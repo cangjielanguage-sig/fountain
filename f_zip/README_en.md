@@ -79,6 +79,183 @@ entry.close()          // writes the data descriptor and registers the central e
 w2.close()             // writes the central directory + EOCD; readable only after this
 ```
 
+## API reference
+
+### Top-level functions
+
+```cangjie
+public func zip(output: OutputStream, dir: Path,
+    options!: ZipWriterOptions = ZipWriterOptions()): Int64
+public func unzip(input: InputStream, dir: Path, limits!: ZipLimits = ZipLimits()): Int64
+public func unzip(path: String, dir: Path, limits!: ZipLimits = ZipLimits()): Int64
+```
+
+| Function | Behavior |
+| --- | --- |
+| `zip` | Recursively packs a directory; each file uses `addFileStream` (streaming); directories are written as directory entries; returns the **file count** (directories excluded). Symbolic links are skipped, and directory links skip the whole subtree. |
+| `unzip` | Extracts all entries; creates the target directory; overwrites existing files; returns the **file count** (directories excluded). Zip Slip, symlink, encrypted-ZIP and ZIP-bomb policies apply here. |
+
+`unzip` is not transactional: on an encrypted entry or mid-way error, already extracted files remain
+on disk (the current entry's partial file is removed). For all-or-nothing behavior, extract into a
+temporary directory and replace the destination after success.
+
+### `ZipReader`
+
+```cangjie
+public class ZipReader {
+    public init(input: InputStream, limits!: ZipLimits = ZipLimits())
+    public init(path: String, limits!: ZipLimits = ZipLimits())
+
+    public func entries(): ArrayList<ZipEntry>
+    public func contains(name: String): Bool
+    public func read(name: String): ?Array<Byte>
+    public func readAll(name: String): Array<Array<Byte>>
+    public func open(name: String): ?InputStream
+    public func openEntry(entry: ZipEntry): ?InputStream
+    public func close(): Unit
+}
+```
+
+- `ZipReader(input)` buffers the whole stream; `ZipReader(path)` uses `File.seek` windows without
+  buffering the whole archive.
+- After parsing, `entries` / `contains` / `read` / `open` are read-only and may be called
+  concurrently; each `open` creates an independent cursor.
+- `read` / `open` use the **last** same-name entry (later wins); `readAll` returns all same-name
+  non-directory entries in central-directory order.
+- `open` verifies CRC and uncompressed size only at EOF; a truncated stream or CRC mismatch throws
+  `ZipException`.
+- `read` / `open` do **no path safety checks**; path validation is only performed by `unzip`.
+- `close()` is idempotent; after closing, `entries` / `read` / `open` throw `ZipException`.
+
+### `ZipEntry`
+
+```cangjie
+public struct ZipEntry {
+    public let name: String
+    public let compressedSize: Int64
+    public let uncompressedSize: Int64
+    public let crc32: UInt32
+    public let method: UInt16
+    public let isDirectory: Bool
+    public let modifiedAt: Option<DateTime>
+    public let localHeaderOffset: Int64
+}
+```
+
+All values come from the **central directory**, not the local header. `isDirectory` is determined by
+a trailing `/`; `modifiedAt = None` when the DOS time is all zero.
+
+### `ZipWriter`
+
+```cangjie
+public class ZipWriter {
+    public init(output: OutputStream, options!: ZipWriterOptions = ZipWriterOptions())
+    public prop position: Int64
+    public prop spilling: Bool
+
+    public func add(name: String, data: Array<Byte>): String
+    public func addFileStream(name: String, input: InputStream): String
+    public func openEntry(name: String): ZipEntryOutputStream
+    public func addFile(name: String, path: Path): String
+    public func addDirectory(name: String): String
+    public func close(): Unit
+}
+```
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `add` | Memory | Data is already in memory; writes real local headers without a data descriptor. Above `memoryEntryThreshold` it spills to a temp file and switches to the streaming path. |
+| `addFileStream` | Streaming | Unknown length; writes bit 3 + a 24-byte ZIP64 data descriptor. |
+| `openEntry` | Push | Returns a `ZipEntryOutputStream`; the caller writes data, and closing the entry writes the descriptor and registers the central directory. |
+| `addFile` | Streaming | Reads a disk file; **follows symbolic links** (the caller explicitly names one file). |
+| `addDirectory` | — | Writes a directory entry (appends `/`); same-name directories merge. |
+
+- Every `add*` returns the **actual written name**; name collisions are renamed (`a.txt` → `a_2.txt`).
+- `close()` writes the central directory + EOCD; it is required and idempotent. The archive is only
+  readable after closing.
+- `ZipWriter` is not thread-safe; `spilling` is atomic, but `position` and `spilling` are not
+  guaranteed to be consistent with each other.
+- After a write error the writer becomes dirty and any further `add*` / `close()` throws
+  `ZipException`.
+
+### `ZipEntryOutputStream`
+
+```cangjie
+public class ZipEntryOutputStream <: OutputStream {
+    public prop entryName: String
+    public prop count: Int64
+    public func write(buffer: Array<Byte>): Unit
+    public func flush(): Unit
+    public func close(): Unit
+}
+```
+
+- `count` is the number of **uncompressed** bytes written.
+- `close()` finishes the entry and registers it in the central directory; it is idempotent and no
+  further writes are allowed.
+- A write failure marks the owning `ZipWriter` dirty.
+
+### `ZipWriterOptions`
+
+```cangjie
+public class ZipWriterOptions {
+    public var memoryEntryThreshold: Int64
+    public var tempDir: ?Path
+    public var method: CompressionMethod
+
+    public init(memoryEntryThreshold!: Int64 = /* platform default */, tempDir!: ?Path = None,
+        method!: CompressionMethod = CompressionMethod.Deflate)
+    public static func forServer(): ZipWriterOptions
+    public static func forLowMemory(): ZipWriterOptions
+}
+```
+
+| Field / preset | Default | Description |
+| --- | --- | --- |
+| `memoryEntryThreshold` | Linux/gnu 64 MB, others 16 MB | `add()` spills to a temp file above this |
+| `tempDir` | `None` | Preferred temp directory; falls back through option → `TMPDIR` → system temp → `./.fountain_tmp/` |
+| `method` | `Deflate` | Use `Stored` for already-compressed data (JPEG/MP4/ZIP) |
+| `forServer()` | 64 MB | Server preset |
+| `forLowMemory()` | 8 MB | Low-memory preset |
+
+If all four temp directory choices are unwritable, it throws instead of falling back to memory.
+
+### `ZipLimits`
+
+```cangjie
+public struct ZipLimits {
+    public let maxEntrySize: Int64        // 512 MB
+    public let maxTotalSize: Int64        // 2 GB, per reader instance
+    public let maxEntries: Int64          // 65535
+    public let ratioWarnThreshold: Int64  // 1000, warning only
+}
+```
+
+- `maxTotalSize` is the cumulative limit **per `ZipReader` instance**, not a process-wide quota.
+- Counting uses actual decompressed bytes, not the header's `uncompressedSize`.
+- `maxEntrySize` has two layers: reject before opening when the central-directory value already
+  exceeds it; abort during streaming based on actual bytes when the header lies.
+- `maxEntries` is enforced while parsing the central directory. Writers have no entry-count limit;
+  entry counts ≥ `0xFFFF` upgrade to ZIP64 automatically.
+
+### `CompressionMethod` / `ZipException`
+
+```cangjie
+public enum CompressionMethod {
+    | Stored
+    | Deflate
+    public prop value: UInt16
+    public static func fromValue(value: UInt16): ?CompressionMethod
+}
+
+public class ZipException <: BaseException {
+    public init(message: String)
+}
+```
+
+`f_zip` throws only `ZipException`: invalid archives, CRC mismatches, encrypted entries, invalid
+paths and limit violations all use it.
+
 ## Security defaults
 
 | Risk | Default behavior |

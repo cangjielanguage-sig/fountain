@@ -419,6 +419,374 @@ HTTP and stdio share the `f_jsonrpc.JsonRpcClient` message layer (monotonic ids,
 mapping); stdio ignores `headers` / `keepAlive` / `maxResponseBytes` and uses `timeout` as the read timeout.
 
 
+## API reference
+
+### `fountain::f_mcp.base`
+
+#### `McpProtocol`
+
+```cangjie
+public class McpProtocol {
+    public static const VERSION = '2026-07-28'
+    public static const PATH = '/mcp'
+    public static const SSE_PATH = '/mcp/sse'
+    public static const TOOL_RESULT_PREFIX = '/mcp/tool-results/'
+
+    public static const META = '_meta'
+    public static const KEY_PROTOCOL_VERSION = 'io.modelcontextprotocol/protocolVersion'
+    public static const KEY_CLIENT_INFO = 'io.modelcontextprotocol/clientInfo'
+    public static const KEY_CLIENT_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities'
+    public static const KEY_SERVER_INFO = 'io.modelcontextprotocol/serverInfo'
+
+    public static func isToolName(name: String): Bool
+    public static func encodeCursor(offset: Int64): String
+    public static func decodeCursor(cursor: String): ?Int64
+}
+```
+
+Error codes: `METHOD_NOT_FOUND=-32601`, `INVALID_PARAMS=-32602`, `INTERNAL_ERROR=-32603`,
+`RESOURCE_NOT_FOUND=-32040`, `UNSUPPORTED_VERSION=-32022`, `OVERLOADED=-32003`,
+`RATE_LIMITED=-32050`.
+
+#### `McpException`
+
+```cangjie
+public class McpException <: JsonRpcException {
+    public init(code: Int64, message: String, data!: ?JsonValue = None)
+}
+```
+
+MCP-level failures throw this type; `code` comes from the constants above.
+
+#### Content and result models
+
+```cangjie
+public class ContentBlock {
+    public func kind(): String
+    public func toJson(): JsonObject
+    public static func fromJson(obj: JsonObject): ContentBlock
+    public static func text(text: String): ContentBlock
+    public static func image(data: Array<Byte>, mimeType: String): ContentBlock
+    public static func audio(data: Array<Byte>, mimeType: String): ContentBlock
+    public static func resource(uri: String, mimeType: ?String,
+        text!: ?String = None, blob!: ?Array<Byte> = None): ContentBlock
+    public static func resourceLink(uri: String, name: String,
+        description!: ?String = None, mimeType!: ?String = None): ContentBlock
+}
+
+public class CallToolResult {
+    public let content: ArrayList<ContentBlock>
+    public let structuredContent: ?JsonValue
+    public let isError: Bool
+    public let resultType: String
+    public let inputRequired: ?JsonValue
+    public let requestState: ?JsonValue
+    public let extra: ?JsonObject
+
+    public init(content!: ArrayList<ContentBlock>, structuredContent!: ?JsonValue = None,
+        isError!: Bool = false, resultType!: String = 'complete', inputRequired!: ?JsonValue = None,
+        requestState!: ?JsonValue = None, extra!: ?JsonObject = None)
+    public static func text(text: String): CallToolResult
+    public static func error(text: String): CallToolResult
+    public static func fromJson(obj: JsonObject): CallToolResult
+    public func toJson(): JsonObject
+}
+
+public struct ResourceContent { public let uri: String; public let mimeType: ?String
+    public let text: ?String; public let blob: ?Array<Byte> }
+public struct PromptMessage { public let role: String; public let content: ContentBlock }
+```
+
+- `ContentBlock.kind()` returns the server's original `type`; unknown blocks are preserved and
+  `toJson()` can round-trip them.
+- `CallToolResult.resultType = 'input_required'` requests another round; `requestState` is passed
+  back unchanged on the next call.
+- `extra` is written to the result-level `data` (for example truncation `truncated` / `limit`).
+
+#### Typed models
+
+`McpServerInfo`, `McpCapabilities`, `DiscoverResult`, `PromptArgument`, `McpToolDescriptor`,
+`ResourceDescriptor`, `PromptDescriptor`, `ToolPage`, `ResourcePage`, `PromptPage`,
+`ReadResourceResult`, `GetPromptResult` and `ListenResult` all provide
+`fromJson(JsonObject)` and `toJson(): JsonObject`. Key fields:
+
+| Type | Key fields |
+| --- | --- |
+| `McpServerInfo` | `name` / `version` |
+| `McpCapabilities` | `raw`; `toolsListChanged` / `resourcesSubscribe` / `resourcesListChanged` / `promptsListChanged` |
+| `DiscoverResult` | `supportedVersions` / `capabilities` / `serverInfo?` / `raw` |
+| `McpToolDescriptor` | `name` / `description` / `inputSchema` / `raw` |
+| `ResourceDescriptor` | `uri` / `name` / `description` / `mimeType?` |
+| `PromptDescriptor` | `name` / `description` / `arguments` |
+| `ToolPage` / `ResourcePage` / `PromptPage` | the corresponding list + `nextCursor?` |
+| `ReadResourceResult` | `contents: Array<ResourceContent>` |
+| `GetPromptResult` | `description` / `messages: Array<PromptMessage>` |
+| `ListenResult` | `subscriptionId` / `subscribedTopics` / `sseUrl` |
+
+### `fountain::f_mcp.server`
+
+#### Annotations
+
+| Annotation | Target | Effect |
+| --- | --- | --- |
+| `@Mcp['name']` | class | Adds `@Bean` and registers; the default name is `fountain-mcp` |
+| `@McpToolMeta[name, description, perCallerRpm, perCallerToolRpm, perToolRpm, maxConcurrency, perCallerConcurrency]` | method | Registers a tool; numeric `-1` inherits, `0` disables the limit, `>0` sets it |
+| `@McpResourceMeta[uri, name, description, mediaType]` | method | Registers a resource; `uri` is required |
+| `@McpPromptMeta[name, description]` | method | Registers a prompt |
+| `@McpPromptArg[description, required]` | parameter | Prompt argument metadata; `required` defaults to `true` |
+
+#### `McpRegistry`
+
+```cangjie
+public class McpRegistry {
+    public static func configure(configure: (McpServerBuilder) -> Unit): Unit
+    public static func getToolMeta<T>(name: String, args: Array<TypeInfo>): ?McpToolMeta where T <: Object
+    public static func getResourceMeta<T>(name: String, args: Array<TypeInfo>): ?McpResourceMeta where T <: Object
+    public static func getPromptMeta<T>(name: String, args: Array<TypeInfo>): ?McpPromptMeta where T <: Object
+    public static func serverInfo(name: String): Unit
+    public static func build(): Unit
+    public static func server(): McpServer
+}
+```
+
+- `configure` appends tools / resources / prompts to the shared builder; if `build()` has already
+  run, it rebuilds immediately so the new items take effect. Use it for manual registration in
+  `main()`.
+- `build()` rebuilds `McpServer` from all accumulated registrations and may be called repeatedly.
+  Call it only during startup: rebuilding while serving loses the result cache and subscription
+  state.
+- `get*Meta<T>` is used by the macros; ordinary application code rarely calls it directly.
+
+#### `McpServer`
+
+```cangjie
+public class McpServer {
+    public static func builder(): McpServerBuilder
+    public func jsonRpcServer(): JsonRpcServer
+    public func resultStoreRef(): ToolResultStore
+    public func hub(): SubscriptionHub
+    public func close(): Unit
+}
+```
+
+#### `McpServerBuilder`
+
+| Method | Description |
+| --- | --- |
+| `serverInfo(name, version)` | Sets server name and version; empty `version` uses `mcp_version` |
+| `rateLimit(policy)` | Service-level rate limit and concurrency policy |
+| `publicBaseUrl(url)` | Public root URL for result links / SSE URL / relative resource URIs |
+| `pageSize(size)` | List page size, default 100 |
+| `resultStore(options)` | External result store options |
+| `trustForwardedFor(trust)` | Whether to trust `X-Forwarded-For` |
+| `maxSubscribers(n)` | Total subscriber limit, default 1024 |
+| `subscriberQueueCapacity(n)` | Per-subscriber queue capacity, default 256 |
+| `subscriberDetachedTtl(ttl)` | Detached subscriber retention, default 60s |
+| `rateLimitBackend(backend)` | Injects a custom rate-limit backend instance |
+| `tool(tool)` / `resource(resource)` / `prompt(prompt)` | Registers an item |
+| `build()` | Builds `McpServer`; config is applied first and the builder overrides only explicit fields |
+
+#### `McpTool` / `McpToolBuilder`
+
+```cangjie
+public type McpToolHandler = (McpToolContext, JsonValue) -> CallToolResult
+
+public class McpToolContext {
+    public let callerId: String
+    public let requestId: ?JsonValue
+    public let inputResponses: ?JsonValue
+    public let requestState: ?JsonValue
+}
+
+McpTool.builder(name)
+    .description(text)
+    .inputSchema(schema)
+    .inputSchemaFromFile(path)
+    .handler({ctx, args => CallToolResult.text('ok')})
+    .rateLimit(ToolRateLimit(...))
+    .maxResultBytes(bytes)
+    .build()
+
+McpTool.of<MyRequest>('my.tool')   // generates inputSchema from a @DataAssist type
+```
+
+`build()` validates the tool name (1–128 chars from `A-Za-z0-9_-.'`) and the schema; `$ref` /
+`$defs` are rejected at build time.
+
+#### `McpResource` / `McpResourceBuilder`
+
+```cangjie
+public type McpResourceHandler = (McpResourceContext) -> ArrayList<ResourceContent>
+
+McpResource.builder('/doc', 'doc')
+    .description('documentation')
+    .mimeType('text/plain')
+    .handler({ctx => /* ArrayList<ResourceContent> */})
+    .build()
+```
+
+- `uri` accepts a full `http` / `https` / `ftp` URL or an absolute path starting with `/`.
+  A relative path needs `publicBaseUrl` and is resolved to an absolute URL when the server is built.
+- `#fragment`, protocol-relative `//` URIs and the `/mcp/tool-results/` prefix are rejected.
+
+#### `McpPrompt` / `McpPromptBuilder`
+
+```cangjie
+public type McpPromptHandler = (JsonObject) -> ArrayList<PromptMessage>
+
+McpPrompt.builder('greet')
+    .description('generate a greeting')
+    .argument('name', description: 'name', required: true)
+    .handler({args => /* ArrayList<PromptMessage> */})
+    .build()
+```
+
+The argument name is `PromptArgument.name`; use `Option<T>` for optional prompt parameters.
+
+#### Rate limiting
+
+```cangjie
+public struct RateLimitPolicy {
+    public let perCallerRpm: ?Int64
+    public let perCallerToolRpm: ?Int64
+    public let perToolRpm: ?Int64
+    public let maxConcurrency: ?Int64
+    public let perCallerConcurrency: ?Int64
+}
+
+public struct ToolRateLimit { /* same fields, tool-level override */ }
+
+public interface RateLimitBackend {
+    static prop name: String
+    static func new(): RateLimitBackend
+    func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool
+    func close(): Unit
+}
+```
+
+- `RateLimitBackends.register<T>()` / `of(name)` / `fromConfig()`; built-ins are `token-bucket`,
+  `leaking-bucket`, `sliding-window` and `unlimited`.
+- Check order: global concurrency → tool concurrency → caller concurrency → `perCallerRpm` →
+  `perCallerToolRpm` → `perToolRpm`. A rejection returns `-32050` with `data.scope`; HTTP also
+  returns 429 + `Retry-After`.
+- `ConcurrencyGate(maxSize!, idleTtl!)` provides an in-process concurrency gate:
+  `tryAcquire(key, limit)` returns `true` when a slot is acquired (call `release` later) and
+  `false` otherwise (`limit <= 0` or the limit is reached), in which case no release is needed.
+
+#### Result store
+
+```cangjie
+public struct ResultStoreOptions {
+    public let maxEntries: Int64       // 256
+    public let maxBytes: Int64         // 256 MiB
+    public let ttlMillis: Int64        // 10 minutes
+    public let adaptive: Bool          // true
+    public let windowMillis: Int64     // 5 minutes
+    public let rejectRateThreshold: Float64 // 0.01
+    public let floor: Int64            // 128
+    public let ceiling: Int64          // 1024
+    public let shrinkConfirmWindows: Int64 // 3
+}
+
+public class ToolResultStore {
+    public init(options!: ResultStoreOptions = ResultStoreOptions())
+    public func put(content: ResourceContent): Option<String>
+    public func put(token: String, content: ResourceContent): Bool
+    public func get(token: String): Option<ResourceContent>
+    public func sweep(): Unit
+    public func close(): Unit
+    public prop size: Int64
+    public prop maxEntryCount: Int64
+    public prop usedBytes: Int64
+    public prop sweepCount: Int64
+    public prop windowLockCount: Int64
+}
+```
+
+#### Subscriptions
+
+```cangjie
+public class SubscriptionHub {
+    public init(maxSubscribers!: Int64 = 1024, detachedTtl!: Duration = Duration.second * 60,
+        queueCapacity!: Int64 = 256)
+    public func subscribe(topics: ArrayList<String>): McpSubscriber
+    public func subscribeAttached(topics: ArrayList<String>): McpSubscriber
+    public func unsubscribe(subscriber: McpSubscriber): Unit
+    public func detach(subscriber: McpSubscriber): Unit
+    public func attach(id: Int64): ?McpSubscriber
+    public func publish(topic: String, params: JsonValue): Unit
+    public func prune(): Unit
+    public func close(): Unit
+    public prop size: Int64
+}
+
+public class McpSubscriber {
+    public func drain(): ArrayList<JsonObject>
+    public func take(timeout: Duration): ArrayList<JsonObject>
+    public prop droppedCount: Int64
+}
+```
+
+`McpServer.hub()` returns the server's subscription hub; the SSE endpoint attaches a
+`subscriptionId` from `subscriptions/listen` via `attach(id)`.
+
+#### Configuration
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `mcp_version` | `1.0.0` | Default for `serverInfo.version` |
+| `mcp_publicBaseUrl` | empty | Public root URL; empty means truncated results and relative SSE URLs |
+| `mcp_rateLimit` | empty | `perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency` or JSON |
+| `mcp_rateLimitBackend` | `token-bucket` | Rate-limit algorithm name |
+| `mcp_trustForwardedFor` | `false` | Trust `X-Forwarded-For` as the caller identity |
+
+### `fountain::f_mcp.client`
+
+#### `McpClientOptions`
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `timeout` | `30s` | Per-request timeout |
+| `protocolVersion` | `McpProtocol.VERSION` | Protocol version; on `-32022` retries once with `supported[0]` |
+| `clientName` / `clientVersion` | `fountain-mcp-client` / `1.0.0` | `_meta.clientInfo` |
+| `capabilities` | empty object | `_meta.clientCapabilities` |
+| `maxRounds` | `8` | Default `callToolAuto` round limit |
+| `headers` | empty | HTTP only |
+| `maxResponseBytes` | `8 MiB` | HTTP only |
+| `keepAlive` | `true` | HTTP only |
+| `retryOnConnectFailure` | `0` | Connect failures only |
+
+#### `McpClient`
+
+```cangjie
+public class McpClient {
+    public init(url: String, options!: McpClientOptions = McpClientOptions())
+    public static func http(url: String, options!: McpClientOptions = McpClientOptions()): McpClient
+    public static func stdio(command: String, args!: Array<String> = Array<String>(),
+        options!: McpClientOptions = McpClientOptions()): McpClient
+
+    public func discover(): DiscoverResult
+    public func listTools(cursor!: ?String = None): ToolPage
+    public func listAllTools(): Array<McpToolDescriptor>
+    public func callTool(name: String, arguments!: JsonValue = JsonObject()): McpCallToolResult
+    public func callToolAuto(name: String, arguments!: JsonValue = JsonObject(),
+        handler!: (JsonValue) -> JsonValue, maxRounds!: Int64 = 0): McpCallToolResult
+    public func listResources(cursor!: ?String = None): ResourcePage
+    public func readResource(uri: String): ReadResourceResult
+    public func listPrompts(cursor!: ?String = None): PromptPage
+    public func getPrompt(name: String, arguments!: JsonObject = JsonObject()): GetPromptResult
+    public func listen(topics: Array<String>): ListenResult
+    public func close(): Unit
+}
+```
+
+- Every request injects `_meta` (protocol version, `clientInfo`, `clientCapabilities`).
+- `callTool` returns `input_required` unchanged; `callToolAuto` uses the handler to produce
+  `inputResponses`, passes `requestState` back unchanged, and throws `McpException` after
+  `maxRounds`.
+- `listAllTools` fetches at most 100 pages / 1000 tools; exceeding that throws `McpException`.
+- `McpCallToolResult` is a source-compatible alias for `CallToolResult`.
+
 ## Migration (1.3.17 → next)
 
 | Change | Impact | Migration |

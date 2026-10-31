@@ -416,6 +416,367 @@ HTTP 与 stdio 都复用 `f_jsonrpc.JsonRpcClient` 的消息层（单调 id、�
 stdio 忽略 `headers` / `keepAlive` / `maxResponseBytes`，读超时由 `timeout` 控制。
 
 
+## API 参考
+
+### `fountain::f_mcp.base`
+
+#### `McpProtocol`
+
+```cangjie
+public class McpProtocol {
+    public static const VERSION = '2026-07-28'
+    public static const PATH = '/mcp'
+    public static const SSE_PATH = '/mcp/sse'
+    public static const TOOL_RESULT_PREFIX = '/mcp/tool-results/'
+
+    public static const META = '_meta'
+    public static const KEY_PROTOCOL_VERSION = 'io.modelcontextprotocol/protocolVersion'
+    public static const KEY_CLIENT_INFO = 'io.modelcontextprotocol/clientInfo'
+    public static const KEY_CLIENT_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities'
+    public static const KEY_SERVER_INFO = 'io.modelcontextprotocol/serverInfo'
+
+    public static func isToolName(name: String): Bool
+    public static func encodeCursor(offset: Int64): String
+    public static func decodeCursor(cursor: String): ?Int64
+}
+```
+
+错误码：`METHOD_NOT_FOUND=-32601`、`INVALID_PARAMS=-32602`、`INTERNAL_ERROR=-32603`、
+`RESOURCE_NOT_FOUND=-32040`、`UNSUPPORTED_VERSION=-32022`、`OVERLOADED=-32003`、
+`RATE_LIMITED=-32050`。
+
+#### `McpException`
+
+```cangjie
+public class McpException <: JsonRpcException {
+    public init(code: Int64, message: String, data!: ?JsonValue = None)
+}
+```
+
+MCP 层错误统一抛它；`code` 使用上面的 `McpProtocol` 常量。
+
+#### 内容与结果模型
+
+```cangjie
+public class ContentBlock {
+    public func kind(): String
+    public func toJson(): JsonObject
+    public static func fromJson(obj: JsonObject): ContentBlock
+    public static func text(text: String): ContentBlock
+    public static func image(data: Array<Byte>, mimeType: String): ContentBlock
+    public static func audio(data: Array<Byte>, mimeType: String): ContentBlock
+    public static func resource(uri: String, mimeType: ?String,
+        text!: ?String = None, blob!: ?Array<Byte> = None): ContentBlock
+    public static func resourceLink(uri: String, name: String,
+        description!: ?String = None, mimeType!: ?String = None): ContentBlock
+}
+
+public class CallToolResult {
+    public let content: ArrayList<ContentBlock>
+    public let structuredContent: ?JsonValue
+    public let isError: Bool
+    public let resultType: String
+    public let inputRequired: ?JsonValue
+    public let requestState: ?JsonValue
+    public let extra: ?JsonObject
+
+    public init(content!: ArrayList<ContentBlock>, structuredContent!: ?JsonValue = None,
+        isError!: Bool = false, resultType!: String = 'complete', inputRequired!: ?JsonValue = None,
+        requestState!: ?JsonValue = None, extra!: ?JsonObject = None)
+    public static func text(text: String): CallToolResult
+    public static func error(text: String): CallToolResult
+    public static func fromJson(obj: JsonObject): CallToolResult
+    public func toJson(): JsonObject
+}
+
+public struct ResourceContent { public let uri: String; public let mimeType: ?String
+    public let text: ?String; public let blob: ?Array<Byte> }
+public struct PromptMessage { public let role: String; public let content: ContentBlock }
+```
+
+- `ContentBlock.kind()` 返回服务端原始 `type`；未知类型不会丢弃，`toJson()` 可还原。
+- `CallToolResult.resultType = 'input_required'` 表示需要多轮输入；`requestState` 原样带回下一轮。
+- `extra` 会写到结果顶层 `data`（例如结果截断的 `truncated` / `limit`）。
+
+#### 强类型模型
+
+`McpServerInfo`、`McpCapabilities`、`DiscoverResult`、`PromptArgument`、`McpToolDescriptor`、
+`ResourceDescriptor`、`PromptDescriptor`、`ToolPage`、`ResourcePage`、`PromptPage`、
+`ReadResourceResult`、`GetPromptResult`、`ListenResult` 均提供 `fromJson(JsonObject)` 与
+`toJson(): JsonObject`。关键字段：
+
+| 类型 | 关键字段 |
+| --- | --- |
+| `McpServerInfo` | `name` / `version` |
+| `McpCapabilities` | `raw`；`toolsListChanged` / `resourcesSubscribe` / `resourcesListChanged` / `promptsListChanged` |
+| `DiscoverResult` | `supportedVersions` / `capabilities` / `serverInfo?` / `raw` |
+| `McpToolDescriptor` | `name` / `description` / `inputSchema` / `raw` |
+| `ResourceDescriptor` | `uri` / `name` / `description` / `mimeType?` |
+| `PromptDescriptor` | `name` / `description` / `arguments` |
+| `ToolPage` / `ResourcePage` / `PromptPage` | 对应列表 + `nextCursor?` |
+| `ReadResourceResult` | `contents: Array<ResourceContent>` |
+| `GetPromptResult` | `description` / `messages: Array<PromptMessage>` |
+| `ListenResult` | `subscriptionId` / `subscribedTopics` / `sseUrl` |
+
+### `fountain::f_mcp.server`
+
+#### 注解
+
+| 注解 | 目标 | 说明 |
+| --- | --- | --- |
+| `@Mcp['name']` | class | 自动加 `@Bean` 并注册；名称缺省为 `fountain-mcp` |
+| `@McpToolMeta[name, description, perCallerRpm, perCallerToolRpm, perToolRpm, maxConcurrency, perCallerConcurrency]` | 方法 | 注册 tool；数值 `-1` 继承、`0` 不限制、`>0` 限额 |
+| `@McpResourceMeta[uri, name, description, mediaType]` | 方法 | 注册 resource；`uri` 必填 |
+| `@McpPromptMeta[name, description]` | 方法 | 注册 prompt |
+| `@McpPromptArg[description, required]` | 参数 | prompt 参数描述；`required` 默认 `true` |
+
+#### `McpRegistry`
+
+```cangjie
+public class McpRegistry {
+    public static func configure(configure: (McpServerBuilder) -> Unit): Unit
+    public static func getToolMeta<T>(name: String, args: Array<TypeInfo>): ?McpToolMeta where T <: Object
+    public static func getResourceMeta<T>(name: String, args: Array<TypeInfo>): ?McpResourceMeta where T <: Object
+    public static func getPromptMeta<T>(name: String, args: Array<TypeInfo>): ?McpPromptMeta where T <: Object
+    public static func serverInfo(name: String): Unit
+    public static func build(): Unit
+    public static func server(): McpServer
+}
+```
+
+- `configure` 向共享 Builder 追加 tool / resource / prompt；若已经 `build()` 过会立即重建，
+  新注册项马上生效。适合 `main()` 里手工注册。
+- `build()` 按当前累计注册全量重建 `McpServer`，可重复调用；只应在启动阶段调用，
+  请求处理中重建会丢失结果缓存与订阅状态。
+- `get*Meta<T>` 供宏展开使用；一般业务代码不需要直接调用。
+
+#### `McpServer`
+
+```cangjie
+public class McpServer {
+    public static func builder(): McpServerBuilder
+    public func jsonRpcServer(): JsonRpcServer
+    public func resultStoreRef(): ToolResultStore
+    public func hub(): SubscriptionHub
+    public func close(): Unit
+}
+```
+
+#### `McpServerBuilder`
+
+| 方法 | 说明 |
+| --- | --- |
+| `serverInfo(name, version)` | 设置服务名与版本；`version` 为空时取 `mcp_version` |
+| `rateLimit(policy)` | 服务级限流与并发策略 |
+| `publicBaseUrl(url)` | 对外根地址，用于结果链接 / SSE URL / 相对资源 URI |
+| `pageSize(size)` | 列表分页大小，默认 100 |
+| `resultStore(options)` | 结果外链存储参数 |
+| `trustForwardedFor(trust)` | 是否信任 `X-Forwarded-For` |
+| `maxSubscribers(n)` | 订阅者总量上限，默认 1024 |
+| `subscriberQueueCapacity(n)` | 单订阅者队列容量，默认 256 |
+| `subscriberDetachedTtl(ttl)` | 断线保留时长，默认 60s |
+| `rateLimitBackend(backend)` | 注入自定义限流算法实例 |
+| `tool(tool)` / `resource(resource)` / `prompt(prompt)` | 注册项 |
+| `build()` | 构建 `McpServer`；配置项先落地，Builder 只覆盖显式字段 |
+
+#### `McpTool` / `McpToolBuilder`
+
+```cangjie
+public type McpToolHandler = (McpToolContext, JsonValue) -> CallToolResult
+
+public class McpToolContext {
+    public let callerId: String
+    public let requestId: ?JsonValue
+    public let inputResponses: ?JsonValue
+    public let requestState: ?JsonValue
+}
+
+McpTool.builder(name)
+    .description(text)
+    .inputSchema(schema)
+    .inputSchemaFromFile(path)
+    .handler({ctx, args => CallToolResult.text('ok')})
+    .rateLimit(ToolRateLimit(...))
+    .maxResultBytes(bytes)
+    .build()
+
+McpTool.of<MyRequest>('my.tool')   // 从 @DataAssist 类型生成 inputSchema
+```
+
+`build()` 校验工具名（1–128 字符，`A-Za-z0-9_-.'`）与 schema；`$ref` / `$defs` 在构建期拒绝。
+
+#### `McpResource` / `McpResourceBuilder`
+
+```cangjie
+public type McpResourceHandler = (McpResourceContext) -> ArrayList<ResourceContent>
+
+McpResource.builder('/doc', 'doc')
+    .description('文档')
+    .mimeType('text/plain')
+    .handler({ctx => /* ArrayList<ResourceContent> */})
+    .build()
+```
+
+- `uri` 只接受完整 `http` / `https` / `ftp` URL 或以 `/` 开头的绝对路径；相对路径需要
+  `publicBaseUrl`，构建服务时拼成绝对 URL。
+- 不允许 `#fragment`、`//` 协议相对地址，也不能占用 `/mcp/tool-results/` 前缀。
+
+#### `McpPrompt` / `McpPromptBuilder`
+
+```cangjie
+public type McpPromptHandler = (JsonObject) -> ArrayList<PromptMessage>
+
+McpPrompt.builder('greet')
+    .description('生成问候')
+    .argument('name', description: '姓名', required: true)
+    .handler({args => /* ArrayList<PromptMessage> */})
+    .build()
+```
+
+参数名即 `PromptArgument.name`；可选参数建议用 `Option<T>`。
+
+#### 限流
+
+```cangjie
+public struct RateLimitPolicy {
+    public let perCallerRpm: ?Int64
+    public let perCallerToolRpm: ?Int64
+    public let perToolRpm: ?Int64
+    public let maxConcurrency: ?Int64
+    public let perCallerConcurrency: ?Int64
+}
+
+public struct ToolRateLimit { /* 同字段，工具级覆盖 */ }
+
+public interface RateLimitBackend {
+    static prop name: String
+    static func new(): RateLimitBackend
+    func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool
+    func close(): Unit
+}
+```
+
+- `RateLimitBackends.register<T>()` / `of(name)` / `fromConfig()`；内置 `token-bucket`、
+  `leaking-bucket`、`sliding-window`、`unlimited`。
+- 检查顺序：全局并发 → 工具并发 → 调用方并发 → `perCallerRpm` → `perCallerToolRpm` → `perToolRpm`。
+  超限返回 `-32050`，`data.scope` 标明维度；HTTP 同时返回 429 + `Retry-After`。
+- `ConcurrencyGate(maxSize!, idleTtl!)` 提供进程内并发闸门：`tryAcquire(key, limit)` 返回
+  `true` 表示占用一个槽（需 `release`）；`false` 表示未占用（`limit <= 0` 或已达上限），
+  无需释放。
+
+#### 结果存储
+
+```cangjie
+public struct ResultStoreOptions {
+    public let maxEntries: Int64       // 256
+    public let maxBytes: Int64         // 256 MiB
+    public let ttlMillis: Int64        // 10 分钟
+    public let adaptive: Bool          // true
+    public let windowMillis: Int64     // 5 分钟
+    public let rejectRateThreshold: Float64 // 0.01
+    public let floor: Int64            // 128
+    public let ceiling: Int64          // 1024
+    public let shrinkConfirmWindows: Int64 // 3
+}
+
+public class ToolResultStore {
+    public init(options!: ResultStoreOptions = ResultStoreOptions())
+    public func put(content: ResourceContent): Option<String>
+    public func put(token: String, content: ResourceContent): Bool
+    public func get(token: String): Option<ResourceContent>
+    public func sweep(): Unit
+    public func close(): Unit
+    public prop size: Int64
+    public prop maxEntryCount: Int64
+    public prop usedBytes: Int64
+    public prop sweepCount: Int64
+    public prop windowLockCount: Int64
+}
+```
+
+#### 订阅
+
+```cangjie
+public class SubscriptionHub {
+    public init(maxSubscribers!: Int64 = 1024, detachedTtl!: Duration = Duration.second * 60,
+        queueCapacity!: Int64 = 256)
+    public func subscribe(topics: ArrayList<String>): McpSubscriber
+    public func subscribeAttached(topics: ArrayList<String>): McpSubscriber
+    public func unsubscribe(subscriber: McpSubscriber): Unit
+    public func detach(subscriber: McpSubscriber): Unit
+    public func attach(id: Int64): ?McpSubscriber
+    public func publish(topic: String, params: JsonValue): Unit
+    public func prune(): Unit
+    public func close(): Unit
+    public prop size: Int64
+}
+
+public class McpSubscriber {
+    public func drain(): ArrayList<JsonObject>
+    public func take(timeout: Duration): ArrayList<JsonObject>
+    public prop droppedCount: Int64
+}
+```
+
+`McpServer.hub()` 返回服务端的订阅中心；SSE 端点通过 `attach(id)` 绑定
+`subscriptions/listen` 返回的 `subscriptionId`。
+
+#### 配置项
+
+| 配置项 | 默认 | 说明 |
+| --- | --- | --- |
+| `mcp_version` | `1.0.0` | `serverInfo.version` 的默认值 |
+| `mcp_publicBaseUrl` | 空 | 对外根地址；为空时结果截断、SSE URL 为相对路径 |
+| `mcp_rateLimit` | 空 | `perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency` 或 JSON |
+| `mcp_rateLimitBackend` | `token-bucket` | 限流算法名 |
+| `mcp_trustForwardedFor` | `false` | 是否信任 `X-Forwarded-For` 作为调用方标识 |
+
+### `fountain::f_mcp.client`
+
+#### `McpClientOptions`
+
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `timeout` | `30s` | 单请求超时 |
+| `protocolVersion` | `McpProtocol.VERSION` | 协议版本；遇到 `-32022` 自动换 `supported[0]` 重试一次 |
+| `clientName` / `clientVersion` | `fountain-mcp-client` / `1.0.0` | `_meta.clientInfo` |
+| `capabilities` | 空对象 | `_meta.clientCapabilities` |
+| `maxRounds` | `8` | `callToolAuto` 默认多轮上限 |
+| `headers` | 空 | 仅 HTTP |
+| `maxResponseBytes` | `8 MiB` | 仅 HTTP |
+| `keepAlive` | `true` | 仅 HTTP |
+| `retryOnConnectFailure` | `0` | 仅建连失败 |
+
+#### `McpClient`
+
+```cangjie
+public class McpClient {
+    public init(url: String, options!: McpClientOptions = McpClientOptions())
+    public static func http(url: String, options!: McpClientOptions = McpClientOptions()): McpClient
+    public static func stdio(command: String, args!: Array<String> = Array<String>(),
+        options!: McpClientOptions = McpClientOptions()): McpClient
+
+    public func discover(): DiscoverResult
+    public func listTools(cursor!: ?String = None): ToolPage
+    public func listAllTools(): Array<McpToolDescriptor>
+    public func callTool(name: String, arguments!: JsonValue = JsonObject()): McpCallToolResult
+    public func callToolAuto(name: String, arguments!: JsonValue = JsonObject(),
+        handler!: (JsonValue) -> JsonValue, maxRounds!: Int64 = 0): McpCallToolResult
+    public func listResources(cursor!: ?String = None): ResourcePage
+    public func readResource(uri: String): ReadResourceResult
+    public func listPrompts(cursor!: ?String = None): PromptPage
+    public func getPrompt(name: String, arguments!: JsonObject = JsonObject()): GetPromptResult
+    public func listen(topics: Array<String>): ListenResult
+    public func close(): Unit
+}
+```
+
+- 每次请求自动注入 `_meta`（协议版本、`clientInfo`、`clientCapabilities`）。
+- `callTool` 原样返回 `input_required`；`callToolAuto` 用 handler 生成 `inputResponses`，
+  并把 `requestState` 原样带回下一轮，超过 `maxRounds` 抛 `McpException`。
+- `listAllTools` 最多翻 100 页 / 1000 个工具，超出抛 `McpException`。
+- `McpCallToolResult` 是 `CallToolResult` 的源兼容别名。
+
 ## 迁移（1.3.17 → 下一版）
 
 | 变更 | 影响 | 迁移 |

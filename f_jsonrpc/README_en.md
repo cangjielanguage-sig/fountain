@@ -242,6 +242,270 @@ server is built still takes effect.
 Custom transports (stdio / test doubles) implement `JsonRpcTransport` and are injected with
 `JsonRpcClient(transport, opts: ...)`.
 
+## API reference
+
+### `fountain::f_jsonrpc.base`
+
+#### `JsonRpcProtocol`
+
+Protocol constants and error codes (`public static const`):
+
+| Member | Value / signature | Meaning |
+| --- | --- | --- |
+| `VERSION` | `"2.0"` | JSON-RPC version |
+| `PATH` | `"/rpc"` | Default endpoint |
+| `TOPIC_PATH` | `"/rpc/{topic}"` | Topic endpoint template |
+| `PARSE_ERROR` | `-32700` | Parse error |
+| `INVALID_REQUEST` | `-32600` | Invalid request |
+| `METHOD_NOT_FOUND` | `-32601` | Method not found |
+| `INVALID_PARAMS` | `-32602` | Invalid params |
+| `INTERNAL_ERROR` | `-32603` | Internal error |
+| `SERVER_ERROR` | `-32001` | Reserved; not produced by this implementation |
+| `TIMEOUT` | `-32002` | Method timeout |
+| `OVERLOADED` | `-32003` | Batch size exceeded |
+| `UNKNOWN_TOPIC` | `-32004` | Unknown topic |
+| `DEFAULT_MAX_BATCH_SIZE` | `100` | Default batch limit |
+| `messageOf(code)` | `static func messageOf(code: Int64): String` | Default message for standard codes |
+
+#### `JsonRpcException` and `JsonRpcError`
+
+```cangjie
+public open class JsonRpcException <: Exception {
+    public let code: Int64
+    public let data: ?JsonValue
+    public init(code: Int64, message: String, data!: ?JsonValue = None)
+}
+
+public class JsonRpcConnectException <: IOException {
+    public init(message: String)
+}
+
+public struct JsonRpcError {
+    public const JsonRpcError(public let code: Int64, public let message: String, public let data: ?JsonValue)
+    public static func from(ex: JsonRpcException): JsonRpcError
+    public func toJson(): JsonObject
+}
+```
+
+- `JsonRpcConnectException` is the only retryable transport exception (connect / send phase).
+  Response-read failures are never retried because the server may already have executed the call.
+- `JsonRpcError.toJson()` emits `{code, message, data?}` and can be used directly in a response body.
+
+#### `JsonRpcMeta`
+
+```cangjie
+@Annotation[target: [MemberFunction]]
+public class JsonRpcMeta {
+    public const JsonRpcMeta(public let description: String, public let timeout: String)
+    public prop timeoutDuration: Duration
+}
+```
+
+- Applied to public instance methods of a `@JsonRpc` class. `timeout` is a `Duration` string (`"5s"`, `"1m30s"`).
+- An empty string means no timeout; `timeoutDuration` parses it with `Duration.parse`.
+
+### `fountain::f_jsonrpc.server`
+
+#### `JsonRpcMethodMeta`
+
+```cangjie
+public type JsonRpcHandler = (JsonRpcContext, ?JsonValue) -> JsonValue
+
+public class JsonRpcMethodMeta {
+    public let name: String
+    public let handler: JsonRpcHandler
+    public let description: String
+    public let timeout: ?Duration
+    public let paramsSchema: ?JsonObject
+
+    public init(name!: String, handler!: JsonRpcHandler, description!: String = '',
+        timeout!: ?Duration = None, paramsSchema!: ?JsonObject = None)
+    public func namespace(): String
+}
+```
+
+- `name` is either `namespace.method` or a bare `method`; `namespace()` returns the part before
+  the first `.` (empty for bare names).
+- `paramsSchema` is precompiled with `f_data.CompiledSchema.compile` at construction time, so a
+  malformed schema fails at startup.
+- `timeout = None` runs the handler inline on the request thread; setting it spawns a worker and
+  returns `-32002` on timeout.
+
+#### `JsonRpcRegistry`
+
+```cangjie
+public class JsonRpcRegistry {
+    public static func server(): JsonRpcServer
+    public static func register(meta: JsonRpcMethodMeta): Unit
+    public static func getMeta<T>(fnName: String, argTypes: Array<TypeInfo>): JsonRpcMeta where T <: Object
+}
+```
+
+- `server()` returns the process-wide default endpoint (`/rpc`) server.
+- `register` appends a method to the default endpoint; duplicate names throw `JsonRpcException(-32603)`.
+- `getMeta<T>` reads `@JsonRpcMeta` from `T.fnName` for the given argument types; a missing
+  annotation yields `JsonRpcMeta("", "")` (no description, no timeout).
+
+#### `JsonRpcServer`
+
+```cangjie
+public class JsonRpcServer {
+    public static func builder(): JsonRpcServerBuilder
+    public func addMethod(meta: JsonRpcMethodMeta): Unit
+    public func methods(): ArrayList<JsonRpcMethodMeta>
+    public prop endpoint: String
+    public func handle(body: Array<Byte>, ctx!: JsonRpcContext): ?JsonValue
+    public func invoke(method: String, params!: ?JsonValue = None,
+        ctx!: JsonRpcContext = JsonRpcContext()): JsonValue
+}
+```
+
+| Method | Description |
+| --- | --- |
+| `addMethod` | Thread-safe; duplicate names throw `JsonRpcException(-32603)` instead of overwriting |
+| `methods()` | Snapshot sorted by method name, for stable `tools/list` output |
+| `handle` | Parses a single request or a batch; `None` means a notification with no response body; oversized bodies return `-32600` and set HTTP 413 |
+| `invoke` | Local direct call without HTTP; a missing method throws `JsonRpcException(-32601)` |
+
+Batch behavior in `handle`: an empty array → `-32600`; more than `maxBatchSize` → `-32003`
+(`data={limit,size}`); each batch item is handled independently and notification items produce
+no response.
+
+#### `JsonRpcServerBuilder`
+
+```cangjie
+public class JsonRpcServerBuilder {
+    public func endpoint(name: String): JsonRpcServerBuilder
+    public func maxBatchSize(n: Int64): JsonRpcServerBuilder
+    public func maxBodyBytes(n: Int64): JsonRpcServerBuilder
+    public func addMethod(meta: JsonRpcMethodMeta): JsonRpcServerBuilder
+    public func build(): JsonRpcServer
+}
+```
+
+- When `maxBodyBytes` is unset (`0`), each request reads `MVCConfig.maxRequestBodySize`
+  (default 2 MiB) at request time.
+- `maxBatchSize` / `maxBodyBytes` accept positive values only; non-positive values are ignored.
+
+#### `JsonRpcContext`
+
+```cangjie
+public class JsonRpcContext {
+    public let http: ?HttpContext
+    public let id: ?JsonValue
+    public let endpoint: String
+    public let topic: String
+    public let deadline: ?MonoTime
+
+    public init(http!: ?HttpContext = None, id!: ?JsonValue = None,
+        endpoint!: String = JsonRpcProtocol.PATH, topic!: String = '', deadline!: ?MonoTime = None)
+    public func setResponseHeader(name: String, value: String): Unit
+    public func isExpired(): Bool
+}
+```
+
+- `http = None` means stdio / local invocation; `setResponseHeader` is a no-op there.
+- `isExpired()` is always `false` without a `deadline`; long-running loops should poll it.
+
+#### `JsonRpcController` / `JsonRpcMapping`
+
+`JsonRpcController` is the built-in `f_mvc` controller with two routes:
+
+- `handleRoot(@RequestBody raw)` → `/rpc`
+- `handleTopic(@RequestBody raw, @PathVariable topic)` → `/rpc/{topic}`
+
+`JsonRpcMapping <: RequestMapping` is the annotation class behind `@JsonRpcMapping[path: ...]`.
+It fixes `POST` + `application/json` and exposes only `path`; use it to wire a custom
+`@Controller` method to `JsonRpcServer.handle`.
+
+#### `JsonRpcArgs`
+
+```cangjie
+public class JsonRpcArgs {
+    public static func extract<T>(params: ?JsonValue, name: String, named!: Bool): T where T <: DataFields<T>
+    public static func toJson<T>(value: T): JsonValue where T <: DataFields<T>
+    public static func toJson(value: Unit): JsonValue
+}
+```
+
+Argument conversion helpers: `extract` reads a positional / named value and converts it to `T`;
+`toJson` converts a return value to JSON and maps `Unit` to `null`.
+
+### `fountain::f_jsonrpc.client`
+
+#### `ClientOptions`
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `timeout` | `30s` | Per-request HTTP timeout |
+| `headers` | empty | Extra request headers (for example `Authorization`) |
+| `maxResponseBytes` | `8 MiB` | Response body limit; exceeding it stops reading and closes the connection |
+| `keepAlive` | `true` | `false` sends `Connection: close` |
+| `retryOnConnectFailure` | `0` | Retries for connect / send failures only |
+
+#### `JsonRpcCall` / `JsonRpcResponse`
+
+```cangjie
+public struct JsonRpcCall {
+    public const JsonRpcCall(public let method: String, public let params!: ?JsonValue = None)
+}
+
+public struct JsonRpcResponse {
+    public const JsonRpcResponse(public let id: ?JsonValue, public let result: ?JsonValue,
+        public let error: ?JsonRpcError)
+    public prop isError: Bool
+}
+```
+
+`batch` returns responses in input order; a per-item error is stored in `error` and does not abort
+the batch.
+
+#### `JsonRpcTransport`
+
+```cangjie
+public interface JsonRpcTransport {
+    func send(body: Array<Byte>): Array<Byte>
+    func close(): Unit
+}
+```
+
+Custom transports (stdio / test doubles) implement `send` / `close`. A connect / send failure
+should throw `JsonRpcConnectException`; a response-read failure should throw a normal exception.
+
+#### `JsonRpcClient`
+
+```cangjie
+public class JsonRpcClient {
+    public init(url: String, opts!: ClientOptions = ClientOptions())
+    public init(transport: JsonRpcTransport, opts!: ClientOptions = ClientOptions())
+    public func call(method: String, params!: ?JsonValue = None): JsonValue
+    public func callAsync(method: String, params!: ?JsonValue = None): Future<JsonValue>
+    public func notify(method: String, params!: ?JsonValue = None): Unit
+    public func batch(calls: Array<JsonRpcCall>): Array<JsonRpcResponse>
+    public func close(): Unit
+}
+```
+
+| Method | Behavior |
+| --- | --- |
+| `call` | Sends one request and returns `result`; a server `error` throws `JsonRpcException`; a missing `result` throws `-32603` |
+| `callAsync` | Wraps `call` in `spawn`, returning `Future<JsonValue>` |
+| `notify` | Sends an `id`-less notification and returns immediately; no response parsing and no server error propagation |
+| `batch` | Batch call; a whole-batch rejection (`-32003` / `-32600`) throws `JsonRpcException` |
+| `close` | Closes the transport; idempotent |
+
+### Macros
+
+| Annotation | Target | Effect |
+| --- | --- | --- |
+| `@JsonRpc[namespace: xxx]` | class | Adds `@Bean` and registers public instance methods as `xxx.method`; without the attribute methods use bare names |
+| `@JsonRpcMeta['description', '5s']` | method | Sets description and timeout; an empty string means no timeout |
+| `@JsonRpcMapping[path: '/my-rpc']` | method | Fixes `POST` + `application/json` and wires the method into a custom controller |
+
+`@JsonRpc` expansion relies on `lookup` / `BeanFactory` / `TypeInfo` re-exported by the facade
+package; when importing only `f_jsonrpc.server` / `base`, add those three symbols or simply
+`import fountain::f_jsonrpc.*`.
+
 ## Out of scope
 
 - SSE / WebSocket or any other transport
