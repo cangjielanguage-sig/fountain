@@ -27,12 +27,16 @@ import fountain::f_rule.exception.*
 public class TypeDescriptor {
     public let typeTag: String
     public let hostTypeName: String
+    /** 宿主类简单名（`f_jit` 注册表口径）；动态类型为空串。 */
+    public let hostSimpleName: String
     private let names_: ArrayList<String>
     private let types_: HashMap<String, FieldType>
 
-    init(typeTag: String, hostTypeName: String, names: Array<String>, types: HashMap<String, FieldType>) {
+    init(typeTag: String, hostTypeName: String, hostSimpleName: String, names: Array<String>,
+        types: HashMap<String, FieldType>) {
         this.typeTag = typeTag
         this.hostTypeName = hostTypeName
+        this.hostSimpleName = hostSimpleName
         this.names_ = ArrayList<String>()
         for (name in names) {
             this.names_.add(name)
@@ -114,7 +118,8 @@ public class FactSpace {
         for (name in schema.names()) {
             types[name] = schema.fieldType(name)
         }
-        addDescriptor(TypeDescriptor(schema.typeTag, schema.hostTypeName, schema.names(), types))
+        addDescriptor(TypeDescriptor(schema.typeTag, schema.hostTypeName, schema.hostSimpleName,
+            schema.names(), types))
         this
     }
 
@@ -127,7 +132,7 @@ public class FactSpace {
             names.add(name)
             types[name] = fieldType
         }
-        addDescriptor(TypeDescriptor(typeTag, "", names.toArray(), types))
+        addDescriptor(TypeDescriptor(typeTag, "", "", names.toArray(), types))
         this
     }
 

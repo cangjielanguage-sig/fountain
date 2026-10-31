@@ -81,7 +81,7 @@ public class FactSchema<T> {
         this.types_ = HashMap<String, FieldType>()
         let info = TypeInfo.of<T>()
         this.hostName_ = info.qualifiedName
-        this.hostSimple_ = info.name
+        this.hostSimple_ = simpleTypeName(info.name)
     }
 
     /** 类型标签，规则与决策表中引用该类型时使用同一字符串。 */
@@ -139,4 +139,17 @@ public class FactSchema<T> {
     public func has(name: String): Bool {
         getters_.contains(name)
     }
+}
+
+/** 取类型名最后一段；`f_jit` 注册表只认标识符。 */
+func simpleTypeName(name: String): String {
+    var i = Int64(name.size) - 1
+    while (i >= 0) {
+        let byte = name[i]
+        if (byte == b'.' || byte == b'$' || byte == b':') {
+            return name[i + 1..]
+        }
+        i -= 1
+    }
+    name
 }

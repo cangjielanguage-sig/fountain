@@ -151,7 +151,7 @@ public class Validator {
      *
      * `Any`/`Scalar` 视为未知，一律放行——动态事实的类型只能在运行期确定。
      */
-    static func compatible(fieldType: FieldType, op: Operator): Bool {
+    public static func compatible(fieldType: FieldType, op: Operator): Bool {
         match (op) {
             case IsNull | NotNull => true
             // 等值/不等值对任意标量与列表都成立（ValueKey 全序）

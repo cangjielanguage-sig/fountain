@@ -18,6 +18,6 @@ package fountain::f_rule.table
 /**
  * 决策表（`doc/07-decision-table.md`）。
  *
- * M0 只建包骨架；`DecisionTable` / `HitPolicy` / `CsvTableParser` / `XlsxTableParser` /
- * `TableCompiler` / `TableExecutor` 在 M5、M6 落地。
+ * M5 已落地模型、命中策略、条件/输出单元格、CSV 解析、编译与执行；
+ * XLSX 载体（`XlsxTableParser`）在 M6 补齐。
  */

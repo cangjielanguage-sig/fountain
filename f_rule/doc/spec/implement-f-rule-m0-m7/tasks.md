@@ -122,24 +122,24 @@
 
 ## 6. M5 决策表 API + CSV
 
-- [ ] 6.1 失败用例 `DecisionTableBuilder_test`：列声明顺序、`row(values)` / `row(ruleId, values)`、`factSpace` 缺省 `default`、`factType` 缺省单类型推断、多类型无 `factType` 抛 `TABLE_INVALID`
-- [ ] 6.2 实现 `table/Column.cj`、`table/TableRow.cj`、`table/DecisionTable.cj`、`table/DecisionTableBuilder.cj`
-- [ ] 6.3 失败用例 `HitPolicy_test`：7 种策略的 0/1/N 命中行为与 `doc/07` §2 表格一致（T-07~T-11）
-- [ ] 6.4 实现 `table/HitPolicy.cj` 与聚合逻辑 `table/HitAggregator.cj`
-- [ ] 6.5 失败用例 `CellParser_test`：13 种条件写法、`-` 与空单元格等价、`FieldType` 各类型解析、非法值抛 `TYPE_MISMATCH`（T-05）
-- [ ] 6.6 实现 `table/CellParser.cj`（算子解析 + 值类型推断）
-- [ ] 6.7 失败用例 `OutputCell_test`：字面量、`${binding.field}`、`${binding}`、未声明绑定抛 `UNKNOWN_BINDING`（T-06）
-- [ ] 6.8 实现输出单元格解析（编译期转字段引用）
-- [ ] 6.9 失败用例 `ExprColumn_test`：`expr` 列裸表达式按 `factType` + 绑定包装编译、语法错误抛 `SCRIPT_COMPILE`
-- [ ] 6.10 实现 `expr` 列接线到 `JitExpression.ofExpression`
-- [ ] 6.11 失败用例 `CsvTableParser_test`：基本解析（T-01）、引号转义（T-02）、`#` 注释与 `# key: value` 元数据（T-03）、列数不一致带行号（T-04）、BOM、非 UTF-8 报错
-- [ ] 6.12 实现 `table/CsvTableParser.cj`（RFC 4180 状态机 + 元数据 + UTF-8 校验）
-- [ ] 6.13 失败用例 `TableCompiler_test`：每行编译为单模式 `Rule`、`factSpace`/`salience`/`id` 映射正确、`when.*` 未知字段抛 `UNKNOWN_FIELD`、空表抛 `TABLE_INVALID`（T-15）、`Unique` 重复行抛 `TABLE_INVALID`
-- [ ] 6.14 实现 `table/TableCompiler.cj` 与 §8 校验清单
-- [ ] 6.15 失败用例 `TableExecutor_test`：端到端输出（I-01）、`Collect` 返回全部且按行序（T-10）、`RowTrace` 记录每列结果
-- [ ] 6.16 实现 `table/TableExecutor.cj`、`table/TableResult.cj`、`table/RowTrace.cj`
-- [ ] 6.17 夹具 `src/fixtures/pricing.csv`、`orders.csv`、`users.csv` 并接入测试
-- [ ] 6.18 `cjpm test` 全绿，T-01~T-11 全部覆盖
+- [x] 6.1 失败用例 `DecisionTableBuilder_test`：列声明顺序、`row(values)` / `row(ruleId, values)`、`factSpace` 缺省 `default`、`factType` 缺省单类型推断、多类型无 `factType` 抛 `TABLE_INVALID`
+- [x] 6.2 实现 `table/Column.cj`、`table/TableRow.cj`、`table/DecisionTable.cj`、`table/DecisionTableBuilder.cj`
+- [x] 6.3 失败用例 `HitPolicy_test`：7 种策略的 0/1/N 命中行为与 `doc/07` §2 表格一致（T-07~T-11）
+- [x] 6.4 实现 `table/HitPolicy.cj` 与聚合逻辑 `table/HitAggregator.cj`
+- [x] 6.5 失败用例 `CellParser_test`：13 种条件写法、`-` 与空单元格等价、`FieldType` 各类型解析、非法值抛 `TYPE_MISMATCH`（T-05）
+- [x] 6.6 实现 `table/CellParser.cj`（算子解析 + 值类型推断）
+- [x] 6.7 失败用例 `OutputCell_test`：字面量、`${binding.field}`、`${binding}`、未声明绑定抛 `UNKNOWN_BINDING`（T-06）
+- [x] 6.8 实现输出单元格解析（编译期转字段引用）
+- [x] 6.9 失败用例 `ExprColumn_test`：`expr` 列裸表达式按 `factType` + 绑定包装编译、语法错误抛 `SCRIPT_COMPILE`
+- [x] 6.10 实现 `expr` 列接线到 `JitExpression.ofExpression`
+- [x] 6.11 失败用例 `CsvTableParser_test`：基本解析（T-01）、引号转义（T-02）、`#` 注释与 `# key: value` 元数据（T-03）、列数不一致带行号（T-04）、BOM、非 UTF-8 报错
+- [x] 6.12 实现 `table/CsvTableParser.cj`（RFC 4180 状态机 + 元数据 + UTF-8 校验）
+- [x] 6.13 失败用例 `TableCompiler_test`：每行编译为单模式 `Rule`、`factSpace`/`salience`/`id` 映射正确、`when.*` 未知字段抛 `UNKNOWN_FIELD`、空表抛 `TABLE_INVALID`（T-15）、`Unique` 重复行抛 `TABLE_INVALID`
+- [x] 6.14 实现 `table/TableCompiler.cj` 与 §8 校验清单
+- [x] 6.15 失败用例 `TableExecutor_test`：端到端输出（I-01）、`Collect` 返回全部且按行序（T-10）、`RowTrace` 记录每列结果
+- [x] 6.16 实现 `table/TableExecutor.cj`、`table/TableResult.cj`、`table/RowTrace.cj`
+- [x] 6.17 夹具 `src/fixtures/pricing.csv`、`orders.csv`、`users.csv` 并接入测试
+- [x] 6.18 `cjpm test` 全绿，T-01~T-11 全部覆盖
 
 ## 7. M6 决策表 XLSX
 
