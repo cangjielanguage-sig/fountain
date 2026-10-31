@@ -185,9 +185,73 @@ compiler.registerType<DynamicFact>()
 
 `RuleSet.build()` 会校验每条 `Script` 条件的 `parameters` 都能在模式绑定中找到；缺失抛 `SCRIPT_BINDING_MISSING`。
 
+### 6.4 M0 spike 实测结论
+
+环境：Linux aarch64（`cjc 1.3.0-alpha.20261023001052`、`cjpm 1.3.0-alpha.08`），2026-10-31。
+方法：`@JitBind` 修饰一个与 `DynamicFact` 同签名的探针类（`get(name): ?Any`、`has(name): Bool`），
+用 `Compiler.registerType` 登记后逐条编译/调用，记录失败码与消息。探针代码属一次性 spike，未入库。
+
+**① 动态事实的 `get(): ?Any` 不能进 JIT**
+
+| 探针 | 源码 | 结果 |
+|---|---|---|
+| 1a | `{ f: Fact => f.get("amount") > 200 }` | `SourceCompileException` `TypeMismatch`：`运算两侧类型不兼容: HostObject / Int64` |
+| 1b | `{ f: Fact => f.get("amount") != None }` | `SourceCompileException` `NotAssigned`：脚本里 `None` 不是字面量，被当成未赋值的局部变量 |
+| 1c | `{ f: Fact => f.has("amount") }` | 正常，`call<Bool>` 返回 `true` |
+| 1d | `{ f: Fact => let a: Any = 1; a == 1 }` | `TypeMismatch`：`Any 值上不得做运算 / 比较 / 等值` |
+| 1e | `{ f: Fact => let v = f.get("amount"); true }` | 编译通过，**运行期** `JitException(code=99)`（`?Any` 装箱值的解包路径未实现） |
+| 1f | `{ f: Fact => (f.get("amount") as Int64) > 200 }` | `TypeMismatch`：`as Int64` 的左面静态类型是 `?`，类型不相容 |
+
+结论：`?Any` 返回值一律映射为 `HostObject`，既不能比较、不能取 `as`、也不能承接给局部变量；
+动态事实的脚本条件**在本期无任何 JIT 可行写法**。`has()` 这类 `Bool` 方法可用，但缺少取值能力就
+无法表达阈值判断。
+
+**② `call<T>` 的 `T` 必须精确等于返回类型，`Option` 不可作返回类型**
+
+| 探针 | 场景 | 结果 |
+|---|---|---|
+| 2a | `{ b: Bool => b }` + `call<Bool>` | 正常返回 `true` |
+| 2b | 同上 + `call<Any>` | `JitException`：`T 与返回类型不符（§8.2 第 5 步）` |
+| 2c | 同上 + `call<Int64>` | 同上 |
+| 2d | `{ b: Bool => Some(b) }` | `NotAssigned`：`Some` / `None` 均非脚本字面量 ⇒ `Option` 无法构造 |
+| 2f/2g/2h | `{ b: Bool => let a: Any = b; a }` | 只能 `call<Any>`；`call<Bool>` 报 `T 与返回类型不符` |
+
+结论：谓词单元必须**恰好**返回 `Bool`，宿主用 `call<Bool>` 取回；不能用 `Any` 承接再转 Bool，
+也不能用 `Option` 表达"无结果"。因此 `JitExpression.eval` 的签名只能是 `Bool`，失败语义走异常/三值
+外层包装，而不是靠返回值表达。
+
+**③ `@JitBind` 只覆盖实例成员与构造器，静态成员不参与脚本语法**
+
+| 探针 | 源码 | 结果 |
+|---|---|---|
+| 3a | `{ => Order.of(7).total() }` | `NotAssigned`：`Order` 被当成局部变量 ⇒ 静态函数调用不可解析 |
+| 3b | `{ => Order.ZERO }` | `NotAssigned`：静态字段同上 |
+| 3c | `{ => Order(7).total() }` | 正常，返回 `7`（构造器 + 实例方法都通） |
+| 3e | `{ o: Order => o.amount }` | 正常，返回 `42`（实例字段） |
+| 3f | `{ o: Order => o.total() }` | 正常，返回 `42`（实例方法） |
+| 3g | 预定义函数返回对象后链式取成员 `spikeOrderOf(7).total()` | `NotImpl`：`成员调用属 M2` |
+| 3h | 预定义函数单独返回对象 `spikeOrderOf(7)` | 正常，`call<Order>` 取回对象 |
+| 3i | 预定义函数返回标量 `spikePlus(x)` | 正常 |
+
+结论：脚本里能用的只有**模式绑定的形参**（实例字段/方法）、字面量、运算符与已注册的预定义函数；
+不能调用 `Order.of(...)`、读静态常量，也不能对预定义函数的返回值继续取成员。规则 DSL 因此不承诺
+"脚本内构造对象"，**构建期校验**必须拦住这类写法（`SCRIPT_COMPILE`），而不是留到运行期。
+
+**对 `ExpressionMode` 的影响**
+
+- 默认值维持 `JitPreferred`（`doc/03` §7）：强类型事实的脚本条件编译成功即可直接用 JIT。
+- 动态事实（`DynamicFact`）的脚本条件**无条件**走内置解释器：不是"失败后回退"，而是构建期就按
+  绑定类型决定，并记一条 `WARN`（含规则 id、字段名）。这样避免同一规则在不同机器上因后端差异
+  静默换路径。
+- 1e 的 `code=99` 只在 aarch64 后端观测到；1a/1f/2b/2c/3a/3b 都是**前端**类型检查错误，
+  与后端无关。动态事实走解释器的决定不依赖 1e，故即便该后端缺陷被修复也不改变默认策略。
+
 ## 7. 内置解释器（降级路径）
 
 当 f_jit 不可用（平台不支持、类型未登记、`Option`/`Any` 限制）时，`JitExpression` 降级为内置解释器。内置解释器只支持受限语法，覆盖面小于 f_jit：
+
+> 动态事实（`DynamicFact.get(): ?Any`）**总是**走解释器，不依赖"编译失败再回退"——
+> 原因见 §6.4 ①：JIT 侧的 `?Any` 没有任何可用写法，靠失败回退会在不同后端上得到不同路径。
 
 ```
 expr   := or

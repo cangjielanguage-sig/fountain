@@ -1,0 +1,6 @@
+2026-10-31
+    chore(f_rule): M0 骨架 —— 9 个包（exception/fact/condition/rule/rete/agenda/flow/table）、
+      26 个错误码与 RuleException、RuleRuntime 共享编译器、RuleInitializer（f_app 注册）
+    chore(f_rule): cjpm.toml 补 f_app / f_ticktock 路径依赖；.modules 收录 f_rule
+    docs(f_rule): doc/03 §6.4 记录 f_jit spike 实测：?Any 映射 HostObject（动态事实走内置解释器）、
+      call<T> 的 T 必须精确等于返回类型、@JitBind 静态成员不可在脚本中使用

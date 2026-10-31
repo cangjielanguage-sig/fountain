@@ -85,7 +85,25 @@ main() {
 | `fountain::f_jit` | 表达式编译与脚本规则体 |
 | `fountain::f_excel` | XLSX 决策表读取 |
 | `fountain::f_regex` | `Matches` 算子 |
+| `fountain::f_app` | `Initializer` 注册（`RuleInitializer`） |
+| `fountain::f_ticktock` | `JoinTask` 超时定时器 |
 | `fountain::f_base` / `f_collection` / `f_concurrent` / `f_log` / `f_util` | 基础设施 |
+
+### 初始化顺序
+
+`f_jit` 的编译缓存是进程级的，`f_egraph` 与 `f_rule` 必须共用同一个 `Compiler`，否则脚本规则体会
+在两边各编译一份、且类型注册互不可见。应用按下列顺序初始化：
+
+```cangjie
+let compiler = Compiler(CompileOptions(DummyDiagnosticsSink()))
+compiler.registerType<Order>()                 // 1. f_jit：登记参与脚本的类型
+RuleRuntime.initCompiler(compiler)             // 2. f_rule：注入共享编译器
+// 3. f_egraph / f_rule 由 f_app.InitializerCollection 启动
+```
+
+未调用 `RuleRuntime.initCompiler` 时，首次使用会惰性创建默认 `Compiler` 并打印一次 `WARN`——
+默认实例看不到应用注册的类型，脚本条件会在 `RuleSet.build()` 抛 `SCRIPT_COMPILE`。
+
 
 ## 构建
 
@@ -95,9 +113,14 @@ cjpm build
 cjpm test
 ```
 
+M0 实测（aarch64 Linux / 7 核 / `cjc 1.3.0-alpha`）：冷构建含全部路径依赖约 **3m54s**，
+增量构建约 **3s**，`cjpm test` 增量约 **5s**。
+
 ## 状态
 
-**设计阶段**：`src/` 尚未实现，技术文档已完成。实施计划见 [doc/10-roadmap.md](doc/10-roadmap.md)。
+**M0 骨架完成，尚不可用于生产**：`src/` 目前只有包骨架、错误码/异常、`RuleRuntime` 与
+`RuleInitializer`；事实模型、条件、Rete、议程、决策流、决策表按 [doc/10-roadmap.md](doc/10-roadmap.md)
+的 M1~M7 推进。快速开始示例是目标形态，M3 之后才可运行。
 
 ## 许可
 

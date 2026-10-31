@@ -116,7 +116,7 @@ M1 的顺序匹配器**长期保留**，不作为生产路径，只作为 M2 的
 | 条件 | 影响 | 状态 |
 |---|---|---|
 | `f_jit` 解释器在 aarch64-linux-ohos 可用 | 表达式求值 | 已知：机器码后端只支持 Linux，ohos 走解释器，功能可用 |
-| `f_jit` 支持 `Option`/`Any` | 动态事实表达式 | 待 spike |
+| `f_jit` 支持 `Option`/`Any` | 动态事实表达式 | 已确认不支持（M0 spike，见 `doc/03` §6.4）：`?Any` 映射为 `HostObject`，不可比较/取 `as`；动态事实改走内置解释器 |
 | `f_excel` 读取 API 稳定 | XLSX 决策表 | 已知：`ExcelDocument` / `ExcelSheetStream` 可用 |
 | `f_egraph` `emit` 不丢 session | 扇出后会话一致 | 已知：会丢；用 `RuleEnvelope` 兜底 |
 

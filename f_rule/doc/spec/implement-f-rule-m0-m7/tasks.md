@@ -6,18 +6,18 @@
 
 ## 1. M0 骨架、依赖与 spike
 
-- [ ] 1.1 失败用例：`RuleException_test` 断言 `RuleErrorCode` 26 个码的 `toString()` 为稳定大写蛇形名、`==`/`hashCode` 可用
-- [ ] 1.2 实现 `exception/RuleErrorCode.cj` 与 `exception/RuleException.cj`（`code` / `message` / `caused`）
-- [ ] 1.3 建立 `src/` 9 个包骨架（`exception/fact/condition/rule/rete/agenda/flow/table` + 根包 `rule.cj`），每个包至少一个可编译文件
-- [ ] 1.4 失败用例：`RuleRuntime_test` 断言 `initCompiler(c)` 后 `RuleRuntime.compiler()` 返回同一实例；未初始化时惰性创建并只 WARN 一次
-- [ ] 1.5 实现 `RuleRuntime.cj`；`RuleInitializer.cj` 按 `f_app.Initializer` 模式在 `static init()` 注册，`name = "fountain::f_rule"`、`dependencies = ["fountain::f_egraph"]`
-- [ ] 1.6 `f_rule/cjpm.toml` 补 `fountain::f_app`、`fountain::f_ticktock` 路径依赖
-- [ ] 1.7 spike ①：对 `DynamicFact` 加 `@JitBind` 后编译 `{ f: DynamicFact => f.get("amount") > 200 }`，记录失败码与消息
-- [ ] 1.8 spike ②：编译 `{ b: Bool => b }` 与 `call<Bool>`、`call<Any>`，确认"`T` 必须精确等于返回类型"与 `Option` 不可用
-- [ ] 1.9 spike ③：确认 `@JitBind` 对 `static func` / `static let` 的展开边界（能否在脚本里调用 `Order.of(...)`）
-- [ ] 1.10 把 1.7~1.9 结论写入 `f_rule/doc/03-condition-expression.md` §6，并据此确定 `ExpressionMode` 默认值（预期 `JitPreferred` + 动态事实降级）
-- [ ] 1.11 `.modules` 的 `[include]` 增加 `f_rule`（`f_excel` 之后）；`f_rule/README.md` 状态段与依赖表更新；新增 `f_rule/CHANGELOG`
-- [ ] 1.12 `cjpm build` 通过（空模块），记录首次构建耗时
+- [x] 1.1 失败用例：`RuleException_test` 断言 `RuleErrorCode` 26 个码的 `toString()` 为稳定大写蛇形名、`==`/`hashCode` 可用
+- [x] 1.2 实现 `exception/RuleErrorCode.cj` 与 `exception/RuleException.cj`（`code` / `message` / `caused`）
+- [x] 1.3 建立 `src/` 9 个包骨架（`exception/fact/condition/rule/rete/agenda/flow/table` + 根包 `rule.cj`），每个包至少一个可编译文件
+- [x] 1.4 失败用例：`RuleRuntime_test` 断言 `initCompiler(c)` 后 `RuleRuntime.compiler()` 返回同一实例；未初始化时惰性创建并只 WARN 一次
+- [x] 1.5 实现 `RuleRuntime.cj`；`RuleInitializer.cj` 按 `f_app.Initializer` 模式在 `static init()` 注册，`name = "fountain::f_rule"`、`dependencies = ["fountain::f_egraph"]`
+- [x] 1.6 `f_rule/cjpm.toml` 补 `fountain::f_app`、`fountain::f_ticktock` 路径依赖
+- [x] 1.7 spike ①：对 `DynamicFact` 加 `@JitBind` 后编译 `{ f: DynamicFact => f.get("amount") > 200 }`，记录失败码与消息
+- [x] 1.8 spike ②：编译 `{ b: Bool => b }` 与 `call<Bool>`、`call<Any>`，确认"`T` 必须精确等于返回类型"与 `Option` 不可用
+- [x] 1.9 spike ③：确认 `@JitBind` 对 `static func` / `static let` 的展开边界（能否在脚本里调用 `Order.of(...)`）
+- [x] 1.10 把 1.7~1.9 结论写入 `f_rule/doc/03-condition-expression.md` §6，并据此确定 `ExpressionMode` 默认值（预期 `JitPreferred` + 动态事实降级）
+- [x] 1.11 `.modules` 的 `[include]` 增加 `f_rule`（`f_excel` 之后）；`f_rule/README.md` 状态段与依赖表更新；新增 `f_rule/CHANGELOG`
+- [x] 1.12 `cjpm build` 通过（空模块），记录首次构建耗时
 
 ## 2. M1 事实模型与条件
 

@@ -19,6 +19,7 @@
   repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/f_rule"
 
 [dependencies]
+  "fountain::f_app" = {path = "../f_app"}
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_concurrent" = {path = "../f_concurrent"}
@@ -27,6 +28,7 @@
   "fountain::f_jit" = {path = "../f_jit"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_regex" = {path = "../f_regex"}
+  "fountain::f_ticktock" = {path = "../f_ticktock"}
   "fountain::f_util" = {path = "../f_util"}
 
 [profile.build]
