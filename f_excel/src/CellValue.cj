@@ -54,7 +54,7 @@ public enum NumberFormat <: Equatable<NumberFormat> & ToString {
  * 单元格值。
  *
  * `Formula` 的第一个参数是**原文（不带前导 `=`）**，第二个是缓存值；读取不求值（M2 才提供显式求值）。
- * M1 不含 `TimeSpan`：`[h]:mm:ss` 类格式按 `Date` 返回并记 `UnsupportedTimeFormat`。
+ * `[h]:mm:ss` 类时长格式返回 `TimeSpan`（M2-d）；其余日期格式返回 `Date`。
  */
 public enum CellValue <: ToString {
     | Empty
@@ -63,6 +63,7 @@ public enum CellValue <: ToString {
     | Boolean(Bool)
     | Error(String)
     | Date(DateTime)
+    | TimeSpan(Duration)
     | Formula(String, Option<CellValue>)
 
     public func toString(): String {
@@ -73,6 +74,7 @@ public enum CellValue <: ToString {
             case Boolean(v) => if (v) { "TRUE" } else { "FALSE" }
             case Error(v) => v
             case Date(v) => v.toString()
+            case TimeSpan(v) => v.toString()
             case Formula(src, cached) => match (cached) {
                 case Some(v) => "=${src} => ${v}"
                 case None => "=${src}"

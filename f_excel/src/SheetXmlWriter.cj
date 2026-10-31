@@ -20,30 +20,6 @@ import std.io.OutputStream
 import fountain::f_base.StringGenerator
 import fountain::f_xml.{QName, XmlAttribute, XmlWriter}
 
-/** `cellXfs` 的最小样式表：索引即单元格的 `s`。 */
-internal class StyleTable {
-    /** 每个 `s` 指向的 `numFmtId`；`s = 0` 恒为 General。 */
-    private let formats = ArrayList<Int64>()
-
-    init() {
-        formats.add(0)
-    }
-
-    func indexOf(numFmtId: Int64): Int64 {
-        for (i in 0..formats.size) {
-            if (formats[i] == numFmtId) {
-                return i
-            }
-        }
-        formats.add(numFmtId)
-        Int64(formats.size - 1)
-    }
-
-    func numFmtIds(): ArrayList<Int64> {
-        formats
-    }
-}
-
 /**
  * 把 [RowData] 映射成 `f_xml.XmlWriter` 的增量事件。
  *
@@ -56,7 +32,8 @@ private func xl(local: String): QName {
 
 internal class SheetXmlWriter {
     private let xml: XmlWriter
-    private let styles: StyleTable
+    private let pool: StylePool
+    private let maxCellStyles: Int64
     private let date1904: Bool
     private let sheetName: String
     private let warnings: ArrayList<ExcelWarning>
@@ -67,13 +44,15 @@ internal class SheetXmlWriter {
 
     init(
         output: OutputStream,
-        styles: StyleTable,
+        pool: StylePool,
         date1904: Bool,
         sheetName: String,
-        warnings: ArrayList<ExcelWarning>
+        warnings: ArrayList<ExcelWarning>,
+        maxCellStyles!: Int64 = 64000
     ) {
         this.xml = XmlWriter(output)
-        this.styles = styles
+        this.pool = pool
+        this.maxCellStyles = maxCellStyles
         this.date1904 = date1904
         this.sheetName = sheetName
         this.warnings = warnings
@@ -81,7 +60,10 @@ internal class SheetXmlWriter {
 
     func begin(dimension: ?String): Unit {
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
-        xml.startElement(QName("worksheet", uri: Some(NS_MAIN)))
+        xml.startElement(
+            QName("worksheet", uri: Some(NS_MAIN)),
+            attributes: [XmlAttribute(QName("xmlns:r"), NS_REL)]
+        )
         match (dimension) {
             case Some(ref) => xml.emptyElement(xl("dimension"), attributes: [XmlAttribute(QName("ref"), ref)])
             case None => ()
@@ -103,7 +85,11 @@ internal class SheetXmlWriter {
         xml.endElement(xl("row"))
     }
 
-    func end(merges: ArrayList<String>): Unit {
+    func end(
+        merges: ArrayList<String>,
+        formats: ArrayList<ConditionalFormat>,
+        drawingRel!: ?String = None
+    ): Unit {
         xml.endElement(xl("sheetData"))
         if (merges.size > 0) {
             xml.startElement(xl("mergeCells"), attributes: [XmlAttribute(QName("count"), merges.size.toString())])
@@ -111,6 +97,13 @@ internal class SheetXmlWriter {
                 xml.emptyElement(xl("mergeCell"), attributes: [XmlAttribute(QName("ref"), range)])
             }
             xml.endElement(xl("mergeCells"))
+        }
+        if (formats.size > 0) {
+            writeConditionalFormats(formats)
+        }
+        match (drawingRel) {
+            case Some(relId) => xml.emptyElement(xl("drawing"), attributes: [XmlAttribute(QName("r:id"), relId)])
+            case None => ()
         }
         xml.endElement(QName("worksheet"))
         xml.flush()
@@ -120,6 +113,14 @@ internal class SheetXmlWriter {
         let ref = "${columnLetters(cell.col)}${rowIndex}"
         let attrs = ArrayList<XmlAttribute>()
         attrs.add(XmlAttribute(QName("r"), ref))
+        match (effectiveStyle(cell)) {
+            case Some(style) =>
+                let index = pool.getOrAdd(style, maxCellStyles)
+                if (index > 0) {
+                    attrs.add(XmlAttribute(QName("s"), index.toString()))
+                }
+            case None => ()
+        }
         match (cell.value) {
             case Empty => xml.emptyElement(xl("c"), attributes: attrs.toArray())
             case Text(text) =>
@@ -173,9 +174,47 @@ internal class SheetXmlWriter {
                 }
                 xml.endElement(xl("c"))
             case Date(value) =>
-                let numFmtId = match (cell.numberFormat) {
-                    case Some(Builtin(id)) => if (id >= 14 && id <= 22 || id >= 45 && id <= 47) {
-                        id
+                xml.startElement(xl("c"), attributes: attrs.toArray())
+                xml.startElement(xl("v"))
+                xml.text(formatNumber(serialFromDateTime(value, date1904)))
+                xml.endElement(xl("v"))
+                xml.endElement(xl("c"))
+            case TimeSpan(value) =>
+                xml.startElement(xl("c"), attributes: attrs.toArray())
+                xml.startElement(xl("v"))
+                xml.text(formatNumber(Float64(value.toSeconds()) / 86400.0))
+                xml.endElement(xl("v"))
+                xml.endElement(xl("c"))
+        }
+    }
+
+    /** 显式样式优先；其次是 numberFormat；日期在两者都缺省时自动绑内置日期格式。 */
+    private func effectiveStyle(cell: Cell): ?CellStyle {
+        match (cell.style) {
+            case Some(style) =>
+                match (cell.value) {
+                    case Date(_) => if (!isDateFormatStyle(style.numberFormat)) {
+                        warnFormat()
+                    }
+                    case TimeSpan(_) => if (!isElapsedFormatStyle(style.numberFormat)) {
+                        warnFormat()
+                    }
+                    case _ => ()
+                }
+                return Some(style)
+            case None => ()
+        }
+        match (cell.value) {
+            case TimeSpan(_) =>
+                let format = match (cell.numberFormat) {
+                    case Some(value) => value
+                    case None => NumberFormat.Custom("[h]:mm:ss")
+                }
+                return Some(CellStyle(numberFormat: format))
+            case Date(value) =>
+                let id = match (cell.numberFormat) {
+                    case Some(Builtin(fmtId)) => if (isBuiltinDateFormat(fmtId)) {
+                        fmtId
                     } else {
                         warnFormat()
                         dateStyleFor(value, date1904)
@@ -185,12 +224,28 @@ internal class SheetXmlWriter {
                         dateStyleFor(value, date1904)
                     case None => dateStyleFor(value, date1904)
                 }
-                attrs.add(XmlAttribute(QName("s"), styles.indexOf(numFmtId).toString()))
-                xml.startElement(xl("c"), attributes: attrs.toArray())
-                xml.startElement(xl("v"))
-                xml.text(formatNumber(serialFromDateTime(value, date1904)))
-                xml.endElement(xl("v"))
-                xml.endElement(xl("c"))
+                return Some(CellStyle(numberFormat: NumberFormat.Builtin(id)))
+            case _ => ()
+        }
+        match (cell.numberFormat) {
+            case Some(format) => Some(CellStyle(numberFormat: format))
+            case None => None<CellStyle>
+        }
+    }
+
+    private func isElapsedFormatStyle(format: NumberFormat): Bool {
+        match (format) {
+            case Custom(code) => hasElapsedMarker(code)
+            case Builtin(id) => id == 46 || id == 47
+            case General => false
+        }
+    }
+
+    private func isDateFormatStyle(format: NumberFormat): Bool {
+        match (format) {
+            case Builtin(id) => isBuiltinDateFormat(id)
+            case Custom(code) => isDateFormatCode(code)
+            case General => false
         }
     }
 
@@ -213,6 +268,88 @@ internal class SheetXmlWriter {
                 xml.text(v)
                 xml.endElement(xl("v"))
             case _ => ()
+        }
+    }
+
+    private func writeConditionalFormats(formats: ArrayList<ConditionalFormat>): Unit {
+        for (format in formats) {
+            xml.startElement(
+                xl("conditionalFormatting"),
+                attributes: [XmlAttribute(QName("sqref"), format.range)]
+            )
+            for (rule in format.rules) {
+                let attrs = ArrayList<XmlAttribute>()
+                attrs.add(XmlAttribute(QName("type"), rule.ruleType.toString()))
+                attrs.add(XmlAttribute(QName("priority"), rule.priority.toString()))
+                if (rule.stopIfTrue) {
+                    attrs.add(XmlAttribute(QName("stopIfTrue"), "1"))
+                }
+                if (rule.comparison.toString() != "") {
+                    attrs.add(XmlAttribute(QName("operator"), rule.comparison.toString()))
+                }
+                match (rule.text) {
+                    case Some(value) => attrs.add(XmlAttribute(QName("text"), value))
+                    case None => ()
+                }
+                match (rule.format) {
+                    case Some(value) =>
+                        attrs.add(XmlAttribute(QName("dxfId"), pool.getOrAddDxf(value).toString()))
+                    case None => ()
+                }
+                xml.startElement(xl("cfRule"), attributes: attrs.toArray())
+                for (formula in rule.formulas) {
+                    xml.startElement(xl("formula"))
+                    xml.text(formula)
+                    xml.endElement(xl("formula"))
+                }
+                match (rule.colorScale) {
+                    case Some(scale) =>
+                        xml.startElement(xl("colorScale"))
+                        for (cfvo in scale.cfvos) {
+                            xml.emptyElement(
+                                xl("cfvo"),
+                                attributes: [XmlAttribute(QName("type"), cfvo.kind), XmlAttribute(QName("val"), cfvo.value)]
+                            )
+                        }
+                        for (color in scale.colors) {
+                            xml.emptyElement(xl("color"), attributes: [XmlAttribute(QName("rgb"), color)])
+                        }
+                        xml.endElement(xl("colorScale"))
+                    case None => ()
+                }
+                match (rule.dataBar) {
+                    case Some(bar) =>
+                        xml.startElement(xl("dataBar"))
+                        xml.emptyElement(
+                            xl("cfvo"),
+                            attributes: [XmlAttribute(QName("type"), bar.min.kind), XmlAttribute(QName("val"), bar.min.value)]
+                        )
+                        xml.emptyElement(
+                            xl("cfvo"),
+                            attributes: [XmlAttribute(QName("type"), bar.max.kind), XmlAttribute(QName("val"), bar.max.value)]
+                        )
+                        xml.emptyElement(xl("color"), attributes: [XmlAttribute(QName("rgb"), bar.color)])
+                        xml.endElement(xl("dataBar"))
+                    case None => ()
+                }
+                match (rule.iconSet) {
+                    case Some(set) =>
+                        xml.startElement(
+                            xl("iconSet"),
+                            attributes: [XmlAttribute(QName("iconSet"), set.name)]
+                        )
+                        for (cfvo in set.cfvos) {
+                            xml.emptyElement(
+                                xl("cfvo"),
+                                attributes: [XmlAttribute(QName("type"), cfvo.kind), XmlAttribute(QName("val"), cfvo.value)]
+                            )
+                        }
+                        xml.endElement(xl("iconSet"))
+                    case None => ()
+                }
+                xml.endElement(xl("cfRule"))
+            }
+            xml.endElement(xl("conditionalFormatting"))
         }
     }
 

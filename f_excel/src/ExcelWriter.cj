@@ -29,7 +29,7 @@ public class ExcelWriter {
     private let zip: ZipWriter
     private let names: Array<String>
     private let options: ExcelWriteOptions
-    private let styles = StyleTable()
+    private let styles = StylePool()
     private let warnings_ = ArrayList<ExcelWarning>()
     private var nextSheet = 0
     private var failed = false
@@ -106,7 +106,7 @@ public class ExcelWriter {
             fail("无法打开条目：${e.message}")
         }
         let date1904 = this.options.date1904 ?? false
-        let writer = SheetXmlWriter(entry, styles, date1904, name, warnings_)
+        let writer = SheetXmlWriter(entry, styles, date1904, name, warnings_, maxCellStyles: options.maxCellStyles)
         rowsWritten_ = 0
         var lastIndex: Int64 = 0
         try {
@@ -132,7 +132,7 @@ public class ExcelWriter {
                 rowsWritten_++
                 lastIndex = row.index
             }
-            writer.end(ArrayList<String>())
+            writer.end(ArrayList<String>(), ArrayList<ConditionalFormat>())
             entry.close()
         } catch (e: Exception) {
             try {
@@ -150,7 +150,7 @@ public class ExcelWriter {
             fail("还有 ${names.size - nextSheet} 个 sheet 未写")
         }
         try {
-            zip.add("xl/styles.xml", PackageWriter.stylesXml(styles))
+            zip.add("xl/styles.xml", StylesWriter.write(styles))
             zip.close()
         } catch (e: Exception) {
             fail(e.message)

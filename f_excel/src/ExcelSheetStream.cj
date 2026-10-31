@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_excel
 
-import std.collection.{ArrayList, HashMap}
+import std.collection.ArrayList
 import std.env
 import std.fs.{File, OpenMode, Path, removeIfExists}
 import std.io.{InputStream, copy}
@@ -119,7 +119,8 @@ public class ExcelSheetStream {
     private let info: PackageInfo
     private let options: ExcelStreamReadOptions
     private let styles: StylesLite
-    private let sst: SharedStringTable
+    private let sst: SharedStringsLookup
+    private var sstIndex: ?SharedStringIndex = None
     private let warnings_ = ArrayList<ExcelWarning>()
     private let spoolFile: ?File
     private let spoolDir: ?Path
@@ -132,7 +133,7 @@ public class ExcelSheetStream {
         info: PackageInfo,
         options: ExcelStreamReadOptions,
         styles: StylesLite,
-        sst: SharedStringTable,
+        sst: SharedStringsLookup,
         spoolFile: ?File,
         spoolDir: ?Path
     ) {
@@ -221,14 +222,38 @@ public class ExcelSheetStream {
                 case None => ()
             }
         }
-        var sst = SharedStringTable.empty()
+        var sst: SharedStringsLookup = SharedStringTable.empty()
+        var index: ?SharedStringIndex = None
+        var indexFailed = false
         if (options.loadSharedStrings) {
             match (zip.read("xl/sharedStrings.xml")) {
-                case Some(bytes) => sst = SharedStringTable.load(bytes)
+                case Some(bytes) =>
+                    if (options.sharedStringsIndex) {
+                        try {
+                            let created = SharedStringIndex.build(bytes)
+                            index = Some(created)
+                            sst = created
+                        } catch (_: Exception) {
+                            indexFailed = true
+                            sst = SharedStringTable.load(bytes)
+                        }
+                    } else {
+                        sst = SharedStringTable.load(bytes)
+                    }
                 case None => ()
             }
         }
-        ExcelSheetStream(zip, info, options, styles, sst, spoolFile, spoolDir)
+        let stream = ExcelSheetStream(zip, info, options, styles, sst, spoolFile, spoolDir)
+        stream.sstIndex = index
+        if (indexFailed) {
+            stream.warnings_.add(
+                ExcelWarning(
+                    ExcelWarningKind.IndexDegraded,
+                    "sharedStrings 索引创建失败，已回退到全量表"
+                )
+            )
+        }
+        stream
     }
 
     public func sheetNames(): Array<String> {
@@ -338,6 +363,10 @@ public class ExcelSheetStream {
         try {
             zip.close()
         } catch (_: Exception) {}
+        match (this.sstIndex) {
+            case Some(index) => index.close()
+            case None => ()
+        }
         match (spoolDir) {
             case Some(path) =>
                 try {

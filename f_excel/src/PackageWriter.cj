@@ -20,6 +20,17 @@ import std.io.{ByteBuffer, OutputStream}
 import fountain::f_xml.{QName, XmlAttribute, XmlWriter}
 import fountain::f_zip.ZipWriter
 
+private let NS_XDR: String = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+private let NS_A: String = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+private func xdr(local: String): QName {
+    QName(local, prefix: Some("xdr"), uri: Some(NS_XDR))
+}
+
+private func a(local: String): QName {
+    QName(local, prefix: Some("a"), uri: Some(NS_A))
+}
+
 private func ct(local: String): QName {
     QName(local, uri: Some(NS_CONTENT_TYPES))
 }
@@ -41,9 +52,30 @@ internal class PackageWriter {
         warnings: ArrayList<ExcelWarning>
     ): Unit {
         let count = Int64(sheets.size)
+        var drawingIndex: Int64 = 0
+        var mediaIndex: Int64 = 0
+        let sheetDrawing = ArrayList<Int64>()
+        let sheetMedia = ArrayList<ArrayList<String>>()
+        let usedFormats = ArrayList<ImageFormat>()
+        for (sheet in sheets) {
+            let images = sheet.sheetImages()
+            let media = ArrayList<String>()
+            if (images.size > 0) {
+                drawingIndex++
+                sheetDrawing.add(drawingIndex)
+                for (image in images) {
+                    mediaIndex++
+                    media.add("image${mediaIndex}.${image.format.extension()}")
+                    usedFormats.add(image.format)
+                }
+            } else {
+                sheetDrawing.add(0)
+            }
+            sheetMedia.add(media)
+        }
         let zip = ZipWriter(output)
-        let styles = StyleTable()
-        zip.add("[Content_Types].xml", contentTypes(count))
+        let styles = StylePool()
+        zip.add("[Content_Types].xml", contentTypes(count, sheetDrawing: sheetDrawing, formats: usedFormats))
         zip.add("_rels/.rels", rootRels())
         let names = ArrayList<String>()
         for (sheet in sheets) {
@@ -52,6 +84,19 @@ internal class PackageWriter {
         zip.add("xl/workbook.xml", workbookXmlFromNames(names.toArray(), date1904))
         zip.add("xl/_rels/workbook.xml.rels", workbookRels(count))
         for (i in 0..sheets.size) {
+            let images = sheets[i].sheetImages()
+            var drawingRel: ?String = None
+            if (images.size > 0) {
+                let drawing = sheetDrawing[i]
+                drawingRel = Some("rId1")
+                let media = sheetMedia[i]
+                for (j in 0..images.size) {
+                    zip.add("xl/media/${media[j]}", images[j].data)
+                }
+                zip.add("xl/drawings/drawing${drawing}.xml", drawingXml(images))
+                zip.add("xl/drawings/_rels/drawing${drawing}.xml.rels", drawingRels(media))
+                zip.add("xl/worksheets/_rels/sheet${i + 1}.xml.rels", sheetRels(drawing))
+            }
             let entry = zip.openEntry("xl/worksheets/sheet${i + 1}.xml")
             let writer = SheetXmlWriter(entry, styles, date1904, sheets[i].name, warnings)
             writer.begin(sheets[i].dimension())
@@ -62,14 +107,14 @@ internal class PackageWriter {
                 }
                 let cells = ArrayList<Cell>()
                 for (pair in values) {
-                    cells.add(Cell(pair[0], pair[1]))
+                    cells.add(Cell(pair[0], pair[1], style: sheets[i].styleOf(rowIndex, pair[0])))
                 }
                 writer.row(RowData(rowIndex, cells.toArray()))
             }
-            writer.end(sheets[i].mergedRanges())
+            writer.end(sheets[i].mergedRanges(), sheets[i].conditionalFormats(), drawingRel: drawingRel)
             entry.close()
         }
-        zip.add("xl/styles.xml", stylesXml(styles))
+        zip.add("xl/styles.xml", StylesWriter.write(styles))
         zip.close()
     }
 
@@ -77,7 +122,11 @@ internal class PackageWriter {
         XmlWriter(buffer)
     }
 
-    internal static func contentTypes(sheetCount: Int64): Array<Byte> {
+    internal static func contentTypes(
+        sheetCount: Int64,
+        sheetDrawing!: ArrayList<Int64> = ArrayList<Int64>(),
+        formats!: ArrayList<ImageFormat> = ArrayList<ImageFormat>()
+    ): Array<Byte> {
         let buffer = ByteBuffer(256 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
@@ -117,6 +166,40 @@ internal class PackageWriter {
                     )
                 ]
             )
+        }
+        var hasPng = false
+        var hasJpeg = false
+        for (format in formats) {
+            match (format) {
+                case Png => hasPng = true
+                case Jpeg => hasJpeg = true
+            }
+        }
+        if (hasPng) {
+            xml.emptyElement(
+                ct("Default"),
+                attributes: [XmlAttribute(QName("Extension"), "png"), XmlAttribute(QName("ContentType"), "image/png")]
+            )
+        }
+        if (hasJpeg) {
+            xml.emptyElement(
+                ct("Default"),
+                attributes: [XmlAttribute(QName("Extension"), "jpeg"), XmlAttribute(QName("ContentType"), "image/jpeg")]
+            )
+        }
+        for (drawing in sheetDrawing) {
+            if (drawing > 0) {
+                xml.emptyElement(
+                    ct("Override"),
+                    attributes: [
+                        XmlAttribute(QName("PartName"), "/xl/drawings/drawing${drawing}.xml"),
+                        XmlAttribute(
+                            QName("ContentType"),
+                            "application/vnd.openxmlformats-officedocument.drawing+xml"
+                        )
+                    ]
+                )
+            }
         }
         xml.emptyElement(
             ct("Override"),
@@ -207,71 +290,103 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    internal static func stylesXml(styles: StyleTable): Array<Byte> {
-        let buffer = ByteBuffer(128 * 1024)
+    private static func drawingXml(images: ArrayList<SheetImage>): Array<Byte> {
+        let buffer = ByteBuffer(256 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
-        xml.startElement(QName("styleSheet", uri: Some(NS_MAIN)))
-        xml.startElement(xl("fonts"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.startElement(xl("font"))
-        xml.emptyElement(xl("sz"), attributes: [XmlAttribute(QName("val"), "11")])
-        xml.endElement(xl("font"))
-        xml.endElement(xl("fonts"))
-        xml.startElement(xl("fills"), attributes: [XmlAttribute(QName("count"), "2")])
-        xml.startElement(xl("fill"))
-        xml.emptyElement(xl("patternFill"), attributes: [XmlAttribute(QName("patternType"), "none")])
-        xml.endElement(xl("fill"))
-        xml.startElement(xl("fill"))
-        xml.emptyElement(xl("patternFill"), attributes: [XmlAttribute(QName("patternType"), "gray125")])
-        xml.endElement(xl("fill"))
-        xml.endElement(xl("fills"))
-        xml.startElement(xl("borders"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.startElement(xl("border"))
-        xml.emptyElement(xl("left"))
-        xml.emptyElement(xl("right"))
-        xml.emptyElement(xl("top"))
-        xml.emptyElement(xl("bottom"))
-        xml.emptyElement(xl("diagonal"))
-        xml.endElement(xl("border"))
-        xml.endElement(xl("borders"))
-        xml.startElement(xl("cellStyleXfs"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.emptyElement(
-            xl("xf"),
-            attributes: [
-                XmlAttribute(QName("numFmtId"), "0"),
-                XmlAttribute(QName("fontId"), "0"),
-                XmlAttribute(QName("fillId"), "0"),
-                XmlAttribute(QName("borderId"), "0")
-            ]
-        )
-        xml.endElement(xl("cellStyleXfs"))
-        let formats = styles.numFmtIds()
-        xml.startElement(xl("cellXfs"), attributes: [XmlAttribute(QName("count"), formats.size.toString())])
-        for (numFmtId in formats) {
-            let attrs = ArrayList<XmlAttribute>()
-            attrs.add(XmlAttribute(QName("numFmtId"), numFmtId.toString()))
-            attrs.add(XmlAttribute(QName("fontId"), "0"))
-            attrs.add(XmlAttribute(QName("fillId"), "0"))
-            attrs.add(XmlAttribute(QName("borderId"), "0"))
-            attrs.add(XmlAttribute(QName("xfId"), "0"))
-            if (numFmtId != 0) {
-                attrs.add(XmlAttribute(QName("applyNumberFormat"), "1"))
-            }
-            xml.emptyElement(xl("xf"), attributes: attrs.toArray())
+        xml.startElement(xdr("wsDr"), attributes: [XmlAttribute(QName("xmlns:r"), NS_REL)])
+        for (i in 0..images.size) {
+            let image = images[i]
+            xml.startElement(xdr("twoCellAnchor"), attributes: [XmlAttribute(QName("editAs"), "oneCell")])
+            writeAnchor(xml, "from", image.from)
+            writeAnchor(xml, "to", image.to)
+            xml.startElement(xdr("pic"))
+            xml.startElement(xdr("nvPicPr"))
+            xml.emptyElement(
+                xdr("cNvPr"),
+                attributes: [XmlAttribute(QName("id"), "${i + 1}"), XmlAttribute(QName("name"), "Picture ${i + 1}")]
+            )
+            xml.startElement(xdr("cNvPicPr"))
+            xml.emptyElement(a("picLocks"), attributes: [XmlAttribute(QName("noChangeAspect"), "1")])
+            xml.endElement(xdr("cNvPicPr"))
+            xml.endElement(xdr("nvPicPr"))
+            xml.startElement(xdr("blipFill"))
+            xml.emptyElement(a("blip"), attributes: [XmlAttribute(QName("r:embed"), "rId${i + 1}")])
+            xml.startElement(a("stretch"))
+            xml.emptyElement(a("fillRect"))
+            xml.endElement(a("stretch"))
+            xml.endElement(xdr("blipFill"))
+            xml.startElement(xdr("spPr"))
+            xml.startElement(a("xfrm"))
+            xml.emptyElement(a("off"), attributes: [XmlAttribute(QName("x"), "0"), XmlAttribute(QName("y"), "0")])
+            xml.emptyElement(a("ext"), attributes: [XmlAttribute(QName("cx"), "0"), XmlAttribute(QName("cy"), "0")])
+            xml.endElement(a("xfrm"))
+            xml.startElement(a("prstGeom"), attributes: [XmlAttribute(QName("prst"), "rect")])
+            xml.emptyElement(a("avLst"))
+            xml.endElement(a("prstGeom"))
+            xml.endElement(xdr("spPr"))
+            xml.endElement(xdr("pic"))
+            xml.emptyElement(xdr("clientData"))
+            xml.endElement(xdr("twoCellAnchor"))
         }
-        xml.endElement(xl("cellXfs"))
-        xml.startElement(xl("cellStyles"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.emptyElement(
-            xl("cellStyle"),
-            attributes: [
-                XmlAttribute(QName("name"), "Normal"),
-                XmlAttribute(QName("xfId"), "0"),
-                XmlAttribute(QName("builtinId"), "0")
-            ]
-        )
-        xml.endElement(xl("cellStyles"))
-        xml.endElement(QName("styleSheet"))
+        xml.endElement(xdr("wsDr"))
         xml.flush()
         buffer.bytes()
     }
+
+    private static func writeAnchor(xml: XmlWriter, tag: String, ref: CellRef): Unit {
+        xml.startElement(xdr(tag))
+        xml.startElement(xdr("col"))
+        xml.text((ref.col - 1).toString())
+        xml.endElement(xdr("col"))
+        xml.startElement(xdr("colOff"))
+        xml.text("0")
+        xml.endElement(xdr("colOff"))
+        xml.startElement(xdr("row"))
+        xml.text((ref.row - 1).toString())
+        xml.endElement(xdr("row"))
+        xml.startElement(xdr("rowOff"))
+        xml.text("0")
+        xml.endElement(xdr("rowOff"))
+        xml.endElement(xdr(tag))
+    }
+
+    private static func drawingRels(media: ArrayList<String>): Array<Byte> {
+        let buffer = ByteBuffer(64 * 1024)
+        let xml = newWriter(buffer)
+        xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
+        xml.startElement(QName("Relationships", uri: Some(NS_PKG_REL)))
+        for (i in 0..media.size) {
+            xml.emptyElement(
+                rel("Relationship"),
+                attributes: [
+                    XmlAttribute(QName("Id"), "rId${i + 1}"),
+                    XmlAttribute(QName("Type"), "${NS_REL}/image"),
+                    XmlAttribute(QName("Target"), "../media/${media[i]}")
+                ]
+            )
+        }
+        xml.endElement(QName("Relationships"))
+        xml.flush()
+        buffer.bytes()
+    }
+
+    private static func sheetRels(drawing: Int64): Array<Byte> {
+        let buffer = ByteBuffer(64 * 1024)
+        let xml = newWriter(buffer)
+        xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
+        xml.startElement(QName("Relationships", uri: Some(NS_PKG_REL)))
+        xml.emptyElement(
+            rel("Relationship"),
+            attributes: [
+                XmlAttribute(QName("Id"), "rId1"),
+                XmlAttribute(QName("Type"), "${NS_REL}/drawing"),
+                XmlAttribute(QName("Target"), "../drawings/drawing${drawing}.xml")
+            ]
+        )
+        xml.endElement(QName("Relationships"))
+        xml.flush()
+        buffer.bytes()
+    }
+
 }

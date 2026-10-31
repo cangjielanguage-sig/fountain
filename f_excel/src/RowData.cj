@@ -25,11 +25,18 @@ public struct Cell {
     public let col: Int64
     public let value: CellValue
     public let numberFormat: ?NumberFormat
+    public let style: ?CellStyle
 
-    public init(col: Int64, value: CellValue, numberFormat!: ?NumberFormat = None) {
+    public init(
+        col: Int64,
+        value: CellValue,
+        numberFormat!: ?NumberFormat = None,
+        style!: ?CellStyle = None
+    ) {
         this.col = col
         this.value = value
         this.numberFormat = numberFormat
+        this.style = style
     }
 
     public func toString(): String {

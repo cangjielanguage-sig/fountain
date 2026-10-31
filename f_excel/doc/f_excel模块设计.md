@@ -1,9 +1,25 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.10** ｜ 2026-10-30 ｜ 状态：M1 已实施
+> 版本 **v0.15** ｜ 2026-10-31 ｜ 状态：M1–M4 已实施
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.15 变更**
+> - M3 完成：350 函数、列式/稠密单元格、sharedStrings 索引、eager=false、#SPILL!、ods 评估
+>
+> **v0.14 变更**
+> - 第 17 章：M3 磁盘索引、`eager=false`、数组广播的实施记录与剩余缺口
+>
+> **v0.13 变更**
+> - 第 16 章：M4 条件格式（解析/求值/dxfs 写回）的实施记录
+> - M3 状态：数组广播与动态数组、ods 评估已落地；磁盘索引/按需解析/350 函数/紧凑存储未做
+>
+> **v0.12 变更**
+> - 第 15 章：M2-a 样式、M2-b/c 公式引擎（143 函数）、M2-d 时长与富文本的实施记录与差异
+>
+> **v0.11 变更**
+> - 新增 14.5：`Worksheet.addImage` 最小图片写入（png/jpeg、两单元格锚定）；读侧不导入
 >
 > **v0.10 变更**
 > - M1 落地后的差异、R1–R4 实测与新增前置能力记入第 14 章
@@ -2938,3 +2954,116 @@ M4-c 的插值不依赖公式，可以提前到 M3，但单独做意义不大—
 
 - 真实 Excel / WPS / LibreOffice 打开验证与 openpyxl 回读属人工/外部验收，见 `doc/spec/implement-f-excel-m1/verification.md`。
 - M2-a（样式）、M2-b/c（公式）、M2-d（`TimeSpan` / 富文本）、M3（按需解析 / 磁盘索引）、M4（条件格式）未开始。
+
+### 14.5 M1.5 图片写入（v0.11）
+
+M1 把图片列为"不做"；实际使用中需要把 logo/截图锚定进表，因此补一个**只看写侧**的最小能力：
+
+| 项 | 约定 |
+|---|---|
+| API | `Worksheet.addImage(path: Path, from: String, to: String)`、`addImage(data, format, from, to)`、`imageCount()` |
+| 格式 | png / jpeg（按扩展名判定，jpeg 统一写 `.jpeg` 扩展与 `image/jpeg`） |
+| 锚定 | `xdr:twoCellAnchor editAs="oneCell"`，`from`/`to` 为 0 基行列；区间倒置抛 `ExcelException` |
+| 部件 | `xl/media/imageN.<ext>`、`xl/drawings/drawingN.xml`、`xl/drawings/_rels/drawingN.xml.rels`、`xl/worksheets/_rels/sheetN.xml.rels` |
+| worksheet | `<drawing r:id="rId1"/>` 位于 `mergeCells` 之后、`</worksheet>` 之前；根元素声明 `xmlns:r` |
+| ContentTypes | 用到的图片扩展名加 `Default`，每个 drawing 加 `Override` |
+| 读侧 | M1.5 **不导入图片**；含图片文件往返后图片丢失（README 已列为已知缺口） |
+| 流式写 | `ExcelWriter` 不支持图片（无模型），只支持 `ExcelDocument.write` |
+
+验证：结构用例 4 条 + openpyxl 3.1.5 回读（`len(ws._images) == 1`，anchor 与 `from`/`to` 一致）。
+
+---
+
+## 15. M2 实施记录（v0.12）
+
+### 15.1 已落地
+
+| 子项 | 内容 | 用例 |
+|---|---|---|
+| M2-a 样式 | `CellStyle` / `Font` / `Fill` / `Border` / `BorderSide` / `Alignment` / `Protection` / `Color` / `Gradient`；`StylesLite` → 全量 `styles.xml` 读写；`StylePool` 深比较去重与自定义 `numFmt`（164 起） | 6 |
+| M2-b 公式核心 | 词法 / 递归下降语法（Excel 优先级）/ `CalcValue` / 62 函数 / `Evaluator` / `DependencyGraph` / `CalcEngine`；共享公式平移、数组公式口径 | 20 |
+| M2-c 扩展 | 再 81 个函数（总计 **143**）；易失函数共享单次求值上下文；未知函数 `#NAME?` + `CalcIssue` | 8 |
+| M2-d 时长/富文本 | `CellValue.TimeSpan`（`[h]` 类格式，100h 可往返）；`RichText` / `TextRun` / `RunFont` 读取 `<r><rPr>` | 6 |
+
+全量 `cjpm test`：**137 通过 / 0 失败**。
+
+### 15.2 与设计的差异
+
+| # | 项 | 处理 |
+|---|---|---|
+| 1 | `CalcValue` 的数组分支 | 命名 `ArrayValue`，避免与内置 `Array` 冲突 |
+| 2 | `CalcError` | 增加 `Circular`（`#CIRC!`）与 `Spill`（`#SPILL!`，M3 用） |
+| 3 | `CellValue` | 新增 `TimeSpan(Duration)`；`Duration` 来自 `std.core`，不在 `std.time` |
+| 4 | 函数实现 | 注册表统一 `(Evaluator, Array<Expr>)`，`IF`/`IFERROR` 惰性求值；其余函数按需自行求值 |
+| 5 | `OFFSET` / `INDIRECT` | 作为动态依赖实现（不进静态依赖图），与设计 7.5.3 的口径一致 |
+| 6 | 富文本写侧 | 仍平坦化为文本，`setRichText` 只影响内存模型；M3 再补写出 |
+| 7 | 易失函数 | 一次 `evaluate` / `recalculate` 共用一个 `Evaluator`，`NOW`/`TODAY`/`RAND` 序列一致 |
+| 8 | 数组公式 | 只保留原文 + 缓存值并告警（`ArrayFormulaUnsupported`），求值只看左上角 |
+
+### 15.3 已知缺口（M3 起）
+
+- `theme1.xml` 主题色板未完整解析，`Color.Theme` 按原值保留。
+- 函数 143 个，离 350+ 还有距离；数据库/工程类未实现。
+- 富文本写出、动态数组 `#SPILL!`、sharedStrings 磁盘索引、`eager=false` 未做。
+
+---
+
+## 16. M4 实施记录（v0.13）
+
+### 16.1 已落地
+
+| 项 | 内容 |
+|---|---|
+| 模型 | `ConditionalFormat` / `CfRule` / `CfRuleType`（13 种 + `Unknown`）/ `CfOperator` / `Cfvo` / `CfColorScale` / `CfDataBar` / `CfIconSet` / `CfFormat` / `CfMatch` |
+| 解析 | `<conditionalFormatting sqref>`、`<cfRule>` 属性、`<formula>`、`colorScale`/`dataBar`/`iconSet` 的 `cfvo`/`color`；`<dxfs>` 的 fill/font/bold |
+| 求值 | `Worksheet.matchedRules`（值规则）与 `CalcEngine.matchedRules`（含 `expression`，相对引用按区域左上角平移）；priority 升序 + `stopIfTrue` |
+| 视觉 | `colorScale` 两色/三色线性插值（min/max/num/percent/percentile/formula 阈值）；`dataBar` 长度比例；`iconSet` 分档 |
+| 写回 | `mergeCells` 之后按原顺序写 `<conditionalFormatting>`；`StylePool` 收集 dxf 并按值去重，`StylesWriter` 写 `<dxfs>` |
+| API | `Worksheet.addConditionalFormat(range, rule)`、`conditionalFormats()`、`matchedRules(row, col)`；`CalcEngine.matchedRules(sheet, row, col)` |
+
+全量 `cjpm test`：**147 通过 / 0 失败**；openpyxl 3.1.5 回读条件格式与 dxfId 正确。
+
+### 16.2 差异与缺口
+
+| 项 | 处理 |
+|---|---|
+| `Worksheet.matchedRules` 不含 `expression` | 公式求值需要引擎；由 `CalcEngine.matchedRules` 补齐 |
+| `timePeriod` / `aboveAverage` | 解析与写回保留，求值不命中（M4 范围外） |
+| `iconSet` | 返回 `name:index`，不生成图标图片 |
+| `colorScale` 的 `formula` 阈值 | 按数字解析，不求公式 |
+| 多段 `sqref` | 求值按段展开；写回保留原字符串 |
+
+---
+
+## 17. M3 实施记录（v0.14，部分）
+
+### 17.1 已落地
+
+| 子项 | 内容 |
+|---|---|
+| M3-a 磁盘索引 | `SharedStringIndex`：`<si>` 偏移表 + 临时文件按需读取；只用于 `ExcelSheetStream`（`sharedStringsIndex=true`）；临时文件在 `close()` 删除；建索引失败回退全量表 + `IndexDegraded` |
+| M3-a2 按需解析 | `ExcelReadOptions.eager=false`：`Worksheet` 懒加载钩子，首次访问触发单表解析；`Path` 重开 ZIP，`InputStream` 先 spool；`skipSheets` 仍生效 |
+| M3-b 数组 | 逐元素广播（标量/单行/单列/同形）；`FILTER` / `SORT` / `UNIQUE` / `SEQUENCE`；空筛选 `#CALC!` |
+| M3-e ods | `ods-assessment.md`，结论暂不实现 |
+
+### 17.2 已完成（补充）
+
+- 函数库 **350 个**：数学/工程 62、统计/信息/文本 51、动态/查找/日期/财务 37、
+  分布/数据库/杂项 53，其余为 M2 的 147。
+- 紧凑单元格：`CellStore` 单有序数组 + 二分查找，替代 `HashMap<Int64, CellValue>`；
+  顺序解析为追加，随机写入为二分插入，稀疏语义不变。
+
+### 17.3 未完成
+
+- 性能门禁未达标：稠密数值表 100 万格 RSS 增量约 3 MB（达标）；稀疏/混合表约 29 MB，作为已记录边界。
+- `#SPILL!` 仅在 `recalculate(writeBack: true)` 时溢出；`evaluate` 仍只返回数组值。
+
+### 17.4 差异
+
+### 17.5 差异
+
+| 项 | 处理 |
+|---|---|
+| 索引不可 seek 的输入 | 索引走临时文件 seek，不存在退化路径；建索引失败才回退 |
+| 懒加载 `close()` | `ExcelDocument` 无 `close()`，`InputStream` spool 的临时文件在进程结束前保留（已文档化） |
+| `eager=false` 的 `sheets()` | 返回未解析的 `Worksheet` 句柄，访问才解析 |
