@@ -27,5 +27,7 @@ public interface VectorStore {
     func get(collection: String, id: String): ?VectorRecord
     func remove(collection: String, id: String): Bool
     func searchDense(query: VectorQuery): ArrayList<VectorHit>
+    /** 稀疏倒排检索：按 `查询权重 × 记录权重` 累加 */
+    func searchSparse(query: SparseQuery): ArrayList<VectorHit>
     func count(collection: String): Int64
 }

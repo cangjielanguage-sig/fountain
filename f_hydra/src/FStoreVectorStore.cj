@@ -45,9 +45,15 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func upsert(collection: String, record: VectorRecord): Unit {
+        // 覆盖写：先清掉旧稀疏倒排，否则旧 token 会残留
+        deletePostings(collection, record.id)
+
         store.add(payloadKey(collection, record.id).toArray(), record.payload.toArray())
         store.add(denseKey(collection, record.id).toArray(), encodeDense(record.dense).toArray())
         store.add(sparseKey(collection, record.id).toArray(), encodeSparse(record.sparse).toArray())
+        for((token, weight) in record.sparse){
+            store.add(postingKey(collection, token, record.id).toArray(), weight.toString().toArray())
+        }
         store.add(readyKey(collection, record.id).toArray(), [1u8])
         ()
     }
@@ -70,6 +76,7 @@ public class FStoreVectorStore <: VectorStore {
 
     public func remove(collection: String, id: String): Bool {
         let existed = store.contains(payloadKey(collection, id).toArray())
+        deletePostings(collection, id)
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
@@ -91,6 +98,40 @@ public class FStoreVectorStore <: VectorStore {
                 continue
             }
             let score = cosine(query.dense, dense)
+            let payload = match(store.get(payloadKey(query.collection, id).toArray())){
+                case Some(bytes) => String.fromUtf8(bytes)
+                case None => ''
+            }
+            hits.add(VectorHit(id, payload, score))
+        }
+        sortDesc(hits)
+        let limited = ArrayList<VectorHit>()
+        for(index in 0..hits.size){
+            if(Int64(index) >= query.limit){
+                break
+            }
+            limited.add(hits[index])
+        }
+        limited
+    }
+
+    public func searchSparse(query: SparseQuery): ArrayList<VectorHit> {
+        let hits = ArrayList<VectorHit>()
+        if(query.limit <= 0 || query.tokens.isEmpty()){
+            return hits
+        }
+        let scores = HashMap<String, Float64>()
+        for((token, queryWeight) in query.tokens){
+            let prefix = postingPrefix(query.collection, token)
+            for((key, value) in store.prefix(prefix.toArray())){
+                let text = String.fromUtf8(key)
+                let id = text[Int64(prefix.size)..Int64(text.size)]
+                let weight = Float64.parse(String.fromUtf8(value))
+                let current = scores.get(id) ?? 0.0f64
+                scores[id] = current + queryWeight * weight
+            }
+        }
+        for((id, score) in scores){
             let payload = match(store.get(payloadKey(query.collection, id).toArray())){
                 case Some(bytes) => String.fromUtf8(bytes)
                 case None => ''
@@ -144,6 +185,26 @@ public class FStoreVectorStore <: VectorStore {
 
     private static func readyKey(collection: String, id: String): String {
         'h:${collection}:r:${id}'
+    }
+
+    private static func postingPrefix(collection: String, token: Int64): String {
+        'h:${collection}:i:t:${token}:'
+    }
+
+    private static func postingKey(collection: String, token: Int64, id: String): String {
+        'h:${collection}:i:t:${token}:${id}'
+    }
+
+    /** 覆盖写/删除前清掉旧倒排，避免旧 token 残留 */
+    private func deletePostings(collection: String, id: String): Unit {
+        match(store.get(sparseKey(collection, id).toArray())){
+            case Some(bytes) =>
+                let tokens = decodeSparse(String.fromUtf8(bytes))
+                for((token, _) in tokens){
+                    store.remove(postingKey(collection, token, id).toArray())
+                }
+            case None => ()
+        }
     }
 
     // ---- codec ----

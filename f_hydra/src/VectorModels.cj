@@ -51,6 +51,19 @@ public class VectorQuery {
     }
 }
 
+/** 稀疏（词面）检索请求：`tokens` 是查询侧的 token→权重 */
+public class SparseQuery {
+    public let collection: String
+    public let tokens: HashMap<Int64, Float64>
+    public let limit: Int64
+
+    public init(collection: String, tokens: HashMap<Int64, Float64>, limit!: Int64 = 10) {
+        this.collection = collection
+        this.tokens = tokens
+        this.limit = limit
+    }
+}
+
 /** 检索结果 */
 public class VectorHit {
     public let id: String

@@ -97,4 +97,62 @@ public class FStoreVectorStoreTest {
         @Expect(store.searchDense(VectorQuery('c', Array<Float64>())).size, 0)
         store.close()
     }
+
+    // ---- sparse ----
+
+    private func tokens(items: Array<(Int64, Float64)>): HashMap<Int64, Float64> {
+        let map = HashMap<Int64, Float64>()
+        for((token, weight) in items){
+            map[token] = weight
+        }
+        map
+    }
+
+    @TestCase
+    func testSparseSearchAccumulatesWeights(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r1', 'p1', [1.0f64, 0.0f64],
+                                       sparse: tokens([(1, 1.0f64), (2, 0.5f64)])))
+        store.upsert('c', VectorRecord('r2', 'p2', [1.0f64, 0.0f64],
+                                       sparse: tokens([(1, 1.0f64)])))
+
+        let hits = store.searchSparse(SparseQuery('c', tokens([(1, 1.0f64), (2, 1.0f64)]), limit: 5))
+        @Expect(hits.size, 2)
+        @Expect(hits[0].id, 'r1')
+        @Expect(hits[0].score, 1.5f64)
+        @Expect(hits[1].score, 1.0f64)
+        store.close()
+    }
+
+    @TestCase
+    func testSparseOverwriteClearsStalePostings(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p1', [1.0f64], sparse: tokens([(1, 1.0f64)])))
+        store.upsert('c', VectorRecord('r', 'p2', [1.0f64], sparse: tokens([(2, 1.0f64)])))
+
+        @Expect(store.searchSparse(SparseQuery('c', tokens([(1, 1.0f64)]))).size, 0)
+        @Expect(store.searchSparse(SparseQuery('c', tokens([(2, 1.0f64)]))).size, 1)
+        store.close()
+    }
+
+    @TestCase
+    func testSparseRemoveClearsPostings(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64], sparse: tokens([(9, 0.7f64)])))
+        @Expect(store.remove('c', 'r'), true)
+        @Expect(store.searchSparse(SparseQuery('c', tokens([(9, 1.0f64)]))).size, 0)
+        store.close()
+    }
+
+    @TestCase
+    func testSparseCollectionsAreIsolated(): Unit {
+        let store = newStore()
+        store.upsert('a', VectorRecord('r', 'A', [1.0f64], sparse: tokens([(5, 1.0f64)])))
+        store.upsert('b', VectorRecord('r', 'B', [1.0f64], sparse: tokens([(5, 1.0f64)])))
+
+        let hitsA = store.searchSparse(SparseQuery('a', tokens([(5, 1.0f64)])))
+        @Expect(hitsA.size, 1)
+        @Expect(hitsA[0].payload, 'A')
+        store.close()
+    }
 }
