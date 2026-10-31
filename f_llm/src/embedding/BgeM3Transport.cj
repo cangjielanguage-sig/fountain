@@ -17,6 +17,8 @@ package fountain::f_llm.embedding
 
 import std.collection.*
 import std.convert.*
+import std.sync.*
+import std.time.*
 
 import stdx.net.tls.common.*
 
@@ -39,12 +41,38 @@ public class BgeM3Transport <: EmbeddingTransport {
     public static const DEFAULT_URL = 'http://127.0.0.1:8000/v1/embeddings'
 
     private let url: String
+    private let timeoutMs: Int64
+    private let retries: Int64
 
-    public init(url!: String = DEFAULT_URL) {
+    public init(url!: String = DEFAULT_URL, timeoutMs!: Int64 = 3000, retries!: Int64 = 2) {
         this.url = url
+        this.timeoutMs = timeoutMs
+        this.retries = retries
     }
 
+    /** 失败重试（2 次，退避 100ms / 300ms），仍失败则抛最后一次异常 */
     public func embed(text: String): EmbeddingResponse {
+        if(timeoutMs > 0){
+            HttpClient.globalReadTimeout(Duration.millisecond * timeoutMs)
+        }
+        var last: ?Exception = None
+        for(attempt in 0..(retries + 1)){
+            try{
+                return postOnce(text)
+            }catch(e: Exception){
+                last = Some(e)
+                if(attempt < retries){
+                    sleep(Duration.millisecond * (100 * (attempt + 1)))
+                }
+            }
+        }
+        throw match(last){
+            case Some(error) => error
+            case None => IllegalStateException('bge-m3 embedding failed without exception')
+        }
+    }
+
+    private func postOnce(text: String): EmbeddingResponse {
         let body = '''
 {"input":["${escape(text)}"],"return_sparse":true,"return_colbert_vecs":true}
 '''

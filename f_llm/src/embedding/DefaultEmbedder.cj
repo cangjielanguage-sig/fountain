@@ -20,6 +20,7 @@ import std.collection.*
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 
+import fountain::f_llm.config.LLMConfig
 import fountain::f_llm.store.*
 
 /** 生产用 `Embedder`：`HttpEmbedder` + 复用 `Embedding` 的传输层，供 `lookup<Embedder>()` 取用。 */
@@ -29,7 +30,10 @@ public class DefaultEmbedder <: Embedder {
 
     public init() {
         // 本机 BGE-M3 服务支持三路；换成 OpenAI 兼容端点时改回 LlmEmbeddingTransport
-        this.inner = HttpEmbedder(BgeM3Transport())
+        this.inner = HttpEmbedder(BgeM3Transport(
+            url: LLMConfig.getEmbeddingUrl(),
+            timeoutMs: LLMConfig.getEmbeddingTimeoutMs(),
+            retries: LLMConfig.getEmbeddingRetries()))
     }
 
     public func embed(text: String): Array<Float64> {

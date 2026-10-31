@@ -22,6 +22,9 @@ import fountain::f_config.*
 
 public struct LLMConfig {
     private init(){}
+    public static const LLM_EMBEDDING_URL = 'llm_embeddingUrl'
+    public static const LLM_EMBEDDING_TIMEOUT_MS = 'llm_embeddingTimeoutMs'
+    public static const LLM_EMBEDDING_RETRIES = 'llm_embeddingRetries'
     public static const LLM_MEMORY_USER_ID = 'llm_memoryUserId'
     public static const LLM = 'llm'
     public static const AUTO = LLM + '_auto'
@@ -73,6 +76,21 @@ public struct LLMConfig {
 
     public static func getPrunerLlmName(): String {
         Config.getString(LLM_PRUNER_LLM_NAME) ?? 'chat-pro'
+    }
+
+    /** BGE-M3 端点（默认本机 8000） */
+    public static func getEmbeddingUrl(): String {
+        Config.getString(LLM_EMBEDDING_URL) ?? 'http://127.0.0.1:8000/v1/embeddings'
+    }
+
+    /** 单次向量化请求超时（毫秒） */
+    public static func getEmbeddingTimeoutMs(): Int64 {
+        Config.getValue<Int64>(LLM_EMBEDDING_TIMEOUT_MS) ?? 3000
+    }
+
+    /** 向量化失败重试次数（不含首次） */
+    public static func getEmbeddingRetries(): Int64 {
+        Config.getValue<Int64>(LLM_EMBEDDING_RETRIES) ?? 2
     }
 
     /** 会话摘要写入向量记忆时归属的用户（默认 0：系统级） */
