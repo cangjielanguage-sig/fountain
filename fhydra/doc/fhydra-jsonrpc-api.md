@@ -14,6 +14,9 @@
 | 端点 | `POST /rpc`（全部命名空间）与 `POST /rpc/hydra`（限定 `hydra`） |
 | 协议 | JSON-RPC 2.0；支持批量数组与通知（无 `id` 不返回响应） |
 | 头 | 必须 `Content-Type: application/json`（否则 415）、`Accept: application/json`（否则 406） |
+| 鉴权 | 除 `hydra.health` 外，全部要求头 `X-Hydra-Key: <hydra_secret>`；缺失/不匹配返回 `-32023` |
+| 启动 | `fhydra` 自带 `main`：`MVCStarter.initialize()` → `MVCStarter.start()`（阻塞） |
+| 数据目录 | `hydra_dataPath`（默认 `./data/fhydra`）；密钥 `hydra_secret`（未配置时拒绝除 health 外的调用） |
 | 命名空间 | 类上 `@JsonRpc[namespace: hydra]`，方法名即 `hydra.<method>` |
 | 超时 | 每个方法用 `@JsonRpcMeta['描述', '5s']` 声明；见方法表 |
 
@@ -59,30 +62,35 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 
 ## 3. 方法表
 
-| 方法 | 参数 | 返回 | 超时 |
-|---|---|---|---|
-| `hydra.health` | `{}` | `{"status":"ok","version":"1.3.17"}` | 1s |
-| `hydra.upsert` | `collection,id,payload,dense,sparse?,colbert?,filters?` | `{"ok":true}` | 5s |
-| `hydra.get` | `collection,id` | record 或 `null` | 2s |
-| `hydra.remove` | `collection,id` | `{"removed":bool}` | 2s |
-| `hydra.searchDense` | `collection,dense,limit,filters?` | `{"hits":[…]}` | 5s |
-| `hydra.searchSparse` | `collection,tokens,limit,filters?` | `{"hits":[…]}` | 5s |
-| `hydra.rerank` | `collection,ids,colbert` | `{"hits":[…]}` | 5s |
-| `hydra.count` | `collection` | `{"count":n}` | 2s |
-| `hydra.ids` | `collection,offset,limit` | `{"ids":[…]}` | 2s |
-| `hydra.buildIndex` | `collection,clusters?` | `{"clusters":n}` | 60s |
-| `hydra.indexClusters` | `collection` | `{"clusters":n}` | 1s |
-| `hydra.recover` | `collection` | `{"purged":n}` | 60s |
-| `hydra.setTtl` | `collection,seconds` | `{"ok":true}` | 2s |
-| `hydra.ttl` | `collection` | `{"ttl":epochSeconds}` | 1s |
-| `hydra.purgeExpired` | `collection` | `{"purgedKeys":n}` | 60s |
-| `hydra.export` | `collection,targetCollection` | `{"exported":n}` | 60s |
+| 方法 | 参数 | 返回 | 超时 | 状态 |
+|---|---|---|---|---|
+| `hydra.health` | `{}` | `{"status":"ok","version":"1.3.17"}` | 1s | ✅ |
+| `hydra.upsert` | `{collection,id,payload,dense\|denseB64,kind?,saveDay?,tags?}` | `true` | 5s | ✅ |
+| `hydra.upsertBatch` | `[record…]`（≤100） | 写入条数 | 10s | ✅ |
+| `hydra.get` | `{collection,id}` | record JSON 字符串 / `"null"` | 2s | ✅ |
+| `hydra.remove` | `{collection,id}` | `bool` | 2s | ✅ |
+| `hydra.searchDense` | `{collection,dense\|denseB64,limit,kind?,saveDay?,tags?}` | `{"hits":[…]}` 字符串 | 5s | ✅ |
+| `hydra.searchSparse` | `{collection,tokenIds,weights,limit,filters?}` | `{"hits":[…]}` 字符串 | 5s | ✅ |
+| `hydra.count` | `{collection}` | `Int64` | 2s | ✅ |
+| `hydra.ids` | `{collection,offset,limit}` | `["id",…]` 字符串 | 2s | ✅ |
+| `hydra.buildIndex` | `{collection,clusters}` | `Int64` 簇数 | 60s | ✅ |
+| `hydra.recover` | `{collection}` | 清理条数 | 60s | ✅ |
+| `hydra.setTtl` | `{collection,seconds}` | `true` | 2s | ✅ |
+| `hydra.ttl` | `{collection}` | epoch 秒 | 1s | ✅ |
+| `hydra.purgeExpired` | `{collection}` | 删除 key 数 | 60s | ✅ |
+| `hydra.rerank` | `{collection,ids,colbert}` | `{"hits":[…]}` | 5s | ⬜ 待实现 |
+| `hydra.indexClusters` | `{collection}` | 簇数 | 1s | ⬜ 待实现 |
+| `hydra.export` | `{collection,targetCollection}` | 条数 | 60s | ⬜ 待实现 |
 
 说明：
 
-- `hydra.export` 只在**同一服务进程内**复制 collection（跨服务器迁移由客户端 `ids` + `get` + `upsert` 完成）；
-- `hydra.searchDense` 未建 IVF 时自动暴力扫描，行为一致；`clusters=0` 表示按 `√n` 估算簇数；
-- `hydra.get` 对「未就绪 / 已删除 / 过期」一律返回 `null`，不区分——避免泄漏写入中间态。
+- **参数一律包在 `param` / `params` 字段里**（f_jsonrpc 的方法参数是一个对象），例如
+  `{"method":"hydra.count","params":{"param":{"collection":"c"}}}`；
+- 复合结果当前返回 **JSON 字符串**（`result` 是字符串而非对象），f_llm 客户端需二次解析；
+  后续可改成 `JsonValue` 直接返回对象；
+- `denseB64` 为 f32 小端原始字节的 Base64（不带 count 头），优先于 `dense` 数组；
+- `hydra.searchDense` 未建 IVF 时自动暴力扫描；`clusters=0` 表示按 `√n` 估算；
+- `hydra.get` 对「未就绪 / 已删除 / 过期」一律返回 `"null"`，不泄漏写入中间态。
 
 ## 4. 示例
 
@@ -134,9 +142,10 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 | -32601 | Method not found | 拼错方法名 |
 | -32602 | Invalid params | 缺必填、`limit<=0`、`clusters<0`、向量为空 |
 | -32603 | Internal error | `f_store` IO、未捕获异常 |
-| 1001 | Dimension mismatch | 查询向量长度与记录不一致（当前实现是跳过该记录；API 层需要显式返回） |
-| 1002 | Invalid vector | 含 NaN/Inf |
-| 1003 | Store unavailable | 数据目录不可写/已关闭 |
+| **-32023** | Unauthorized | 缺少或错误的 `X-Hydra-Key`；`hydra_secret` 未配置 |
+| -32020 ~ -32022 | 预留 | 维度不符 / 非法向量 / 存储不可用（当前实现静默跳过不匹配维度，暂不返回） |
+
+> f_jsonrpc 规定业务错误码落在 `-32020 ~ -32099`，不要占用 `-32001 ~ -32004`。
 
 ## 6. 与 f_llm 的对接点
 
