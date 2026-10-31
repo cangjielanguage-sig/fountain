@@ -51,6 +51,7 @@ public class FStoreVectorStore <: VectorStore {
         store.add(payloadKey(collection, record.id).toArray(), record.payload.toArray())
         store.add(denseKey(collection, record.id).toArray(), encodeDense(record.dense).toArray())
         store.add(sparseKey(collection, record.id).toArray(), encodeSparse(record.sparse).toArray())
+        store.add(colbertKey(collection, record.id).toArray(), encodeColbert(record.colbert).toArray())
         for((token, weight) in record.sparse){
             store.add(postingKey(collection, token, record.id).toArray(), weight.toString().toArray())
         }
@@ -69,7 +70,11 @@ public class FStoreVectorStore <: VectorStore {
                     case Some(raw) => decodeSparse(String.fromUtf8(raw))
                     case None => HashMap<Int64, Float64>()
                 }
-                Some(VectorRecord(id, String.fromUtf8(bytes), dense, sparse: sparse))
+                let colbert = match(store.get(colbertKey(collection, id).toArray())){
+                    case Some(raw) => decodeColbert(String.fromUtf8(raw))
+                    case None => Array<Array<Float64>>()
+                }
+                Some(VectorRecord(id, String.fromUtf8(bytes), dense, sparse: sparse, colbert: colbert))
             case None => None
         }
     }
@@ -80,6 +85,7 @@ public class FStoreVectorStore <: VectorStore {
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
+        store.remove(colbertKey(collection, id).toArray())
         store.remove(readyKey(collection, id).toArray())
         existed
     }
@@ -149,6 +155,27 @@ public class FStoreVectorStore <: VectorStore {
         limited
     }
 
+    public func rerank(collection: String, ids: ArrayList<String>,
+                       queryColbert: Array<Array<Float64>>): ArrayList<VectorHit> {
+        let hits = ArrayList<VectorHit>()
+        if(ids.isEmpty() || queryColbert.isEmpty()){
+            return hits
+        }
+        for(id in ids){
+            let docColbert = match(store.get(colbertKey(collection, id).toArray())){
+                case Some(raw) => decodeColbert(String.fromUtf8(raw))
+                case None => Array<Array<Float64>>()
+            }
+            let payload = match(store.get(payloadKey(collection, id).toArray())){
+                case Some(bytes) => String.fromUtf8(bytes)
+                case None => ''
+            }
+            hits.add(VectorHit(id, payload, maxSim(queryColbert, docColbert)))
+        }
+        sortDesc(hits)
+        hits
+    }
+
     public func count(collection: String): Int64 {
         var total: Int64 = 0
         for(_ in store.prefix(payloadPrefix(collection).toArray())){
@@ -195,6 +222,10 @@ public class FStoreVectorStore <: VectorStore {
         'h:${collection}:i:t:${token}:${id}'
     }
 
+    private static func colbertKey(collection: String, id: String): String {
+        'h:${collection}:v:c:${id}'
+    }
+
     /** 覆盖写/删除前清掉旧倒排，避免旧 token 残留 */
     private func deletePostings(collection: String, id: String): Unit {
         match(store.get(sparseKey(collection, id).toArray())){
@@ -229,6 +260,30 @@ public class FStoreVectorStore <: VectorStore {
             }
         }
         values.toArray()
+    }
+
+    static func encodeColbert(vectors: Array<Array<Float64>>): String {
+        var text = ''
+        for(row in vectors){
+            if(!text.isEmpty()){
+                text += ';'
+            }
+            text += encodeDense(row)
+        }
+        text
+    }
+
+    static func decodeColbert(text: String): Array<Array<Float64>> {
+        let rows = ArrayList<Array<Float64>>()
+        if(text.isEmpty()){
+            return rows.toArray()
+        }
+        for(part in text.split(';')){
+            if(!part.isEmpty()){
+                rows.add(decodeDense(part))
+            }
+        }
+        rows.toArray()
     }
 
     static func encodeSparse(tokens: HashMap<Int64, Float64>): String {
@@ -278,6 +333,28 @@ public class FStoreVectorStore <: VectorStore {
             return 0.0f64
         }
         dot / (sqrt(normA) * sqrt(normB))
+    }
+
+    /**
+     * ColBERT max-sim：查询每个 token 在文档 token 里取最大余弦，再对查询 token 求平均。
+     * 文档没有 colbert（空）时记 0，仍返回该候选（不静默丢弃）。
+     */
+    static func maxSim(query: Array<Array<Float64>>, doc: Array<Array<Float64>>): Float64 {
+        if(query.isEmpty() || doc.isEmpty()){
+            return 0.0f64
+        }
+        var total: Float64 = 0.0f64
+        for(q in query){
+            var best: Float64 = -1.0f64
+            for(d in doc){
+                let score = cosine(q, d)
+                if(score > best){
+                    best = score
+                }
+            }
+            total += best
+        }
+        total / Float64(query.size)
     }
 
     private static func sqrt(value: Float64): Float64 {

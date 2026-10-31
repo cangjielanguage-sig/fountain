@@ -29,5 +29,12 @@ public interface VectorStore {
     func searchDense(query: VectorQuery): ArrayList<VectorHit>
     /** 稀疏倒排检索：按 `查询权重 × 记录权重` 累加 */
     func searchSparse(query: SparseQuery): ArrayList<VectorHit>
+    /**
+     * 对一级候选做 colbert 重排（max-sim）。
+     *
+     * `ids` 是 dense/sparse 召回的候选；只对这些 id 现算，不做全库扫描。
+     */
+    func rerank(collection: String, ids: ArrayList<String>,
+                queryColbert: Array<Array<Float64>>): ArrayList<VectorHit>
     func count(collection: String): Int64
 }

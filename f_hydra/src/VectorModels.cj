@@ -28,13 +28,17 @@ public class VectorRecord {
     public let payload: String
     public let dense: Array<Float64>
     public let sparse: HashMap<Int64, Float64>
+    /** 多头向量（每 token 一个向量），只用于重排，不建索引 */
+    public let colbert: Array<Array<Float64>>
 
     public init(id: String, payload: String, dense: Array<Float64>,
-                sparse!: HashMap<Int64, Float64> = HashMap<Int64, Float64>()) {
+                sparse!: HashMap<Int64, Float64> = HashMap<Int64, Float64>(),
+                colbert!: Array<Array<Float64>> = Array<Array<Float64>>()) {
         this.id = id
         this.payload = payload
         this.dense = dense
         this.sparse = sparse
+        this.colbert = colbert
     }
 }
 

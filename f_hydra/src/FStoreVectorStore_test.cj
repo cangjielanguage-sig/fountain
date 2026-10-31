@@ -144,6 +144,43 @@ public class FStoreVectorStoreTest {
         store.close()
     }
 
+    // ---- colbert ----
+
+    @TestCase
+    func testColbertRoundtrip(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64],
+                                       colbert: [[1.0f64, 0.0f64], [0.0f64, 1.0f64]]))
+        let record = store.get('c', 'r').getOrThrow()
+        @Expect(record.colbert.size, 2)
+        @Expect(record.colbert[0].size, 2)
+        @Expect(record.colbert[1][0], 0.0f64)
+        store.close()
+    }
+
+    @TestCase
+    func testRerankOrdersByMaxSim(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('aligned', 'A', [1.0f64], colbert: [[1.0f64, 0.0f64]]))
+        store.upsert('c', VectorRecord('orthogonal', 'B', [1.0f64], colbert: [[0.0f64, 1.0f64]]))
+
+        let hits = store.rerank('c', ArrayList<String>(['orthogonal', 'aligned']), [[1.0f64, 0.0f64]])
+        @Expect(hits.size, 2)
+        @Expect(hits[0].id, 'aligned')
+        @Expect(hits[0].score > hits[1].score, true)
+        store.close()
+    }
+
+    @TestCase
+    func testRerankEmptyQueryOrIds(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64], colbert: [[1.0f64, 0.0f64]]))
+
+        @Expect(store.rerank('c', ArrayList<String>(), [[1.0f64, 0.0f64]]).size, 0)
+        @Expect(store.rerank('c', ArrayList<String>(['r']), Array<Array<Float64>>()).size, 0)
+        store.close()
+    }
+
     @TestCase
     func testSparseCollectionsAreIsolated(): Unit {
         let store = newStore()
