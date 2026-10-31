@@ -35,6 +35,7 @@
 | [08-api.md](08-api.md) | 对外 API 与完整示例 |
 | [09-testing.md](09-testing.md) | 测试策略、用例矩阵、性能门禁 |
 | [10-roadmap.md](10-roadmap.md) | 里程碑拆分与验收标准 |
+| [11-assembly.md](11-assembly.md) | 装配层：`RuleSetBuilder.table()` 与 `RuleEngine.executeTable()` 的包依赖解法 |
 
 ## 术语表
 

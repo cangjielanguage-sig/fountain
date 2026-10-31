@@ -104,20 +104,24 @@ f_rule/src/
 包依赖方向（单向，禁止反向）：
 
 ```
-exception  ←  fact  ←  condition  ←  rule  ←  rete  ←  engine  ←  flow
-                                        ↑        ↑         ↑
-                                     agenda ─────┘         │
-                                        └──────────────────┘
+runtime → exception → fact → condition → rule → rete     → engine → flow
+                                            ├→ agenda   ↗
+                                            └→ table ──┘
 ```
 
 | 规则 | 说明 |
 |---|---|
 | `flow` 依赖 `engine` | `RuleTask` 调 `RuleEngine.session()` 与 `RuleSession.fire()` |
-| `engine` 依赖 `rete`/`agenda`/`rule`/`fact` | 会话持有网络运行态与议程 |
+| `engine` 依赖 `rete`/`agenda`/`rule`/`fact`/`table` | 会话持有网络运行态与议程；`executeTable` 编译并缓存决策表执行器 |
 | `agenda` 依赖 `rule`/`rete` 的产出接口 | `ActivationSink` 定义在 `agenda`，由 `rete` 反向实现 |
+| `table` 依赖 `rule`/`fact`/`condition`/`runtime` | 编译表产出 `Rule`；**不依赖 `engine`**，故 `engine → table` 单向 |
+| `rule` 只认识 `TableSource` 接口 | 装配期 `RuleSetBuilder.table()` 按接口调用，不知道表结构（见 `doc/11`） |
+| `runtime` 是最底层 | 只依赖 `f_jit` 与 `f_log`，供 `rule`/`rete`/`table` 取共享 `Compiler` |
 | **根包不依赖任何子包的具体实现** | 根包只 `public import` 重导出；因此子包**不能** `import fountain::f_rule.*` |
 
-违反最后一条会造成包循环：早期 `RuleEngine` 放在根包，`flow` 引它，根包就无法重导出 `flow`，用户被迫写 `import fountain::f_rule.flow.*`。现已把 `RuleEngine` / `RuleSession` 下移到 `engine/`，用户按 `doc/08` 的 `import fountain::f_rule.*` 即可拿到全部门面。
+违反最后一条会造成包循环。这个坑踩过三次：`RuleSetBuilder`、`ActivationSink`、`RuleEngine` 都曾因「放在根包被上层引用」而阻塞根包重导出，现分别下移到 `rule` / `agenda` / `engine`。
+
+第四个潜在循环是 `rule ↔ table`：表要产出 `Rule`，而 `RuleSetBuilder` 又要接收表。解法不是移动包，而是接口反转——`rule` 定义 `TableSource`，`table` 实现它。详见 [11-assembly.md](11-assembly.md)。
 
 ## 3. 核心数据流
 
