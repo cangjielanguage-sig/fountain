@@ -42,4 +42,25 @@ public interface VectorStore {
     func buildIndex(collection: String, clusters!: Int64): Int64
     /** 当前簇数，0 表示尚未建索引（检索自动退回暴力扫描） */
     func indexClusters(collection: String): Int64
+
+    /**
+     * 崩溃恢复：清理未写完的记录（缺 `ready` 标记或正文），返回清理条数。
+     * 建议进程启动时调用一次；`recover` 只做清理，不尝试补全。
+     */
+    func recover(collection: String): Int64
+
+    /** 设置集合 TTL（epoch 秒）；`seconds <= 0` 表示立即过期，`< 0` 表示取消 TTL */
+    func setTtl(collection: String, seconds: Int64): Unit
+
+    /** 读取 TTL（epoch 秒），0 表示未设置 */
+    func ttlOf(collection: String): Int64
+
+    /** 过期集合物理删除，返回删除的 key 数 */
+    func purgeExpired(collection: String): Int64
+
+    /** 按 id 字典序分页（只返回就绪记录），供导出/运维遍历 */
+    func ids(collection: String, offset: Int64, limit: Int64): ArrayList<String>
+
+    /** 把本集合的就绪记录写到另一个实现（跨进程/跨实现迁移），返回条数 */
+    func exportTo(collection: String, target: VectorStore, targetCollection: String): Int64
 }

@@ -116,6 +116,35 @@ Collection（= f_llm 的一个 用户+命名空间；命名示例：记忆 `u{ui
 - **一致性**：簇心会随数据漂移，批量写入后应调用 `buildIndex` 重建（当前不做自动重建）。
 - **未建索引**：`indexClusters() == 0`，检索直接走暴力扫描，行为与 v0.3 一致。
 
+### 1.5 v0.5 两阶段写、恢复、TTL、导出
+
+**两阶段写**：写入顺序固定为 payload → dense → sparse → colbert 分片 → 倒排 → **`r:{id}` 就绪标记**。
+`get` / `searchDense` / `searchSparse` / `rerank` / `count` / `ids` 全部先校验就绪标记，
+未完成的半成品对任何读路径都不可见。
+
+**崩溃恢复**：`recover(collection) -> Int64`
+
+- 扫 `d:` 与 `v:d:` 两套前缀取 id 并集（覆盖「只写了 payload」和「只写了向量」两种残局）；
+- 缺 payload 或缺 ready → `purgeRecord`：反向指针、倒排、colbert 分片、payload、dense、sparse、ready 全删；
+- 只清理不补全（补全需要重新向量化，属于调用方语义）；
+- 集合已过期时等价于 `purgeExpired`。
+
+**集合 TTL**：
+
+| 方法 | 行为 |
+|---|---|
+| `setTtl(collection, seconds)` | 写 `h:{c}:m:ttl = now + seconds`；`seconds = 0` 立即过期；负数取消 |
+| `ttlOf(collection)` | 读绝对过期时间（epoch 秒），0 表示未设置 |
+| `purgeExpired(collection)` | 过期时删除 `h:{c}:` 前缀下全部 key（含索引与 TTL 本身），返回删除数 |
+
+读路径遇到过期集合一律返回空；取消 TTL 后原数据重新可见（未被 purge 时）。
+
+**导出/迁移**：
+
+- `ids(collection, offset, limit)`：只列就绪记录，按 id 字典序分页；
+- `exportTo(collection, target, targetCollection)`：按页 `get` → `target.upsert`，跨实现/跨进程迁移；
+  目标端不复制 IVF 索引，需要时重新 `buildIndex`。
+
 ---
 
 ## 2. 索引

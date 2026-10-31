@@ -17,21 +17,31 @@ package fountain::f_hydra
 
 import std.collection.*
 import std.convert.*
+import std.time.DateTime
 
 import fountain::f_store.Store
 
 /**
- * 基于 `f_store` 的向量实现（v0.1）。
+ * 基于 `f_store` 的向量实现（v0.5）。
  *
- * 布局（前缀 `h:` 与业务库隔离）：
+ * 布局（前缀 `h:` 与业务库隔离，详见 `fhydra/doc/fhydra-design.md` §1.3/§1.4）：
  * ```
- * h:{collection}:d:{id}      payload JSON
- * h:{collection}:v:d:{id}    dense（逗号分隔的十进制，v0.2 换 f32 小端）
- * h:{collection}:v:s:{id}    sparse（`token:weight,...`）
- * h:{collection}:r:{id}      就绪标记
+ * h:{collection}:d:{id}          payload JSON
+ * h:{collection}:v:d:{id}        dense（f32 小端）
+ * h:{collection}:v:s:{id}        sparse（`token:weight,...`）
+ * h:{collection}:v:c:{id}:{p}    colbert 分片（f32 小端，每片 ≤64KB）
+ * h:{collection}:i:t:{tok}:{id}  稀疏倒排
+ * h:{collection}:m:ivf            IVF 配置
+ * h:{collection}:m:cent:{i}       IVF 簇心
+ * h:{collection}:i:c:{i}:{id}     IVF 桶成员
+ * h:{collection}:i:r:{id}         IVF 反向指针
+ * h:{collection}:m:ttl            集合 TTL（epoch 秒）
+ * h:{collection}:r:{id}           就绪标记（两阶段写的最后一步）
  * ```
- * 检索是**暴力扫描**：遍历 collection 内的 dense 前缀逐个算余弦。
- * 这是设计文档里 BruteForce 阶段，数据量上来后替换为 IVF-Flat / IVF-PQ。
+ *
+ * 写入顺序：payload → dense → sparse → colbert 分片 → 倒排 → **ready**。
+ * 读路径一律先校验 `ready`，未就绪的半成品对查询不可见；启动时可调 `recover()`
+ * 清理崩溃遗留。
  */
 public class FStoreVectorStore <: VectorStore {
     private let store: Store
@@ -66,6 +76,9 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func get(collection: String, id: String): ?VectorRecord {
+        if(expired(collection) || !isReady(collection, id)){
+            return None
+        }
         match(store.get(payloadKey(collection, id).toArray())){
             case Some(bytes) =>
                 let dense = match(store.get(denseKey(collection, id).toArray())){
@@ -95,7 +108,7 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func searchDense(query: VectorQuery): ArrayList<VectorHit> {
-        if(query.limit <= 0 || query.dense.isEmpty()){
+        if(query.limit <= 0 || query.dense.isEmpty() || expired(query.collection)){
             return ArrayList<VectorHit>()
         }
         // 1. IVF 候选（未建索引时为空）
@@ -131,6 +144,9 @@ public class FStoreVectorStore <: VectorStore {
         for((key, value) in store.prefix(prefix.toArray())){
             let text = String.fromUtf8(key)
             let id = text[Int64(prefix.size)..Int64(text.size)]
+            if(!isReady(query.collection, id)){
+                continue
+            }
             let dense = VectorCodec.decodeDense(value)
             if(dense.size != query.dense.size){
                 continue
@@ -143,6 +159,9 @@ public class FStoreVectorStore <: VectorStore {
     private func scoreIds(query: VectorQuery, ids: ArrayList<String>): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
         for(id in ids){
+            if(!isReady(query.collection, id)){
+                continue
+            }
             match(store.get(denseKey(query.collection, id).toArray())){
                 case Some(bytes) =>
                     let dense = VectorCodec.decodeDense(bytes)
@@ -178,7 +197,7 @@ public class FStoreVectorStore <: VectorStore {
 
     public func searchSparse(query: SparseQuery): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
-        if(query.limit <= 0 || query.tokens.isEmpty()){
+        if(query.limit <= 0 || query.tokens.isEmpty() || expired(query.collection)){
             return hits
         }
         let scores = HashMap<String, Float64>()
@@ -193,11 +212,10 @@ public class FStoreVectorStore <: VectorStore {
             }
         }
         for((id, score) in scores){
-            let payload = match(store.get(payloadKey(query.collection, id).toArray())){
-                case Some(bytes) => String.fromUtf8(bytes)
-                case None => ''
+            if(!isReady(query.collection, id)){
+                continue
             }
-            hits.add(VectorHit(id, payload, score))
+            hits.add(VectorHit(id, payloadOf(query.collection, id), score))
         }
         sortDesc(hits)
         let limited = ArrayList<VectorHit>()
@@ -213,31 +231,195 @@ public class FStoreVectorStore <: VectorStore {
     public func rerank(collection: String, ids: ArrayList<String>,
                        queryColbert: Array<Array<Float64>>): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
-        if(ids.isEmpty() || queryColbert.isEmpty()){
+        if(ids.isEmpty() || queryColbert.isEmpty() || expired(collection)){
             return hits
         }
         for(id in ids){
-            let docColbert = readColbert(collection, id)
-            let payload = match(store.get(payloadKey(collection, id).toArray())){
-                case Some(bytes) => String.fromUtf8(bytes)
-                case None => ''
+            if(!isReady(collection, id)){
+                continue
             }
-            hits.add(VectorHit(id, payload, maxSim(queryColbert, docColbert)))
+            hits.add(VectorHit(id, payloadOf(collection, id),
+                               maxSim(queryColbert, readColbert(collection, id))))
         }
         sortDesc(hits)
         hits
     }
 
     public func count(collection: String): Int64 {
+        if(expired(collection)){
+            return 0
+        }
         var total: Int64 = 0
-        for(_ in store.prefix(payloadPrefix(collection).toArray())){
-            total++
+        let prefix = payloadPrefix(collection)
+        for((key, _) in store.prefix(prefix.toArray())){
+            let text = String.fromUtf8(key)
+            let id = text[Int64(prefix.size)..Int64(text.size)]
+            if(isReady(collection, id)){
+                total++
+            }
         }
         total
     }
 
+    // ---- v0.5 两阶段写 / TTL ----
+
+    public func recover(collection: String): Int64 {
+        if(expired(collection)){
+            return purgeExpired(collection)
+        }
+        let ids = collectIds(collection)
+        var purged: Int64 = 0
+        for(id in ids){
+            let hasPayload = store.contains(payloadKey(collection, id).toArray())
+            if(!hasPayload || !isReady(collection, id)){
+                purgeRecord(collection, id)
+                purged++
+            }
+        }
+        purged
+    }
+
+    public func setTtl(collection: String, seconds: Int64): Unit {
+        if(seconds < 0){
+            store.remove(ttlKey(collection).toArray())
+            return
+        }
+        let now = DateTime.now().toUnixTimeStamp().toSeconds()
+        store.add(ttlKey(collection).toArray(), (now + seconds).toString().toArray())
+        ()
+    }
+
+    public func ttlOf(collection: String): Int64 {
+        match(store.get(ttlKey(collection).toArray())){
+            case Some(bytes) => Int64.tryParse(String.fromUtf8(bytes)) ?? 0
+            case None => 0
+        }
+    }
+
+    public func ids(collection: String, offset: Int64, limit: Int64): ArrayList<String> {
+        let result = ArrayList<String>()
+        if(limit <= 0 || expired(collection)){
+            return result
+        }
+        let all = ArrayList<String>()
+        let prefix = payloadPrefix(collection)
+        for((key, _) in store.prefix(prefix.toArray())){
+            let text = String.fromUtf8(key)
+            let id = text[Int64(prefix.size)..Int64(text.size)]
+            if(isReady(collection, id)){
+                all.add(id)
+            }
+        }
+        // 字典序保证分页稳定
+        for(index in 1..all.size){
+            let current = all[index]
+            var position = index - 1
+            while(position >= 0 && all[position] > current){
+                all[position + 1] = all[position]
+                position--
+            }
+            all[position + 1] = current
+        }
+        var index = offset
+        while(index < Int64(all.size) && Int64(result.size) < limit){
+            result.add(all[index])
+            index++
+        }
+        result
+    }
+
+    public func exportTo(collection: String, target: VectorStore, targetCollection: String): Int64 {
+        var exported: Int64 = 0
+        var offset: Int64 = 0
+        let batch: Int64 = 100
+        while(true){
+            let page = ids(collection, offset, batch)
+            if(page.isEmpty()){
+                break
+            }
+            for(id in page){
+                match(get(collection, id)){
+                    case Some(record) =>
+                        target.upsert(targetCollection, record)
+                        exported++
+                    case None => ()
+                }
+            }
+            if(Int64(page.size) < batch){
+                break
+            }
+            offset += batch
+        }
+        exported
+    }
+
+    public func purgeExpired(collection: String): Int64 {
+        if(!expired(collection)){
+            return 0
+        }
+        let prefix = 'h:${collection}:'
+        let keys = ArrayList<String>()
+        for((key, _) in store.prefix(prefix.toArray())){
+            keys.add(String.fromUtf8(key))
+        }
+        for(key in keys){
+            store.remove(key.toArray())
+        }
+        Int64(keys.size)
+    }
+
     public func close(): Unit {
         store.close()
+    }
+
+    // ---- v0.5 helpers ----
+
+    private func isReady(collection: String, id: String): Bool {
+        store.contains(readyKey(collection, id).toArray())
+    }
+
+    private func expired(collection: String): Bool {
+        let deadline = ttlOf(collection)
+        if(deadline <= 0){
+            return false
+        }
+        DateTime.now().toUnixTimeStamp().toSeconds() >= deadline
+    }
+
+    /** 收集 payload 与 dense 两类前缀下的全部 id（可能互为孤儿） */
+    private func collectIds(collection: String): ArrayList<String> {
+        let ids = ArrayList<String>()
+        let seen = HashMap<String, Bool>()
+        let payloads = payloadPrefix(collection)
+        for((key, _) in store.prefix(payloads.toArray())){
+            let text = String.fromUtf8(key)
+            let id = text[Int64(payloads.size)..Int64(text.size)]
+            if(!seen.contains(id)){
+                seen[id] = true
+                ids.add(id)
+            }
+        }
+        let dense = densePrefix(collection)
+        for((key, _) in store.prefix(dense.toArray())){
+            let text = String.fromUtf8(key)
+            let id = text[Int64(dense.size)..Int64(text.size)]
+            if(!seen.contains(id)){
+                seen[id] = true
+                ids.add(id)
+            }
+        }
+        ids
+    }
+
+    private func purgeRecord(collection: String, id: String): Unit {
+        ivf(collection).unrecord(id)
+        deletePostings(collection, id)
+        deleteColbertParts(collection, id)
+        store.remove(payloadKey(collection, id).toArray())
+        store.remove(denseKey(collection, id).toArray())
+        store.remove(sparseKey(collection, id).toArray())
+        store.remove(readyKey(collection, id).toArray())
+        ()
     }
 
     // ---- keys ----
@@ -264,6 +446,10 @@ public class FStoreVectorStore <: VectorStore {
 
     private static func readyKey(collection: String, id: String): String {
         'h:${collection}:r:${id}'
+    }
+
+    private static func ttlKey(collection: String): String {
+        'h:${collection}:m:ttl'
     }
 
     private static func postingPrefix(collection: String, token: Int64): String {

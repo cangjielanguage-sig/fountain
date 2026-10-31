@@ -19,6 +19,8 @@ import std.collection.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import fountain::f_store.Store
+
 /** 每个用例独立目录，避免 f_store 的单实例可见性把用例串起来 */
 private var pathSeq: Int64 = 0
 
@@ -278,6 +280,119 @@ public class FStoreVectorStoreTest {
         @Expect(store.indexClusters('c'), 0)
         let hits = store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 4))
         @Expect(hits.size, 4)
+        store.close()
+    }
+
+    // ---- v0.5 两阶段写 / 恢复 / TTL ----
+
+    /** 绕过 upsert 直接写 payload + dense，模拟「写到一半崩溃」 */
+    private func rawPartial(path: String, collection: String, id: String): Store {
+        let raw = Store(path)
+        raw.add('h:${collection}:d:${id}'.toArray(), '{"partial":true}'.toArray())
+        raw.add('h:${collection}:v:d:${id}'.toArray(), VectorCodec.encodeDense([1.0f64, 0.0f64]))
+        raw
+    }
+
+    @TestCase
+    func testPartialWriteIsInvisibleUntilReady(): Unit {
+        pathSeq++
+        let raw = rawPartial('/tmp/fhydra-partial-${pathSeq}', 'c', 'half')
+        let store = FStoreVectorStore(raw)
+
+        @Expect(store.get('c', 'half').isNone(), true)
+        @Expect(store.count('c'), 0)
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64])).size, 0)
+        store.close()
+    }
+
+    @TestCase
+    func testRecoverPurgesHalfWrittenRecords(): Unit {
+        pathSeq++
+        let raw = rawPartial('/tmp/fhydra-recover-${pathSeq}', 'c', 'half')
+        let store = FStoreVectorStore(raw)
+
+        @Expect(store.recover('c'), 1)
+        // 清理是物理删除，不是仅隐藏
+        @Expect(raw.contains('h:c:d:half'.toArray()), false)
+        @Expect(raw.contains('h:c:v:d:half'.toArray()), false)
+        store.close()
+    }
+
+    @TestCase
+    func testRecoverKeepsCompleteRecords(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('ok', 'p', [1.0f64, 0.0f64]))
+        @Expect(store.recover('c'), 0)
+        @Expect(store.get('c', 'ok').getOrThrow().payload, 'p')
+        store.close()
+    }
+
+    @TestCase
+    func testTtlHidesCollectionUntilCleared(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64, 0.0f64]))
+
+        store.setTtl('c', 0)   // 立即过期
+        @Expect(store.ttlOf('c') > 0, true)
+        @Expect(store.get('c', 'r').isNone(), true)
+        @Expect(store.count('c'), 0)
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64])).size, 0)
+
+        store.setTtl('c', -1)  // 取消 TTL，数据仍在
+        @Expect(store.ttlOf('c'), 0)
+        @Expect(store.get('c', 'r').isSome(), true)
+        store.close()
+    }
+
+    @TestCase
+    func testIdsPagingSkipsPartialRecords(): Unit {
+        pathSeq++
+        let raw = rawPartial('/tmp/fhydra-ids-${pathSeq}', 'c', 'half')
+        let store = FStoreVectorStore(raw)
+        store.upsert('c', VectorRecord('b', 'B', [1.0f64]))
+        store.upsert('c', VectorRecord('a', 'A', [1.0f64]))
+
+        let first = store.ids('c', 0, 1)
+        let second = store.ids('c', 1, 1)
+        @Expect(first.size, 1)
+        @Expect(first[0], 'a')
+        @Expect(second[0], 'b')
+        // 半成品（无 ready）不参与导出
+        @Expect(store.ids('c', 0, 10).size, 2)
+        store.close()
+    }
+
+    @TestCase
+    func testExportCopiesRecordsToAnotherStore(): Unit {
+        let source = newStore()
+        source.upsert('c', VectorRecord('r1', 'P1', [1.0f64, 0.0f64],
+                                        sparse: tokens([(7, 0.5f64)]),
+                                        colbert: [[1.0f64, 0.0f64]]))
+        let target = newStore()
+
+        @Expect(source.exportTo('c', target, 'copy'), 1)
+        let record = target.get('copy', 'r1').getOrThrow()
+        @Expect(record.payload, 'P1')
+        @Expect(record.dense.size, 2)
+        @Expect(record.sparse.get(7).getOrThrow(), 0.5f64)
+        @Expect(record.colbert.size, 1)
+        @Expect(target.searchDense(VectorQuery('copy', [1.0f64, 0.0f64])).size, 1)
+        source.close()
+        target.close()
+    }
+
+    @TestCase
+    func testPurgeExpiredRemovesEverything(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64, 0.0f64]))
+        store.setTtl('c', 0)
+
+        @Expect(store.purgeExpired('c') > 0, true)
+        @Expect(store.get('c', 'r').isNone(), true)
+        @Expect(store.count('c'), 0)
+
+        store.setTtl('c', -1)
+        @Expect(store.get('c', 'r').isNone(), true)   // 已物理删除
         store.close()
     }
 }
