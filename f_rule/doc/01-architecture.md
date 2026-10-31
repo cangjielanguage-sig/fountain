@@ -39,8 +39,6 @@
 ```
 f_rule/src/
 ├── rule.cj                       # 包根，public import 重导出
-├── RuleEngine.cj                 # 引擎门面（会话管理、关闭级联）
-├── RuleSession.cj                # 会话（事实、议程、fire/fireDetailed）
 ├── RuleInitializer.cj            # f_app Initializer（注册决策表加载器）
 ├── RuleRuntime.cj                # 共享 Compiler 与全局配置
 ├── exception/
@@ -85,6 +83,9 @@ f_rule/src/
 │   ├── ClosureAction.cj          # 闭包动作
 │   ├── TableAction.cj            # 决策表动作（写输出槽）
 │   └── CycleDetector.cj          # 环形指纹窗口，超限抛 CYCLE_LIMIT
+├── engine/
+│   ├── RuleEngine.cj             # 引擎门面（会话管理、关闭级联）
+│   └── RuleSession.cj            # 会话（事实、议程、fire/fireDetailed、FireResult）
 ├── flow/
 │   ├── RuleFlow.cj               # 一条规则一个 ImmediateFlow
 │   ├── RuleSetFlow.cj            # 规则集编排流程
@@ -98,6 +99,24 @@ f_rule/src/
     ├── XlsxTableParser.cj        # XLSX 载体（依赖 f_excel）
     └── TableCompiler.cj          # 表 → Rule[]
 ```
+
+包依赖方向（单向，禁止反向）：
+
+```
+exception  ←  fact  ←  condition  ←  rule  ←  rete  ←  engine  ←  flow
+                                        ↑        ↑         ↑
+                                     agenda ─────┘         │
+                                        └──────────────────┘
+```
+
+| 规则 | 说明 |
+|---|---|
+| `flow` 依赖 `engine` | `RuleTask` 调 `RuleEngine.session()` 与 `RuleSession.fire()` |
+| `engine` 依赖 `rete`/`agenda`/`rule`/`fact` | 会话持有网络运行态与议程 |
+| `agenda` 依赖 `rule`/`rete` 的产出接口 | `ActivationSink` 定义在 `agenda`，由 `rete` 反向实现 |
+| **根包不依赖任何子包的具体实现** | 根包只 `public import` 重导出；因此子包**不能** `import fountain::f_rule.*` |
+
+违反最后一条会造成包循环：早期 `RuleEngine` 放在根包，`flow` 引它，根包就无法重导出 `flow`，用户被迫写 `import fountain::f_rule.flow.*`。现已把 `RuleEngine` / `RuleSession` 下移到 `engine/`，用户按 `doc/08` 的 `import fountain::f_rule.*` 即可拿到全部门面。
 
 ## 3. 核心数据流
 

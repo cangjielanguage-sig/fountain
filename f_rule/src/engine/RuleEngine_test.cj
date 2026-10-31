@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_rule
+package fountain::f_rule.engine
 
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_rule.condition.{Operator, Pattern}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{DynamicFact, Fact}
-import fountain::f_rule.rule.{Rule, RuleSet}
+import fountain::f_rule.rule.{Rule, RuleSet, RuleSetBuilder}
 
 /** 构建订单规则集：一条匹配 `amount > 200` 的规则。 */
 func engineRuleSet(): RuleSet {

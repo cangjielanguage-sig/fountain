@@ -17,7 +17,7 @@ package fountain::f_rule.flow
 
 import std.collection.HashMap
 import fountain::f_egraph.base.{Event, Task, TaskEvent}
-import fountain::f_rule.RuleEngine
+import fountain::f_rule.engine.RuleEngine
 import fountain::f_rule.fact.{Fact, TypeTag}
 
 /** 事件载荷 → `(space, fact)` 列表；缺省把 `Fact` 载荷插入 `default` 空间。 */

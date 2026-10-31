@@ -17,7 +17,8 @@ package fountain::f_rule.flow
 
 import std.collection.{ArrayList, HashSet}
 import fountain::f_egraph.base.{Event, ImmediateFlow}
-import fountain::f_rule.{Rule, RuleEngine}
+import fountain::f_rule.rule.Rule
+import fountain::f_rule.engine.RuleEngine
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 
 /**

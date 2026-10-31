@@ -19,7 +19,8 @@ import std.collection.HashMap
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_egraph.base.{DataEvent, EndEvent, EventType, ImmediateFlow, TaskEvent}
-import fountain::f_rule.{Rule, RuleEngine, RuleSetBuilder}
+import fountain::f_rule.rule.{Rule, RuleSetBuilder}
+import fountain::f_rule.engine.RuleEngine
 import fountain::f_rule.condition.{Operator, Pattern}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{DynamicFact, Fact}
