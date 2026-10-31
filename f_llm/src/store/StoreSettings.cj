@@ -26,6 +26,9 @@ import fountain::f_log.*
  * 新键：`llm_memoryStore` / `llm_metaStore` / `llm_metaStorePath` / `llm_contentStoreUrl`。
  * 旧键（`llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath`）只识别、不生效，
  * 启动时逐条 `warn`，避免「配了旧键以为切了后端」。
+ *
+ * **配置只在启动时读取一次**：f_llm 永不支持运行期修改配置，切换实现/端点必须重启进程
+ * （见 `doc/known-limitations.md` §0）。
  */
 public class StoreSettings {
     public static const CONTENT_KEY = 'llm_memoryStore'

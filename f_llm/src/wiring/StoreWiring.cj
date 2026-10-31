@@ -44,6 +44,9 @@ public class StoreWiring {
      * 幂等接线：
      * 1. 补齐 `inMemory` / `postgres` / `mysql` 三个内容族工厂；
      * 2. 调用 `Stores.bootstrap()` 校验配置值，未知值立即抛错并列出可选实现。
+     *
+     * **配置只在首次调用时读取**：f_llm 永不支持运行期修改配置（`BeanFactory` 条件只评估一次、
+     * 被丢弃的 bean 不可恢复），换实现/换端点必须重启进程。见 `doc/known-limitations.md` §0。
      */
     public static func wire(): Unit {
         synchronized(mutex){

@@ -22,8 +22,8 @@ import fountain::f_llm.store.*
 /**
  * 复用现有 `Embedding`（OpenAI 兼容 `/embeddings`、失败转移、熔断）的传输层实现。
  *
- * 当前只返回 dense：sparse / colbert 需要服务端在响应里额外返回
- * `sparse` / `colbert_vecs` 字段，等 BGE-M3 端点确认后再补解析。
+ * 只返回 dense：OpenAI 兼容端点没有 `lexical_weights` / `colbert_vecs` 字段。
+ * 需要三路时用 `BgeM3Transport`（默认实现）；用本类时检索会标 `degraded`、`rerank` 失效。
  */
 public class LlmEmbeddingTransport <: EmbeddingTransport {
     private let llmName: String
