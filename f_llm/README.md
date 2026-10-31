@@ -1542,6 +1542,9 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 - 连接级超时：`stdx.net.http` 的 `ClientBuilder` 尚未提供 `connectTimeout`，等标准库支持后再补；
   当前建连阶段依赖操作系统 TCP 超时。
 
+其它外部依赖限制（MySQL 必须有 MyVector、f_store 单实例、历史数据重建等）见
+[`doc/known-limitations.md`](doc/known-limitations.md)。
+
 > `lexical_weights` 由官方 `sparse_linear.pt` 计算（`ReLU(h·w+b)`，同 token 取最大），与 FlagEmbedding
 > 的 `_process_token_weights` 一致；该文件只有 **3.5KB**，因为它是 `(1,1024)` 的投影向量，不是词表大小的矩阵。
 > `colbert_vecs` 由官方 `colbert_linear.pt`（`1024×1024`，约 2.1MB）投影后按 token 归一化。

@@ -1564,6 +1564,9 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 - Connect-level timeout: `stdx.net.http`'s `ClientBuilder` has no `connectTimeout` yet; connection setup
   currently relies on the OS TCP timeout.
 
+Other external-dependency limits (MySQL requires MyVector, f_store single-instance semantics, rebuilding
+historical indexes, etc.) are listed in [`doc/known-limitations.md`](doc/known-limitations.md).
+
 > `lexical_weights` come from the official `sparse_linear.pt` (`ReLU(h·w+b)`, max over duplicate tokens),
 > matching FlagEmbedding's `_process_token_weights`. That file is only **3.5 KB** because it is a `(1,1024)`
 > projection vector, not a vocab-sized matrix. `colbert_vecs` come from the official `colbert_linear.pt`
