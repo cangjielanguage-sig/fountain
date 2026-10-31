@@ -23,29 +23,29 @@ public class M3CellStore_test {
     @TestCase
     public func randomOrderEquivalence(): Unit {
         let store = CellStore()
-        let keys: Array<Int64> = [500, 3, 900, 1, 700, 42]
-        for (key in keys) {
-            store.add(key, CellValue.Number(Float64(key)))
+        let points: Array<(Int64, Int64)> = [(5, 2), (1, 1), (9, 3), (1, 2), (7, 1), (4, 2)]
+        for (point in points) {
+            store.add(point[0], point[1], CellValue.Number(Float64(point[0] * 10 + point[1])))
         }
         @Assert(store.size(), 6)
-        for (key in keys) {
-            match (store.get(key)) {
-                case Some(Number(v)) => @Assert(v, Float64(key))
+        for (point in points) {
+            match (store.get(point[0], point[1])) {
+                case Some(Number(v)) => @Assert(v, Float64(point[0] * 10 + point[1]))
                 case _ => @Assert(false, true)
             }
         }
-        @Assert(store.get(999).isNone(), true)
-        @Assert(store.remove(3), true)
-        @Assert(store.get(3).isNone(), true)
-        @Assert(store.remove(3), false)
+        @Assert(store.get(9, 9).isNone(), true)
+        @Assert(store.remove(1, 1), true)
+        @Assert(store.get(1, 1).isNone(), true)
+        @Assert(store.remove(1, 1), false)
     }
 
     @TestCase
     public func rowEntriesAreSorted(): Unit {
         let store = CellStore()
-        store.add(2 * (EXCEL_MAX_COL + 1) + 5, CellValue.Text("e"))
-        store.add(2 * (EXCEL_MAX_COL + 1) + 1, CellValue.Text("a"))
-        store.add(2 * (EXCEL_MAX_COL + 1) + 3, CellValue.Text("c"))
+        store.add(2, 5, CellValue.Text("e"))
+        store.add(2, 1, CellValue.Text("a"))
+        store.add(2, 3, CellValue.Text("c"))
         let entries = store.rowEntries(2, EXCEL_MAX_COL)
         @Assert(entries.size, 3)
         @Assert(entries[0][0], 1)

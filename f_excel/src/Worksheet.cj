@@ -93,7 +93,7 @@ public class Worksheet {
         if (!valid(row, col)) {
             return None<CellValue>
         }
-        cells.get(key(row, col))
+        cells.get(row, col)
     }
 
     public func cell(ref: String): ?CellValue {
@@ -109,12 +109,27 @@ public class Worksheet {
         cell(ref.row, ref.col)
     }
 
+    /** 数值快路径（内部/解析用）。 */
+    internal func setCellNumber(row: Int64, col: Int64, value: Float64): Unit {
+        this.ensureLoaded()
+        if (!valid(row, col)) {
+            throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
+        }
+        cells.addNumber(row, col, value)
+        if (row > maxRowSeen) {
+            maxRowSeen = row
+        }
+        if (col > maxColSeen) {
+            maxColSeen = col
+        }
+    }
+
     public func setCell(row: Int64, col: Int64, value: CellValue): Unit {
         this.ensureLoaded()
         if (!valid(row, col)) {
             throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
         }
-        cells.add(key(row, col), value)
+        cells.add(row, col, value)
         if (row > maxRowSeen) {
             maxRowSeen = row
         }
@@ -297,7 +312,7 @@ public class Worksheet {
         if (!valid(row, col)) {
             return
         }
-        cells.remove(key(row, col))
+        cells.remove(row, col)
     }
 
     public func clearCell(ref: String): Unit {
