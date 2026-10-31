@@ -1535,6 +1535,8 @@ Config.set<String>([
   value fails immediately and lists the available implementations (no silent fallback);
 - `Memory` also calls `wire()` (idempotent) the first time it stores a summary, so a forgotten explicit wiring
   does not silently drop summaries (failures are logged as `warn`);
+- `wire()` also seeds the 7 predefined memory kinds into `llm_memory_kind` (`user_id=0`, weights from
+  `MemoryKinds.weightOf`); an unavailable database only logs a warning and never blocks startup;
 - Implementation packages: `store.postgres` / `store.mysql` (each imports its own driver); `dao.postgres` / `dao.mysql` hold SQL only.
 
 ### Embeddings (BGE-M3)

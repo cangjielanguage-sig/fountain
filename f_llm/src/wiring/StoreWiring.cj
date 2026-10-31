@@ -17,6 +17,8 @@ package fountain::f_llm.wiring
 
 import std.sync.*
 
+import fountain::f_log.*
+
 import fountain::f_llm.store.*
 
 import fountain::f_llm.store.mysql.*
@@ -31,6 +33,7 @@ import fountain::f_llm.store.postgres.*
  */
 public class StoreWiring {
     private static let mutex = Mutex()
+    private static var kindsSeeded = false
 
     private init() {
     }
@@ -46,6 +49,27 @@ public class StoreWiring {
             ensure('postgres', { => PostgresContentStore() })
             ensure('mysql', { => MySqlContentStore() })
             Stores.bootstrap()
+            seedKinds()
+        }
+    }
+
+    /**
+     * 预定义 kind 补种（P1）：数据库不可用时只告警，不阻断启动——
+     * 权重表在代码里有默认值，缺表不影响读写。
+     */
+    private static func seedKinds(): Unit {
+        if(kindsSeeded){
+            return
+        }
+        try{
+            match(StoreSettings.load().memoryStore){
+                case 'postgres' => MemoryKinds.seed(PostgresKindPersistence())
+                case 'mysql' => MemoryKinds.seed(MySqlKindPersistence())
+                case _ => ()
+            }
+            kindsSeeded = true
+        }catch(e: Exception){
+            LoggerFactory.getLogger<StoreWiring>().warn('memory kind seed skipped: ${e.message}')
         }
     }
 
