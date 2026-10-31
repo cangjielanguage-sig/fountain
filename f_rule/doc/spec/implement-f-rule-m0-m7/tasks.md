@@ -98,27 +98,27 @@
 
 ## 5. M4 流程编排
 
-- [ ] 5.1 失败用例 `RuleEnvelope_test`：`from` 优先取载荷信封、缺信封回退 `event.session`、`wrap` 继承 session/ruleSetId/traceId、`unwrap` 还原载荷
-- [ ] 5.2 实现 `flow/RuleEnvelope.cj`
-- [ ] 5.3 失败用例 `FlowContext_test`：`create`/`attach`/`detach`/`current`/`bind`/`unbind`、`facts(space)` 惰性建视图且同一空间同视图、未声明空间抛 `UNKNOWN_FACT_SPACE`、未绑定抛 `NO_CONTEXT`、`release` 按 `Discard` 清空
-- [ ] 5.4 实现 `flow/FlowContext.cj`（ThreadLocal + 视图缓存 + `Release` 策略）
-- [ ] 5.5 失败用例 `RuleFlow_test`：`category = "<ruleSetId>/<ruleId>"`、`tag = version`、`flow.toString()` 正确、可独立 `start`（P-01/P-02）
-- [ ] 5.6 实现 `flow/RuleFlow.cj`
-- [ ] 5.7 失败用例 `ResolveTask_test`：两路/三路扇出都到达、子事件载荷是信封且 session 与父一致、`plan` 空产出抛 `EMPTY_FANOUT`、返回值 `name == EventType.Multi.toString()`（P-03/P-04/P-12）
-- [ ] 5.8 实现 `flow/ResolveTask.cj`
-- [ ] 5.9 失败用例 `JoinTask_test`：收齐只发一次（P-06）、缺一路不发（P-07）、重复到达幂等（P-08）、并发两 session 交错不串扰（P-09）、到齐后清态可下一轮
-- [ ] 5.10 实现 `flow/JoinTask.cj`（`ConcurrentHashMap<session, BranchState>`，键取信封 session）
-- [ ] 5.11 失败用例 `JoinTimeout_test`：配置 `timeout` 后未集齐发 `timeoutEvent`、未配置 `timeoutEvent` 发 `ErrorEvent`、`Ticktock` 不可用时构造期 WARN 且不超时
-- [ ] 5.12 实现 `JoinTask` 超时（`f_ticktock.DelayedTicktockTask` 一次性延迟任务 + 清态）
-- [ ] 5.13 失败用例 `Reachability_test`：扇出分支直达 `End` 抛 `FANOUT_WITHOUT_JOIN`（P-05）、两个 `JoinTask.branches` 重叠抛 `ILLEGAL_STATE`、合法编排（`order.created → split → {…} → join → End`）通过
-- [ ] 5.14 实现 `flow/Reachability.cj`（从 `ResolveTask.producing` BFS，遇到 End 边即失败）
-- [ ] 5.15 失败用例 `SameSpaceFanout_test`：两个分支都在 `orders` 时抛 `SAME_SPACE_FANOUT`（P-14）、跨空间扇出通过（P-13）
-- [ ] 5.16 实现 `flow/RuleSetFlow.cj` 的 `start`/`fanout`/`join`/`end`/`flow` 与同空间校验
-- [ ] 5.17 失败用例 `RuleTask_test`：`exec` 按信封取 session → 建事实 → `agenda.fire` → 输出事件带同一 session；未声明空间抛 `UNKNOWN_FACT_SPACE`（I-02）
-- [ ] 5.18 实现 `flow/RuleTask.cj` 与可配置 `FactFactory`
-- [ ] 5.19 失败用例 `FlowSessionRegression_test`：构造缺 `JoinTask` 的流程并连续 `start()` 两次，锁定"残留事件会被第二次 `start` 消费"的上游行为（P-05b）
-- [ ] 5.20 失败用例 `VersionSwitch_test`：新 tag 注册后 `removeExceptCurrentTag()` 生效（P-10）、旧 tag 被依赖时抛 `GraphException`（P-11）
-- [ ] 5.21 `cjpm test` 全绿，P-01~P-15 全部覆盖
+- [x] 5.1 失败用例 `RuleEnvelope_test`：`from` 优先取载荷信封、缺信封回退 `event.session`、`wrap` 继承 session/ruleSetId/traceId、`unwrap` 还原载荷
+- [x] 5.2 实现 `flow/RuleEnvelope.cj`
+- [x] 5.3 失败用例 `FlowContext_test`：`create`/`attach`/`detach`/`current`/`bind`/`unbind`、`facts(space)` 惰性建视图且同一空间同视图、未声明空间抛 `UNKNOWN_FACT_SPACE`、未绑定抛 `NO_CONTEXT`、`release` 按 `Discard` 清空
+- [x] 5.4 实现 `flow/FlowContext.cj`（ThreadLocal + 视图缓存 + `Release` 策略）
+- [x] 5.5 失败用例 `RuleFlow_test`：`category = "<ruleSetId>/<ruleId>"`、`tag = version`、`flow.toString()` 正确、可独立 `start`（P-01/P-02）
+- [x] 5.6 实现 `flow/RuleFlow.cj`
+- [x] 5.7 失败用例 `ResolveTask_test`：两路/三路扇出都到达、子事件载荷是信封且 session 与父一致、`plan` 空产出抛 `EMPTY_FANOUT`、返回值 `name == EventType.Multi.toString()`（P-03/P-04/P-12）
+- [x] 5.8 实现 `flow/ResolveTask.cj`
+- [x] 5.9 失败用例 `JoinTask_test`：收齐只发一次（P-06）、缺一路不发（P-07）、重复到达幂等（P-08）、并发两 session 交错不串扰（P-09）、到齐后清态可下一轮
+- [x] 5.10 实现 `flow/JoinTask.cj`（`ConcurrentHashMap<session, BranchState>`，键取信封 session）
+- [x] 5.11 失败用例 `JoinTimeout_test`：配置 `timeout` 后未集齐发 `timeoutEvent`、未配置 `timeoutEvent` 发 `ErrorEvent`、`Ticktock` 不可用时构造期 WARN 且不超时
+- [x] 5.12 实现 `JoinTask` 超时（`f_ticktock.DelayedTicktockTask` 一次性延迟任务 + 清态）
+- [x] 5.13 失败用例 `Reachability_test`：扇出分支直达 `End` 抛 `FANOUT_WITHOUT_JOIN`（P-05）、两个 `JoinTask.branches` 重叠抛 `ILLEGAL_STATE`、合法编排（`order.created → split → {…} → join → End`）通过
+- [x] 5.14 实现 `flow/Reachability.cj`（从 `ResolveTask.producing` BFS，遇到 End 边即失败）
+- [x] 5.15 失败用例 `SameSpaceFanout_test`：两个分支都在 `orders` 时抛 `SAME_SPACE_FANOUT`（P-14）、跨空间扇出通过（P-13）
+- [x] 5.16 实现 `flow/RuleSetFlow.cj` 的 `start`/`fanout`/`join`/`end`/`flow` 与同空间校验
+- [x] 5.17 失败用例 `RuleTask_test`：`exec` 按信封取 session → 建事实 → `agenda.fire` → 输出事件带同一 session；未声明空间抛 `UNKNOWN_FACT_SPACE`（I-02）
+- [x] 5.18 实现 `flow/RuleTask.cj` 与可配置 `FactFactory`
+- [x] 5.19 失败用例 `FlowSessionRegression_test`：构造缺 `JoinTask` 的流程并连续 `start()` 两次，锁定"残留事件会被第二次 `start` 消费"的上游行为（P-05b）
+- [x] 5.20 失败用例 `VersionSwitch_test`：新 tag 注册后 `removeExceptCurrentTag()` 生效（P-10）、旧 tag 被依赖时抛 `GraphException`（P-11）
+- [x] 5.21 `cjpm test` 全绿，P-01~P-15 全部覆盖
 
 ## 6. M5 决策表 API + CSV
 
