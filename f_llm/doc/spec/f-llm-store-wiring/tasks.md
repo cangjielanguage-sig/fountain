@@ -26,9 +26,9 @@
 
 ## 4. 实现包与 bootstrap
 
-- [ ] 4.1 `f_llm/cjpm.toml`：驱动提升到 dependencies，补 target bin-dependencies
-- [ ] 4.2 `store/postgres`：`register()` 注册 content/meta 工厂（executor + embedder）
-- [ ] 4.3 `store/mysql`：同上
+- [x] 4.1 `f_llm/cjpm.toml`：驱动提升到 dependencies，补 target bin-dependencies
+- [x] 4.2 `store/postgres`：`register()` 注册 content/meta 工厂（executor + embedder）
+- [x] 4.3 `store/mysql`：同上
 - [ ] 4.4 `Stores.bootstrap()`：按 `StoreSettings` 调用对应 `register()`；未知值启动失败
 - [ ] 4.5 用例：注册后可 `Stores.content()/meta()`；未注册时错误信息含可选值
 
