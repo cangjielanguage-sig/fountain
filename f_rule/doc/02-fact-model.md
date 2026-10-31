@@ -42,6 +42,19 @@ public class FactHandle <: Hashable & Equatable<FactHandle> {
 
 `FactHandle` 相等性比较 `(space, id)`：id 只在同一 `(space, session)` 内单调唯一，不同空间可能重复，因此必须带 `space`。`typeTag` 仅用于调试与桶定位。
 
+### 2.1 实例判重
+
+`FactBase.assert` 要拒绝"同一实例重复插入"。仓颉的 `Object` 没有 identity hash，无法直接用引用地址做键，因此提供可选接口：
+
+```cangjie
+/** 事实实例身份。实现后 assert 判重为 O(1)；未实现时退回 refEq 线性扫描。 */
+public interface IdentifiedFact {
+    prop identity: Int64
+}
+```
+
+`TypedFact` / `DynamicFact` 由 `f_rule` 内部实现该接口，标识在构造时从进程级单调计数器分配，不参与任何持久化或业务语义。外部自定义 `Fact` 若不实现，判重按引用相等扫描该类型的已有事实（条数少时可接受）。
+
 ## 3. 强类型事实
 
 ### 3.1 字段访问器

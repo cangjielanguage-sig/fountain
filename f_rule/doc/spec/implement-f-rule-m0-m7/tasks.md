@@ -21,37 +21,37 @@
 
 ## 2. M1 事实模型与条件
 
-- [ ] 2.1 失败用例 `ValueKey_test`：`Int64(1) == Float64(1.0)`、`DateTime`→纳秒、`Array`/`Set` 归一、跨域排序抛 `TYPE_MISMATCH`（F-07/F-08）
-- [ ] 2.2 实现 `fact/ValueKey.cj`：`Hashable & Equatable & Comparable`，域序 Number < Text < Bool < Time < List
-- [ ] 2.3 失败用例 `FactSchema_test` / `TypedFact_test`：字段读取、未声明字段返回 None、`has` 与 `get` 区分、`hostTypeName` 记录（F-01）
-- [ ] 2.4 实现 `fact/Fact.cj`（`Fact` / `FactHandle` / `TypeTag` 常量）、`fact/FactSchema.cj`、`fact/TypedFact.cj`
-- [ ] 2.5 失败用例 `DynamicFact_test`：缺失字段、`set`/`remove`、`freeze` 后 `set` 抛 `ILLEGAL_STATE`、非法值类型抛 `TYPE_MISMATCH`（F-02/F-03）
-- [ ] 2.6 实现 `fact/DynamicFact.cj`（含允许类型白名单校验）
-- [ ] 2.7 失败用例 `FactBase_test`：`assert` 返回句柄、重复 `assert` 同实例抛 `DUPLICATE_FACT`、`update` 保 id、`retract` 不存在返回 false、`scan`/`size`/`clear`（F-04/F-05/F-06）
-- [ ] 2.8 实现 `fact/FactBase.cj`（`typeTag` 分桶 + 单调 id + 实例弱引用表）
-- [ ] 2.9 失败用例 `FactSpace_test` / `FactSpaceRegistry_test`：类型注册、`fieldTypes`、不一致 schema 重复注册抛 `DUPLICATE_TYPE`、`freeze()` 后注册抛 `NETWORK_FROZEN`（F-16）
-- [ ] 2.10 实现 `fact/FactSpace.cj`、`fact/FactSpaceRegistry.cj`
-- [ ] 2.11 失败用例 `FactBaseView_test`：会话隔离（F-09）、`fork` + `commitToParent`（F-10）、`Shared`/`Isolated` 两种级别
-- [ ] 2.12 实现 `fact/FactBaseView.cj`
-- [ ] 2.13 失败用例 `Operator_test`：15 个算子各一组正/反例，`In` 空集合恒 false，`IsNull` vs 字段缺失，`Matches` 整串匹配（C-01/C-02/C-03）
-- [ ] 2.14 实现 `condition/Operator.cj`、`condition/Operand.cj`，以及三值逻辑求值器 `condition/Truth.cj`
-- [ ] 2.15 失败用例 `TruthTable_test`：`And`/`Or`/`Not` 与 SQL 真值表一致，`Unknown` 不产生激活（C-04）
-- [ ] 2.16 失败用例 `Constraint_test` / `Pattern_test`：约束重排语义不变、未知字段抛 `UNKNOWN_FIELD`、绑定名重复抛 `ILLEGAL_STATE`（C-05/C-08）
-- [ ] 2.17 实现 `condition/Constraint.cj`、`condition/Pattern.cj`、`condition/JoinConstraint.cj`
-- [ ] 2.18 失败用例 `ConditionExpr_test`：`Or` 跨类型展开为多条规则（id 加 `#1`/`#2`）、`Not` 包裹 join 抛错、深度 33 抛 `TABLE_INVALID`（C-06/C-07）
-- [ ] 2.19 实现 `condition/ConditionExpr.cj`（含展开与深度校验）
-- [ ] 2.20 失败用例 `JitExpression_test`：完整 lambda 编译、裸表达式按绑定类型包装、语法错误抛 `SCRIPT_COMPILE`、形参缺失抛 `SCRIPT_BINDING_MISSING`、动态事实绑定走解释器并 WARN
-- [ ] 2.21 实现 `condition/JitExpression.cj`（两种构造 + `f_jit` 错误包装）与 `condition/Interpreter.cj`（白名单 10 函数 + 节点计数上限）
-- [ ] 2.22 失败用例 `InterpreterVsJit_test`：同一批表达式在 `JitPreferred` 与 `Interpreted` 下结果逐条一致（I-03）
-- [ ] 2.23 失败用例 `RuleBuilder_test`：`salience`/`facts`/`when`/`join`/`where`/`then`/`build`，无模式规则抛 `EMPTY_PATTERN`，重复规则 id 抛 `DUPLICATE_RULE`
-- [ ] 2.24 实现 `rule/Rule.cj`、`rule/RuleBuilder.cj`、`rule/Bindings.cj`
-- [ ] 2.25 失败用例 `RuleSetBuilder_test`：空间自动声明、`registerFact(space, schema)`、`registerDynamicType`、`expressionMode`、`conflictResolver`、缺省空间 `default`（F-15）
-- [ ] 2.26 实现 `rule/RuleSet.cj` 与根包 `RuleSetBuilder` 的装配部分（不含网络构建）
-- [ ] 2.27 失败用例 `RuleSetValidation_test`：跨空间 `CROSS_SPACE_JOIN`、未知空间 `UNKNOWN_FACT_SPACE`（F-13/F-14）、无空间 `EMPTY_FACT_SPACE_SET`、未知类型 `UNKNOWN_TYPE`、失败后 `Invalid` 且不可建引擎
-- [ ] 2.28 实现构建期校验器 `rule/Validator.cj`，按 `doc/02` §8 表格逐项实现
-- [ ] 2.29 实现 `ReteNetwork` 之前的顺序匹配器 `test/NaiveMatcher.cj`（嵌套循环 + 逐条 join 判定）与 `test/PropertyGen.cj`（固定种子 20261031）
-- [ ] 2.30 失败用例 `NaiveMatcher_test`：单空间/多空间分别产出激活、共享空间事实互通、隔离空间互不可见（F-11/F-12）
-- [ ] 2.31 `cjpm test` 全绿，F-01~F-18、C-01~C-08 全部覆盖
+- [x] 2.1 失败用例 `ValueKey_test`：`Int64(1) == Float64(1.0)`、`DateTime`→纳秒、`Array`/`Set` 归一、跨域排序抛 `TYPE_MISMATCH`（F-07/F-08）
+- [x] 2.2 实现 `fact/ValueKey.cj`：`Hashable & Equatable & Comparable`，域序 Number < Text < Bool < Time < List
+- [x] 2.3 失败用例 `FactSchema_test` / `TypedFact_test`：字段读取、未声明字段返回 None、`has` 与 `get` 区分、`hostTypeName` 记录（F-01）
+- [x] 2.4 实现 `fact/Fact.cj`（`Fact` / `FactHandle` / `TypeTag` 常量）、`fact/FactSchema.cj`、`fact/TypedFact.cj`
+- [x] 2.5 失败用例 `DynamicFact_test`：缺失字段、`set`/`remove`、`freeze` 后 `set` 抛 `ILLEGAL_STATE`、非法值类型抛 `TYPE_MISMATCH`（F-02/F-03）
+- [x] 2.6 实现 `fact/DynamicFact.cj`（含允许类型白名单校验）
+- [x] 2.7 失败用例 `FactBase_test`：`assert` 返回句柄、重复 `assert` 同实例抛 `DUPLICATE_FACT`、`update` 保 id、`retract` 不存在返回 false、`scan`/`size`/`clear`（F-04/F-05/F-06）
+- [x] 2.8 实现 `fact/FactBase.cj`（`typeTag` 分桶 + 单调 id + 实例弱引用表）
+- [x] 2.9 失败用例 `FactSpace_test` / `FactSpaceRegistry_test`：类型注册、`fieldTypes`、不一致 schema 重复注册抛 `DUPLICATE_TYPE`、`freeze()` 后注册抛 `NETWORK_FROZEN`（F-16）
+- [x] 2.10 实现 `fact/FactSpace.cj`、`fact/FactSpaceRegistry.cj`
+- [x] 2.11 失败用例 `FactBaseView_test`：会话隔离（F-09）、`fork` + `commitToParent`（F-10）、`Shared`/`Isolated` 两种级别
+- [x] 2.12 实现 `fact/FactBaseView.cj`
+- [x] 2.13 失败用例 `Operator_test`：15 个算子各一组正/反例，`In` 空集合恒 false，`IsNull` vs 字段缺失，`Matches` 整串匹配（C-01/C-02/C-03）
+- [x] 2.14 实现 `condition/Operator.cj`、`condition/Operand.cj`，以及三值逻辑求值器 `condition/Truth.cj`
+- [x] 2.15 失败用例 `TruthTable_test`：`And`/`Or`/`Not` 与 SQL 真值表一致，`Unknown` 不产生激活（C-04）
+- [x] 2.16 失败用例 `Constraint_test` / `Pattern_test`：约束重排语义不变、未知字段抛 `UNKNOWN_FIELD`、绑定名重复抛 `ILLEGAL_STATE`（C-05/C-08）
+- [x] 2.17 实现 `condition/Constraint.cj`、`condition/Pattern.cj`、`condition/JoinConstraint.cj`
+- [x] 2.18 失败用例 `ConditionExpr_test`：`Or` 跨类型展开为多条规则（id 加 `#1`/`#2`）、`Not` 包裹 join 抛错、深度 33 抛 `TABLE_INVALID`（C-06/C-07）
+- [x] 2.19 实现 `condition/ConditionExpr.cj`（含展开与深度校验）
+- [x] 2.20 失败用例 `JitExpression_test`：完整 lambda 编译、裸表达式按绑定类型包装、语法错误抛 `SCRIPT_COMPILE`、形参缺失抛 `SCRIPT_BINDING_MISSING`、动态事实绑定走解释器并 WARN
+- [x] 2.21 实现 `condition/JitExpression.cj`（两种构造 + `f_jit` 错误包装）与 `condition/Interpreter.cj`（白名单 10 函数 + 节点计数上限）
+- [x] 2.22 失败用例 `InterpreterVsJit_test`：同一批表达式在 `JitPreferred` 与 `Interpreted` 下结果逐条一致（I-03）
+- [x] 2.23 失败用例 `RuleBuilder_test`：`salience`/`facts`/`when`/`join`/`where`/`then`/`build`，无模式规则抛 `EMPTY_PATTERN`，重复规则 id 抛 `DUPLICATE_RULE`
+- [x] 2.24 实现 `rule/Rule.cj`、`rule/RuleBuilder.cj`、`rule/Bindings.cj`
+- [x] 2.25 失败用例 `RuleSetBuilder_test`：空间自动声明、`registerFact(space, schema)`、`registerDynamicType`、`expressionMode`、`conflictResolver`、缺省空间 `default`（F-15）
+- [x] 2.26 实现 `rule/RuleSet.cj` 与根包 `RuleSetBuilder` 的装配部分（不含网络构建）
+- [x] 2.27 失败用例 `RuleSetValidation_test`：跨空间 `CROSS_SPACE_JOIN`、未知空间 `UNKNOWN_FACT_SPACE`（F-13/F-14）、无空间 `EMPTY_FACT_SPACE_SET`、未知类型 `UNKNOWN_TYPE`、失败后 `Invalid` 且不可建引擎
+- [x] 2.28 实现构建期校验器 `rule/Validator.cj`，按 `doc/02` §8 表格逐项实现
+- [x] 2.29 实现 `ReteNetwork` 之前的顺序匹配器 `test/NaiveMatcher.cj`（嵌套循环 + 逐条 join 判定）与 `test/PropertyGen.cj`（固定种子 20261031）
+- [x] 2.30 失败用例 `NaiveMatcher_test`：单空间/多空间分别产出激活、共享空间事实互通、隔离空间互不可见（F-11/F-12）
+- [x] 2.31 `cjpm test` 全绿，F-01~F-18、C-01~C-08 全部覆盖
 
 ## 3. M2 Rete 网络
 

@@ -30,14 +30,15 @@ import fountain::f_rule.table.*
 
 ```cangjie
 public class RuleSet {
-    public static func builder(id: String): RuleSetBuilder
     public prop id: String
     public prop version: String
     public prop rules: Array<Rule>
     public func close(): Unit
 }
 
+/** 规则集构建器。放在根包，避免 `rule` 包反向依赖根包。 */
 public class RuleSetBuilder {
+    public init(id: String)
     public func version(version: String): RuleSetBuilder
     /** 声明一个事实库空间；规则通过 `.facts(id)` 引用。 */
     public func factSpace(id: String): RuleSetBuilder
@@ -56,7 +57,15 @@ public class RuleSetBuilder {
     public func expressionMode(mode: ExpressionMode): RuleSetBuilder
     /** 冲突消解策略，缺省 salience → specificity → ruleOrder → seq。 */
     public func conflictResolver(resolver: ConflictResolver): RuleSetBuilder
+    /** 构建并校验；失败抛 RuleException，规则集对象不可得。 */
     public func build(): RuleSet
+    /**
+     * 构建但不在失败时抛出：校验失败时返回处于 Invalid 状态的 RuleSet，
+     * 原因由 lastError() 暴露。供测试与"预校验后再决定是否上线"的场景使用。
+     */
+    public func buildOrInvalid(): RuleSet
+    /** 最近一次 buildOrInvalid 的失败原因；成功或未调用时为 None。 */
+    public func lastError(): ?RuleException
 }
 ```
 
@@ -83,10 +92,11 @@ public class RuleBuilder {
      * 同一规则集内相同 id 的规则共享事实与网络分片。
      */
     public func facts(space: String): RuleBuilder
-    public func when(pattern: Pattern): RuleBuilder
+    /** 追加一个模式。`when` 是仓颉关键字，故命名为 addPattern。 */
+    public func addPattern(pattern: Pattern): RuleBuilder
     public func join(constraint: JoinConstraint): RuleBuilder
-    /** 脚本条件，形参必须与已声明的绑定名一致。 */
-    public func where(source: String): RuleBuilder
+    /** 脚本条件，形参必须与已声明的绑定名一致。`where` 是关键字，故命名为 script。 */
+    public func script(source: String): RuleBuilder
     public func then(action: (ActionContext) -> Unit): RuleBuilder
     public func build(): Rule
 }
@@ -120,9 +130,9 @@ main() {
     let vip = Rule.builder("R1")
         .salience(100)
         .facts("orders")
-        .when(Pattern("Order", "o")
-            .where("level", Operator.Ge, 3)
-            .where("amount", Operator.Gt, 200))
+        .addPattern(Pattern("Order", "o")
+            .constrain("level", Operator.Ge, 3)
+            .constrain("amount", Operator.Gt, 200))
         .then { ctx =>
             ctx.set("discount", 0.85)
             ctx.set("event", "order.discounted")
@@ -132,12 +142,12 @@ main() {
     let fallback = Rule.builder("R2")
         .salience(0)
         .facts("orders")
-        .when(Pattern("Order", "o"))
+        .addPattern(Pattern("Order", "o"))
         .then { ctx => ctx.set("discount", 1.0) }
         .build()
 
     // 3. 规则集：声明空间并注册类型
-    let ruleSet = RuleSet.builder("pricing")
+    let ruleSet = RuleSetBuilder("pricing")
         .version("v1")
         .factSpace("orders")
         .registerFact("orders", orderSchema)
@@ -166,7 +176,7 @@ import std.fs.Path
 main() {
     // orderSchema 沿用 §5 的定义
     let table = CsvTableParser.parseFile(Path("./rules/pricing.csv"))
-    let ruleSet = RuleSet.builder(table.id)
+    let ruleSet = RuleSetBuilder(table.id)
         .version(table.version)
         .registerFact(table.factSpace, orderSchema)
         .table(table)
@@ -191,7 +201,7 @@ import fountain::f_egraph.*
 
 main() {
     // vip/bulk 在 orders 空间；level 在 users 空间（规则定义同 §5）
-    let rs = RuleSet.builder("pricing")
+    let rs = RuleSetBuilder("pricing")
         .version("v1")
         .factSpace("orders")
         .factSpace("users")
@@ -290,7 +300,7 @@ public class Pattern {
 ## 10. 生命周期
 
 ```
-RuleSet.builder → build → [只读]
+RuleSetBuilder → build → [只读]
                               │
                    RuleEngine(ruleSet)
                               │
@@ -348,7 +358,7 @@ ClosureTask.initCompiler(compiler)
 RuleRuntime.initCompiler(compiler)
 
 // 4. 构建规则集
-let ruleSet = RuleSet.builder("pricing")...
+let ruleSet = RuleSetBuilder("pricing")...
 ```
 
 顺序不可颠倒：`RuleSet.build()` 会编译 `Script` 条件，此时 `Compiler` 必须已登记全部类型。

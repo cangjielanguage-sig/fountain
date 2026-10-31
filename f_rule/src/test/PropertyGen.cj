@@ -1,0 +1,79 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_rule.test
+
+import std.collection.ArrayList
+import fountain::f_rule.condition.{JoinConstraint, Operator, Pattern}
+import fountain::f_rule.fact.DynamicFact
+import fountain::f_rule.rule.Rule
+
+/**
+ * 固定种子的规则/事实生成器（`doc/09-testing.md` §4.1）。
+ *
+ * 默认种子 `20261031`，保证差分失败可复现。生成器自己实现 LCG 而不是依赖
+ * `std.random`：种子与序列完全由本类控制，跨平台一致。
+ */
+public class PropertyGen {
+    private var state: Int64
+
+    public init(seed!: Int64 = 20261031) {
+        this.state = seed
+    }
+
+    /** 0..bound-1 的确定性伪随机数。 */
+    public func next(bound: Int64): Int64 {
+        state = (state * 1103515245 + 12345) % 2147483648
+        if (bound <= 0) {
+            return 0
+        }
+        (state / 65536) % bound
+    }
+
+    /** 生成 `count` 条 `GenFact` 动态事实（字段 amount / level / code）。 */
+    public func facts(count: Int64): Array<DynamicFact> {
+        let out = ArrayList<DynamicFact>()
+        var i: Int64 = 0
+        while (i < count) {
+            let fact = DynamicFact("GenFact")
+            fact.set("amount", next(1000))
+            fact.set("level", next(6))
+            fact.set("code", if (next(2) == 0) { "A" } else { "B" })
+            out.add(fact)
+            i += 1
+        }
+        out.toArray()
+    }
+
+    /** 生成 `count` 条单/双模式规则，至少一条约束。 */
+    public func rules(count: Int64, space!: String = "default"): Array<Rule> {
+        let out = ArrayList<Rule>()
+        var i: Int64 = 0
+        while (i < count) {
+            let builder = Rule.builder("G${i}")
+                .facts(space)
+                .salience(next(10))
+                .addPattern(Pattern("GenFact", "o").constrain("amount", Operator.Ge, next(500)))
+            if (next(2) == 0) {
+                let _ = builder.addPattern(Pattern("GenFact", "u")
+                    .constrain("level", Operator.Le, next(6)))
+                let _ = builder.join(JoinConstraint("o", "amount", Operator.Gt, "u", "amount"))
+            }
+            out.add(builder.build())
+            i += 1
+        }
+        out.toArray()
+    }
+}

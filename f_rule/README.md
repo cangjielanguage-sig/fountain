@@ -40,13 +40,13 @@ main() {
     let vip = Rule.builder("R1")
         .salience(100)
         .facts("orders")
-        .when(Pattern("Order", "o")
-            .where("level", Operator.Ge, 3)
-            .where("amount", Operator.Gt, 200))
+        .addPattern(Pattern("Order", "o")
+            .constrain("level", Operator.Ge, 3)
+            .constrain("amount", Operator.Gt, 200))
         .then { ctx => ctx.set("discount", 0.85) }
         .build()
 
-    let ruleSet = RuleSet.builder("pricing")
+    let ruleSet = RuleSetBuilder("pricing")
         .version("v1")
         .factSpace("orders")
         .registerFact("orders", schema)

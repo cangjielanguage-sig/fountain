@@ -246,6 +246,28 @@ compiler.registerType<DynamicFact>()
 - 1e 的 `code=99` 只在 aarch64 后端观测到；1a/1f/2b/2c/3a/3b 都是**前端**类型检查错误，
   与后端无关。动态事实走解释器的决定不依赖 1e，故即便该后端缺陷被修复也不改变默认策略。
 
+### 6.5 一元 `!` 的前端优先级缺陷与降级
+
+**现象**：`f_jit` 把一元 `!` 绑得比比较运算更紧。
+
+```cangjie
+let f = c.compile("{ n: Int64 => !(n < 50) }")
+f.call<Bool>([Int64(49)])     // JIT: true（错误）
+                              // 期望: false
+```
+
+实测 `49 → true`、`100 → true`、`500 → true`，等价于 `(~n) < 50`。内置解释器对同一源码返回
+`false`，与语义一致。
+
+**处理**：`JitExpression` 在编译前扫描源码，命中一元 `!`（排除 `!=`）时整体改走内置解释器并记
+`WARN`；`JitPreferred` 下不抛错。标记与复现条件写在 `src/condition/JitExpression.cj` 的
+`hasUnaryNot` 注释里（`WORKAROUND(f_jit-unary-not-precedence-20261031)`）。
+
+**代价与退出条件**：
+
+- 代价：含 `!` 的条件失去 JIT 性能；扫描按字符进行，字符串字面量里的 `!` 会保守触发降级（只影响性能）。
+- 退出条件：`f_jit` 修复该优先级后，删除 `hasUnaryNot` 与两处调用点，并重跑 I-03 差分用例。
+
 ## 7. 内置解释器（降级路径）
 
 当 f_jit 不可用（平台不支持、类型未登记、`Option`/`Any` 限制）时，`JitExpression` 降级为内置解释器。内置解释器只支持受限语法，覆盖面小于 f_jit：
