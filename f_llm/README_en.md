@@ -1543,6 +1543,11 @@ Defaults to `http://127.0.0.1:8000/v1/embeddings` (`BgeM3Transport`) and fetches
 | `lexical_weights` | sparse, `tokenId → weight` | `llm_memory_token` |
 | `colbert_vecs` | one 1024-d vector per token (max 96) | `*_colbert` (`bytea`) |
 
+Timeouts cover read/write only (default 3000 ms, tuned by `llm_embeddingTimeoutMs`): `stdx.net.http`'s
+`ClientBuilder` exposes no connect timeout, so connection setup relies on the OS TCP timeout. For records
+missing sparse/colbert data, run `MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace)` to
+recompute those two routes in pages (dense is left untouched).
+
 > The local weight directory has no `sparse_linear.pt`, so `lexical_weights` is a **term-frequency approximation**
 > rather than BGE-M3's learned sparse. Field names/shapes follow FlagEmbedding, so swapping in a real sparse head
 > needs no upstream change. For dense-only OpenAI-compatible endpoints use `LlmEmbeddingTransport`

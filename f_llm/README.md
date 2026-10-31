@@ -1522,6 +1522,10 @@ Config.set<String>([
 | `lexical_weights` | sparse，`tokenId → 权重` | `llm_memory_token` |
 | `colbert_vecs` | 每 token 一个 1024 维向量（最多 96） | `*_colbert`（`bytea`） |
 
+超时只覆盖读/写（默认 3000ms，可用 `llm_embeddingTimeoutMs` 调）：`stdx.net.http` 的 `ClientBuilder`
+没有连接超时入口，建连阶段依赖操作系统 TCP 超时。历史数据缺 sparse/colbert 时，用
+`MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace)` 按页重建（只重算这两路，不动 dense）。
+
 > 当前权重目录没有 `sparse_linear.pt`，服务的 `lexical_weights` 是**词频近似**而非 BGE-M3 学习式稀疏；
 > 字段名与形状按 FlagEmbedding 对齐，换成带稀疏头的权重后上层不用改。
 > 换成只给 dense 的 OpenAI 兼容端点时，改用 `LlmEmbeddingTransport`（sparse/colbert 为空，检索自动标 `degraded`）。

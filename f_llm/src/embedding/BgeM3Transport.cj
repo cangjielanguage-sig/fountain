@@ -50,10 +50,17 @@ public class BgeM3Transport <: EmbeddingTransport {
         this.retries = retries
     }
 
-    /** 失败重试（2 次，退避 100ms / 300ms），仍失败则抛最后一次异常 */
+    /**
+     * 失败重试（2 次，退避 100ms / 300ms），仍失败则抛最后一次异常。
+     *
+     * 超时只覆盖读/写：`stdx.net.http` 的 `ClientBuilder` 没有连接超时入口，
+     * `HttpClient` 也只暴露 `readTimeout` / `writeTimeout`，因此建连阶段依赖
+     * 操作系统 TCP 超时。
+     */
     public func embed(text: String): EmbeddingResponse {
         if(timeoutMs > 0){
             HttpClient.globalReadTimeout(Duration.millisecond * timeoutMs)
+            HttpClient.globalWriteTimeout(Duration.millisecond * timeoutMs)
         }
         var last: ?Exception = None
         for(attempt in 0..(retries + 1)){
