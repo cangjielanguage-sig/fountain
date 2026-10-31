@@ -41,13 +41,14 @@
 | 术语 | 英文 / 标识 | 含义 |
 |---|---|---|
 | 事实 | `Fact` | 可字段寻址的数据单元，网络匹配的输入 |
-| 事实库 | `FactBase` | 按规则集与会话隔离的事实容器 |
+| 事实库空间 | `FactSpace` | 事实库命名空间；规则声明归属，相同空间共享事实 |
+| 事实库 | `FactBase` | `(space, session)` 级的事实容器 |
 | 模式 | `Pattern` | 一类事实 + 绑定名 + 约束集合 |
 | 约束 | `Constraint` | 单事实上的一个判定（字段、算子、右操作数） |
-| 规则 | `Rule` | 模式序列 + 连接约束 + 动作 |
-| 规则集 | `RuleSet` | 一组规则 + 一个 `FactBase` + 一个版本 |
+| 规则 | `Rule` | 模式序列 + 连接约束 + 动作 + 所属空间 |
+| 规则集 | `RuleSet` | 一组规则 + 一组 `FactSpace` + 一个版本 |
 | 激活 | `Activation` | 某条规则在某一组绑定下被满足的实例 |
-| 议程 | `Agenda` | 待执行激活的优先队列 |
+| 议程 | `Agenda` | 待执行激活的优先队列，session 级、跨空间统一排序 |
 | 令牌 | `Token` | beta 网络中沿路径传播的部分匹配结果 |
 | 事件分解执行器 | `ResolveTask` | 把单个事件拆成多个子事件，扇出到多个执行器 |
 | 汇合执行器 | `JoinTask` | 等待多个分支事件全部到达后再发出一个事件 |
@@ -56,6 +57,8 @@
 ## 强制约束
 
 1. **进入 Rete 网络的事实不可变**。修改必须走 `FactBase.update()`（内部等价 retract + assert），否则网络索引与事实内容不一致。
-2. **扇出分支不得直达结束事件**。`f_egraph` 的 `ImmediateDispatcher.dispatch()` 在遇到 `EndExecutor` 时立即返回，队列中剩余事件被丢弃；所有扇出必须有 `JoinTask` 汇合。
-3. **脚本面只暴露白名单类型**。`f_jit` 表达式只能访问 `Compiler.registerType` / `@JitBind` 登记的成员，未登记的类型在编译期报"未注册"。
-4. **规则版本切换以 `tag` 为单位**。同一 `category` 下同时只允许一个活跃 `tag`，切换后调用 `removeExceptCurrentTag()`。
+2. **规则是单库的**。一条规则的所有模式必须属于同一 `FactSpace`，禁止跨空间 join；需要跨库关联时用 `ActionContext.copyTo` 物化到目标库。
+3. **扇出分支不得直达结束事件**。`f_egraph` 的 `ImmediateDispatcher.dispatch()` 在遇到 `EndExecutor` 时立即返回，队列中剩余事件被丢弃；所有扇出必须有 `JoinTask` 汇合。
+4. **同空间的多条规则串联，不同空间才扇出**。同空间扇出会并发改写同一批事实，执行顺序不可控。
+5. **脚本面只暴露白名单类型**。`f_jit` 表达式只能访问 `Compiler.registerType` / `@JitBind` 登记的成员，未登记的类型在编译期报"未注册"。
+6. **规则版本切换以 `tag` 为单位**。同一 `category` 下同时只允许一个活跃 `tag`，切换后调用 `removeExceptCurrentTag()`。

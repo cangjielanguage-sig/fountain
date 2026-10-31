@@ -17,6 +17,8 @@ package fountain::f_rule.agenda
 
 public class Activation <: Hashable & Equatable<Activation> {
     public let rule: Rule
+    /** 规则所属事实库空间。 */
+    public let factSpace: String
     /** 绑定名 → 事实句柄；执行时按需解析成实例。 */
     public let bindings: Bindings
     /** 规则声明的优先级，越大越先执行。 */
@@ -31,20 +33,22 @@ public class Activation <: Hashable & Equatable<Activation> {
 }
 ```
 
-相等性：`(rule.id, bindings)`。同一规则同一组绑定只允许一个激活存在于议程中。
+相等性：`(factSpace, rule.id, bindings)`。同一规则同一组绑定只允许一个激活存在于议程中；不同空间的同名规则是不同激活。
 
 `Bindings` 是不可变视图：
 
 ```cangjie
 public class Bindings {
     public func get(binding: String): ?FactHandle
-    public func resolve(binding: String): ?Fact      // 回查 FactBase
+    public func resolve(binding: String): ?Fact      // 回查来源空间的 FactBase
     public func names(): Array<String>
     public func toMap(): HashMap<String, FactHandle>
 }
 ```
 
 ## 3. 议程
+
+议程是 **session 级**的，不是空间级：不同 `FactSpace` 的激活进入同一个队列，按统一策略排序，这样跨库的优先级比较才有意义。但每条激活的执行只作用于 `activation.factSpace` 指定的空间。
 
 ```cangjie
 public class Agenda {
@@ -201,6 +205,8 @@ public interface RuleAction {
 }
 
 public class ActionContext {
+    /** 当前激活所属事实库空间；动作默认只读写这个空间。 */
+    public prop factSpace: String
     public func fact(binding: String): ?Fact
     public func assert(fact: Fact): FactHandle
     public func retract(handle: FactHandle): Unit
@@ -209,8 +215,15 @@ public class ActionContext {
     public func set(name: String, value: Any): Unit
     public func get(name: String): ?Any
     public func outputs(): HashMap<String, Any>
+
+    /** 跨空间只读访问。 */
+    public func factIn(space: String, handle: FactHandle): ?Fact
+    /** 把事实复制到另一个空间，返回目标空间的新句柄。 */
+    public func copyTo(space: String, fact: Fact): FactHandle
 }
 ```
+
+跨空间访问一律**显式**：不提供 `assertInto(space)` 之类的快捷方式，搬运必须走 `copyTo`。两条空间里的同名事实是两个独立对象，各自的撤销互不影响。
 
 三种动作实现：
 
@@ -226,7 +239,7 @@ public class ActionContext {
 
 - 动作抛出异常 → `fire` 立即终止，异常原样上抛（包 `RuleException(ACTION_FAILED)`，`caused` 保留原异常）；
 - 已执行的动作**不回滚**：规则引擎不提供分布式事务；
-- 需要原子性时，在动作里写业务事务，或把整批事实变更放到 `FactBaseView(Isolated)` 中，成功后 `commitToParent`。
+- 需要原子性时，在动作里写业务事务，或把整批事实变更放到 `FactBaseView(space, session, Isolated)` 中，成功后 `commitToParent`。
 
 ## 9. 循环检测
 
@@ -257,7 +270,7 @@ flow.registerTask(task)
 
 `RuleTask.exec(e)`：
 
-1. 取 `e.session` 对应的 `FactBaseView`；
+1. 按 `RuleEnvelope` 取 session，按 `activation.factSpace` 取 `FactBaseView`；
 2. 用事件数据构造事实（`FactFactory` 可配置）；
 3. `agenda.fire()`；
 4. 把输出槽包装成下一个 `TaskEvent` 返回。

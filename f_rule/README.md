@@ -7,6 +7,7 @@
 | 能力 | 说明 |
 |---|---|
 | 双形态事实 | 强类型业务类（`@JitBind` + `FactSchema`）与动态字典（`DynamicFact`）并存 |
+| 多事实库 | 每条规则可指定独立 `FactSpace`，也可多条规则共享；Rete 按空间分片，跨空间不可 join |
 | 条件求值 | 内置算子（`Eq`/`Gt`/`In`/`IsNull`/…）+ f_jit 表达式 + 内置解释器降级 |
 | Rete 网络 | alpha/beta 节点共享、等值/范围索引、令牌父链共享、增量插入与撤销 |
 | 议程 | 6 种冲突消解策略 + 组合，3 种 `FireMode`，循环检测 |
@@ -38,6 +39,7 @@ main() {
 
     let vip = Rule.builder("R1")
         .salience(100)
+        .facts("orders")
         .when(Pattern("Order", "o")
             .where("level", Operator.Ge, 3)
             .where("amount", Operator.Gt, 200))
@@ -46,13 +48,14 @@ main() {
 
     let ruleSet = RuleSet.builder("pricing")
         .version("v1")
-        .registerFact(schema)
+        .factSpace("orders")
+        .registerFact("orders", schema)
         .rule(vip)
         .build()
 
     let engine = RuleEngine(ruleSet)
     let session = engine.session("order-1001")
-    session.assert(TypedFact(Order("1001", 500, 3), schema))
+    session.assert("orders", TypedFact(Order("1001", 500, 3), schema))
     println(session.fire().get("discount").getOrThrow())     // 0.85
 }
 ```

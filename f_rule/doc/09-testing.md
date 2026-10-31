@@ -34,6 +34,14 @@
 | F-08 | 跨域比较（字符串 vs 数字） | 抛 `TYPE_MISMATCH` |
 | F-09 | 会话隔离 | A 会话事实在 B 会话不可见 |
 | F-10 | `fork` + `commitToParent` | 子视图事实合并到父 |
+| F-11 | 两条规则 `.facts("a")` / `.facts("b")` | 各自只看自己空间的事实 |
+| F-12 | 三条规则同 `.facts("a")` | 任一条插入的事实对其余两条可见 |
+| F-13 | 同一规则两个 `Pattern` 跨空间 | 构建期抛 `CROSS_SPACE_JOIN` |
+| F-14 | 规则引用未声明空间 | 构建期抛 `UNKNOWN_FACT_SPACE` |
+| F-15 | 未声明空间的规则 | 自动归入 `default`，且与显式 `.facts("default")` 等价 |
+| F-16 | 同一空间 `typeTag` 用不同 schema 重复注册 | 抛 `DUPLICATE_TYPE` |
+| F-17 | `ActionContext.copyTo("b", fact)` | 目标空间生成新句柄，两库独立撤销 |
+| F-18 | `copyTo` 后撤销源事实 | 目标空间事实不受影响 |
 
 ### 3.2 条件
 
@@ -67,6 +75,11 @@
 | R-13 | 无规则关心的事实类型 | 不抛错，直接忽略 |
 | R-14 | 令牌 refCount 归零 | 从 BetaMemory 与父链释放 |
 | R-15 | 100 条规则共享 20 个 alpha 签名 | 节点数 = 20 + join 数，不随规则数线性增长 |
+| R-16 | 断言 `a` 空间事实 | `b` 空间的 alpha memory 不变 |
+| R-17 | 两个空间出现完全相同的 alpha 签名 | 各建一个节点，不跨片共享 |
+| R-18 | 重建 `a` 空间分片 | `b` 空间的 token 与激活不受影响 |
+| R-19 | 同一会话跨空间各有激活 | 议程统一排序，动作写回各自来源空间 |
+| R-20 | 空间内无规则关心的事实类型 | 该空间分片忽略，其他分片不受影响 |
 
 ### 3.4 议程
 
@@ -120,6 +133,9 @@
 | P-10 | 版本切换 | 新 tag 生效，旧 tag 移除 |
 | P-11 | 旧 tag 被依赖时移除 | 抛 `GraphException` |
 | P-12 | ResolveTask 空产出 | `EMPTY_FANOUT` |
+| P-13 | 不同空间的两条规则分支扇出 | 互不干扰，各自完成 |
+| P-14 | 同空间的两条规则扇出 | 构建期拒绝或文档标记为禁止（顺序不确定） |
+| P-15 | 扇出后两个分支改同一空间事实 | 执行顺序由队列决定，结果可复现 |
 
 ### 3.7 集成
 
@@ -197,6 +213,10 @@ o.tags contains "urgent"
 | `pricing.csv` | 决策表基本用例 |
 | `pricing.xlsx` | 与 CSV 等价的 Excel 版本 |
 | `pricing_large.xlsx` | 10 万行流式读取 |
+| `orders.csv` | 绑定 `orders` 空间的决策表 |
+| `users.csv` | 绑定 `users` 空间的决策表 |
+| `shared_space.json` | 多规则共享 `orders` 空间的规则集 |
+| `isolated_space.json` | 每规则独立空间的规则集 |
 | `rules_1000.json` | 1000 条规则的代码生成输入 |
 | `facts_10000.json` | 10000 条事实的批量插入 |
 

@@ -19,9 +19,10 @@ import fountain::f_rule.table.*
 
 | 类型 | 职责 | 线程安全 |
 |---|---|---|
-| `RuleSet` | 规则集：注册事实、装配规则、构建网络 | 构建期单线程；构建后只读 |
+| `RuleSet` | 规则集：声明空间、注册事实、装配规则、构建网络 | 构建期单线程；构建后只读 |
 | `RuleEngine` | 运行时：按 session 创建会话、插入事实、触发议程 | 是 |
-| `FactBase` / `FactBaseView` | 事实存储与视图 | 是 |
+| `FactSpace` | 事实库命名空间、类型注册、规则归属 | 构建期单线程；冻结后只读 |
+| `FactBase` / `FactBaseView` | `(space, session)` 级事实存储与视图 | 是 |
 | `DecisionTable` | 决策表模型与编译 | 构建期单线程 |
 | `RuleSetFlow` | 决策流编排 | 由 `f_egraph` 保证 |
 
@@ -38,10 +39,16 @@ public class RuleSet {
 
 public class RuleSetBuilder {
     public func version(version: String): RuleSetBuilder
-    /** 注册强类型事实的字段访问器。 */
+    /** 声明一个事实库空间；规则通过 `.facts(id)` 引用。 */
+    public func factSpace(id: String): RuleSetBuilder
+    /** 在缺省空间 "default" 注册强类型事实的字段访问器。 */
     public func registerFact<T>(schema: FactSchema<T>): RuleSetBuilder
-    /** 注册动态事实的类型标签（无需字段声明）。 */
+    /** 在指定空间注册；空间不存在时自动声明。 */
+    public func registerFact<T>(space: String, schema: FactSchema<T>): RuleSetBuilder
+    /** 在缺省空间注册动态事实的类型标签与字段。 */
     public func registerDynamicType(typeTag: String, fields: Array<String>): RuleSetBuilder
+    /** 在指定空间注册动态类型。 */
+    public func registerDynamicType(space: String, typeTag: String, fields: Array<String>): RuleSetBuilder
     public func rule(rule: Rule): RuleSetBuilder
     public func rules(rules: Array<Rule>): RuleSetBuilder
     public func table(table: DecisionTable): RuleSetBuilder
@@ -62,6 +69,8 @@ public class Rule {
     public static func builder(id: String): RuleBuilder
     public prop id: String
     public prop salience: Int64
+    /** 所属事实库空间，缺省 "default"。 */
+    public prop factSpace: String
     public prop patterns: Array<Pattern>
     public prop joins: Array<JoinConstraint>
     public prop actions: Array<RuleAction>
@@ -69,6 +78,11 @@ public class Rule {
 
 public class RuleBuilder {
     public func salience(value: Int64): RuleBuilder
+    /**
+     * 绑定事实库。缺省 "default"。
+     * 同一规则集内相同 id 的规则共享事实与网络分片。
+     */
+    public func facts(space: String): RuleBuilder
     public func when(pattern: Pattern): RuleBuilder
     public func join(constraint: JoinConstraint): RuleBuilder
     /** 脚本条件，形参必须与已声明的绑定名一致。 */
@@ -105,6 +119,7 @@ main() {
     // 2. 规则
     let vip = Rule.builder("R1")
         .salience(100)
+        .facts("orders")
         .when(Pattern("Order", "o")
             .where("level", Operator.Ge, 3)
             .where("amount", Operator.Gt, 200))
@@ -116,14 +131,16 @@ main() {
 
     let fallback = Rule.builder("R2")
         .salience(0)
+        .facts("orders")
         .when(Pattern("Order", "o"))
         .then { ctx => ctx.set("discount", 1.0) }
         .build()
 
-    // 3. 规则集
+    // 3. 规则集：声明空间并注册类型
     let ruleSet = RuleSet.builder("pricing")
         .version("v1")
-        .registerFact(orderSchema)
+        .factSpace("orders")
+        .registerFact("orders", orderSchema)
         .rule(vip)
         .rule(fallback)
         .build()
@@ -131,7 +148,7 @@ main() {
     // 4. 引擎
     let engine = RuleEngine(ruleSet)
     let session = engine.session("order-1001")
-    session.assert(TypedFact(Order("1001", 500, 3), orderSchema))
+    session.assert("orders", TypedFact(Order("1001", 500, 3), orderSchema))
 
     // 5. 触发
     let outputs = session.fire()
@@ -151,13 +168,13 @@ main() {
     let table = CsvTableParser.parseFile(Path("./rules/pricing.csv"))
     let ruleSet = RuleSet.builder(table.id)
         .version(table.version)
-        .registerFact(orderSchema)
+        .registerFact(table.factSpace, orderSchema)
         .table(table)
         .build()
 
     let engine = RuleEngine(ruleSet)
     let session = engine.session("order-1001")
-    session.assert(TypedFact(Order("1001", 500, 3), orderSchema))
+    session.assert(table.factSpace, TypedFact(Order("1001", 500, 3), orderSchema))
 
     let result = engine.executeTable(table, session)
     for (output in result.outputs) {
@@ -173,21 +190,28 @@ import fountain::f_rule.*
 import fountain::f_egraph.*
 
 main() {
+    // vip/bulk 在 orders 空间；level 在 users 空间（规则定义同 §5）
     let rs = RuleSet.builder("pricing")
         .version("v1")
-        .registerFact(orderSchema)
+        .factSpace("orders")
+        .factSpace("users")
+        .registerFact("orders", orderSchema)
+        .registerFact("users", userSchema)
         .rule(vip)
         .rule(bulk)
+        .rule(level)
         .build()
 
     let engine = RuleEngine(rs)
     let flow = RuleSetFlow.build(engine)
         .start("order.created")
+        // 不同空间的两条分支可以并行
         .fanout("order.created", [
-            ("order.vip.check", "pricing/R1"),
-            ("order.bulk.check", "pricing/R2")
+            ("order.priced.check", "pricing/R1"),
+            ("user.level.check", "pricing/R3")
         ])
-        .join(["order.vip.done", "order.bulk.done"], "order.priced")
+        // 同空间的 R1 → R2 在子流程内部串联
+        .join(["order.bulk.done", "user.level.done"], "order.priced")
         .end()
         .flow
 
@@ -234,9 +258,15 @@ public class EngineOptions {
 
 public class RuleSession {
     public prop id: String
+    /** 缺省空间 "default" 的事实视图。 */
     public prop facts: FactBaseView
+    /** 指定空间的事实视图；空间未声明时抛 UNKNOWN_FACT_SPACE。 */
+    public func facts(space: String): FactBaseView
     public prop agenda: Agenda
+    /** 在缺省空间插入。 */
     public func assert(fact: Fact): FactHandle
+    /** 在指定空间插入。 */
+    public func assert(space: String, fact: Fact): FactHandle
     public func retract(handle: FactHandle): Unit
     public func update(handle: FactHandle, fact: Fact): Unit
     /** 执行议程，返回最后一次动作产生的输出槽合并结果。 */

@@ -36,6 +36,18 @@ public class RuleFlow {
 | `registerStart(eventName)` | 规则的 `acceptableEvent` | 该规则接受的上游事件 |
 | 输出事件名 | 规则 `producingEvent` | 该规则产出的事件 |
 
+`category` 不编码事实库：规则与空间的绑定在 `rule.factSpace` 上，`RuleFlow.build()` 时写进 `FlowContext`。这样同一规则换空间不需要改流程名。
+
+同一 `FactSpace` 的多条规则做成多个 Flow 时，它们读写同一批事实，**必须串联而不是扇出**（扇出会并发改写同一空间，执行顺序不确定）：
+
+```cangjie
+// 同空间的规则：串联，顺序由 salience 决定
+parent.registerTaskByImmediateFlow(eventName: "order.created", subCategory: "pricing/R1", subTag: "v1")
+parent.registerTaskByImmediateFlow(eventName: "order.vip.done", subCategory: "pricing/R2", subTag: "v1")
+```
+
+不同空间的规则可以扇出，互不干扰。
+
 子流程嵌入父流程：
 
 ```cangjie
@@ -263,6 +275,17 @@ public class JoinTask <: Task {
 
 ## 5. 共享事实库
 
+`FlowContext` 是一个会话在**多个** `FactSpace` 上的视图集合，不是单个事实库。哪些规则共享、哪些独立，由 `rule.factSpace` 决定（见 02 §6.5）：
+
+```
+session "s1"
+├── FactSpace("orders") → FactBaseView("orders", "s1")   ← R1、R2、R3 共用
+├── FactSpace("users")  → FactBaseView("users",  "s1")   ← R4、R5 共用
+└── FactSpace("default")→ FactBaseView("default","s1")   ← 未声明的规则
+```
+
+一个事件从入口到结束，可能穿过多个空间。`FlowContext` 按需惰性建立视图：第一次 `facts("users")` 时才创建 `FactBaseView`。
+
 ### 5.1 FlowContext
 
 ```cangjie
@@ -284,7 +307,13 @@ public class FlowContext {
 
     public prop session: String
     public prop ruleSetId: String
+
+    /** 缺省空间 "default" 的事实视图。 */
     public prop facts: FactBaseView
+    /** 指定空间的事实视图；空间未声明时抛 UNKNOWN_FACT_SPACE。 */
+    public func facts(space: String): FactBaseView
+    /** 当前上下文已激活的空间 id（按首次访问顺序）。 */
+    public func spaces(): Array<String>
 }
 ```
 
@@ -304,11 +333,12 @@ try {
 
 ```
 流程 start
-  └─ FlowContext.create(session) → FactBaseView(Shared)
-       ├─ 规则 Task 读写事实
-       ├─ f_jit 表达式通过 RuleRuntime.current().facts 访问
+  └─ FlowContext.create(ruleSetId, session)
+       ├─ 按需建立 FactBaseView(space, session)，共享级别默认 Shared
+       ├─ 规则 Task 读写各自空间的事实
+       ├─ f_jit 表达式通过 RuleRuntime.current().facts(space) 访问
        └─ 流程 End / Error
-            └─ FlowContext.release(session) → 可选：把事实快照写入审计日志
+            └─ FlowContext.release(session) → 对该会话的全部空间生效
 ```
 
 释放策略：
@@ -321,18 +351,33 @@ try {
 
 ### 5.3 与 Rete 的关系
 
-产生式模式下，`FactBaseView` 的事实变更直接驱动网络传播。注意：**Rete 网络是规则集级的（全局），memory 是会话级的**。
+产生式模式下，`FactBaseView` 的事实变更直接驱动**所属空间分片**的网络传播。作用域是两维的：
+
+| 组成 | 作用域 |
+|---|---|
+| `ReteNetwork` 结构（节点、连接、共享键） | `FactSpace` 级，进程内共享 |
+| alpha/beta memory | `(FactSpace, session)` 级 |
+| `Agenda` | `session` 级，跨空间统一排序 |
 
 ```cangjie
+/** 单个 (space, session) 的网络运行态。 */
 public class SessionNetwork {
     public init(network: ReteNetwork, session: String)
+    public prop space: String
     public func assert(fact: Fact): FactHandle
     public func retract(handle: FactHandle): Unit
+}
+
+/** session 级运行时：持有该会话在各空间的 SessionNetwork + 一个共享议程。 */
+public class SessionRuntime {
+    public init(ruleSet: RuleSet, session: String)
+    public func network(space: String): SessionNetwork
     public prop agenda: Agenda
+    public func close(): Unit
 }
 ```
 
-`ReteNetwork` 只存结构（节点、连接、共享键）；`SessionNetwork` 存该会话的 alpha/beta memory 与 agenda。这样多个会话并发时不会互相污染 token。
+`ReteNetwork` 只存结构与共享键；`SessionNetwork` 存该 `(space, session)` 的 alpha/beta memory。`SessionRuntime` 把同一会话的多张分片聚在一起，共享一个 `Agenda`，这样 `orders` 空间的高优先级规则可以排在 `users` 空间的中优先级规则之前执行。
 
 ## 6. 两种规则体写法
 
@@ -346,8 +391,9 @@ public class DiscountTask <: Task {
 
     public func exec(e: Event): Event {
         let ctx = FlowContext.attach(RuleEnvelope.from(e))
-        let order = ctx.facts.get(...)   // 业务逻辑
-        ctx.facts.assert(DynamicFact("Discount", ...))
+        let orders = ctx.facts("orders")          // 显式指定空间
+        let order = orders.get(...)               // 业务逻辑
+        orders.assert(DynamicFact("Discount", ...))
         TaskEvent(category: e.category, tag: e.tag,
                   name: "order.discounted", data: ..., session: ctx.session)
     }
@@ -403,12 +449,21 @@ let task = ClosureTask.compile(
 ## 7. 编排示例
 
 ```cangjie
-// 规则集：订单定价
+// 规则定义时声明所属空间
+let ruleVip = Rule.builder("R1").facts("orders").when(...).then(...).build()
+let ruleBulk = Rule.builder("R2").facts("orders").when(...).then(...).build()
+let ruleLevel = Rule.builder("R3").facts("users").when(...).then(...).build()
+
+// 规则集：订单定价（orders 空间）+ 用户等级（users 空间）
 let rs = RuleSet.builder("pricing")
     .version("v1")
-    .registerFact(orderSchema)
-    .rule(ruleVip)          // 一条规则一个 Flow
+    .factSpace("orders")
+    .factSpace("users")
+    .registerFact("orders", orderSchema)
+    .registerFact("users", userSchema)
+    .rule(ruleVip)       // R1、R2 共享 orders
     .rule(ruleBulk)
+    .rule(ruleLevel)     // R3 独享 users
     .build()
 
 // 父流程
@@ -417,27 +472,31 @@ flow.registerStart("order.created")
 flow.registerEnd()
 flow.registerError()
 
-// 扇出：订单创建后并行跑 VIP 规则与批量规则
+// 扇出：orders 分支与 users 分支互不干扰，可以并行
 flow.registerTask(ResolveTask(
     name: "split",
     acceptable: ["order.created"],
-    producing: ["order.vip.check", "order.bulk.check"],
+    producing: ["order.priced.check", "user.level.check"],
     plan: { e =>
         let env = RuleEnvelope.from(e)
-        [("order.vip.check", env), ("order.bulk.check", env)]
+        [("order.priced.check", env), ("user.level.check", env)]
     }
 ))
 
-// 两条分支各自嵌入规则流程
+// orders 分支：R1 → R2 串联（共享同一空间，必须串行）
 flow.registerTaskByImmediateFlow(
-    eventName: "order.vip.check", subCategory: "pricing/R1", subTag: "v1")
+    eventName: "order.priced.check", subCategory: "pricing/R1", subTag: "v1")
 flow.registerTaskByImmediateFlow(
-    eventName: "order.bulk.check", subCategory: "pricing/R2", subTag: "v1")
+    eventName: "order.vip.done", subCategory: "pricing/R2", subTag: "v1")
 
-// 汇合：两条分支都完成才进入定价
+// users 分支：R3 独立
+flow.registerTaskByImmediateFlow(
+    eventName: "user.level.check", subCategory: "pricing/R3", subTag: "v1")
+
+// 汇合：两个空间的分支都完成才进入定价
 flow.registerTask(JoinTask(
     name: "join",
-    branches: ["order.vip.done", "order.bulk.done"],
+    branches: ["order.bulk.done", "user.level.done"],
     output: "order.priced"
 ))
 
@@ -446,7 +505,22 @@ flow.registerTask(ClosureTask.compile("price", ["order.priced"], ["End"], "...")
 flow.removeExceptCurrentTag()
 ```
 
-可达性：`order.created → split → {vip.check, bulk.check} → {vip.done, bulk.done} → join → order.priced → End`。`join` 之前没有 End，满足 §3.4 约束。
+可达性：`order.created → split → {priced.check → vip.done → bulk.done, level.check → level.done} → join → order.priced → End`。`join` 之前没有 End，满足 §3.4 约束。
+
+空间拓扑：
+
+```
+orders:  R1 ──▶ R2        （共享，串联）
+users:   R3               （独立）
+         两者仅通过 JoinTask 汇合，事实不互通
+```
+
+如果想在 R2 里用 R3 产出的等级，有两条路：
+
+1. R3 的 `ActionContext.copyTo("orders", fact)` 把等级事实复制进 orders；
+2. 或把 R2、R3 都放进同一空间，接受共享副作用。
+
+前者是显式复制，后者是显式共享，都不存在隐式跨库可见性。
 
 ## 8. 错误处理
 

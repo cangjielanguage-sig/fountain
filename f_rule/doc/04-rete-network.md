@@ -8,10 +8,44 @@
 | 插入/撤销只做增量传播 | alpha/beta 记忆 + 引用计数 |
 | 匹配代价与规则数近似无关 | 网络结构按约束签名 hash-consing |
 | 可撤销 | 每个令牌记录来源，`refCount` 归零即回收 |
+| 多事实库隔离 | 按 `FactSpace` 分片，每片一张独立网络 |
 
 网络一旦构建完成即**冻结**：节点集合、连接关系、索引结构不再变化，只有 memory 内容变化。新增规则必须重建网络（或走版本化重建）。
 
+### 1.1 按 FactSpace 分片
+
+一个规则集只有**一个** `ReteNetwork` 类型，但运行期持有**多个实例**，每个 `FactSpace` 一个：
+
+```
+RuleSet
+├── FactSpace("orders")
+│   └── ReteNetwork   ← 只包含 facts("orders") 的规则
+├── FactSpace("users")
+│   └── ReteNetwork   ← 只包含 facts("users") 的规则
+└── FactSpace("default")
+    └── ReteNetwork   ← 未声明空间的规则
+```
+
+分片规则：
+
+| 规则 | 归属 |
+|---|---|
+| `.facts("orders")` | `orders` 片 |
+| 未声明 | `default` 片 |
+| 决策表 `.factSpace("pricing")` | 该表编译出的全部规则进 `pricing` 片 |
+
+分片的理由：
+
+1. 不同空间的事实集合不同，混在一张网络里 join 语义无法定义；
+2. 分片后每张网络的规模更小，节点共享只在真正相关的一组规则间发生；
+3. 撤销事实时只需遍历所属分片，不影响其他空间；
+4. 版本重建可以按片进行，不同空间的规则可以独立升级。
+
+**节点共享不跨片**：两个空间里出现完全相同的 alpha 签名，也各建一个节点。跨片共享会破坏"片内自洽"的可撤销性。
+
 ## 2. 网络结构
+
+单张分片的内部结构：
 
 ```
                      RootNode
@@ -154,6 +188,8 @@ public class TerminalNode <: ReteNode & TokenSink {
 
 ## 4. 共享键
 
+共享键的作用域是**单个 `FactSpace` 分片**。两个分片中出现完全相同的 alpha 或 join 签名，也各建一个节点——跨片共享会让撤销语义依赖两个库的生命周期，得不偿失。
+
 ### 4.1 Alpha 共享
 
 ```cangjie
@@ -189,7 +225,7 @@ internal class JoinSignature <: Hashable & Equatable<JoinSignature> {
 
 - 同一 alpha 签名但 `typeTag` 不同（规范上不允许，`typeTag` 已是签名一部分）；
 - join 约束顺序不同但语义等价（不做交换律归一，保持实现简单；由 `NetworkBuilder` 在构建前对约束排序，保证相同集合产生相同签名）；
-- 跨规则集的网络不共享（不同 `FactBase`，无意义）。
+- 跨规则集的网络不共享（不同 `RuleSet`，无可共享的结构）。
 
 ## 5. 令牌
 
@@ -366,18 +402,24 @@ func TerminalNode.activate(token: Token): Unit {
 
 ```cangjie
 public class ReteNetwork {
-    public func build(ruleSet: RuleSet): Unit    // 构建 + 冻结
+    /** @param space 该分片归属的事实库空间 */
+    public init(space: String)
+    /** 构建该分片的规则子集，完成后冻结。 */
+    public func build(rules: Array<Rule>, registry: FactSpaceRegistry): Unit
     public func assert(handle: FactHandle, fact: Fact): Unit
     public func retract(handle: FactHandle): Unit
     public func frozen(): Bool
+    public prop space: String
 }
 ```
 
 规则集变更（增删规则、改条件）不支持原地修改：
 
-1. 用新版本号重建网络；
-2. 旧网络处理完在飞事实后卸载；
-3. `RuleSet` 切换 `rete` 指针。
+1. 用新版本号重建**受影响的分片**；
+2. 旧分片处理完在飞事实后卸载；
+3. `FactSpace` 切换 `rete` 指针。
+
+按分片重建的好处：只改 `orders` 空间的规则时，`users` 空间的网络与内存（含大量 token）完全不受影响。
 
 这与 `f_egraph` 的 `tag` 版本切换语义一致：同一 `category` 只保留一个活跃 `tag`。
 
@@ -385,13 +427,19 @@ public class ReteNetwork {
 
 | 操作 | 复杂度 |
 |---|---|
-| `assert` | O(alpha 链长度 + 命中 join 数 × 匹配令牌数) |
-| `retract` | O(命中令牌数)（依赖 `produced` 索引） |
+| `assert` | O(alpha 链长度 + 命中 join 数 × 匹配令牌数)，只在所属分片内 |
+| `retract` | O(命中令牌数)（依赖 `produced` 索引），只在所属分片内 |
 | 单次 join 探测 | O(1)（等值索引）/ O(log n + k)（范围索引）/ O(n)（无索引回退） |
 | 激活产出 | O(模式数)（展开绑定表） |
-| 内存 | O(alpha 事实数 + beta 令牌数)，令牌共享父链 |
+| 内存 | O(alpha 事实数 + beta 令牌数)，令牌共享父链；按空间分别计量 |
 
 不限规模的前提是**索引覆盖 join 字段**。如果规则里出现大量无索引的回退 join，复杂度退化为笛卡尔积——`NetworkBuilder` 在构建期统计每个 join 的索引覆盖率，低于阈值时写 `WARN` 日志并给出建议字段。
+
+分片对规模的影响：
+
+- 规则均摊到 K 个空间时，单张网络规模约为总量的 1/K，构建与传播都更快；
+- 但如果规则分布极度不均（一个空间占 99% 规则），分片不带来收益，也不会带来额外开销（只是多几个空分片）；
+- 分片不减少总内存：每个分片独立维护 alpha memory 与 token，跨片不共享；同一事实如果需要被两个空间的规则看到，必须两份（见 02 §6.6）。
 
 ## 11. 内存回收
 
@@ -415,8 +463,8 @@ public interface ActivationSink {
 
 ```
 assert(fact)
-  └─ FactBase.assert → handle
-      └─ ReteNetwork.assert(handle, fact)
+  └─ FactSpace.of(space) → FactBase.assert → handle
+      └─ 分片路由：space → ReteNetwork(space)
           └─ RootNode.child(typeTag)
               └─ AlphaNode.test → 通过 → 后继/输出
                   └─ AlphaMemory.add → 建索引 → rightActivate × K

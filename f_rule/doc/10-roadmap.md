@@ -31,9 +31,9 @@ M3 与 M4 可并行；M5 依赖 M2 + M3；M6 依赖 M5。
 
 | 项 | 内容 |
 |---|---|
-| 交付 | `fact/*`、`condition/*`、`rule/*`、`NaiveMatcher` |
-| 能力 | 强类型 + 动态事实；全部算子；`And/Or/Not`；`FactBase` 会话隔离；顺序匹配（无网络） |
-| 验收 | F-01~F-10、C-01~C-08 全绿；`NaiveMatcher` 能产出激活，供后续差分基线 |
+| 交付 | `fact/*`（含 `FactSpace`、`FactSpaceRegistry`）、`condition/*`、`rule/*`、`NaiveMatcher` |
+| 能力 | 强类型 + 动态事实；全部算子；`And/Or/Not`；多事实库空间与规则绑定；`(space, session)` 隔离；顺序匹配（无网络） |
+| 验收 | F-01~F-18、C-01~C-08 全绿；`NaiveMatcher` 能按空间分别产出激活，供后续差分基线 |
 | 依赖 | M0 |
 
 M1 的顺序匹配器**长期保留**，不作为生产路径，只作为 M2 的差分基准。
@@ -43,8 +43,8 @@ M1 的顺序匹配器**长期保留**，不作为生产路径，只作为 M2 的
 | 项 | 内容 |
 |---|---|
 | 交付 | `rete/*`（`RootNode`、`AlphaNode`、`AlphaMemory`、`BetaNode`、`BetaMemory`、`Token`、`TerminalNode`、`NetworkBuilder`、`SortedIndex`） |
-| 能力 | alpha 链 + join + 令牌共享 + 引用计数 + 增量插入/撤销 + alpha/beta 节点共享 + 等值索引 |
-| 验收 | R-01~R-15 全绿；差分测试 200 组随机用例通过；B-01/B-02 达标 |
+| 能力 | 按 `FactSpace` 分片；alpha 链 + join + 令牌共享 + 引用计数 + 增量插入/撤销 + 片内节点共享 + 等值索引 |
+| 验收 | R-01~R-20 全绿；差分测试 200 组随机用例通过；B-01/B-02 达标 |
 | 依赖 | M1 |
 | 风险 | R2（有序索引）、R3（`produced` 内存）——先实现可用版本，压测后优化 |
 

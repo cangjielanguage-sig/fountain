@@ -7,10 +7,13 @@ DecisionTable
 ├── id: String
 ├── name: String
 ├── version: String
+├── factSpace: String           # 整表绑定的事实库空间，缺省 "default"
 ├── hitPolicy: HitPolicy
 ├── columns: Array<Column>
 └── rows: Array<TableRow>
 ```
+
+一张决策表只能绑定一个 `factSpace`：所有行编译出的规则属于同一空间。需要跨空间时拆成多张表，各自 `.factSpace(...)`。
 
 `Column`：
 
@@ -74,6 +77,7 @@ public enum HitPolicy <: ToString {
 public class DecisionTable {
     public static func builder(id: String): DecisionTableBuilder
     public prop id: String
+    public prop factSpace: String
     public prop hitPolicy: HitPolicy
     public prop columns: Array<Column>
     public prop rows: Array<TableRow>
@@ -84,6 +88,8 @@ public class DecisionTable {
 public class DecisionTableBuilder {
     public func name(name: String): DecisionTableBuilder
     public func version(version: String): DecisionTableBuilder
+    /** 整表绑定事实库空间，缺省 "default"。 */
+    public func factSpace(space: String): DecisionTableBuilder
     public func hitPolicy(policy: HitPolicy): DecisionTableBuilder
     public func salience(default: Int64): DecisionTableBuilder
 
@@ -196,6 +202,7 @@ o.amount > 200 && o.level >= 3
 # id: pricing
 # name: 订单折扣
 # version: v1
+# factSpace: orders
 # hitPolicy: First
 # salience: 100
 id,name,when.order.level,when.order.amount,then.discount,then.event
@@ -212,7 +219,8 @@ R3,兜底,,,1.0,order.discounted
 4. `name` 列可选，仅用于可读性；
 5. 空单元格 = 不约束（条件列）/ 不输出（输出列）；
 6. 字段路径用 `.` 分隔：`when.<binding>.<field>` 或 `when.<field>`（单模式规则可省略 binding）；
-7. 输出列同理：`then.<name>`。
+7. 输出列同理：`then.<name>`；
+8. `factSpace` 缺省为 `default`；值必须是 `RuleSet` 已声明或即将声明的空间。
 
 ### 5.2 转义
 
@@ -256,6 +264,7 @@ public class CsvTableParser {
 key         | value
 id          | pricing
 version     | v1
+factSpace   | orders
 hitPolicy   | First
 salience    | 100
 ```
@@ -307,6 +316,7 @@ Array<Rule>（每条规则 = 一个模式 + 一组约束 + 一组输出动作）
 
 | 决策表元素 | Rule 元素 |
 |---|---|
+| `factSpace` 属性 | `Rule.factSpace`（整表统一） |
 | `when.<field>` 列 | `Pattern(typeTag, binding).where(field, op, value)` |
 | `expr.<name>` 列 | `ConditionExpr.Script(JitExpression)` |
 | `then.<name>` 列 | `TableAction` 写输出槽 `name` |
