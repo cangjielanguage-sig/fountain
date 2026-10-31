@@ -73,7 +73,7 @@ internal class WorksheetParser {
     static func parseSheet(
         bytes: Array<Byte>,
         options: ExcelReadOptions,
-        sst: SharedStringTable,
+        sst: SharedStringsLookup,
         sheetName: String,
         styles!: StylesLite = StylesLite.empty(),
         date1904Override!: ?Bool = None
@@ -95,7 +95,7 @@ internal class WorksheetParser {
 /** 单张 sheet 的事件状态机。 */
 internal class SheetRowHandler {
     private let options: ExcelReadOptions
-    private let sst: SharedStringTable
+    private let sst: SharedStringsLookup
     private let sheetName: String
     private let parsed: ParsedSheet
     private let styles: StylesLite
@@ -151,7 +151,7 @@ internal class SheetRowHandler {
 
     init(
         options: ExcelReadOptions,
-        sst: SharedStringTable,
+        sst: SharedStringsLookup,
         sheetName: String,
         parsed: ParsedSheet,
         styles: StylesLite,

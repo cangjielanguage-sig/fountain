@@ -5,19 +5,19 @@
 ## 0. 基准与前置
 
 - [ ] 0.1 建立规模化基准：100 万行读/写、100 MB 打开、100 万单元格，记录当前 RSS
-- [ ] 0.2 确认 ZipReader 能重复打开条目、deflate 流是否可 seek（决定索引退化策略）
+- [x] 0.2 确认 ZipReader 能重复打开条目、deflate 流是否可 seek（决定索引退化策略）
 
 ## 1. M3-a sharedStrings 磁盘索引
 
-- [ ] 1.1 失败用例：索引构建只存 offset/length；按需读取与全量表结果一致
-- [ ] 1.2 失败用例：不可 seek 流 → `IndexDegraded` + 结果仍正确
-- [ ] 1.3 实现 `SharedStringIndex.cj` 并接入 `ExcelSheetStream`
+- [x] 1.1 失败用例：索引构建只存 offset/length；按需读取与全量表结果一致
+- [x] 1.2 失败用例：不可 seek 流 → `IndexDegraded` + 结果仍正确
+- [x] 1.3 实现 `SharedStringIndex.cj` 并接入 `ExcelSheetStream`
 
 ## 2. M3-a2 按需解析
 
-- [ ] 2.1 失败用例：`eager=false` 构造不解析 sheet；首次 cell 触发一次解析
-- [ ] 2.2 失败用例：`InputStream + eager=false` 自动 spool + `SpoolForLazy`
-- [ ] 2.3 实现 `SheetLazyLoader` 与 `ExcelDocument` 分支
+- [x] 2.1 失败用例：`eager=false` 构造不解析 sheet；首次 cell 触发一次解析
+- [x] 2.2 失败用例：`InputStream + eager=false` 自动 spool + `SpoolForLazy`
+- [x] 2.3 实现 `SheetLazyLoader` 与 `ExcelDocument` 分支
 
 ## 3. M3-b 数组/动态数组
 

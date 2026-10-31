@@ -26,7 +26,13 @@ import fountain::f_xml.{XmlAttribute, XmlEvent, XmlPullParser}
  * `<si>` 内可能有多个 `<r><t>`（富文本分段），文本拼接成平坦串；`<rPh>` 里的 `<t>` 是注音，跳过。
  * M2-d 起同时保留每段的 `<rPr>`（粗体/斜体/下划线/字号/颜色/字体名），供 `Worksheet.richText` 使用。
  */
-internal class SharedStringTable {
+internal interface SharedStringsLookup {
+    func get(index: Int64): ?String
+
+    func runsAt(index: Int64): ArrayList<TextRun>
+}
+
+internal class SharedStringTable <: SharedStringsLookup {
     private let items: ArrayList<String>
     private let runSets: ArrayList<ArrayList<TextRun>>
 
@@ -169,7 +175,7 @@ internal class SharedStringTable {
         SharedStringTable(ArrayList<String>(), ArrayList<ArrayList<TextRun>>())
     }
 
-    func get(index: Int64): ?String {
+    public func get(index: Int64): ?String {
         if (index < 0 || index >= Int64(items.size)) {
             return None<String>
         }
@@ -177,7 +183,7 @@ internal class SharedStringTable {
     }
 
     /** 某个 `<si>` 的富文本分段；不是富文本返回空表。 */
-    func runsAt(index: Int64): ArrayList<TextRun> {
+    public func runsAt(index: Int64): ArrayList<TextRun> {
         if (index < 0 || index >= Int64(runSets.size)) {
             return ArrayList<TextRun>()
         }

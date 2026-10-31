@@ -23,7 +23,7 @@ Excel (xlsx / OOXML) reader and writer: **streaming parse, streaming generate**,
 | Duration / rich text | `[h]:mm:ss` reads as `CellValue.TimeSpan`; `Worksheet.richText` exposes sharedStrings run fonts |
 | Conditional formatting | `<conditionalFormatting>` / 13 `CfRuleType`s / `dxfs` read & write; `matchedRules` evaluation (cellIs/expression/text/colorScale/dataBar/iconSet) |
 
-Full `cjpm test`: **147 passed / 0 failed**.
+Full `cjpm test`: **155 passed / 0 failed**.
 
 ## Usage
 
@@ -48,6 +48,18 @@ sheet.setCell("A1", CellValue.Text("name"))
 sheet.setCell("B1", CellValue.Number(0.1))
 sheet.merge("A1:B1")
 doc.write(Path("/data/out.xlsx"))
+```
+
+### Lazy parsing / shared-string index
+
+```cangjie
+let options = ExcelReadOptions()
+options.eager = false                  // parse a sheet on first access
+let doc = ExcelDocument(Path("big.xlsx"), options: options)
+
+let streamOptions = ExcelStreamReadOptions()
+streamOptions.sharedStringsIndex = true // spool sharedStrings and read on demand
+let stream = ExcelSheetStream.open(Path("big.xlsx"), options: streamOptions)
 ```
 
 ### Formula evaluation
@@ -128,6 +140,6 @@ out.close()
 
 ## Tests and fixtures
 
-- `cjpm test` green (147 cases).
+- `cjpm test` green (155 cases).
 - Fixtures build minimal xlsx packages in memory with `f_zip.ZipWriter` (`fixtures.cj`); no external sample files.
 - "Real Excel opens it without repair" is a manual acceptance item, recorded in `doc/spec/implement-f-excel-m1/verification.md`.

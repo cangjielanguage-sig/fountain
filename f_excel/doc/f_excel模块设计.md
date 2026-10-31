@@ -1,9 +1,12 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.13** ｜ 2026-10-31 ｜ 状态：M1 + M2 + M4 已实施，M3 部分
+> 版本 **v0.14** ｜ 2026-10-31 ｜ 状态：M1 + M2 + M4 已实施，M3 部分
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.14 变更**
+> - 第 17 章：M3 磁盘索引、`eager=false`、数组广播的实施记录与剩余缺口
 >
 > **v0.13 变更**
 > - 第 16 章：M4 条件格式（解析/求值/dxfs 写回）的实施记录
@@ -3026,3 +3029,31 @@ M1 把图片列为"不做"；实际使用中需要把 logo/截图锚定进表，
 | `iconSet` | 返回 `name:index`，不生成图标图片 |
 | `colorScale` 的 `formula` 阈值 | 按数字解析，不求公式 |
 | 多段 `sqref` | 求值按段展开；写回保留原字符串 |
+
+---
+
+## 17. M3 实施记录（v0.14，部分）
+
+### 17.1 已落地
+
+| 子项 | 内容 |
+|---|---|
+| M3-a 磁盘索引 | `SharedStringIndex`：`<si>` 偏移表 + 临时文件按需读取；只用于 `ExcelSheetStream`（`sharedStringsIndex=true`）；临时文件在 `close()` 删除；建索引失败回退全量表 + `IndexDegraded` |
+| M3-a2 按需解析 | `ExcelReadOptions.eager=false`：`Worksheet` 懒加载钩子，首次访问触发单表解析；`Path` 重开 ZIP，`InputStream` 先 spool；`skipSheets` 仍生效 |
+| M3-b 数组 | 逐元素广播（标量/单行/单列/同形）；`FILTER` / `SORT` / `UNIQUE` / `SEQUENCE`；空筛选 `#CALC!` |
+| M3-e ods | `ods-assessment.md`，结论暂不实现 |
+
+### 17.2 未完成
+
+- 函数库 151 个（目标 ≥350）：工程/数据库/高级统计与动态数组函数缺口大。
+- 紧凑单元格仍为 `HashMap<Int64, CellValue>`，未做行块结构。
+- 性能门禁（100 万行 / 100 MB / 100 万格 RSS）未测。
+- 动态数组的 `#SPILL!` 语义未实现（只返回数组值）。
+
+### 17.3 差异
+
+| 项 | 处理 |
+|---|---|
+| 索引不可 seek 的输入 | 索引走临时文件 seek，不存在退化路径；建索引失败才回退 |
+| 懒加载 `close()` | `ExcelDocument` 无 `close()`，`InputStream` spool 的临时文件在进程结束前保留（已文档化） |
+| `eager=false` 的 `sheets()` | 返回未解析的 `Worksheet` 句柄，访问才解析 |

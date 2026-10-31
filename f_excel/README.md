@@ -23,7 +23,7 @@ Excel（xlsx / OOXML）读写模块：**流式解析、流式生成**、日期�
 | 时长 / 富文本 | `[h]:mm:ss` 读取为 `CellValue.TimeSpan`；`Worksheet.richText` 暴露 sharedStrings 的分段字体 |
 | 条件格式 | `<conditionalFormatting>` / 13 种 `CfRuleType` / `dxfs` 解析与写回；`matchedRules` 求值（cellIs/expression/文本/colorScale/dataBar/iconSet） |
 
-全量 `cjpm test`：**147 通过 / 0 失败**。
+全量 `cjpm test`：**155 通过 / 0 失败**。
 
 ## 用法
 
@@ -48,6 +48,18 @@ sheet.setCell("A1", CellValue.Text("名称"))
 sheet.setCell("B1", CellValue.Number(0.1))
 sheet.merge("A1:B1")
 doc.write(Path("/data/out.xlsx"))
+```
+
+### 按需解析 / 字符串索引
+
+```cangjie
+let options = ExcelReadOptions()
+options.eager = false                  // 首次访问 sheet 才解析
+let doc = ExcelDocument(Path("big.xlsx"), options: options)
+
+let streamOptions = ExcelStreamReadOptions()
+streamOptions.sharedStringsIndex = true // 字符串表落临时文件，按需读取
+let stream = ExcelSheetStream.open(Path("big.xlsx"), options: streamOptions)
 ```
 
 ### 公式求值
@@ -116,8 +128,8 @@ out.close()
 
 ## 已知缺口（M1 范围）
 
-- **样式**：`theme1.xml` 只按 tint 线性插值，主题色板未完整解析；条件格式（M4）不保留。
-- **公式**：动态数组 / `#SPILL!` 与 350+ 函数属 M3；`OFFSET` / `INDIRECT` 为动态依赖，不参与静态依赖图。
+- **样式**：`theme1.xml` 只按 tint 线性插值，主题色板未完整解析。
+- **公式**：动态数组只做到函数返回数组，`#SPILL!` 溢出与 350+ 函数未完成；`OFFSET` / `INDIRECT` 为动态依赖，不参与静态依赖图。
 - **富文本**：只读不写，写侧平坦化为普通文本（样式丢失）。
 - **时长 / 富文本**：`[h]:mm:ss` 按 `Date` 返回并告警；富文本平坦化为 `Text`。
 - **图片**：只支持写入（png / jpeg、两单元格锚定）；读取时不导入图片，含图片的文件往返后图片会丢失。
@@ -129,6 +141,6 @@ out.close()
 
 ## 测试与夹具
 
-- `cjpm test` 全绿（147 条）。
+- `cjpm test` 全绿（155 条）。
 - 夹具用 `f_zip.ZipWriter` 现场拼最小 xlsx（`fixtures.cj`），不依赖外部样本文件。
 - 「真实 Excel 打开不报修复」属人工验收项，记录见 `doc/spec/implement-f-excel-m1/verification.md`。

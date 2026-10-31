@@ -30,6 +30,8 @@ public class ExcelReadOptions {
     public var maxCols: Int64 = 0
     /** 读整文档时跳过的 sheet。 */
     public var skipSheets: Array<String> = []
+    /** `false` = 按需解析（首次访问某个 sheet 才解析）；`InputStream` 输入会先落临时文件。 */
+    public var eager: Bool = true
 
     public init() {}
 }
@@ -44,6 +46,8 @@ public class ExcelStreamReadOptions {
     public var date1904: ?Bool = None
     public var loadStyles: Bool = true
     public var loadSharedStrings: Bool = true
+    /** 只记录 `<si>` 的文件偏移，按需读取（临时文件 + 索引）；默认关。 */
+    public var sharedStringsIndex: Bool = false
     public var maxRows: Int64 = 0
     public var maxCols: Int64 = 0
 

@@ -32,6 +32,7 @@ public class Worksheet {
     private let stylesMap = HashMap<Int64, CellStyle>()
     private let richTexts = HashMap<Int64, RichText>()
     private let conditionalFormatsList = ArrayList<ConditionalFormat>()
+    private var loader: ?() -> Unit = None
     private var dimensionRef: ?String = None
     private var maxRowSeen: Int64 = 0
     private var maxColSeen: Int64 = 0
@@ -46,15 +47,32 @@ public class Worksheet {
         }
     }
 
+    /** 懒加载：`eager=false` 时由文档注入；首次访问触发一次解析。 */
+    internal func setLoader(load: () -> Unit): Unit {
+        this.loader = Some(load)
+    }
+
+    private func ensureLoaded(): Unit {
+        match (this.loader) {
+            case Some(load) =>
+                this.loader = None
+                load()
+            case None => ()
+        }
+    }
+
     public func rowCount(): Int64 {
+        this.ensureLoaded()
         maxRowSeen
     }
 
     public func colCount(): Int64 {
+        this.ensureLoaded()
         maxColSeen
     }
 
     public func dimension(): ?String {
+        this.ensureLoaded()
         dimensionRef
     }
 
@@ -71,6 +89,7 @@ public class Worksheet {
     }
 
     public func cell(row: Int64, col: Int64): ?CellValue {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             return None<CellValue>
         }
@@ -78,6 +97,7 @@ public class Worksheet {
     }
 
     public func cell(ref: String): ?CellValue {
+        this.ensureLoaded()
         match (CellRef.parse(ref)) {
             case Some(r) => cell(r.row, r.col)
             case None => None<CellValue>
@@ -85,10 +105,12 @@ public class Worksheet {
     }
 
     public func cell(ref: CellRef): ?CellValue {
+        this.ensureLoaded()
         cell(ref.row, ref.col)
     }
 
     public func setCell(row: Int64, col: Int64, value: CellValue): Unit {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
         }
@@ -102,6 +124,7 @@ public class Worksheet {
     }
 
     public func setCell(ref: String, value: CellValue): Unit {
+        this.ensureLoaded()
         let r = match (CellRef.parse(ref)) {
             case Some(v) => v
             case None => throw ExcelException("非法的单元格引用：${ref}")
@@ -110,16 +133,19 @@ public class Worksheet {
     }
 
     public func setCell(ref: CellRef, value: CellValue): Unit {
+        this.ensureLoaded()
         setCell(ref.row, ref.col, value)
     }
 
     /** 条件格式（按解析/添加顺序）。 */
     public func conditionalFormats(): ArrayList<ConditionalFormat> {
+        this.ensureLoaded()
         this.conditionalFormatsList
     }
 
     /** 追加一组条件格式；同 `range` 的规则合并到同一组。 */
     public func addConditionalFormat(range: String, rule: CfRule): Unit {
+        this.ensureLoaded()
         match (CellRef.parseRange(range)) {
             case Some(_) => ()
             case None => throw ExcelException("非法的条件格式区域：${range}")
@@ -137,6 +163,7 @@ public class Worksheet {
 
     /** 值规则命中（不含 `expression`，它需要公式引擎）。 */
     public func matchedRules(row: Int64, col: Int64): ArrayList<CfMatch> {
+        this.ensureLoaded()
         this.matchedRulesWith(row, col, None)
     }
 
@@ -227,6 +254,7 @@ public class Worksheet {
 
     /** 富文本（`sharedStrings` 的分段样式）；不是富文本返回 `None`。 */
     public func richText(row: Int64, col: Int64): ?RichText {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             return None<RichText>
         }
@@ -234,6 +262,7 @@ public class Worksheet {
     }
 
     public func setRichText(row: Int64, col: Int64, value: RichText): Unit {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
         }
@@ -242,6 +271,7 @@ public class Worksheet {
 
     /** 读取某格的完整样式；没有显式样式返回 `None`。 */
     public func styleOf(row: Int64, col: Int64): ?CellStyle {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             return None<CellStyle>
         }
@@ -249,6 +279,7 @@ public class Worksheet {
     }
 
     public func setStyle(row: Int64, col: Int64, style: CellStyle): Unit {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
         }
@@ -262,6 +293,7 @@ public class Worksheet {
     }
 
     public func clearCell(row: Int64, col: Int64): Unit {
+        this.ensureLoaded()
         if (!valid(row, col)) {
             return
         }
@@ -269,6 +301,7 @@ public class Worksheet {
     }
 
     public func clearCell(ref: String): Unit {
+        this.ensureLoaded()
         match (CellRef.parse(ref)) {
             case Some(r) => clearCell(r.row, r.col)
             case None => ()
@@ -277,6 +310,7 @@ public class Worksheet {
 
     /** 左上 → 右下；缺失的格子给 `Empty`。 */
     public func range(from: String, to: String): Array<Array<CellValue>> {
+        this.ensureLoaded()
         let parsed = match (CellRef.parseRange("${from}:${to}")) {
             case Some(v) => v
             case None => throw ExcelException("非法的区域：${from}:${to}")
@@ -300,6 +334,7 @@ public class Worksheet {
 
     /** 一行里实际出现的格子，按列升序。 */
     public func rowValues(row: Int64): Array<(Int64, CellValue)> {
+        this.ensureLoaded()
         let out = ArrayList<(Int64, CellValue)>()
         if (row < 1 || row > EXCEL_MAX_ROW) {
             return out.toArray()
@@ -315,11 +350,13 @@ public class Worksheet {
 
     /** 把图片锚定到 `[from, to]` 单元格区域（写侧；读侧 M1.5 不解析图片）。 */
     public func addImage(path: Path, from: String, to: String): Unit {
+        this.ensureLoaded()
         let (data, format) = readImage(path)
         addImage(data, format, from, to)
     }
 
     public func addImage(data: Array<Byte>, format: ImageFormat, from: String, to: String): Unit {
+        this.ensureLoaded()
         let start = match (CellRef.parse(from)) {
             case Some(v) => v
             case None => throw ExcelException("非法的图片起始单元格：${from}")
@@ -338,18 +375,22 @@ public class Worksheet {
     }
 
     public func imageCount(): Int64 {
+        this.ensureLoaded()
         Int64(images.size)
     }
 
     internal func sheetImages(): ArrayList<SheetImage> {
+        this.ensureLoaded()
         images
     }
 
     public func mergedRanges(): ArrayList<String> {
+        this.ensureLoaded()
         merges
     }
 
     public func mergedRangeAt(row: Int64, col: Int64): ?String {
+        this.ensureLoaded()
         for (range in merges) {
             let parsed = CellRef.parseRange(range)
             match (parsed) {
@@ -365,6 +406,7 @@ public class Worksheet {
     }
 
     public func mergedValue(row: Int64, col: Int64): ?CellValue {
+        this.ensureLoaded()
         match (mergedRangeAt(row, col)) {
             case Some(range) =>
                 match (CellRef.parseRange(range)) {
@@ -376,6 +418,7 @@ public class Worksheet {
     }
 
     public func merge(range: String): Unit {
+        this.ensureLoaded()
         let parsed = match (CellRef.parseRange(range)) {
             case Some(v) => v
             case None => throw ExcelException("非法的合并区域：${range}")
@@ -398,10 +441,12 @@ public class Worksheet {
     }
 
     public func merge(from: String, to: String): Unit {
+        this.ensureLoaded()
         merge("${from}:${to}")
     }
 
     public func unmerge(range: String): Bool {
+        this.ensureLoaded()
         let parsed = match (CellRef.parseRange(range)) {
             case Some(v) => v
             case None => return false
