@@ -360,6 +360,17 @@ internal class A64Emitter {
         this.word(0xCA000000u32 | (UInt32(rm) << 16) | (UInt32(rn) << 5) | UInt32(rd))
     }
 
+    /**
+     * `EOR Xd, Xn, #1`（`EOR (immediate)`：`sf=1, opc=10, N=1, immr=0, imms=0`）。
+     *
+     * 位掩码恒为 `#1`，因此只有 `Rn`(9–5) / `Rd`(4–0) 两个字段需要填——走字段构造
+     * 而不是裸字面量，正是为了避免「注释写 `X9, X9`、编码却是 `X9, X0`」这类
+     * 长期不一致（fix-jit-unary-not D1）。
+     */
+    func eorImm1(rd: Int64, rn: Int64): Unit {
+        this.word(0xD2400000u32 | (UInt32(rn) << 5) | UInt32(rd))
+    }
+
     func lslv(rd: Int64, rn: Int64, rm: Int64): Unit {
         this.word(0x9AC02000u32 | (UInt32(rm) << 16) | (UInt32(rn) << 5) | UInt32(rd))
     }
