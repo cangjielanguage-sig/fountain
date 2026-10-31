@@ -21,9 +21,9 @@
 
 ## 3. M3-b 数组/动态数组
 
-- [ ] 3.1 失败用例：数组公式 `ref` 广播、`#SPILL!`、`#CALC!`
-- [ ] 3.2 失败用例：FILTER/SORT/UNIQUE/SEQUENCE/XLOOKUP
-- [ ] 3.3 实现 `CalcValue.Array`、广播与溢出检测
+- [x] 3.1 失败用例：数组公式 `ref` 广播、`#SPILL!`、`#CALC!`
+- [x] 3.2 失败用例：FILTER/SORT/UNIQUE/SEQUENCE/XLOOKUP
+- [x] 3.3 实现 `CalcValue.Array`、广播与溢出检测
 
 ## 4. M3-c 函数库
 
@@ -38,7 +38,7 @@
 
 ## 6. M3-e ods 评估
 
-- [ ] 6.1 产出 `ods-assessment.md`（映射、复用、差异、结论、估算）
+- [x] 6.1 产出 `ods-assessment.md`（映射、复用、差异、结论、估算）
 
 ## 7. 收尾
 

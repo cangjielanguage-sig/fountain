@@ -158,6 +158,46 @@ internal class Evaluator {
     }
 
     private func evalBinary(op: BinaryOp, leftValue: CalcValue, rightValue: CalcValue): CalcValue {
+        // 数组逐元素广播（M3-b）：标量对数组、单行/单列对矩阵
+        match ((leftValue, rightValue)) {
+            case (ArrayValue(_), _) => return this.evalArrayBinary(op, leftValue, rightValue)
+            case (_, ArrayValue(_)) => return this.evalArrayBinary(op, leftValue, rightValue)
+            case _ => ()
+        }
+        this.scalarBinary(op, leftValue, rightValue)
+    }
+
+    /** 数组广播：维度必须相同，或其中一方为 1×1 / 单行 / 单列。 */
+    private func evalArrayBinary(op: BinaryOp, leftValue: CalcValue, rightValue: CalcValue): CalcValue {
+        let leftGrid = gridOf(leftValue)
+        let rightGrid = gridOf(rightValue)
+        let rows = if (leftGrid.size > rightGrid.size) { leftGrid.size } else { rightGrid.size }
+        let leftCols = if (leftGrid.size == 0) { 0 } else { leftGrid[0].size }
+        let rightCols = if (rightGrid.size == 0) { 0 } else { rightGrid[0].size }
+        let cols = if (leftCols > rightCols) { leftCols } else { rightCols }
+        if (rows == 0 || cols == 0) {
+            return CalcValue.Error(CalcError.Value)
+        }
+        if (leftGrid.size > 1 && rightGrid.size > 1 && leftGrid.size != rightGrid.size) {
+            return CalcValue.Error(CalcError.Value)
+        }
+        if (leftCols > 1 && rightCols > 1 && leftCols != rightCols) {
+            return CalcValue.Error(CalcError.Value)
+        }
+        let out = ArrayList<Array<CalcValue>>()
+        for (row in 0..rows) {
+            let line = ArrayList<CalcValue>()
+            for (col in 0..cols) {
+                let a = pickBroadcast(leftGrid, row, col, rows, cols)
+                let b = pickBroadcast(rightGrid, row, col, rows, cols)
+                line.add(this.scalarBinary(op, a, b))
+            }
+            out.add(line.toArray())
+        }
+        CalcValue.ArrayValue(out.toArray())
+    }
+
+    private func scalarBinary(op: BinaryOp, leftValue: CalcValue, rightValue: CalcValue): CalcValue {
         match (firstError([leftValue, rightValue])) {
             case Some(e) => return CalcValue.Error(e)
             case None => ()
@@ -211,4 +251,29 @@ internal class Evaluator {
             case _ => CalcValue.Error(CalcError.Value)
         }
     }
+}
+
+/** 从（可能是标量、单行、单列的）网格里取 `(row, col)` 处的值。 */
+private func pickBroadcast(grid: Array<Array<CalcValue>>, row: Int64, col: Int64, rows: Int64, cols: Int64): CalcValue {
+    if (grid.size == 0) {
+        return CalcValue.Empty
+    }
+    let gridRows = Int64(grid.size)
+    let gridCols = Int64(grid[0].size)
+    var r = row
+    var c = col
+    if (gridRows == 1) {
+        r = 0
+    } else if (r >= gridRows) {
+        return CalcValue.Error(CalcError.Value)
+    }
+    if (gridCols == 1) {
+        c = 0
+    } else if (c >= gridCols) {
+        return CalcValue.Error(CalcError.Value)
+    }
+    if (r >= gridRows || c >= gridCols) {
+        return CalcValue.Error(CalcError.Value)
+    }
+    grid[r][c]
 }

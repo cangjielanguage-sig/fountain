@@ -195,6 +195,11 @@ internal func lookupFunction(rawName: String): ?FnEntry {
         case "NA" => Some(FnEntry(name, 0, 0, { ev, args => fnNa(ev, args) }))
         case "TYPE" => Some(FnEntry(name, 1, 1, { ev, args => fnType(ev, args) }))
         case "ERROR.TYPE" => Some(FnEntry(name, 1, 1, { ev, args => fnErrorType(ev, args) }))
+        // 动态数组（M3-b）
+        case "FILTER" => Some(FnEntry(name, 2, 3, { ev, args => fnFilter(ev, args) }))
+        case "SORT" => Some(FnEntry(name, 1, 3, { ev, args => fnSort(ev, args) }))
+        case "UNIQUE" => Some(FnEntry(name, 1, 1, { ev, args => fnUnique(ev, args) }))
+        case "SEQUENCE" => Some(FnEntry(name, 1, 4, { ev, args => fnSequence(ev, args) }))
         case _ => None<FnEntry>
     }
 }

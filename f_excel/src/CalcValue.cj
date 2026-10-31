@@ -31,6 +31,7 @@ public enum CalcError <: Equatable<CalcError> & ToString {
     | GettingData
     | Circular
     | Spill
+    | Calc
 
     public operator func ==(that: CalcError): Bool {
         this.toString() == that.toString()
@@ -52,6 +53,7 @@ public enum CalcError <: Equatable<CalcError> & ToString {
             case GettingData => "#GETTING_DATA"
             case Circular => "#CIRC!"
             case Spill => "#SPILL!"
+            case Calc => "#CALC!"
         }
     }
 
@@ -68,6 +70,7 @@ public enum CalcError <: Equatable<CalcError> & ToString {
             case "#GETTING_DATA" => Some(GettingData)
             case "#CIRC!" => Some(Circular)
             case "#SPILL!" => Some(Spill)
+            case "#CALC!" => Some(Calc)
             case _ => None<CalcError>
         }
     }
