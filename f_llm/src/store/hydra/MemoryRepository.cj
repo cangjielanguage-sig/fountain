@@ -42,7 +42,7 @@ public class HydraMemoryRepository <: MemoryRepository {
     private static let SEQ_KEY = 'seq'
     private static let SEP = String.fromUtf8([1u8])
 
-    private let store: FStoreVectorStore
+    private let transport: HydraTransport
 
     public init(path!: String = '') {
         let location = if(path.isEmpty()){
@@ -50,7 +50,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         }else{
             path
         }
-        this.store = FStoreVectorStore(location)
+        this.transport = InProcessTransport(FStoreVectorStore(location))
     }
 
     public func upsert(write: MemoryWrite, titleVector: Array<Float64>,
@@ -65,12 +65,12 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(!write.kind.isEmpty()){
             filters['kind'] = write.kind
         }
-        store.upsert(collection, VectorRecord(id.toString(),
+        transport.upsert(collection, VectorRecord(id.toString(),
                                               encode(write.title, write.content, write.kind,
                                                      saveTime, write.namespace),
                                               contentVector, vectors: vectors,
                                               filters: filters, saveTime: saveTime))
-        store.upsert(MAP, VectorRecord('map:${id}', collection, Array<Float64>()))
+        transport.upsert(MAP, VectorRecord('map:${id}', collection, Array<Float64>()))
         id
     }
 
@@ -82,7 +82,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         }
         for(namespace in query.namespaces){
             let collection = collectionOf(query.userId, namespace)
-            for(hit in store.searchDenseField(VectorQuery(collection, vector, limit: limit), 'content')){
+            for(hit in transport.searchDenseField(collection, 'content', vector, limit)){
                 collect(hits, query, collection, hit)
             }
         }
@@ -97,7 +97,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         }
         for(namespace in query.namespaces){
             let collection = collectionOf(query.userId, namespace)
-            for(hit in store.searchSparse(SparseQuery(collection, tokens, limit: limit))){
+            for(hit in transport.searchSparse(collection, tokens, limit)){
                 collect(hits, query, collection, hit)
             }
         }
@@ -127,7 +127,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(collection.isEmpty()){
             return None
         }
-        match(store.get(collection, recordId.toString())){
+        match(transport.get(collection, recordId.toString())){
             case Some(record) =>
                 let title = match(record.vectors.get('title')){
                     case Some(vector) => Array<Array<Float64>>()
@@ -143,7 +143,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(collection.isEmpty()){
             return None
         }
-        match(store.get(collection, id.toString())){
+        match(transport.get(collection, id.toString())){
             case Some(record) => Some(decode(userId, record))
             case None => None
         }
@@ -153,8 +153,8 @@ public class HydraMemoryRepository <: MemoryRepository {
                      limit: Int64): ArrayList<MemoryRecord> {
         let records = ArrayList<MemoryRecord>()
         let collection = collectionOf(userId, namespace)
-        for(id in store.ids(collection, offset, limit)){
-            match(store.get(collection, id)){
+        for(id in transport.ids(collection, offset, limit)){
+            match(transport.get(collection, id)){
                 case Some(record) => records.add(decode(userId, record))
                 case None => ()
             }
@@ -167,9 +167,9 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(collection.isEmpty()){
             return false
         }
-        let removed = store.remove(collection, id.toString())
+        let removed = transport.remove(collection, id.toString())
         if(removed){
-            store.remove(MAP, 'map:${id}')
+            transport.remove(MAP, 'map:${id}')
         }
         removed
     }
@@ -181,7 +181,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(!kindWanted(query, collection, hit.id)){
             return
         }
-        match(store.get(collection, hit.id)){
+        match(transport.get(collection, hit.id)){
             case Some(record) => hits.add(MemoryHit(decode(query.userId, record), hit.score))
             case None => ()
         }
@@ -192,7 +192,7 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(query.kinds.isEmpty()){
             return true
         }
-        match(store.get(collection, id)){
+        match(transport.get(collection, id)){
             case Some(record) =>
                 let kind = decode(0, record).kind
                 for(item in query.kinds){
@@ -211,14 +211,14 @@ public class HydraMemoryRepository <: MemoryRepository {
         if(collection.isEmpty()){
             return
         }
-        match(store.get(collection, memoryId.toString())){
+        match(transport.get(collection, memoryId.toString())){
             case Some(record) =>
                 let sparse = if(tokens.isEmpty()){ record.sparse }else{ tokens }
                 let vectors = match(colbert){
                     case Some(values) => values
                     case None => record.colbert
                 }
-                store.upsert(collection, VectorRecord(record.id, record.payload, record.dense,
+                transport.upsert(collection, VectorRecord(record.id, record.payload, record.dense,
                                                       sparse: sparse, colbert: vectors,
                                                       filters: record.filters,
                                                       vectors: record.vectors,
@@ -229,17 +229,17 @@ public class HydraMemoryRepository <: MemoryRepository {
 
     private func nextId(): Int64 {
         var current: Int64 = 0
-        match(store.get(MAP, SEQ_KEY)){
+        match(transport.get(MAP, SEQ_KEY)){
             case Some(record) => current = Int64.tryParse(record.payload) ?? 0
             case None => ()
         }
         let next = current + 1
-        store.upsert(MAP, VectorRecord(SEQ_KEY, next.toString(), Array<Float64>()))
+        transport.upsert(MAP, VectorRecord(SEQ_KEY, next.toString(), Array<Float64>()))
         next
     }
 
     private func collectionOfId(id: Int64): String {
-        match(store.get(MAP, 'map:${id}')){
+        match(transport.get(MAP, 'map:${id}')){
             case Some(record) => record.payload
             case None => ''
         }
