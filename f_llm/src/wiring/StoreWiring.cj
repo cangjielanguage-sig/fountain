@@ -21,6 +21,7 @@ import fountain::f_bean.*
 import fountain::f_log.*
 
 import fountain::f_llm.store.*
+import fountain::f_llm.store.hydra.*
 
 import fountain::f_llm.store.mysql.*
 import fountain::f_llm.store.postgres.*
@@ -59,6 +60,7 @@ public class StoreWiring {
             ensure('inMemory', { => InMemoryContentStore() })
             ensure('postgres', { => PostgresContentStore() })
             ensure('mysql', { => MySqlContentStore() })
+            ensure('f_hydra', { => HydraContentStore() })
             ensureMeta('postgres', { => PostgresMetaStore() })
             ensureMeta('mysql', { => MySqlMetaStore() })
             ensureMeta('f_store', { => FStoreMetaStore(StoreSettings.load().metaStorePath) })

@@ -36,7 +36,7 @@ public class StoreSettings {
     public static const META_PATH_KEY = 'llm_metaStorePath'
     public static const CONTENT_URL_KEY = 'llm_contentStoreUrl'
 
-    public static const DEFAULT_CONTENT = 'postgres'
+    public static const DEFAULT_CONTENT = 'f_hydra'
     public static const DEFAULT_META = 'f_store'
     public static const DEFAULT_META_PATH = './data/f_llm-meta'
 
