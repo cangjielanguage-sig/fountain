@@ -70,6 +70,33 @@ Collection（= f_llm 的一个 用户+命名空间；命名示例：记忆 `u{ui
 
 **value 上限**：SSTable 单文件 64MB，建议 value ≤ 64KB；`payload` 超限时由调用方截断或分片（f_llm 侧保证正文 ≤ 32KB/条）。
 
+### 1.3 v0.3 已实现布局（f_hydra 动态库）
+
+实际 key 统一加 `h:` 前缀，与其它业务的 key 空间隔离：
+
+| key | value |
+|---|---|
+| `h:{c}:d:{id}` | payload（不透明 JSON） |
+| `h:{c}:v:d:{id}` | dense：`count(Int32 LE) + count × Float32 LE`（1024 维 = 4KB） |
+| `h:{c}:v:s:{id}` | sparse：文本 `token:weight,...`（单条通常 < 2KB，便于排查） |
+| `h:{c}:v:c:{id}:{part}` | colbert：`count(Int32 LE) + count × dim × Float32 LE`，按 ≤64KB 分片 |
+| `h:{c}:i:t:{token}:{id}` | 稀疏倒排 posting，value = 权重 |
+| `h:{c}:r:{id}` | 就绪标记（两阶段写的占位，恢复逻辑 v0.5 补） |
+
+编码约束（`VectorCodec`）：
+
+1. **小端**，与 `f_llm.store.ColbertCodec` **字节级兼容**——同一条 colbert 可以在 PG 的
+   `title_colbert` 列与 f_hydra 之间直接搬移；
+2. **不写死维度**：dense 的 dim = count；colbert 的 dim 由 `(字节数 - 4) / count / 4` 推断，
+   换 768/1024 维模型不改格式；
+3. **f32 截断**：写入即 `Float32(value)`，读回 `Float64(Float32)`，不要期望 bit-level 还原原始 `Float64`；
+4. **分片**：96 token × 1024 维 × 4B ≈ 384KB，是建议值（64KB）的 6 倍；按 64KB 切片存 `:{part}`，
+   读取时按 part 序号拼接（part 数由前缀扫描得到，不额外存元数据）；
+5. **无版本字节**：与 `ColbertCodec` 保持一致；将来改布局用新 key 前缀（如 `v:d2:`）区分，
+   不引入版本位——避免同一条记录出现两种解释。
+
+> v0.1/v0.2 的文本编码（逗号/分号分隔）**不再可读**，需要重写；当前仅测试目录有数据，无生产迁移问题。
+
 ---
 
 ## 2. 索引

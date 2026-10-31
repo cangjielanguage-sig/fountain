@@ -45,13 +45,17 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func upsert(collection: String, record: VectorRecord): Unit {
-        // 覆盖写：先清掉旧稀疏倒排，否则旧 token 会残留
+        // 覆盖写：先清掉旧稀疏倒排与旧 colbert 分片，否则残留
         deletePostings(collection, record.id)
+        deleteColbertParts(collection, record.id)
 
         store.add(payloadKey(collection, record.id).toArray(), record.payload.toArray())
-        store.add(denseKey(collection, record.id).toArray(), encodeDense(record.dense).toArray())
+        store.add(denseKey(collection, record.id).toArray(), VectorCodec.encodeDense(record.dense))
         store.add(sparseKey(collection, record.id).toArray(), encodeSparse(record.sparse).toArray())
-        store.add(colbertKey(collection, record.id).toArray(), encodeColbert(record.colbert).toArray())
+        let parts = VectorCodec.encodeColbertParts(record.colbert)
+        for(index in 0..parts.size){
+            store.add(colbertPartKey(collection, record.id, index).toArray(), parts[index])
+        }
         for((token, weight) in record.sparse){
             store.add(postingKey(collection, token, record.id).toArray(), weight.toString().toArray())
         }
@@ -63,18 +67,15 @@ public class FStoreVectorStore <: VectorStore {
         match(store.get(payloadKey(collection, id).toArray())){
             case Some(bytes) =>
                 let dense = match(store.get(denseKey(collection, id).toArray())){
-                    case Some(raw) => decodeDense(String.fromUtf8(raw))
+                    case Some(raw) => VectorCodec.decodeDense(raw)
                     case None => Array<Float64>()
                 }
                 let sparse = match(store.get(sparseKey(collection, id).toArray())){
                     case Some(raw) => decodeSparse(String.fromUtf8(raw))
                     case None => HashMap<Int64, Float64>()
                 }
-                let colbert = match(store.get(colbertKey(collection, id).toArray())){
-                    case Some(raw) => decodeColbert(String.fromUtf8(raw))
-                    case None => Array<Array<Float64>>()
-                }
-                Some(VectorRecord(id, String.fromUtf8(bytes), dense, sparse: sparse, colbert: colbert))
+                Some(VectorRecord(id, String.fromUtf8(bytes), dense,
+                                  sparse: sparse, colbert: readColbert(collection, id)))
             case None => None
         }
     }
@@ -82,10 +83,10 @@ public class FStoreVectorStore <: VectorStore {
     public func remove(collection: String, id: String): Bool {
         let existed = store.contains(payloadKey(collection, id).toArray())
         deletePostings(collection, id)
+        deleteColbertParts(collection, id)
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
-        store.remove(colbertKey(collection, id).toArray())
         store.remove(readyKey(collection, id).toArray())
         existed
     }
@@ -99,7 +100,7 @@ public class FStoreVectorStore <: VectorStore {
         for((key, value) in store.prefix(prefix.toArray())){
             let text = String.fromUtf8(key)
             let id = text[Int64(prefix.size)..Int64(text.size)]
-            let dense = decodeDense(String.fromUtf8(value))
+            let dense = VectorCodec.decodeDense(value)
             if(dense.size != query.dense.size){
                 continue
             }
@@ -162,10 +163,7 @@ public class FStoreVectorStore <: VectorStore {
             return hits
         }
         for(id in ids){
-            let docColbert = match(store.get(colbertKey(collection, id).toArray())){
-                case Some(raw) => decodeColbert(String.fromUtf8(raw))
-                case None => Array<Array<Float64>>()
-            }
+            let docColbert = readColbert(collection, id)
             let payload = match(store.get(payloadKey(collection, id).toArray())){
                 case Some(bytes) => String.fromUtf8(bytes)
                 case None => ''
@@ -222,8 +220,61 @@ public class FStoreVectorStore <: VectorStore {
         'h:${collection}:i:t:${token}:${id}'
     }
 
-    private static func colbertKey(collection: String, id: String): String {
-        'h:${collection}:v:c:${id}'
+    /** colbert 分片：`h:{c}:v:c:{id}:{part}`，每片 ≤ 64KB */
+    private static func colbertPartPrefix(collection: String, id: String): String {
+        'h:${collection}:v:c:${id}:'
+    }
+
+    private static func colbertPartKey(collection: String, id: String, part: Int64): String {
+        'h:${collection}:v:c:${id}:${part}'
+    }
+
+    private func deleteColbertParts(collection: String, id: String): Unit {
+        let prefix = colbertPartPrefix(collection, id)
+        let keys = ArrayList<String>()
+        for((key, _) in store.prefix(prefix.toArray())){
+            keys.add(String.fromUtf8(key))
+        }
+        for(key in keys){
+            store.remove(key.toArray())
+        }
+    }
+
+    private func readColbert(collection: String, id: String): Array<Array<Float64>> {
+        let prefix = colbertPartPrefix(collection, id)
+        let parts = ArrayList<String>()
+        for((key, _) in store.prefix(prefix.toArray())){
+            parts.add(String.fromUtf8(key))
+        }
+        if(parts.isEmpty()){
+            return Array<Array<Float64>>()
+        }
+        // 键是 `...:{part}`，按 part 数字排序（part 数量很少，插入排序足够）
+        for(index in 1..parts.size){
+            let current = parts[index]
+            var position = index - 1
+            while(position >= 0 && partOf(parts[position], prefix) > partOf(current, prefix)){
+                parts[position + 1] = parts[position]
+                position--
+            }
+            parts[position + 1] = current
+        }
+        let rows = ArrayList<Array<Float64>>()
+        for(key in parts){
+            match(store.get(key.toArray())){
+                case Some(bytes) =>
+                    for(row in VectorCodec.decodeColbert(bytes)){
+                        rows.add(row)
+                    }
+                case None => ()
+            }
+        }
+        rows.toArray()
+    }
+
+    private static func partOf(key: String, prefix: String): Int64 {
+        let suffix = key[Int64(prefix.size)..Int64(key.size)]
+        Int64.tryParse(suffix) ?? 0
     }
 
     /** 覆盖写/删除前清掉旧倒排，避免旧 token 残留 */
@@ -238,53 +289,7 @@ public class FStoreVectorStore <: VectorStore {
         }
     }
 
-    // ---- codec ----
-
-    static func encodeDense(values: Array<Float64>): String {
-        var text = ''
-        for(index in 0..values.size){
-            if(index > 0){
-                text += ','
-            }
-            text += values[index].toString()
-        }
-        text
-    }
-
-    static func decodeDense(text: String): Array<Float64> {
-        let values = ArrayList<Float64>()
-        for(part in text.split(',')){
-            let item = part.trimAscii()
-            if(!item.isEmpty()){
-                values.add(Float64.parse(item))
-            }
-        }
-        values.toArray()
-    }
-
-    static func encodeColbert(vectors: Array<Array<Float64>>): String {
-        var text = ''
-        for(row in vectors){
-            if(!text.isEmpty()){
-                text += ';'
-            }
-            text += encodeDense(row)
-        }
-        text
-    }
-
-    static func decodeColbert(text: String): Array<Array<Float64>> {
-        let rows = ArrayList<Array<Float64>>()
-        if(text.isEmpty()){
-            return rows.toArray()
-        }
-        for(part in text.split(';')){
-            if(!part.isEmpty()){
-                rows.add(decodeDense(part))
-            }
-        }
-        rows.toArray()
-    }
+    // ---- codec（dense/colbert 走 VectorCodec 的 f32 二进制；sparse 保持文本） ----
 
     static func encodeSparse(tokens: HashMap<Int64, Float64>): String {
         var text = ''
