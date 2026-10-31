@@ -1537,7 +1537,8 @@ Config.set<String>([
 - 首次启动自动建目录；目录必须可写，否则启动失败；
 - 人格一人一条（覆盖写），技能带 `version`，提示词按 `(name, version)` 存并保留 `latest`；
 - 写入顺序是「先主体、后索引」，启动时扫描主体补建缺失索引（`f_store` 没有事务）；
-- 内容族仍需在 `postgres` / `mysql` / `f_hydra` / `fhydra` 中选一个——记忆与知识要向量检索，`f_store` 不承担这部分。
+- 内容族仍需在 `postgres` / `mysql` / `f_hydra` / `fhydra` 中选一个——记忆与知识要向量检索，`f_store` 不承担这部分；
+- `f_store` **不实现 `KnowledgeStore`**：知识文档需要向量化检索，配置成 `f_store` 时知识能力不可用（不是降级，是边界）。
 
 ## 配置项
 

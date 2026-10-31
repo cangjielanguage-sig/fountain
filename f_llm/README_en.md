@@ -1554,7 +1554,8 @@ Notes:
 - The directory is created on first start and must be writable;
 - One character per user (overwrite), skills carry a `version`, prompts are stored per `(name, version)` with a `latest` pointer;
 - Writes go body-first, index-second; startup scans bodies and rebuilds missing indexes (`f_store` has no transactions);
-- The content family still requires `postgres` / `mysql` / `f_hydra` / `fhydra` — memories and knowledge need vector search, which `f_store` does not provide.
+- The content family still requires `postgres` / `mysql` / `f_hydra` / `fhydra` — memories and knowledge need vector search, which `f_store` does not provide;
+- `f_store` does **not** implement `KnowledgeStore`: documents require vector search, so knowledge is unavailable with `f_store` (a boundary, not a degradation).
 
 ## Configuration items
 
