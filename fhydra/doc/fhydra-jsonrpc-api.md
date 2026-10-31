@@ -86,8 +86,8 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 
 - **参数一律包在 `param` / `params` 字段里**（f_jsonrpc 的方法参数是一个对象），例如
   `{"method":"hydra.count","params":{"param":{"collection":"c"}}}`；
-- 复合结果当前返回 **JSON 字符串**（`result` 是字符串而非对象），f_llm 客户端需二次解析；
-  后续可改成 `JsonValue` 直接返回对象；
+- `searchDense` / `searchSparse` / `rerank` 返回**对象**（`{"hits":[…]}`）；
+  `get` / `ids` 仍返回 JSON 字符串，下一步统一为对象；
 - `denseB64` 为 f32 小端原始字节的 Base64（不带 count 头），优先于 `dense` 数组；
 - `hydra.searchDense` 未建 IVF 时自动暴力扫描；`clusters=0` 表示按 `√n` 估算；
 - `hydra.get` 对「未就绪 / 已删除 / 过期」一律返回 `"null"`，不泄漏写入中间态。
