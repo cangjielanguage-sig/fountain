@@ -124,3 +124,40 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 **当前替代**：`llm_memoryStore=postgres|mysql|inMemory`。
 
 **解除条件**：fhydra 提供 `MemoryStore` 实现并注册为 bean。
+
+---
+
+## 7. 余额查询：zhipu / siliconflow / aliyun 仍为占位（内部待办，暂不实现）
+
+**现状**：三个类已经 `@Bean` 注册、provider 名可被路由到，但 `query()` 直接抛异常：
+
+```cangjie
+// f_llm/src/balance/BalanceQueriers.cj:275
+/** 智谱 / 硅基流动 / 阿里云：本期只留可编译占位，调用即抛「不支持」 */
+public class ZhipuBalanceQuerier <: BalanceQuerier {
+    public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
+        throw BalanceUnsupportedException('balance query for zhipu is not implemented yet')
+    }
+}
+// SiliconFlowBalanceQuerier → 'balance query for siliconflow is not implemented yet'
+// AliyunBalanceQuerier    → 'balance query for aliyun is not implemented yet'
+```
+
+**影响**：调用这三家的余额接口会得到明确的 `BalanceUnsupportedException`（不静默返回 0）；
+余额聚合、阈值告警对这三家不可用。不影响对话、记忆、检索等主链路。
+
+**实现要点**（照抄已实现的 provider 模式即可）：
+
+- 参考 `DeepSeekBalanceQuerier`（`GET /user/balance`，`conf.auth` 作为 Bearer）；
+- 需要签名的参考 `TencentCloudBalanceQuerier` / `VolcengineBalanceQuerier`（`BalancePoster` 是注入点，可单测签名与解析）；
+- 解析结果统一成 `ArrayList<BalanceSnapshot>`，金额保留原始字符串（`BalanceUnits.parse` 同时给 `Float64` 视图）。
+
+**待确认（这也是暂不实现的原因）**：
+
+| provider | 需要确认 |
+|---|---|
+| zhipu | 余额接口是否存在/是否仅控制台可见、鉴权是否沿用 `conf.auth` |
+| siliconflow | 余额接口路径与响应字段（是否与 DeepSeek 同构） |
+| aliyun | 阿里云是 AK/SK 签名（`AccessKeyId/Secret` 在 `conf.conf` 或 `auth` 里），不是简单 Bearer |
+
+**优先级**：低。等接口形态确认后再按 provider 逐个补，每个约「一个类 + 一组解析用例」的量级。
