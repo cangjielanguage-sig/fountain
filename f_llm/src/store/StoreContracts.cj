@@ -54,8 +54,10 @@ public interface KnowledgeStore {
     /** 删除正文与全部块 */
     func remove(docId: String): Bool
     /**
-     * 块级检索（P0）：先按词面召回，再由实现打分排序。
-     * 语义检索（向量）尚未实现，当前是关键词命中数排序。
+     * 块级检索：dense（块向量余弦）+ lexical（词面命中数）混合打分。
+     *
+     * 具体权重由实现决定（当前 `cosine + 0.1 × min(命中次数, 5)`），
+     * 没有 `Embedder` 时退化为纯词面召回。
      */
     func search(query: KnowledgeQuery): ArrayList<KnowledgeHit>
     /** 分页列出 docId（重建索引时逐篇重算） */
