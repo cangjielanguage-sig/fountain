@@ -276,6 +276,9 @@ CREATE TABLE IF NOT EXISTS llm_document_chunk (
   doc_id      VARCHAR(128) NOT NULL,
   seq         INT          NOT NULL,
   content     TEXT         NOT NULL,
+  content_vec vector(1024),
   update_time TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
 );
 CREATE INDEX IF NOT EXISTS idx_llm_document_chunk_doc ON llm_document_chunk (doc_id);
+CREATE INDEX IF NOT EXISTS idx_llm_document_chunk_vec
+ON llm_document_chunk USING hnsw (content_vec vector_cosine_ops);

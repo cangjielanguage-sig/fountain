@@ -15,11 +15,13 @@ limitations under the License.
 */
 package fountain::f_llm.store.postgres
 
+import fountain::f_bean.*
+
 import fountain::f_llm.store.*
 
 /** PostgreSQL 内容族：记忆 + 知识文档（4.x）。 */
 public class PostgresContentStore <: ContentStore {
-    private let knowledgeStore = PostgresKnowledgeStore()
+    private var cachedKnowledge: ?KnowledgeStore = None
     private var cachedMemory: ?MemoryStore = None
 
     public init() {
@@ -38,8 +40,20 @@ public class PostgresContentStore <: ContentStore {
         }
     }
 
+    /** 知识实现懒构造：有 `Embedder` bean 时启用语义检索，否则退化为词面 */
     public prop knowledge: KnowledgeStore {
-        get() { knowledgeStore }
+        get() {
+            match(cachedKnowledge){
+                case Some(store) => store
+                case None =>
+                    let store = match(lookupOption<Embedder>()){
+                        case Some(model) => PostgresKnowledgeStore(model)
+                        case None => PostgresKnowledgeStore()
+                    }
+                    cachedKnowledge = Some(store)
+                    store
+            }
+        }
     }
 }
 

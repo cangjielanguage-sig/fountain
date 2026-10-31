@@ -56,6 +56,7 @@ public class KnowledgeConformanceTest {
                   doc_id VARCHAR(128) NOT NULL,
                   seq INT NOT NULL,
                   content TEXT NOT NULL,
+                  content_vec vector(1024),
                   update_time TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
                 )
             ''').update
@@ -151,5 +152,41 @@ public class KnowledgeConformanceTest {
                 assertSearch(store)
             case None => ()
         }
+    }
+
+    /** P0.2：有 Embedder 时，即使词面完全不命中也能靠向量召回 */
+    @TestCase
+    func testPostgresSemanticRecallWithoutLexicalMatch(): Unit {
+        match(postgresKnowledge()){
+            case Some(_) =>
+                let semantic = PostgresKnowledgeStore(FixedEmbedder())
+                semantic.upsert(KnowledgeDoc('v-1', '语义', '完全不含查询词'))
+
+                let lexicalOnly = PostgresKnowledgeStore()
+                @Expect(lexicalOnly.search(KnowledgeQuery('另一个词', limit: 5)).size, 0)
+
+                let hits = semantic.search(KnowledgeQuery('另一个词', limit: 5))
+                @Expect(hits.size, 1)
+                @Expect(hits[0].docId, 'v-1')
+                @Expect(hits[0].score > 0.5f64, true)
+            case None => ()
+        }
+    }
+}
+
+/** 固定返回 [1,0,0...]：让任意查询与任意块都相似，用来验证向量通道生效 */
+class FixedEmbedder <: Embedder {
+    public func embed(text: String): Array<Float64> {
+        let vector = Array<Float64>(1024, repeat: 0.0f64)
+        vector[0] = 1.0f64
+        vector
+    }
+
+    public func embedColbert(text: String): Array<Array<Float64>> {
+        Array<Array<Float64>>()
+    }
+
+    public func tokenize(text: String): HashMap<Int64, Float64> {
+        HashMap<Int64, Float64>()
     }
 }

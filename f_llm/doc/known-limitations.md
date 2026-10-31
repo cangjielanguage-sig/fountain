@@ -189,17 +189,24 @@ public class ZhipuBalanceQuerier <: BalanceQuerier {
 
 ---
 
-## 8. 知识检索目前只有词面召回（语义检索待实现）
+## 8. 知识检索：MySQL 仍是词面召回（PG / 内存已支持语义）
 
-**现状**：`KnowledgeStore.search` 已可用（块级、多词命中数排序、可按 `docIds` 限定），
-但召回是 `LIKE '%<首个词>%'` + 内存打分，**没有块向量、没有 ANN**。
+**现状**：
+
+| 实现 | 召回方式 |
+|---|---|
+| PostgreSQL | 块向量 `content_vec vector(1024)` + `<=>` 余弦近邻，与词面命中合并打分 |
+| 内存 | 进程内算余弦，同上合并 |
+| MySQL | `LIKE '%首词%'` 候选 200 + 命中数打分，**没有 `MYVECTOR` 列** |
+
+打分口径：`score = cosine + 0.1 × min(命中次数, 5)`（语义为主，精确词加成）；没有 `Embedder`
+时退化为纯词面。
 
 **影响**：
 
-- 近义/改写的提问召回不到（「怎么配置」匹配不到「如何设置」）；
-- 长文档里首个词不出现、但其它词出现时，整条记录不进入候选（召回以第一个词为准）；
-- 候选上限 200，超大库会漏召回。
+- 在 MySQL 上配 `llm_memoryStore=mysql` 时，知识检索召回不到近义表达（「怎么配置」匹配不到「如何设置」）；
+- MySQL 的 `LIKE` 召回以**第一个词**为准，长文档里首词不出现就整条不漏召回；候选上限 200。
 
-**解除条件**：给 `llm_document_chunk` 加向量列（PG `vector(1024)` / MySQL `MYVECTOR`），
-`upsert` 时对每块调用 `Embedder.embed`，`search` 改为 dense ANN + 词面混合打分。
-索引重建复用 `MemoryIndexRebuilder` 的思路（按 doc 分页重算）。
+**解除条件**：给 MySQL 的 `llm_document_chunk` 加 `MYVECTOR` 列，`chunkInsert` 写入
+`myvector_construct('<v>')`，`chunkSearchDense` 用 `MYVECTOR_IS_ANN`（与 `MySqlMemoryRepository`
+同一套写法：字面量内联、`annPath` 由 `SELECT DATABASE()` 拼接、测试里 `CALL myvector_index_build`）。

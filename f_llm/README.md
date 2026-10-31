@@ -1564,8 +1564,9 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 - `KnowledgeStore.upsert` 覆盖写正文后按 **400 字窗口 / 50 字重叠**切块，写入 `llm_document_chunk`；
 - `KnowledgeStore.search(KnowledgeQuery)` 返回**块级**结果：按查询词命中次数打分（多词累加），
   同分按 `docId`、`seq` 升序，可用 `docIds` 限定范围；
-- 三实现口径一致：PG / MySQL 走 `LIKE` 召回候选（上限 200）+ 统一打分排序，内存实现同逻辑；
-- **语义检索（块向量 + ANN）尚未实现**，当前是词面召回。
+- **混合检索**：有 `Embedder` 时，块向量走余弦相似度（PG `<=>` / 内存直算），与词面命中数合并打分
+  （`score = cosine + 0.1 × min(命中数, 5)`）；没有 `Embedder` 时退化为纯词面；
+- PG 与内存实现已支持语义召回；**MySQL 仍为纯词面**（`MYVECTOR` 列待补）。
 
 ### MySQL（9.7 LTS + MyVector）
 

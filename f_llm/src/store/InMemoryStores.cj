@@ -28,13 +28,26 @@ import fountain::f_bean.macros.*
  */
 public class InMemoryContentStore <: ContentStore {
     private let memoryStore = InMemoryMemoryStore()
-    private let knowledgeStore = InMemoryKnowledgeStore()
 
     public prop memory: MemoryStore {
         get() { memoryStore }
     }
+    private var cachedKnowledge: ?KnowledgeStore = None
+
+    /** 有 `Embedder` bean 时启用语义检索，否则退化为词面 */
     public prop knowledge: KnowledgeStore {
-        get() { knowledgeStore }
+        get() {
+            match(cachedKnowledge){
+                case Some(store) => store
+                case None =>
+                    let store = match(lookupOption<Embedder>()){
+                        case Some(model) => InMemoryKnowledgeStore(model)
+                        case None => InMemoryKnowledgeStore()
+                    }
+                    cachedKnowledge = Some(store)
+                    store
+            }
+        }
     }
 }
 
@@ -143,6 +156,16 @@ public class InMemoryMemoryStore <: MemoryStore {
 class InMemoryKnowledgeStore <: KnowledgeStore {
     private let docs = HashMap<String, KnowledgeDoc>()
     private let chunks = HashMap<String, ArrayList<KnowledgeChunk>>()
+    private let vectors = HashMap<String, Array<Float64>>()
+    private let embedder: ?Embedder
+
+    public init() {
+        this.embedder = None
+    }
+
+    public init(embedder: Embedder) {
+        this.embedder = Some(embedder)
+    }
 
     public func upsert(doc: KnowledgeDoc): Unit {
         docs[doc.docId] = doc
@@ -150,6 +173,10 @@ class InMemoryKnowledgeStore <: KnowledgeStore {
         var seq: Int64 = 0
         for(content in KnowledgeChunker.split(doc.content)){
             list.add(KnowledgeChunk(doc.docId, seq, content))
+            match(embedder){
+                case Some(model) => vectors[chunkKey(doc.docId, seq)] = model.embed(content)
+                case None => ()
+            }
             seq++
         }
         chunks[doc.docId] = list
@@ -171,10 +198,14 @@ class InMemoryKnowledgeStore <: KnowledgeStore {
 
     public func search(query: KnowledgeQuery): ArrayList<KnowledgeHit> {
         let terms = KnowledgeSearch.terms(query.text)
-        let hits = ArrayList<KnowledgeHit>()
-        if(terms.isEmpty()){
-            return hits
+        let queryVector = match(embedder){
+            case Some(model) => Some(model.embed(query.text))
+            case None => None<Array<Float64>>
         }
+        if(terms.isEmpty() && queryVector.isNone()){
+            return ArrayList<KnowledgeHit>()
+        }
+        let hits = ArrayList<KnowledgeHit>()
         for((docId, list) in chunks){
             if(query.docIds.size > 0){
                 var wanted = false
@@ -189,13 +220,26 @@ class InMemoryKnowledgeStore <: KnowledgeStore {
                 }
             }
             for(chunk in list){
-                let score = KnowledgeSearch.score(chunk.content, terms)
-                if(score > 0.0f64){
-                    hits.add(KnowledgeHit(docId, chunk.seq, chunk.content, score))
+                let lexical = KnowledgeSearch.score(chunk.content, terms)
+                let dense = match(queryVector){
+                    case Some(target) => match(vectors.get(chunkKey(docId, chunk.seq))){
+                        case Some(source) => VectorMath.cosine(target, source)
+                        case None => 0.0f64
+                    }
+                    case None => 0.0f64
                 }
+                if(lexical <= 0.0f64 && dense <= 0.0f64){
+                    continue
+                }
+                let boosted = if(lexical > 5.0f64){ 5.0f64 }else{ lexical }
+                hits.add(KnowledgeHit(docId, chunk.seq, chunk.content, dense + 0.1f64 * boosted))
             }
         }
         KnowledgeSearch.rank(hits, query.limit)
+    }
+
+    private static func chunkKey(docId: String, seq: Int64): String {
+        '${docId}#${seq}'
     }
 }
 

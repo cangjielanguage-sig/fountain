@@ -1591,9 +1591,11 @@ historical indexes, etc.) are listed in [`doc/known-limitations.md`](doc/known-l
   stored in `llm_document_chunk`;
 - `KnowledgeStore.search(KnowledgeQuery)` returns **chunk-level** hits ranked by query-term occurrences
   (summed over terms), ties broken by `docId` then `seq`, optionally scoped by `docIds`;
-- All three backends behave the same: PG / MySQL recall candidates with `LIKE` (max 200) and share the same
-  scoring; the in-memory store uses the same logic;
-- **Semantic search (chunk embeddings + ANN) is not implemented yet** — current recall is lexical.
+- **Hybrid retrieval**: with an `Embedder`, chunk vectors are compared by cosine (PG `<=>` / computed in memory)
+  and merged with lexical hits (`score = cosine + 0.1 × min(hits, 5)`); without an `Embedder` it degrades to
+  lexical only;
+- PG and the in-memory store support semantic recall; **MySQL is still lexical-only** (the `MYVECTOR` column
+  is pending).
 
 ### MySQL (9.7 LTS + MyVector)
 
