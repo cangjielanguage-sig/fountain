@@ -48,5 +48,5 @@
 ## N5 收尾
 
 - [x] N5.1 `verify.md`：记录终态用例数 / 通过 / 失败、`n = 49` 修复前后原始输出、x86 证据状态、N4.1 审计结论（含「未发现 / 发现并另立」）。验收：每个判据都能指到可执行用例或原始输出。
-- [ ] N5.2 归档：`openspec archive fix-jit-unary-not --yes`，delta 并入 `openspec/specs/`。验收：三个 capability 的 delta 全量落地（backend / differential-acceptance / compiler-frontend），`openspec list` 无同名活动变更。
+- [x] N5.2 归档：`openspec archive fix-jit-unary-not --yes`，delta 并入 `openspec/specs/`。验收：三个 capability 的 delta 全量落地（backend / differential-acceptance / compiler-frontend），`openspec list` 无同名活动变更。
 - [ ] N5.3 合并：`git merge --no-ff` 回 master 并删除分支（按 AGENTS.md 的分支流程）。验收：master 上全量仍绿。
