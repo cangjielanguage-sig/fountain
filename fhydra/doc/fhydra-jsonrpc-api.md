@@ -69,8 +69,8 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 | `hydra.upsertBatch` | `[record…]`（≤100） | 写入条数 | 10s | ✅ |
 | `hydra.get` | `{collection,id}` | record JSON 字符串 / `"null"` | 2s | ✅ |
 | `hydra.remove` | `{collection,id}` | `bool` | 2s | ✅ |
-| `hydra.searchDense` | `{collection,dense\|denseB64,limit,kind?,saveDay?,tags?}` | `{"hits":[…]}` 字符串 | 5s | ✅ |
-| `hydra.searchSparse` | `{collection,tokenIds,weights,limit,filters?}` | `{"hits":[…]}` 字符串 | 5s | ✅ |
+| `hydra.searchDense` | `{collection,dense\|denseB64,limit,kind?,saveDay?,tags?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
+| `hydra.searchSparse` | `{collection,tokenIds,weights,limit,filters?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
 | `hydra.count` | `{collection}` | `Int64` | 2s | ✅ |
 | `hydra.ids` | `{collection,offset,limit}` | `["id",…]` 字符串 | 2s | ✅ |
 | `hydra.buildIndex` | `{collection,clusters}` | `Int64` 簇数 | 60s | ✅ |
@@ -78,9 +78,9 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 | `hydra.setTtl` | `{collection,seconds}` | `true` | 2s | ✅ |
 | `hydra.ttl` | `{collection}` | epoch 秒 | 1s | ✅ |
 | `hydra.purgeExpired` | `{collection}` | 删除 key 数 | 60s | ✅ |
-| `hydra.rerank` | `{collection,ids,colbert}` | `{"hits":[…]}` | 5s | ⬜ 待实现 |
-| `hydra.indexClusters` | `{collection}` | 簇数 | 1s | ⬜ 待实现 |
-| `hydra.export` | `{collection,targetCollection}` | 条数 | 60s | ⬜ 待实现 |
+| `hydra.rerank` | `{collection,ids,colbert}` | `{"hits":[…]}` 对象 | 5s | ✅ |
+| `hydra.indexClusters` | `{collection}` | 簇数 | 1s | ✅ |
+| `hydra.export` | `{collection,targetCollection}` | 条数 | 60s | ✅ |
 
 说明：
 

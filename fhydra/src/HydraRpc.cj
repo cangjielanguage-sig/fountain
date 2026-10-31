@@ -87,7 +87,7 @@ public class HydraRpc {
     }
 
     @JsonRpcMeta['dense 检索', '5s']
-    public func searchDense(param: SearchParam): String {
+    public func searchDense(param: SearchParam): HitsDto {
         HydraAuth.require()
         let dense = denseOf(param.denseB64, param.dense)
         if(dense.isEmpty()){
@@ -98,11 +98,11 @@ public class HydraRpc {
         }
         let hits = store.searchDense(VectorQuery(param.collection, dense, limit: param.limit,
                                                  filters: filtersOf(param.kind, param.saveDay, param.tags)))
-        hitsJson(hits)
+        hitsDto(hits)
     }
 
     @JsonRpcMeta['sparse 检索', '5s']
-    public func searchSparse(param: SparseParam): String {
+    public func searchSparse(param: SparseParam): HitsDto {
         HydraAuth.require()
         if(param.tokenIds.size != param.weights.size){
             throw JsonRpcException(BAD_PARAMS, 'tokenIds and weights must have the same length')
@@ -116,7 +116,7 @@ public class HydraRpc {
         }
         let hits = store.searchSparse(SparseQuery(param.collection, tokens, limit: param.limit,
                                                   filters: filtersOf(param.kind, param.saveDay, param.tags)))
-        hitsJson(hits)
+        hitsDto(hits)
     }
 
     @JsonRpcMeta['记录数', '2s']
@@ -139,10 +139,31 @@ public class HydraRpc {
         text + ']'
     }
 
+    @JsonRpcMeta['colbert 重排', '5s']
+    public func rerank(param: RerankParam): HitsDto {
+        HydraAuth.require()
+        hitsDto(store.rerank(param.collection, param.ids, param.colbert))
+    }
+
     @JsonRpcMeta['训练/重建 IVF', '60s']
     public func buildIndex(param: BuildIndexParam): Int64 {
         HydraAuth.require()
         store.buildIndex(param.collection, clusters: param.clusters)
+    }
+
+    @JsonRpcMeta['当前簇数', '1s']
+    public func indexClusters(param: CollectionParam): Int64 {
+        HydraAuth.require()
+        store.indexClusters(param.collection)
+    }
+
+    @JsonRpcMeta['集合导出（同进程内）', '60s']
+    public func export(param: ExportParam): Int64 {
+        HydraAuth.require()
+        if(param.targetCollection.isEmpty()){
+            throw JsonRpcException(BAD_PARAMS, 'targetCollection is required')
+        }
+        store.exportTo(param.collection, store, param.targetCollection)
     }
 
     @JsonRpcMeta['重建/清理半成品', '60s']
@@ -219,6 +240,14 @@ public class HydraRpc {
                 values
             case None => throw JsonRpcException(BAD_PARAMS, 'denseB64 is not valid base64')
         }
+    }
+
+    private static func hitsDto(hits: ArrayList<VectorHit>): HitsDto {
+        let dto = HitsDto()
+        for(hit in hits){
+            dto.hits.add(HitDto(hit.id, hit.payload, hit.score))
+        }
+        dto
     }
 
     private static func hitsJson(hits: ArrayList<VectorHit>): String {

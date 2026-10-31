@@ -112,6 +112,25 @@ public class BuildIndexParam {
 }
 
 @DataAssist[fields props]
+public class RerankParam {
+    public var collection: String = ''
+    public var ids: ArrayList<String> = ArrayList<String>()
+    public var colbert: Array<Array<Float64>> = Array<Array<Float64>>()
+
+    public init() {
+    }
+}
+
+@DataAssist[fields props]
+public class ExportParam {
+    public var collection: String = ''
+    public var targetCollection: String = ''
+
+    public init() {
+    }
+}
+
+@DataAssist[fields props]
 public class TtlParam {
     public var collection: String = ''
     public var seconds: Int64 = 0
