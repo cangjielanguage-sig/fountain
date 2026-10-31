@@ -22,6 +22,7 @@ import fountain::f_config.*
 
 public struct LLMConfig {
     private init(){}
+    public static const LLM_MEMORY_USER_ID = 'llm_memoryUserId'
     public static const LLM = 'llm'
     public static const AUTO = LLM + '_auto'
     public static const FILE_SANDBOX_PATH = LLM + '_fileSandboxPath'
@@ -72,6 +73,11 @@ public struct LLMConfig {
 
     public static func getPrunerLlmName(): String {
         Config.getString(LLM_PRUNER_LLM_NAME) ?? 'chat-pro'
+    }
+
+    /** 会话摘要写入向量记忆时归属的用户（默认 0：系统级） */
+    public static func getMemoryUserId(): Int64 {
+        Int64.tryParse(Config.getString(LLM_MEMORY_USER_ID) ?? '0') ?? 0
     }
 
     public static func getSummarisingLlmName(): String {

@@ -34,9 +34,9 @@
 
 ## 5. 业务层切换
 
-- [ ] 5.1 `Memory` / `FaithfulMemory` 走 `Stores.content().memory`，公开签名不变
-- [ ] 5.2 回归用例：摘要与写入路径行为一致（对比切换前后）
-- [ ] 5.3 `LLMConfs.holder()` 走 `Stores.meta().confs`，保留 `setHolder`
+- [x] 5.1 `Memory` / `FaithfulMemory` 走 `Stores.content().memory`，公开签名不变
+- [x] 5.2 回归用例：摘要与写入路径行为一致（对比切换前后）
+- [x] 5.3 `LLMConfs.holder()` 走 `Stores.meta().confs`，保留 `setHolder`
 - [ ] 5.4 全量回归（目标：现有 231 条 + 新增用例全绿）
 
 ## 6. 文档与归档

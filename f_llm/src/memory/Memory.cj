@@ -78,6 +78,8 @@ ${content}
             }
             let jsonobj = JsonValue.fromStr(jsonstr).asObject()
             extractor.extract(jsonobj, finder.overwrite)
+            // 5.1：摘要同时落一条向量记忆，供检索召回
+            remember(session, jsonstr)
         }
         true
     }
@@ -108,6 +110,21 @@ ${content}
 '''
         }
     }
+    /**
+     * 5.1：把会话摘要写成一条向量记忆（kind=session）。
+     *
+     * 流水仍在 `FaithfulMemory`（它适合按时间回放）；这里只把「提炼后的摘要」
+     * 交给 `Stores.content().memory`，让检索侧能召回。
+     */
+    public static func remember(session: String, summary: String): Unit {
+        try{
+            Stores.content().memory.add(MemoryWrite(LLMConfig.getMemoryUserId(), 'global',
+                                                    session, summary, 'session'))
+        }catch(_: Exception){
+            // 摘要写入失败不影响会话主流程（下次摘要还有机会）
+        }
+    }
+
     protected static func add(session: String, role: Role, content: String): Unit {
         faithful.add(session, role, content)
     }

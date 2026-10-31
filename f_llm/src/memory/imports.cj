@@ -31,3 +31,4 @@ internal import fountain::f_llm.config.LLMConfig
 internal import fountain::f_llm.constant.*
 internal import fountain::f_llm.finder.*
 internal import fountain::f_llm.llm.*
+internal import fountain::f_llm.store.*
