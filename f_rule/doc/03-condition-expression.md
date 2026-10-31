@@ -246,27 +246,37 @@ compiler.registerType<DynamicFact>()
 - 1e 的 `code=99` 只在 aarch64 后端观测到；1a/1f/2b/2c/3a/3b 都是**前端**类型检查错误，
   与后端无关。动态事实走解释器的决定不依赖 1e，故即便该后端缺陷被修复也不改变默认策略。
 
-### 6.5 一元 `!` 的前端优先级缺陷与降级
+### 6.5 一元 `!` 的 AArch64 编码缺陷（已修复）
 
-**现象**：`f_jit` 把一元 `!` 绑得比比较运算更紧。
+**现象**：`f_jit` 的 JIT 路径把 `!(n < 50)` 在 `n = 49` 上算成 `true`，内置解释器算成 `false`（正确）。
 
 ```cangjie
 let f = c.compile("{ n: Int64 => !(n < 50) }")
-f.call<Bool>([Int64(49)])     // JIT: true（错误）
-                              // 期望: false
+f.call<Bool>([Int64(49)])     // 修复前 JIT: true（错误）；修复后: false
 ```
 
-实测 `49 → true`、`100 → true`、`500 → true`，等价于 `(~n) < 50`。内置解释器对同一源码返回
-`false`，与语义一致。
+**根因**（不是优先级，而是机器码编码错误）：`A64Lower` 的 `NOT_B`（`0x5E`）用裸字面量
+`0xD2400009`，位域解码后 `Rn = 00000`，实际是 `EOR X9, X0, #1`，而注释写的是 `EOR X9, X9, #1`
+（正确值 `0xD2400129`）。序言 `movReg(19, 0)` 之后 `x0` 仍是 ctx 指针且函数体不写它，于是
+`X9 = ctx | 1` 恒非零；`CallMarshal` 按 `cell != 0` 解包 Bool，任何 `!expr` 都恒为 `true`
+（含 `!flag`、`!!x`、`s !~ "pat"`）。
 
-**处理**：`JitExpression` 在编译前扫描源码，命中一元 `!`（排除 `!=`）时整体改走内置解释器并记
-`WARN`；`JitPreferred` 下不抛错。标记与复现条件写在 `src/condition/JitExpression.cj` 的
-`hasUnaryNot` 注释里（`WORKAROUND(f_jit-unary-not-precedence-20261031)`）。
+**修复**（`fix-jit-unary-not`，已合入 `sts/1.3.x`）：
 
-**代价与退出条件**：
+| 改动 | 内容 |
+|---|---|
+| `A64Emitter.eorImm1(rd, rn)` | `0xD2400000 \| rn << 5 \| rd`，`eorImm1(9,9)` = `0xD2400129` |
+| `A64Lower` 0x5E | 改调 `eorImm1(9, 9)`，删除裸字面量 |
+| `Lowerer.lowerUnary` 的 `Bang` | 按操作数类型分派：`Bool → NOT_B`、`Int64 → BNOT_I`、其余 `TYPE_MISMATCH` |
 
-- 代价：含 `!` 的条件失去 JIT 性能；扫描按字符进行，字符串字面量里的 `!` 会保守触发降级（只影响性能）。
-- 退出条件：`f_jit` 修复该优先级后，删除 `hasUnaryNot` 与两处调用点，并重跑 I-03 差分用例。
+**f_rule 侧的变化**：原先「含一元 `!` 一律降级内置解释器」的绕过（`hasUnaryNot`）已删除。
+含 `!` 的条件重新走 JIT；用 `JitExpression.usesJit` 可观测实际路径。
+
+**回归判据**：
+
+- `InterpreterVsJit_test` 的 `!(o.amount < 50)` 在 `JitPreferred` 与 `Interpreted` 下逐条一致；
+- `JitExpressionMode_test` 断言含 `!` 的条件 `usesJit == true`，且 `n = 49` 求值为 `false`；
+- 动态事实仍强制走解释器，与本次修复无关。
 
 ## 7. 内置解释器（降级路径）
 

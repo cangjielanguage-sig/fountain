@@ -83,11 +83,6 @@ public class JitExpression {
         }
         let parameters = parseLambdaParameters(trimmed)
         let body = lambdaBody(trimmed)
-        if (hasUnaryNot(body)) {
-            warnInterpreter(trimmed, "含一元 ! 的脚本条件")
-            let program = InterpreterProgram.compile(body)
-            return JitExpression(trimmed, parameters, None, Some(program))
-        }
         let compiled = compileLambda(trimmed, compiler)
         JitExpression(trimmed, parameters, Some(compiled), None)
     }
@@ -107,13 +102,8 @@ public class JitExpression {
                 dynamic = true
             }
         }
-        if (dynamic || hasUnaryNot(source)) {
-            let reason = if (dynamic) {
-                "动态事实绑定"
-            } else {
-                "含一元 ! 的脚本条件"
-            }
-            warnInterpreter(source, reason)
+        if (dynamic) {
+            warnInterpreter(source, "动态事实绑定")
             let program = InterpreterProgram.compile(source)
             return JitExpression(source, names.toArray(), None, Some(program))
         }
@@ -141,6 +131,18 @@ public class JitExpression {
     public prop source: String {
         get() {
             source_
+        }
+    }
+
+    /**
+     * 是否走 f_jit 编译路径。
+     *
+     * `false` 表示该条件由内置解释器求值（动态事实、强制 `Interpreted`，或在
+     * f_jit 缺陷修复前被降级的一元 `!`）。用于排查性能与验证降级是否按预期发生。
+     */
+    public prop usesJit: Bool {
+        get() {
+            compiled_.isSome()
         }
     }
 
@@ -269,34 +271,6 @@ public class JitExpression {
         } catch (_: Exception) {
             false
         }
-    }
-
-    /**
-     * f_jit 的前端把 `!` 绑定得比比较运算更紧，`!(o.amount < 50)` 会被当成
-     * `(~o.amount) < 50`（实测 49 返回 true）。在 f_jit 修复前，含一元 `!` 的条件
-     * 一律走内置解释器，保证 JIT 与解释器语义一致。
-     *
-     * WORKAROUND(f_jit-unary-not-precedence-20261031)
-     * 复现：`{ n: Int64 => !(n < 50) }`，n=49 时 JIT 返回 true、解释器返回 false。
-     * 修复 f_jit 后删除本方法与两处调用点（`of` / `ofExpression`），并跑 I-03 差分。
-     *
-     * 注意：本方法按字符扫描，会跳过 `!=`，但不解析字符串字面量；含 `!` 的字符串
-     * （如 `s == "a!b"`）会被保守判定为一元非，只影响性能、不影响语义。
-     */
-    private static func hasUnaryNot(source: String): Bool {
-        var i: Int64 = 0
-        let size = Int64(source.size)
-        while (i < size) {
-            if (source[i] == 33) {        // '!'
-                if (i + 1 < size && source[i + 1] == 61) {   // '!='
-                    i += 2
-                    continue
-                }
-                return true
-            }
-            i += 1
-        }
-        false
     }
 
     /** 取 `=>` 之后的 lambda 体并去掉尾部 `}`。 */
