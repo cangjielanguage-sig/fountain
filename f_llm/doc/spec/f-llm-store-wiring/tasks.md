@@ -13,7 +13,7 @@
 
 ## 2. 生产 Embedder
 
-- [ ] 2.1 写 BGE-M3 客户端用例（批量、超时、非 200、维度不符）
+- [x] 2.1 写 BGE-M3 客户端用例（批量、超时、非 200、维度不符）
 - [ ] 2.2 实现 `HttpEmbedder`（`/v1/embeddings`，dense/sparse/colbert 三路）
 - [ ] 2.3 失败重试与降级：向量化失败拒绝写入，检索标记 `degraded`
 
