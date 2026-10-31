@@ -18,10 +18,11 @@ package fountain::f_rule.rete
 import fountain::f_rule.agenda.ActivationSink
 import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
-import fountain::f_rule.condition.JoinConstraint
+import fountain::f_rule.condition.{JitExpression, JoinConstraint}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{Fact, FactSpaceRegistry}
 import fountain::f_rule.rule.Rule
+import fountain::f_rule.runtime.RuleRuntime
 
 /**
  * 单个 `FactSpace` 分片的 Rete 网络结构（`doc/04-rete-network.md` §2、§9）。
@@ -165,9 +166,16 @@ public class ReteNetwork {
         created
     }
 
-    /** 每个规则一个终端，不参与共享。 */
+    /** 每个规则一个终端，不参与共享。脚本在构建期编译，失败即抛 SCRIPT_COMPILE。 */
     func newTerminal(rule: Rule): TerminalNode {
-        let created = TerminalNode(nextNodeId(), rule)
+        let scripts = ArrayList<JitExpression>()
+        if (rule.scripts.size > 0) {
+            let compiler = RuleRuntime.compiler()
+            for (source in rule.scripts) {
+                scripts.add(JitExpression.of(source, compiler))
+            }
+        }
+        let created = TerminalNode(nextNodeId(), rule, scripts: scripts.toArray())
         terminals_.add(created)
         created
     }

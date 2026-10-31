@@ -40,7 +40,8 @@
 f_rule/src/
 ├── rule.cj                       # 包根，public import 重导出
 ├── RuleInitializer.cj            # f_app Initializer（注册决策表加载器）
-├── RuleRuntime.cj                # 共享 Compiler 与全局配置
+├── runtime/
+│   └── RuleRuntime.cj            # 共享 Compiler 与全局配置（最底层，无业务依赖）
 ├── exception/
 │   └── RuleException.cj
 ├── fact/

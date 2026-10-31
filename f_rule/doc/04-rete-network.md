@@ -179,12 +179,19 @@ public class BetaMemory <: ReteNode {
 public class TerminalNode <: ReteNode & TokenSink {
     public prop id: Int64
     public prop ruleId: String
+    /** 规则声明的脚本条件，构建期编译；空数组表示只靠模式约束。 */
+    public init(id: Int64, rule: Rule, scripts!: Array<JitExpression>)
     public func activate(bindings: Bindings): Activation
     public func deactivate(bindings: Bindings): Unit
+    /** 先求值脚本，全部为 true 才产出激活。 */
     public func leftActivate(token: Token): Unit
     public func leftRetract(token: Token): Unit
 }
 ```
+
+**脚本求值在终端而不是 alpha 节点**：脚本可以引用多个绑定（`{ o: Order, u: User => o.level > u.minLevel }`），只有到终端时全部绑定才齐备。编译放在网络构建期（`ReteNetwork.newTerminal`），失败即抛 `SCRIPT_COMPILE`，运行时只求值不编译。
+
+忽略脚本会让规则退化为「模式匹配即触发」——这是 M2 的真实缺陷，由 `ScriptCondition_test` 的三个用例锁定（假→无激活、真→有激活、未声明绑定→构建期拒绝）。
 
 ## 4. 共享键
 

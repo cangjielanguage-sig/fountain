@@ -25,6 +25,7 @@ package fountain::f_rule
 
 public import fountain::f_rule.rule.RuleSetBuilder
 public import fountain::f_rule.rule.{DefaultConflictResolver, Rule, RuleSet}
+public import fountain::f_rule.runtime.RuleRuntime
 public import fountain::f_rule.agenda.{Agenda, Bindings, FireMode, Activation}
 public import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle, FactSchema, FactSpace, TypedFact}
 public import fountain::f_rule.condition.{Operator, Pattern}

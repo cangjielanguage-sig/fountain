@@ -16,9 +16,10 @@ limitations under the License.
 package fountain::f_rule.rule
 
 import std.collection.{HashMap, HashSet}
-import fountain::f_rule.condition.{Operator, Pattern}
+import fountain::f_rule.condition.{JitExpression, Operator, Pattern}
 import fountain::f_rule.exception.*
 import fountain::f_rule.fact.{FactSpace, FieldType}
+import fountain::f_rule.runtime.RuleRuntime
 
 /**
  * 构建期校验器（`doc/02-fact-model.md` §8）。
@@ -86,6 +87,13 @@ public class Validator {
                             "规则 ${rule.id} 的 join 引用了不存在的绑定"
                         )
                 }
+            }
+            // 脚本条件在构建期编译并校验形参：编译失败抛 SCRIPT_COMPILE，
+            // 形参不在模式绑定中抛 SCRIPT_BINDING_MISSING。运行时不再兜底。
+            let compiler = RuleRuntime.compiler()
+            for (source in rule.scripts) {
+                let expression = JitExpression.of(source, compiler)
+                expression.requireBindings(byBinding.keys().toArray())
             }
         }
     }

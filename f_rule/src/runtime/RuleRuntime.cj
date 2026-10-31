@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_rule
+package fountain::f_rule.runtime
 
 import std.sync.Mutex
 import fountain::f_jit.Compiler
@@ -70,15 +70,24 @@ public class RuleRuntime {
         }
     }
 
-    /** 测试观测用：惰性路径实际发出 WARN 的次数（默认 `internal` 可见性，不对外）。 */
-    static func lazyWarningCount(): Int64 {
+    /**
+     * 测试观测用：惰性路径实际发出 WARN 的次数。
+     *
+     * 公开是为了让跨包用例（`RuleInitializer_test`）可断言；不属于稳定 API，
+     * 生产代码不应调用。
+     */
+    public static func lazyWarningCount(): Int64 {
         synchronized(mtx) {
             lazyWarnings
         }
     }
 
-    /** 测试用：回到"未初始化"状态，保证用例之间互不影响。 */
-    static func resetForTest(): Unit {
+    /**
+     * 测试用：回到"未初始化"状态，保证用例之间互不影响。
+     *
+     * 公开是为了让跨包用例可重置共享编译器；不属于稳定 API。
+     */
+    public static func resetForTest(): Unit {
         synchronized(mtx) {
             shared = None
             lazyWarned = false

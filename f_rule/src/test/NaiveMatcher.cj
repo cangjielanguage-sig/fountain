@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.test
 
 import std.collection.{ArrayList, HashMap}
-import fountain::f_rule.RuleRuntime
+import fountain::f_rule.runtime.RuleRuntime
 import fountain::f_rule.condition.{JitExpression, JoinConstraint, Pattern}
 import fountain::f_rule.agenda.Bindings
 import fountain::f_rule.fact.{Fact, IdentifiedFact}

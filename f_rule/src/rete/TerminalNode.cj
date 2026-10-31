@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_rule.rete
 
 import fountain::f_rule.agenda.{Activation, Bindings}
+import fountain::f_rule.condition.JitExpression
 import fountain::f_rule.rule.Rule
 
 /**
@@ -28,10 +29,13 @@ import fountain::f_rule.rule.Rule
 public class TerminalNode <: ReteNode & TokenSink {
     private let id_: Int64
     public let rule: Rule
+    /** 规则声明的脚本条件；空数组表示只靠模式约束。 */
+    private let scripts_: Array<JitExpression>
 
-    public init(id: Int64, rule: Rule) {
+    public init(id: Int64, rule: Rule, scripts!: Array<JitExpression> = Array<JitExpression>()) {
         this.id_ = id
         this.rule = rule
+        this.scripts_ = scripts
     }
 
     public prop id: Int64 {
@@ -59,11 +63,38 @@ public class TerminalNode <: ReteNode & TokenSink {
     }
 
     public func leftActivate(session: ReteSession, token: Token): Unit {
-        session.sink.add(activate(token.bindings()))
+        let bindings = token.bindings()
+        if (!evaluate(bindings)) {
+            return
+        }
+        session.sink.add(activate(bindings))
     }
 
     public func leftRetract(session: ReteSession, token: Token): Unit {
-        session.sink.remove(activate(token.bindings()))
+        let bindings = token.bindings()
+        if (!evaluate(bindings)) {
+            return
+        }
+        session.sink.remove(activate(bindings))
+    }
+
+    /**
+     * 求值规则脚本。全部为 true 才产生激活。
+     *
+     * 脚本是模式之外的附加判定，忽略它会让规则退化成「模式匹配即触发」。
+     * 编译在 `ReteNetwork.newTerminal` 构建期完成，此处只做求值。
+     */
+    private func evaluate(bindings: Bindings): Bool {
+        if (scripts_.size == 0) {
+            return true
+        }
+        let facts = bindings.toFactMap()
+        for (script in scripts_) {
+            if (!script.eval(facts)) {
+                return false
+            }
+        }
+        true
     }
 
     /** 构造激活；供测试与议程直接调用。 */

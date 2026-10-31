@@ -17,6 +17,7 @@ package fountain::f_rule
 
 import fountain::f_app.Initializer
 import fountain::f_app.InitializerCollection
+import fountain::f_rule.runtime.RuleRuntime
 
 /**
  * `f_rule` 的 `f_app` 初始化项（与 `f_health` / `f_egraph` 同型）。
