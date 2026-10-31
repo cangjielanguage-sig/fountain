@@ -1,9 +1,12 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.11** ｜ 2026-10-31 ｜ 状态：M1 + 图片写入已实施
+> 版本 **v0.12** ｜ 2026-10-31 ｜ 状态：M1 + M2 已实施
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.12 变更**
+> - 第 15 章：M2-a 样式、M2-b/c 公式引擎（143 函数）、M2-d 时长与富文本的实施记录与差异
 >
 > **v0.11 变更**
 > - 新增 14.5：`Worksheet.addImage` 最小图片写入（png/jpeg、两单元格锚定）；读侧不导入
@@ -2958,3 +2961,37 @@ M1 把图片列为"不做"；实际使用中需要把 logo/截图锚定进表，
 | 流式写 | `ExcelWriter` 不支持图片（无模型），只支持 `ExcelDocument.write` |
 
 验证：结构用例 4 条 + openpyxl 3.1.5 回读（`len(ws._images) == 1`，anchor 与 `from`/`to` 一致）。
+
+---
+
+## 15. M2 实施记录（v0.12）
+
+### 15.1 已落地
+
+| 子项 | 内容 | 用例 |
+|---|---|---|
+| M2-a 样式 | `CellStyle` / `Font` / `Fill` / `Border` / `BorderSide` / `Alignment` / `Protection` / `Color` / `Gradient`；`StylesLite` → 全量 `styles.xml` 读写；`StylePool` 深比较去重与自定义 `numFmt`（164 起） | 6 |
+| M2-b 公式核心 | 词法 / 递归下降语法（Excel 优先级）/ `CalcValue` / 62 函数 / `Evaluator` / `DependencyGraph` / `CalcEngine`；共享公式平移、数组公式口径 | 20 |
+| M2-c 扩展 | 再 81 个函数（总计 **143**）；易失函数共享单次求值上下文；未知函数 `#NAME?` + `CalcIssue` | 8 |
+| M2-d 时长/富文本 | `CellValue.TimeSpan`（`[h]` 类格式，100h 可往返）；`RichText` / `TextRun` / `RunFont` 读取 `<r><rPr>` | 6 |
+
+全量 `cjpm test`：**137 通过 / 0 失败**。
+
+### 15.2 与设计的差异
+
+| # | 项 | 处理 |
+|---|---|---|
+| 1 | `CalcValue` 的数组分支 | 命名 `ArrayValue`，避免与内置 `Array` 冲突 |
+| 2 | `CalcError` | 增加 `Circular`（`#CIRC!`）与 `Spill`（`#SPILL!`，M3 用） |
+| 3 | `CellValue` | 新增 `TimeSpan(Duration)`；`Duration` 来自 `std.core`，不在 `std.time` |
+| 4 | 函数实现 | 注册表统一 `(Evaluator, Array<Expr>)`，`IF`/`IFERROR` 惰性求值；其余函数按需自行求值 |
+| 5 | `OFFSET` / `INDIRECT` | 作为动态依赖实现（不进静态依赖图），与设计 7.5.3 的口径一致 |
+| 6 | 富文本写侧 | 仍平坦化为文本，`setRichText` 只影响内存模型；M3 再补写出 |
+| 7 | 易失函数 | 一次 `evaluate` / `recalculate` 共用一个 `Evaluator`，`NOW`/`TODAY`/`RAND` 序列一致 |
+| 8 | 数组公式 | 只保留原文 + 缓存值并告警（`ArrayFormulaUnsupported`），求值只看左上角 |
+
+### 15.3 已知缺口（M3 起）
+
+- `theme1.xml` 主题色板未完整解析，`Color.Theme` 按原值保留。
+- 函数 143 个，离 350+ 还有距离；数据库/工程类未实现。
+- 富文本写出、动态数组 `#SPILL!`、sharedStrings 磁盘索引、`eager=false` 未做。

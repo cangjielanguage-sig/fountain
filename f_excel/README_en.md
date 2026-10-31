@@ -12,14 +12,17 @@ Excel (xlsx / OOXML) reader and writer: **streaming parse, streaming generate**,
 | Capability | Description |
 |---|---|
 | Whole-document read | `ExcelDocument(input)` / `ExcelDocument(path)`: sheet list, seven value kinds, sharedStrings, merged ranges, date detection |
-| Whole-document write | `ExcelDocument.write(output)` / `write(path)`: minimal viable package (`inlineStr`), multiple sheets, merges, dates bound to styles |
+| Whole-document write | `ExcelDocument.write(output)` / `write(path)`: `inlineStr`, multiple sheets, merges, date/duration styles, images, full styles |
 | **Streaming read** | `ExcelSheetStream.open(path/input)` → `RowReader`: pull rows one by one, **memory independent of row count** |
 | **Streaming write** | `ExcelWriter`: row iterator → `f_xml.XmlWriter` incremental events → `f_zip.openEntry` push-mode compression |
 | Value kinds | `Empty` / `Number` / `Text` / `Boolean` / `Error` / `Date` / `Formula` (source + cached only, never evaluated) |
 | Dates | Built-in 14–22 / 45–47 plus custom-format heuristics; 1900 / 1904 bases; serial 60 kept as a number with a warning |
 | Images (write) | `Worksheet.addImage(path/bytes, from, to)`: png / jpeg anchored to a cell range; the read side does not import images yet |
+| Styles | Full read/write of `CellStyle` / `Font` / `Fill` / `Border` / `Alignment` / `Protection` / `Color`; `styles.xml` numFmts/fonts/fills/borders/cellXfs/cellStyles; value-deduplicated style pool |
+| Formulas | Parse + evaluate + dependency graph: `CalcEngine.evaluate` / `recalculate`; 143 functions; shared-formula shifting; `#CIRC!` on cycles |
+| Duration / rich text | `[h]:mm:ss` reads as `CellValue.TimeSpan`; `Worksheet.richText` exposes sharedStrings run fonts |
 
-Full `cjpm test`: **90 passed / 0 failed**.
+Full `cjpm test`: **137 passed / 0 failed**.
 
 ## Usage
 
@@ -44,6 +47,26 @@ sheet.setCell("A1", CellValue.Text("name"))
 sheet.setCell("B1", CellValue.Number(0.1))
 sheet.merge("A1:B1")
 doc.write(Path("/data/out.xlsx"))
+```
+
+### Formula evaluation
+
+```cangjie
+let engine = CalcEngine(doc)
+let value = engine.evaluate("Sheet1", "B2")     // single cell, recursive dependencies
+engine.recalculate(writeBack: true)              // recalculate all and write back caches
+```
+
+### Styles
+
+```cangjie
+sheet.setCell("A1", CellValue.Number(1234.5))
+sheet.setStyle(1, 1, CellStyle(
+    numberFormat: NumberFormat.Builtin(4),
+    font: Font(bold: true, color: Color.Rgb("FFFF0000")),
+    fill: Fill.solid(Color.Rgb("FFFFFF00")),
+    alignment: Alignment(horizontal: Horizontal.Center, wrapText: true)
+))
 ```
 
 ### Insert an image
@@ -104,6 +127,6 @@ out.close()
 
 ## Tests and fixtures
 
-- `cjpm test` green (90 cases).
+- `cjpm test` green (137 cases).
 - Fixtures build minimal xlsx packages in memory with `f_zip.ZipWriter` (`fixtures.cj`); no external sample files.
 - "Real Excel opens it without repair" is a manual acceptance item, recorded in `doc/spec/implement-f-excel-m1/verification.md`.

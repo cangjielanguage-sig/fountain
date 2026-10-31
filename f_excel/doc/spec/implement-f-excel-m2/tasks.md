@@ -46,5 +46,5 @@
 ## 5. 收尾
 
 - [x] 5.1 `cjpm test` 全绿，记录用例数（当前 137）
-- [ ] 5.2 README 中英、设计文档、verification.md
-- [ ] 5.3 `openspec validate` + verify（CRITICAL 清零）
+- [x] 5.2 README 中英、设计文档、verification.md
+- [x] 5.3 `openspec validate` + verify（CRITICAL 清零）
