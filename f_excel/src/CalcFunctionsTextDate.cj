@@ -21,7 +21,7 @@ import fountain::f_base.StringGenerator
 
 // ---------------------------------------------------------------- 文本
 
-private func runesOf(text: String): ArrayList<Rune> {
+internal func runesOf(text: String): ArrayList<Rune> {
     let list = ArrayList<Rune>()
     for (r in text.runes()) {
         list.add(r)
@@ -29,7 +29,7 @@ private func runesOf(text: String): ArrayList<Rune> {
     list
 }
 
-private func runesJoin(list: ArrayList<Rune>, start: Int64, end: Int64): String {
+internal func runesJoin(list: ArrayList<Rune>, start: Int64, end: Int64): String {
     let out = StringGenerator()
     var i = start
     let stop = if (end > list.size) { list.size } else { end }

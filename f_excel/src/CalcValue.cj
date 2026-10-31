@@ -232,6 +232,7 @@ internal func cellValueToCalc(value: CellValue, date1904: Bool): CalcValue {
             case None => CalcValue.Error(CalcError.Value)
         }
         case Date(v) => CalcValue.Number(serialFromDateTime(v, date1904))
+        case TimeSpan(v) => CalcValue.Number(Float64(v.toSeconds()) / 86400.0)
         case Formula(_, cached) => match (cached) {
             case Some(v) => cellValueToCalc(v, date1904)
             case None => CalcValue.Empty

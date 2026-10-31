@@ -107,9 +107,113 @@ internal func lookupFunction(rawName: String): ?FnEntry {
         case "ISTEXT" => Some(FnEntry(name, 1, 1, { ev, args => fnIsType(ev, args, "text") }))
         case "ISLOGICAL" => Some(FnEntry(name, 1, 1, { ev, args => fnIsType(ev, args, "logical") }))
         case "ISNA" => Some(FnEntry(name, 1, 1, { ev, args => fnIsType(ev, args, "na") }))
+        // 统计扩展
+        case "STDEV.P" => Some(FnEntry(name, 1, -1, { ev, args => fnStdev(ev, args, false) }))
+        case "STDEV.S" => Some(FnEntry(name, 1, -1, { ev, args => fnStdev(ev, args, true) }))
+        case "VAR.P" => Some(FnEntry(name, 1, -1, { ev, args => fnVariance(ev, args, false) }))
+        case "VAR.S" => Some(FnEntry(name, 1, -1, { ev, args => fnVariance(ev, args, true) }))
+        case "LARGE" => Some(FnEntry(name, 2, 2, { ev, args => fnLargeSmall(ev, args, true) }))
+        case "SMALL" => Some(FnEntry(name, 2, 2, { ev, args => fnLargeSmall(ev, args, false) }))
+        case "RANK" => Some(FnEntry(name, 2, 3, { ev, args => fnRank(ev, args) }))
+        case "PERCENTILE" => Some(FnEntry(name, 2, 2, { ev, args => fnPercentile(ev, args) }))
+        case "QUARTILE" => Some(FnEntry(name, 2, 2, { ev, args => fnQuartile(ev, args) }))
+        case "MODE" => Some(FnEntry(name, 1, -1, { ev, args => fnMode(ev, args) }))
+        case "CORREL" => Some(FnEntry(name, 2, 2, { ev, args => fnCorrel(ev, args) }))
+        case "SLOPE" => Some(FnEntry(name, 2, 2, { ev, args => fnSlopeIntercept(ev, args, true) }))
+        case "INTERCEPT" => Some(FnEntry(name, 2, 2, { ev, args => fnSlopeIntercept(ev, args, false) }))
+        case "FORECAST" => Some(FnEntry(name, 3, 3, { ev, args => fnForecast(ev, args) }))
+        // 查找扩展
+        case "HLOOKUP" => Some(FnEntry(name, 3, 4, { ev, args => fnHLookup(ev, args) }))
+        case "LOOKUP" => Some(FnEntry(name, 2, 3, { ev, args => fnLookup(ev, args) }))
+        case "XLOOKUP" => Some(FnEntry(name, 3, 6, { ev, args => fnXLookup(ev, args) }))
+        case "CHOOSE" => Some(FnEntry(name, 2, -1, { ev, args => fnChoose(ev, args) }))
+        case "OFFSET" => Some(FnEntry(name, 3, 5, { ev, args => fnOffset(ev, args) }))
+        case "INDIRECT" => Some(FnEntry(name, 1, 2, { ev, args => fnIndirect(ev, args) }))
+        case "ROW" => Some(FnEntry(name, 0, 1, { ev, args => fnRowColumn(ev, args, true) }))
+        case "COLUMN" => Some(FnEntry(name, 0, 1, { ev, args => fnRowColumn(ev, args, false) }))
+        case "ROWS" => Some(FnEntry(name, 1, 1, { ev, args => fnRowsColumns(ev, args, true) }))
+        case "COLUMNS" => Some(FnEntry(name, 1, 1, { ev, args => fnRowsColumns(ev, args, false) }))
+        case "TRANSPOSE" => Some(FnEntry(name, 1, 1, { ev, args => fnTranspose(ev, args) }))
+        // 文本扩展
+        case "SUBSTITUTE" => Some(FnEntry(name, 3, 4, { ev, args => fnSubstitute(ev, args) }))
+        case "REPLACE" => Some(FnEntry(name, 4, 4, { ev, args => fnReplace(ev, args) }))
+        case "FIND" => Some(FnEntry(name, 2, 3, { ev, args => fnFindSearch(ev, args, true) }))
+        case "SEARCH" => Some(FnEntry(name, 2, 3, { ev, args => fnFindSearch(ev, args, false) }))
+        case "REPT" => Some(FnEntry(name, 2, 2, { ev, args => fnRept(ev, args) }))
+        case "TEXTJOIN" => Some(FnEntry(name, 3, -1, { ev, args => fnTextJoin(ev, args) }))
+        case "EXACT" => Some(FnEntry(name, 2, 2, { ev, args => fnExact(ev, args) }))
+        case "PROPER" => Some(FnEntry(name, 1, 1, { ev, args => fnProper(ev, args) }))
+        case "CLEAN" => Some(FnEntry(name, 1, 1, { ev, args => fnClean(ev, args) }))
+        case "CHAR" => Some(FnEntry(name, 1, 1, { ev, args => fnCharCode(ev, args, true) }))
+        case "CODE" => Some(FnEntry(name, 1, 1, { ev, args => fnCharCode(ev, args, false) }))
+        case "UNICHAR" => Some(FnEntry(name, 1, 1, { ev, args => fnCharCode(ev, args, true) }))
+        case "UNICODE" => Some(FnEntry(name, 1, 1, { ev, args => fnCharCode(ev, args, false) }))
+        case "T" => Some(FnEntry(name, 1, 1, { ev, args => fnT(ev, args) }))
+        // 数学扩展
+        case "SUMPRODUCT" => Some(FnEntry(name, 1, -1, { ev, args => fnSumProduct(ev, args) }))
+        case "CEILING" => Some(FnEntry(name, 1, 2, { ev, args => fnCeilingFloor(ev, args, true) }))
+        case "FLOOR" => Some(FnEntry(name, 1, 2, { ev, args => fnCeilingFloor(ev, args, false) }))
+        case "MROUND" => Some(FnEntry(name, 2, 2, { ev, args => fnMround(ev, args) }))
+        case "RAND" => Some(FnEntry(name, 0, 0, { ev, args => fnRand(ev, args) }))
+        case "RANDBETWEEN" => Some(FnEntry(name, 2, 2, { ev, args => fnRandBetween(ev, args) }))
+        case "LOG" => Some(FnEntry(name, 1, 2, { ev, args => fnLogBase(ev, args, -1.0) }))
+        case "LOG10" => Some(FnEntry(name, 1, 1, { ev, args => fnLogBase(ev, args, 10.0) }))
+        case "LN" => Some(FnEntry(name, 1, 1, { ev, args => fnLogBase(ev, args, 2.718281828459045) }))
+        case "EXP" => Some(FnEntry(name, 1, 1, { ev, args => fnExp(ev, args) }))
+        case "PI" => Some(FnEntry(name, 0, 0, { ev, args => fnPi(ev, args) }))
+        case "SIN" => Some(FnEntry(name, 1, 1, { ev, args => fnTrig(ev, args, "sin") }))
+        case "COS" => Some(FnEntry(name, 1, 1, { ev, args => fnTrig(ev, args, "cos") }))
+        case "TAN" => Some(FnEntry(name, 1, 1, { ev, args => fnTrig(ev, args, "tan") }))
+        case "DEGREES" => Some(FnEntry(name, 1, 1, { ev, args => fnTrig(ev, args, "degrees") }))
+        case "RADIANS" => Some(FnEntry(name, 1, 1, { ev, args => fnTrig(ev, args, "radians") }))
+        case "GCD" => Some(FnEntry(name, 1, -1, { ev, args => fnGcdLcm(ev, args, true) }))
+        case "LCM" => Some(FnEntry(name, 1, -1, { ev, args => fnGcdLcm(ev, args, false) }))
+        case "FACT" => Some(FnEntry(name, 1, 1, { ev, args => fnFact(ev, args) }))
+        // 日期扩展
+        case "DATEVALUE" => Some(FnEntry(name, 1, 1, { ev, args => fnDateValue(ev, args) }))
+        case "TIMEVALUE" => Some(FnEntry(name, 1, 1, { ev, args => fnTimeValue(ev, args) }))
+        case "EDATE" => Some(FnEntry(name, 2, 2, { ev, args => fnEdate(ev, args, false) }))
+        case "EOMONTH" => Some(FnEntry(name, 2, 2, { ev, args => fnEdate(ev, args, true) }))
+        case "WEEKDAY" => Some(FnEntry(name, 1, 2, { ev, args => fnWeekday(ev, args) }))
+        case "WEEKNUM" => Some(FnEntry(name, 1, 2, { ev, args => fnWeeknum(ev, args) }))
+        case "DATEDIF" => Some(FnEntry(name, 3, 3, { ev, args => fnDatedif(ev, args) }))
+        case "DAYS" => Some(FnEntry(name, 2, 2, { ev, args => fnDays(ev, args) }))
+        case "DAYS360" => Some(FnEntry(name, 2, 3, { ev, args => fnDays360(ev, args) }))
+        case "NETWORKDAYS" => Some(FnEntry(name, 2, 3, { ev, args => fnNetworkdays(ev, args) }))
+        case "WORKDAY" => Some(FnEntry(name, 2, 3, { ev, args => fnWorkday(ev, args) }))
+        // 财务
+        case "PMT" => Some(FnEntry(name, 3, 5, { ev, args => fnPmt(ev, args) }))
+        case "FV" => Some(FnEntry(name, 3, 5, { ev, args => fnFv(ev, args) }))
+        case "PV" => Some(FnEntry(name, 3, 5, { ev, args => fnPv(ev, args) }))
+        case "NPER" => Some(FnEntry(name, 3, 5, { ev, args => fnNper(ev, args) }))
+        case "SLN" => Some(FnEntry(name, 3, 3, { ev, args => fnSln(ev, args) }))
+        case "NPV" => Some(FnEntry(name, 2, -1, { ev, args => fnNpv(ev, args) }))
+        case "IPMT" => Some(FnEntry(name, 4, 6, { ev, args => fnIpmt(ev, args) }))
+        case "PPMT" => Some(FnEntry(name, 4, 6, { ev, args => fnPpmt(ev, args) }))
+        // 信息扩展
+        case "ISERR" => Some(FnEntry(name, 1, 1, { ev, args => fnIsErr(ev, args) }))
+        case "NA" => Some(FnEntry(name, 0, 0, { ev, args => fnNa(ev, args) }))
+        case "TYPE" => Some(FnEntry(name, 1, 1, { ev, args => fnType(ev, args) }))
+        case "ERROR.TYPE" => Some(FnEntry(name, 1, 1, { ev, args => fnErrorType(ev, args) }))
         case _ => None<FnEntry>
     }
 }
+
+/** M2-c 新增的函数名（测试与文档用）。 */
+internal let EXTENDED_FUNCTION_NAMES: Array<String> = [
+    "STDEV.P", "STDEV.S", "VAR.P", "VAR.S", "LARGE", "SMALL", "RANK", "PERCENTILE",
+    "QUARTILE", "MODE", "CORREL", "SLOPE", "INTERCEPT", "FORECAST",
+    "HLOOKUP", "LOOKUP", "XLOOKUP", "CHOOSE", "OFFSET", "INDIRECT", "ROW", "COLUMN",
+    "ROWS", "COLUMNS", "TRANSPOSE",
+    "SUBSTITUTE", "REPLACE", "FIND", "SEARCH", "REPT", "TEXTJOIN", "EXACT", "PROPER",
+    "CLEAN", "CHAR", "CODE", "UNICHAR", "UNICODE", "T",
+    "SUMPRODUCT", "CEILING", "FLOOR", "MROUND", "RAND", "RANDBETWEEN", "LOG", "LOG10",
+    "LN", "EXP", "PI", "SIN", "COS", "TAN", "DEGREES", "RADIANS", "GCD", "LCM", "FACT",
+    "DATEVALUE", "TIMEVALUE", "EDATE", "EOMONTH", "WEEKDAY", "WEEKNUM", "DATEDIF", "DAYS",
+    "DAYS360", "NETWORKDAYS", "WORKDAY",
+    "PMT", "FV", "PV", "NPER", "SLN", "NPV", "IPMT", "PPMT",
+    "ISERR", "NA", "TYPE", "ERROR.TYPE"
+]
 
 /** 当前注册的函数个数（测试用）。 */
 internal let CORE_FUNCTION_NAMES: Array<String> = [

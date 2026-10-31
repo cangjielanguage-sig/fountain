@@ -85,6 +85,7 @@ public class CalcEngine {
     private var inProgress = ArrayList<String>()
     private var cycleCells = ArrayList<String>()
     private var issues = ArrayList<String>()
+    private var evaluator: ?Evaluator = None
 
     public init(doc: ExcelDocument) {
         this.doc = doc
@@ -106,6 +107,7 @@ public class CalcEngine {
         this.inProgress = ArrayList<String>()
         this.cycleCells = ArrayList<String>()
         this.issues = ArrayList<String>()
+        this.evaluator = Some(Evaluator(this.resolver))
         this.resolver.currentSheet = sheet
         this.lookup(sheet, cellRef.row, cellRef.col)
     }
@@ -130,6 +132,7 @@ public class CalcEngine {
         this.inProgress = ArrayList<String>()
         this.cycleCells = ArrayList<String>()
         this.issues = ArrayList<String>()
+        this.evaluator = Some(Evaluator(this.resolver))
         var recalculated: Int64 = 0
         var errors: Int64 = 0
         let targets = ArrayList<String>()
@@ -234,7 +237,14 @@ public class CalcEngine {
                     this.inProgress.add(key)
                     let previous = this.resolver.currentSheet
                     this.resolver.currentSheet = name
-                    let value = Evaluator(this.resolver).eval(expr)
+                    let evaluator = match (this.evaluator) {
+                        case Some(v) => v
+                        case None =>
+                            let created = Evaluator(this.resolver)
+                            this.evaluator = Some(created)
+                            created
+                    }
+                    let value = evaluator.eval(expr)
                     this.resolver.currentSheet = previous
                     this.inProgress.remove(at: this.inProgress.size - 1)
                     if (value.isError()) {

@@ -74,7 +74,7 @@ internal func fnUnaryMath(ev: Evaluator, args: Array<Expr>, mode: String): CalcV
 }
 
 /** Excel 的四舍五入：**远离零**，不是银行家舍入。 */
-private func roundHalfAway(value: Float64, digits: Int64): Float64 {
+internal func roundHalfAway(value: Float64, digits: Int64): Float64 {
     var factor = 1.0
     if (digits >= 0) {
         for (_ in 0..digits) {

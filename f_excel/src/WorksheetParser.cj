@@ -18,6 +18,7 @@ package fountain::f_excel
 import std.collection.{ArrayList, HashMap}
 import std.convert.*
 import std.io.ByteBuffer
+import std.math.*
 import std.time.DateTime
 import fountain::f_base.StringGenerator
 import fountain::f_xml.{XmlAttribute, XmlEvent, XmlPullParser}
@@ -56,6 +57,7 @@ internal interface RowSink {
 /** 解析结果（整文档通道用）。 */
 internal class ParsedSheet {
     let rows = ArrayList<RowData>()
+    let richTexts = ArrayList<(Int64, Int64, RichText)>()
     let merges = ArrayList<String>()
     var dimension: ?String = None
     let warnings = ArrayList<ExcelWarning>()
@@ -316,7 +318,18 @@ internal class SheetRowHandler {
         if (!rowActive || skipCell) {
             return
         }
-        cells.add(Cell(col, valueOf(), style: currentStyle))
+        let value = valueOf()
+        cells.add(Cell(col, value, style: currentStyle))
+        if (cellType == Some("s")) {
+            let index = match (parseIntOrNone(valueText.toString())) {
+                case Some(v) => v
+                case None => -1
+            }
+            let runs = sst.runsAt(index)
+            if (runs.size > 0) {
+                parsed.richTexts.add((rowIndex, col, RichText(runs)))
+            }
+        }
     }
 
     private func valueOf(): CellValue {
@@ -443,22 +456,17 @@ internal class SheetRowHandler {
         }
     }
 
-    /** 数字 → 日期识别（默认开；样式缺失时保持数字）。 */
+    /** 数字 → 日期 / 时长识别（默认开；样式缺失时保持数字）。 */
     private func numberValue(value: Float64): CellValue {
         if (!this.options.autoDetectDate || !this.options.loadStyles) {
             return CellValue.Number(value)
         }
+        if (this.styles.isElapsedFormat(this.styleIndex)) {
+            let seconds = Int64(floor(value * 86400.0 + 0.5))
+            return CellValue.TimeSpan(Duration.second * seconds)
+        }
         if (!this.styles.isDateFormat(this.styleIndex)) {
             return CellValue.Number(value)
-        }
-        if (this.styles.isElapsedFormat(this.styleIndex)) {
-            this.parsed.warnings.add(
-                ExcelWarning(
-                    ExcelWarningKind.UnsupportedTimeFormat,
-                    "时长格式在 M1 按日期处理",
-                    sheet: Some(sheetName)
-                )
-            )
         }
         let date1904 = match (this.date1904Override) {
             case Some(v) => v

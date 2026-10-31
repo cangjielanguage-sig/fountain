@@ -30,6 +30,7 @@ public class Worksheet {
     private let merges = ArrayList<String>()
     private let images = ArrayList<SheetImage>()
     private let stylesMap = HashMap<Int64, CellStyle>()
+    private let richTexts = HashMap<Int64, RichText>()
     private var dimensionRef: ?String = None
     private var maxRowSeen: Int64 = 0
     private var maxColSeen: Int64 = 0
@@ -109,6 +110,21 @@ public class Worksheet {
 
     public func setCell(ref: CellRef, value: CellValue): Unit {
         setCell(ref.row, ref.col, value)
+    }
+
+    /** 富文本（`sharedStrings` 的分段样式）；不是富文本返回 `None`。 */
+    public func richText(row: Int64, col: Int64): ?RichText {
+        if (!valid(row, col)) {
+            return None<RichText>
+        }
+        richTexts.get(key(row, col))
+    }
+
+    public func setRichText(row: Int64, col: Int64, value: RichText): Unit {
+        if (!valid(row, col)) {
+            throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
+        }
+        richTexts.add(key(row, col), value)
     }
 
     /** 读取某格的完整样式；没有显式样式返回 `None`。 */

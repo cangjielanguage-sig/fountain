@@ -223,6 +223,43 @@ public class Formula_test {
     }
 
     @TestCase
+    public func volatileConsistentWithinRecalculate(): Unit {
+        let doc = ExcelDocument()
+        let sheet = doc.sheet("Sheet1").getOrThrow()
+        sheet.setCell("A1", CellValue.Formula("NOW()", None))
+        sheet.setCell("B1", CellValue.Formula("NOW()", None))
+        sheet.setCell("C1", CellValue.Formula("TODAY()", None))
+        let engine = CalcEngine(doc)
+        let report = engine.recalculate(writeBack: true)
+        @Assert(report.recalculated, 3)
+        let a = match (sheet.cell("A1").getOrThrow()) {
+            case Formula(_, Some(Number(v))) => v
+            case _ => -1.0
+        }
+        let b = match (sheet.cell("B1").getOrThrow()) {
+            case Formula(_, Some(Number(v))) => v
+            case _ => -2.0
+        }
+        @Assert(a, b)
+        let c = match (sheet.cell("C1").getOrThrow()) {
+            case Formula(_, Some(Number(v))) => v
+            case _ => -3.0
+        }
+        @Assert(c > 40000.0 && c < a, true)
+    }
+
+    @TestCase
+    public func unknownFunctionReportedAsIssue(): Unit {
+        let doc = ExcelDocument()
+        let sheet = doc.sheet("Sheet1").getOrThrow()
+        sheet.setCell("A1", CellValue.Formula("NO_SUCH_FN(1)", None))
+        let engine = CalcEngine(doc)
+        let report = engine.recalculate()
+        @Assert(report.errors, 1)
+        @Assert(report.issues.size, 1)
+    }
+
+    @TestCase
     public func arrayFormulaKeepsCachedValue(): Unit {
         let sheetXml = worksheetXml(
             "<row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1:A2\">B1:B2*2</f><v>8</v></c></row>" +

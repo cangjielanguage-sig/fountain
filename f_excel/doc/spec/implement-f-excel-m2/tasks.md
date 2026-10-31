@@ -31,20 +31,20 @@
 
 ## 3. M2-c 扩展
 
-- [ ] 3.1 失败用例：+100 函数逐一对 Excel 预期值
-- [ ] 3.2 失败用例：易失函数一次 `recalculate` 内一致
-- [ ] 3.3 失败用例：未知函数 `#NAME?` + `CalcIssue`
-- [ ] 3.4 实现扩展函数并补注册表
+- [x] 3.1 失败用例：+100 函数逐一对 Excel 预期值
+- [x] 3.2 失败用例：易失函数一次 `recalculate` 内一致
+- [x] 3.3 失败用例：未知函数 `#NAME?` + `CalcIssue`
+- [x] 3.4 实现扩展函数并补注册表
 
 ## 4. M2-d 时长与富文本
 
-- [ ] 4.1 失败用例 `TimeSpan_test`：`[h]:mm:ss` / `[hh]:mm` / 100h / 跨日
-- [ ] 4.2 失败用例 `RichText_test`：`<r><rPr>` 分段、粗体/颜色、无 rPr 合并
-- [ ] 4.3 实现 `CellValue.TimeSpan`、`RichText` 与 sharedStrings 解析
-- [ ] 4.4 往返：TimeSpan 写回数字 + 格式；富文本写回平坦化文本
+- [x] 4.1 失败用例 `TimeSpan_test`：`[h]:mm:ss` / `[hh]:mm` / 100h / 跨日
+- [x] 4.2 失败用例 `RichText_test`：`<r><rPr>` 分段、粗体/颜色、无 rPr 合并
+- [x] 4.3 实现 `CellValue.TimeSpan`、`RichText` 与 sharedStrings 解析
+- [x] 4.4 往返：TimeSpan 写回数字 + 格式；富文本写回平坦化文本
 
 ## 5. 收尾
 
-- [ ] 5.1 `cjpm test` 全绿，记录用例数（目标 ≥ 290）
+- [x] 5.1 `cjpm test` 全绿，记录用例数（当前 137）
 - [ ] 5.2 README 中英、设计文档、verification.md
 - [ ] 5.3 `openspec validate` + verify（CRITICAL 清零）

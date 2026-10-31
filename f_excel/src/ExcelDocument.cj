@@ -140,6 +140,11 @@ public class ExcelDocument {
                         date1904Override: Some(this.date1904Flag)
                     )
                     for (row in parsed.rows) {
+                        for (entry in parsed.richTexts) {
+                            if (entry[0] == row.index) {
+                                sheet.setRichText(entry[0], entry[1], entry[2])
+                            }
+                        }
                         for (cell in row.cells) {
                             sheet.setCell(row.index, cell.col, cell.value)
                             match (cell.style) {

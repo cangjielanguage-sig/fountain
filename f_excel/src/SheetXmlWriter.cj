@@ -172,6 +172,12 @@ internal class SheetXmlWriter {
                 xml.text(formatNumber(serialFromDateTime(value, date1904)))
                 xml.endElement(xl("v"))
                 xml.endElement(xl("c"))
+            case TimeSpan(value) =>
+                xml.startElement(xl("c"), attributes: attrs.toArray())
+                xml.startElement(xl("v"))
+                xml.text(formatNumber(Float64(value.toSeconds()) / 86400.0))
+                xml.endElement(xl("v"))
+                xml.endElement(xl("c"))
         }
     }
 
@@ -183,12 +189,21 @@ internal class SheetXmlWriter {
                     case Date(_) => if (!isDateFormatStyle(style.numberFormat)) {
                         warnFormat()
                     }
+                    case TimeSpan(_) => if (!isElapsedFormatStyle(style.numberFormat)) {
+                        warnFormat()
+                    }
                     case _ => ()
                 }
                 return Some(style)
             case None => ()
         }
         match (cell.value) {
+            case TimeSpan(_) =>
+                let format = match (cell.numberFormat) {
+                    case Some(value) => value
+                    case None => NumberFormat.Custom("[h]:mm:ss")
+                }
+                return Some(CellStyle(numberFormat: format))
             case Date(value) =>
                 let id = match (cell.numberFormat) {
                     case Some(Builtin(fmtId)) => if (isBuiltinDateFormat(fmtId)) {
@@ -208,6 +223,14 @@ internal class SheetXmlWriter {
         match (cell.numberFormat) {
             case Some(format) => Some(CellStyle(numberFormat: format))
             case None => None<CellStyle>
+        }
+    }
+
+    private func isElapsedFormatStyle(format: NumberFormat): Bool {
+        match (format) {
+            case Custom(code) => hasElapsedMarker(code)
+            case Builtin(id) => id == 46 || id == 47
+            case General => false
         }
     }
 
