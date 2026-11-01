@@ -87,10 +87,19 @@ class LoomRowMapper {
                 match(raw as String){
                     case Some(text) => text
                     case None =>
-                        // Any 不实现 ToString：这里只可能是数值列，逐个收敛
-                        match(raw as Int64){
-                            case Some(number) => number.toString()
-                            case None => ''
+                        // PG 驱动可能把 TEXT 回成字节数组
+                        match(raw as Array<Byte>){
+                            case Some(bytes) => String.fromUtf8(bytes)
+                            case None =>
+                                // Any 不实现 ToString：剩余只可能是数值列，逐个收敛
+                                match(raw as Int64){
+                                    case Some(number) => number.toString()
+                                    case None =>
+                                        match(raw as Int32){
+                                            case Some(number) => Int64(number).toString()
+                                            case None => ''
+                                        }
+                                }
                         }
                 }
             case None => ''
@@ -100,9 +109,11 @@ class LoomRowMapper {
     private static func intOf(value: ?Any): Int64 {
         match(value){
             case Some(raw) =>
-                match(raw as Int64){
-                    case Some(number) => number
-                    case None => Int64.tryParse(textOf(value)) ?? 0
+                match(raw){
+                    case number: Int64 => number
+                    case number: Int32 => Int64(number)
+                    case text: String => Int64.tryParse(text) ?? 0
+                    case _ => 0
                 }
             case None => 0
         }
