@@ -51,7 +51,7 @@ public class GeneratedFlow {
  * 计划 → 仓颉源码（§9.4 的两级 JIT 的第一半）。
  *
  * 这里只生成**闭包原文**，不编译：编译失败时要把原文原样返回给开发者定位。
- * 步骤体固定形参 `e: Event`、返回 `Event`；流程体固定形参 `host: LoomHost`。
+ * 步骤体固定形参 `e: Event`、返回 `Event`；流程体无参，步骤通过 `LoomHostApi` 调宿主。
  */
 public class CodeGen {
     private init() {
@@ -70,24 +70,24 @@ public class CodeGen {
     public static func stepSource(step: StepPlan): String {
         var text = '// step ${step.id} (${step.kind})\n'
         if(step.kind == 'tool' || step.kind == 'mcp'){
-            text += 'let ${step.id}_args = host.render(${jsonQuote(step.args)}, e)\n'
-            text += 'let ${step.id}_out = host.callTool(${jsonQuote(step.tool)}, ${step.id}_args)\n'
+            text += 'let ${step.id}_args = LoomHostApi.render(${jsonQuote(step.args)}, e)\n'
+            text += 'let ${step.id}_out = LoomHostApi.callTool(${jsonQuote(step.tool)}, ${step.id}_args)\n'
         }else if(step.kind == 'llm'){
-            text += 'let ${step.id}_in = host.render(${jsonQuote(step.input)}, e)\n'
-            text += 'let ${step.id}_out = host.callLlm(${jsonQuote(step.model)}, '
+            text += 'let ${step.id}_in = LoomHostApi.render(${jsonQuote(step.input)}, e)\n'
+            text += 'let ${step.id}_out = LoomHostApi.callLlm(${jsonQuote(step.model)}, '
             text += '${jsonQuote(step.system)}, ${step.id}_in)\n'
         }else{
             // jit / http：素材由计划里的 input 语句片段给出，原样内联
             text += '${step.input}\n'
             text += 'let ${step.id}_out = ${step.id}_result\n'
         }
-        text += 'TaskEvent(category: e.category, tag: e.tag, name: ${jsonQuote(step.id)}, '
-        text += 'data: ${step.id}_out)'
+        text += 'LoomHostApi.taskEvent(e, ${jsonQuote(step.id)}, '
+        text += '${step.id}_out)'
         text
     }
 
     /**
-     * 流程级源码：形参 `host: LoomHost`。
+     * 流程级源码：无参 lambda，步骤体通过 `LoomHostApi` 调宿主。
      *
      * 有异步步骤用 `AsyncFlow`，否则 `ImmediateFlow`（§9.5：jit 默认同步，其余默认异步）。
      */
@@ -96,7 +96,7 @@ public class CodeGen {
         let flowType = if(async){ 'AsyncFlow' }else{ 'ImmediateFlow' }
         let first = firstStep(plan)
         var text = '// loom flow: ${plan.name}\n'
-        text += '{ host: LoomHost =>\n'
+        text += '{ =>\n'
         text += '    let flow = ${flowType}(category: ${jsonQuote(category)}, tag: ${jsonQuote(plan.name)})\n'
         if(!first.isEmpty()){
             text += '    flow.registerStart(category: ${jsonQuote(category)}, tag: ${jsonQuote(plan.name)}, '

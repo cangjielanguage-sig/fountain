@@ -41,18 +41,18 @@ class CodeGen_test {
     @TestCase
     func testToolStepSourceCallsHost(): Unit {
         let source = CodeGen.stepSource(plan().steps[0])
-        @Expect(source.contains('host.callTool("webSearch"'), true)
-        @Expect(source.contains('host.render("{\\"query\\":\\"仓颉 版本\\"}"'), true)
-        @Expect(source.contains('TaskEvent(category: e.category'), true)
-        @Expect(source.contains('name: "fetch"'), true)
+        @Expect(source.contains('LoomHostApi.callTool("webSearch"'), true)
+        @Expect(source.contains('LoomHostApi.render("{\\"query\\":\\"仓颉 版本\\"}"'), true)
+        @Expect(source.contains('LoomHostApi.taskEvent(e'), true)
+        @Expect(source.contains('"fetch"'), true)
     }
 
     @TestCase
     func testLlmStepSourceUsesModelAndSystem(): Unit {
         let source = CodeGen.stepSource(plan().steps[1])
-        @Expect(source.contains('host.callLlm("chat-pro"'), true)
+        @Expect(source.contains('LoomHostApi.callLlm("chat-pro"'), true)
         @Expect(source.contains('"你是技术编辑"'), true)
-        @Expect(source.contains('host.render("fetch.output", e)'), true)
+        @Expect(source.contains('LoomHostApi.render("fetch.output", e)'), true)
     }
 
     @TestCase
