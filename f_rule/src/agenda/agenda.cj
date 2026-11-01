@@ -333,8 +333,11 @@ public class Agenda <: ActivationSink {
                 smallest = left
             }
             let right = left + 1
-            if (right < heap_.size && compare(heap_[right], heap_[smallest]) == Ordering.LT) {
-                smallest = right
+            if (right < heap_.size) {
+                let rightOrder = compare(heap_[right], heap_[smallest])
+                if (rightOrder == Ordering.LT) {
+                    smallest = right
+                }
             }
             if (smallest == parent) {
                 break
@@ -365,7 +368,11 @@ public class Agenda <: ActivationSink {
         while (i < items.size) {
             let current = items[i]
             var j = i - 1
-            while (j >= 0 && compare(items[j], current) == Ordering.GT) {
+            while (j >= 0) {
+                let order = compare(items[j], current)
+                if (order != Ordering.GT) {
+                    break
+                }
                 items[j + 1] = items[j]
                 j -= 1
             }

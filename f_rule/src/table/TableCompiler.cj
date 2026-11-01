@@ -23,7 +23,7 @@ import fountain::f_log.LoggerFactory
 import fountain::f_rule.condition.{Constraint, JitExpression, Operand, Operator, Pattern}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{Fact, FactSpace, FactSpaceRegistry, FieldType}
-import fountain::f_rule.rule.{ActionContext, Rule, RuleAction, Validator}
+import fountain::f_rule.rule.{ActionContext, Rule, Validator}
 
 /** 编译后的一个条件列：`when` 列产出约束，`expr` 列产出 JIT 表达式。 */
 public class CompiledCondition {
@@ -269,7 +269,7 @@ public class TableCompiler {
 
     /** 先构造模式再建规则；动作闭包按行绑定解析输出。 */
     private func buildRule(row: TableRow, pattern: Pattern, scripts: ArrayList<String>,
-        action: RuleAction, salience: Int64): Rule {
+        action: (ActionContext) -> Unit, salience: Int64): Rule {
         // 表 id 前缀避免不同表的同名行冲突（AS-02）
         let builder = Rule.builder("${table_.id}/${row.ruleId}")
             .salience(salience)
@@ -358,7 +358,8 @@ public class TableCompiler {
     }
 
     /** 动作：从当前激活绑定取事实，解析 `${}` 引用后写入输出槽。 */
-    private func actionFor(binding: String, outputs: Array<CompiledOutput>): RuleAction {
+    private func actionFor(binding: String, outputs: Array<CompiledOutput>):
+        (ActionContext) -> Unit {
         { ctx: ActionContext =>
             let facts = HashMap<String, Fact>()
             match (ctx.fact(binding)) {

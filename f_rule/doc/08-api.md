@@ -34,6 +34,13 @@ public class RuleSet {
     public prop version: String
     public prop rules: Array<Rule>
     public func close(): Unit
+
+    /** 观测用：规则当前连续失败次数（成功一次即清零）。 */
+    public func ruleFailureCount(ruleId: String): Int64
+    /** 该规则是否因连续失败 100 次被禁用（规则集级，跨会话共享）。 */
+    public func ruleDisabled(ruleId: String): Bool
+    /** 最近一次失败分类（Timeout / TypeMismatch / RuntimeFailure）。 */
+    public func lastFailureKind(ruleId: String): ?EvalFailureKind
 }
 
 /** 规则集构建器。放在根包，避免 `rule` 包反向依赖根包。 */
@@ -105,10 +112,28 @@ public class RuleBuilder {
     public func join(constraint: JoinConstraint): RuleBuilder
     /** 脚本条件，形参必须与已声明的绑定名一致。`where` 是关键字，故命名为 script。 */
     public func script(source: String): RuleBuilder
+
+    /** 宿主闭包动作；公开签名不变，内部包装成 ClosureAction。 */
     public func then(action: (ActionContext) -> Unit): RuleBuilder
+
+    /**
+     * 脚本动作（f_jit 编译 `{ ctx: ActionContext => ... }`）；裸语句自动包装。
+     * 编译失败在构建期抛 SCRIPT_COMPILE。
+     */
+    public func thenScript(source: String): RuleBuilder
+
     public func build(): Rule
 }
 ```
+
+动作本身是接口：`public interface RuleAction { func execute(ctx: ActionContext): Unit }`；
+`ClosureAction`、`TableAction`、`ScriptAction` 是三种实现，均位于 `rule` 包，
+`agenda` 包保留公开重导出。
+
+`thenScript` 的脚本面有限制：`ActionContext` 的方法表由 `ScriptAction` 手工注册（不是 `@JitBind` 宏），
+`set` 只有 `Int64 / Float64 / Decimal / Bool / String` 五个重载；小数字面量要写 `0.85f64`；
+返回 `Option`/`Any` 的 `fact` / `get` / `outputs` / `factIn` 暂不进脚本面。需要这些能力时用宿主闭包
+`then { ctx => ... }`。详见 [`05-agenda-conflict-resolution.md`](05-agenda-conflict-resolution.md) §7。
 
 ## 5. 完整示例：产生式模式
 
@@ -274,8 +299,11 @@ main() {
 
 ```cangjie
 public class RuleEngine {
-    /** 规则集必须已构建且未关闭，否则抛 ILLEGAL_STATE。 */
+    /** 规则集必须已构建且未关闭，否则抛 ILLEGAL_STATE；使用默认 EngineOptions。 */
     public init(ruleSet: RuleSet)
+
+    /** 带运行期选项；expressionTimeout 作用于该规则集的全部会话。 */
+    public init(ruleSet: RuleSet, options: EngineOptions)
 
     /** 创建/获取会话。同 id 返回同一会话。 */
     public func session(id: String): RuleSession
@@ -296,16 +324,14 @@ public class RuleEngine {
     public func close(): Unit
 }
 
-/** 会话策略，M7 接入。当前版本所有会话等价于 Release.Discard + 无空闲超时。 */
+/**
+ * 引擎运行期选项。当前已落地 expressionTimeout；release / idleTimeout / trace
+ * 留在后续里程碑，未实现前不提供对应字段，避免"有字段不生效"。
+ */
 public class EngineOptions {
-    /** 会话事实释放策略。 */
-    public var release: Release = Release.Discard
-    /** 会话空闲超时，超时自动释放。 */
-    public var idleTimeout: ?Duration = None
-    /** 单次表达式求值超时。 */
-    public var expressionTimeout: Duration = Duration.millisecond * 50
-    /** 跟踪级别。 */
-    public var trace: TraceLevel = TraceLevel.Off
+    /** 单次表达式求值超时；超时按 Unknown 处理。默认 50ms。 */
+    public var expressionTimeout: Duration
+    public init(expressionTimeout!: Duration = Duration.millisecond * 50)
 }
 
 public class RuleSession {
@@ -429,8 +455,8 @@ let ruleSet = RuleSetBuilder("pricing")...
 | `conflictResolver` | `RuleSetBuilder` | `salience → specificity → ruleOrder → seq` |
 | `fireMode` | `Agenda` / `RuleSession.fire` | `Refract` |
 | `expressionTimeout` | `EngineOptions` | 50ms |
-| `release` | `EngineOptions` | `Discard` |
-| `idleTimeout` | `EngineOptions` | 无 |
-| `trace` | `EngineOptions` | `Off` |
+| `release` | `EngineOptions` | 未落地（当前等价 `Discard`） |
+| `idleTimeout` | `EngineOptions` | 未落地（当前无空闲回收） |
+| `trace` | `EngineOptions` | 未落地（当前 `Off`） |
 | `enableCycleDetection` | `RuleSet` | 关闭 |
 | `cycleWindow` | `RuleSet` | 10000 |

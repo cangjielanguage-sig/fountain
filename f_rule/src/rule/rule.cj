@@ -21,7 +21,9 @@ import fountain::f_rule.exception.*
 import fountain::f_rule.fact.TypeTag
 
 /** 规则动作：执行期由议程注入 `ActionContext`。 */
-public type RuleAction = (ActionContext) -> Unit
+public interface RuleAction {
+    func execute(ctx: ActionContext): Unit
+}
 
 /**
  * 规则模型（`doc/08-api.md` §4）。
@@ -140,8 +142,19 @@ public class RuleBuilder {
         this
     }
 
-    public func then(action: RuleAction): RuleBuilder {
-        actions_.add(action)
+    /** 宿主闭包动作；公开签名保持不变，内部包装成 [ClosureAction]。 */
+    public func then(action: (ActionContext) -> Unit): RuleBuilder {
+        actions_.add(ClosureAction(action))
+        this
+    }
+
+    /**
+     * 脚本动作（`f_jit` 编译 `{ ctx: ActionContext => ... }`）。
+     *
+     * 编译在调用本方法时完成；失败抛 `RuleException(SCRIPT_COMPILE)`。
+     */
+    public func thenScript(source: String): RuleBuilder {
+        actions_.add(ScriptAction(source))
         this
     }
 

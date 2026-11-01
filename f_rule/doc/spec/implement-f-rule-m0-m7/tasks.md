@@ -184,5 +184,13 @@
 - [x] 8.6 补齐 `I-01~I-06` 集成用例（决策表→Rete→议程、决策流 + 产生式混用、未登记类型构建期报错）
 - [x] 8.7 `f_rule/README.md`：状态改为可用，补快速开始与"产生式 / 决策表 / 决策流"三种典型用法、初始化顺序、空间与扇出约束（实际写了四种用法 + 6 条约束表）
 - [x] 8.8 `f_rule/CHANGELOG` 记录首个版本；`f_rule/doc/01~10` 与实际实现对齐（API 签名、配置项、错误码；doc/10 补 M5.5 里程碑与验收状态）
-- [ ] 8.9 `cjlint` / `cjfmt` 无告警 —— **未满足，工具链原因**：`cjlint` 在 6 个候选 modules 路径下均报 `Can not find modules`；`cjfmt` 与项目 License 头惯例（`*/` vs ` */`）冲突，对照组 `f_egraph` 同样 172 文件差异。结论与证据记录在 `doc/10` §7
-- [x] 8.10 验收清单逐项核对（`doc/10` §7）：里程碑退出条件、公开 API 用例、差分、门禁、文档一致、CHANGELOG；8.9 一项如实标注未满足
+- [x] 8.9 `cjlint -f ./src -m $CANGJIE_HOME` 的非 License error 归零（41 条已修：G.FUN.02 30、G.ENU.01 4、G.DCL.02 4、G.EXP.03 3）；仅剩 G.OTH.03，交项目级配置处理。`cjfmt` 仍按 `doc/10` §7 的结论保留
+- [x] 8.10 验收清单逐项核对（`doc/10` §7）：里程碑退出条件、公开 API 用例、差分、门禁、文档一致、CHANGELOG；`cjfmt` 一项按项目格式惯例如实标注未满足
+
+## 9. 验证报告跟进（C2/C3/C4 + lint）
+
+- [x] 9.1 C2：运行期异常/超时视为 `Unknown`，WARN 含规则 id、session、site；失败计数按 `(ruleSetId, ruleId)` 规则集级共享，连续 100 次禁用并记 ERROR，成功一次清零；终端脚本、alpha 单事实约束、beta join 三类求值点统一收敛；`EngineOptions` 进 `engine` 包，`RuleEngine(ruleSet, options)` 重载
+- [x] 9.2 C3：动态事实脚本条件走解释器；运行期类型不符按 `TYPE_MISMATCH` 分类，与 C2 共用同一计数器与禁用位（脚本/约束/join 均覆盖）
+- [x] 9.3 C4：`RuleAction` 改为 `execute(ctx: ActionContext)` 接口；`ClosureAction`/`TableAction`/`ScriptAction` 三实现；`then(action: (ActionContext) -> Unit)` 签名不变，新增 `thenScript(source)`，脚本编译失败抛 `SCRIPT_COMPILE`
+- [x] 9.4 lint：修掉全部 41 条非 License error，`cjlint -f ./src -m $CANGJIE_HOME` 只剩 G.OTH.03
+- [x] 9.5 回归：`cjpm test` 430 个用例全绿（原 418 + 新增 12），`doc/03`、`doc/05`、`doc/08` 同步完成

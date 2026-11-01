@@ -72,15 +72,15 @@ class BetaTestSession <: ReteSession {
         }
     }
 
-    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+    public func recordAlphaHits(_: FactHandle, _: Array<AlphaNode>): Unit {
         // 单节点用例不经过根节点分发，不需要命中记录。
     }
 
-    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+    public func alphaHits(_: FactHandle): ?Array<AlphaNode> {
         None
     }
 
-    public func forgetAlphaHits(handle: FactHandle): Unit {
+    public func forgetAlphaHits(_: FactHandle): Unit {
     }
 }
 
@@ -92,11 +92,11 @@ class TokenCollector <: TokenSink {
         this.tokens_ = ArrayList<Token>()
     }
 
-    public func leftActivate(session: ReteSession, token: Token): Unit {
+    public func leftActivate(_: ReteSession, token: Token): Unit {
         tokens_.add(token)
     }
 
-    public func leftRetract(session: ReteSession, token: Token): Unit {
+    public func leftRetract(_: ReteSession, token: Token): Unit {
         var i = 0
         while (i < tokens_.size) {
             if (tokens_[i] == token) {

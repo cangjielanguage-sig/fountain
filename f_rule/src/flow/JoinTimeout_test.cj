@@ -31,7 +31,7 @@ class FakeTimeoutScheduler <: JoinTimeoutScheduler {
         available_
     }
 
-    public func schedule(delay: Duration, action: () -> Unit): Bool {
+    public func schedule(_: Duration, action: () -> Unit): Bool {
         if (!accept_) {
             return false
         }
@@ -50,7 +50,7 @@ class FakeTimeoutScheduler <: JoinTimeoutScheduler {
 
 /** 收集超时事件。 */
 class EventBox {
-    public let events = ArrayList<Event>()
+    public let events: ArrayList<Event> = ArrayList<Event>()
 }
 
 /**

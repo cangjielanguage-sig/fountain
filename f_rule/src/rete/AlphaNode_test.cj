@@ -53,7 +53,7 @@ class AlphaTestSession <: ReteSession {
         alphaMemory(nodeId)
     }
 
-    public func betaMemory(nodeId: Int64): BetaMemory {
+    public func betaMemory(_: Int64): BetaMemory {
         throw Exception("AlphaTestSession 不提供 beta memory")
     }
 
@@ -67,15 +67,15 @@ class AlphaTestSession <: ReteSession {
         }
     }
 
-    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+    public func recordAlphaHits(_: FactHandle, _: Array<AlphaNode>): Unit {
         // 单节点用例不经过根节点分发，不需要命中记录。
     }
 
-    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+    public func alphaHits(_: FactHandle): ?Array<AlphaNode> {
         None
     }
 
-    public func forgetAlphaHits(handle: FactHandle): Unit {
+    public func forgetAlphaHits(_: FactHandle): Unit {
     }
 }
 
@@ -84,11 +84,11 @@ class CountingRightSink <: RightSink {
     public var activated: Int64 = 0
     public var retracted: Int64 = 0
 
-    public func rightActivate(session: ReteSession, handle: FactHandle, fact: Fact): Unit {
+    public func rightActivate(_: ReteSession, _: FactHandle, _: Fact): Unit {
         activated += 1
     }
 
-    public func rightRetract(session: ReteSession, handle: FactHandle): Unit {
+    public func rightRetract(_: ReteSession, _: FactHandle): Unit {
         retracted += 1
     }
 }
@@ -99,12 +99,12 @@ class CountingLeftSink <: TokenSink {
     public var retracted: Int64 = 0
     public var lastName: String = ""
 
-    public func leftActivate(session: ReteSession, token: Token): Unit {
+    public func leftActivate(_: ReteSession, token: Token): Unit {
         activated += 1
         lastName = token.binding
     }
 
-    public func leftRetract(session: ReteSession, token: Token): Unit {
+    public func leftRetract(_: ReteSession, _: Token): Unit {
         retracted += 1
     }
 }

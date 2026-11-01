@@ -124,10 +124,13 @@ public class PropertyGen {
                     k += 1
                 }
                 let _ = builder.addPattern(pattern)
-                if (j > 0 && next(3) != 0) {
-                    let previous = next(j)
-                    let _ = builder.join(JoinConstraint("b${previous}", "amount",
-                        randomJoinOp(), binding, "amount"))
+                if (j > 0) {
+                    let draw = next(3)
+                    if (draw != 0) {
+                        let previous = next(j)
+                        let _ = builder.join(JoinConstraint("b${previous}", "amount",
+                            randomJoinOp(), binding, "amount"))
+                    }
                 }
                 j += 1
             }

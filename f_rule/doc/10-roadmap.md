@@ -153,7 +153,7 @@ M1 的顺序匹配器**长期保留**，不作为生产路径，只作为 M2 的
 
 ## 7. 验收清单
 
-模块可发布需同时满足。状态截至 2026-11-01（`cjpm test` 418/418）：
+模块可发布需同时满足。状态截至 2026-11-01（`cjpm test` 430/430）：
 
 - [x] M0~M7 全部退出条件达成（含 M5.5）
 - [x] 公开 API 均有单元测试
@@ -161,14 +161,15 @@ M1 的顺序匹配器**长期保留**，不作为生产路径，只作为 M2 的
 - [x] 性能门禁 B-01~B-07 达标并记录在 [`perf.md`](perf.md)
 - [x] README 含快速开始与三种典型用法（实际写了四种：产生式 / 决策表聚合 / 决策表进议程 / 决策流）
 - [x] 文档与实现一致（API 签名、配置项、错误码 27 个）
-- [ ] `cjlint` / `cjfmt` 无告警 —— **未满足，工具链原因，非代码问题**
+- [x] `cjlint -f ./src -m $CANGJIE_HOME` 的非 License error 归零（41 条已修，仅剩 `G.OTH.03`，属项目级 License 头配置）
+- [ ] `cjfmt` 无告警 —— **未满足，项目格式惯例与 `cjfmt` 默认配置冲突**
 - [x] CHANGELOG 记录本模块首个版本
 
 最后一项的实测情况：
 
 | 工具 | 结果 | 原因 |
 |---|---|---|
-| `cjlint` | 无法运行 | 依次尝试 `-m` 指向 `./target`、`./target/release`、`$CANGJIE_HOME/lib`、`$CANGJIE_HOME/lib/linux_aarch64_cjnative`、`$CANGJIE_HOME/modules`、`$CANGJIE_HOME/modules/linux_aarch64_cjnative`，全部报 `Can not find modules` |
+| `cjlint` | 通过（仅 `G.OTH.03`） | 正确用法是 `-m $CANGJIE_HOME`（SDK 根，不是 `modules` 子目录）；修掉了 G.FUN.02 30、G.ENU.01 4、G.DCL.02 4、G.EXP.03 3，共 41 条非 License error |
 | `cjfmt` | 172 文件有差异 | 差异集中在 License 头的 `*/` 与 ` */`。对照组 `f_egraph/src/base/Task.cj` 同样有差异，说明是项目统一的格式惯例与 `cjfmt` 默认配置冲突，不是 `f_rule` 特有 |
 
 未为通过检查而批量改写既有格式：那会让 `f_rule` 与仓库其余模块不一致，且改动 172 个文件只为对齐一个注释空格。待项目提供 `cangjie-format.toml` 后再执行。

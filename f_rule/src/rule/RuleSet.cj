@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rule
 
-import fountain::f_rule.condition.ExpressionMode
+import fountain::f_rule.condition.{EvalFailureKind, ExpressionMode}
 import fountain::f_rule.fact.{FactSpace, FactSpaceRegistry}
 
 /** 规则集状态：校验失败后进入 `Invalid`，不得构造引擎。 */
@@ -52,6 +52,8 @@ public class RuleSet {
     public let registry: FactSpaceRegistry
     public let expressionMode: ExpressionMode
     public let conflictResolver: ConflictResolver
+    /** 运行期求值失败状态；按 `(ruleSetId, ruleId)` 归属，跨会话共享。 */
+    public let failureGuard: RuleFailureGuard
     private var status_: RuleSetStatus
     private var closed_: Bool
     private var cycleEnabled_: Bool
@@ -66,6 +68,7 @@ public class RuleSet {
         this.registry = registry
         this.expressionMode = expressionMode
         this.conflictResolver = conflictResolver
+        this.failureGuard = RuleFailureGuard(id)
         this.status_ = RuleSetStatus.Valid
         this.closed_ = false
         this.cycleEnabled_ = false
@@ -128,6 +131,26 @@ public class RuleSet {
     /** 校验失败时由构建器调用；进入 `Invalid` 后不可恢复。 */
     public func markInvalid(): Unit {
         status_ = RuleSetStatus.Invalid
+    }
+
+    /** 配置单次表达式求值超时（`EngineOptions.expressionTimeout`）。 */
+    public func configureExpressionTimeout(value: Duration): Unit {
+        failureGuard.setExpressionTimeout(value)
+    }
+
+    /** 观测用：规则当前的连续失败次数（成功一次即清零）。 */
+    public func ruleFailureCount(ruleId: String): Int64 {
+        failureGuard.failureCount(ruleId)
+    }
+
+    /** 该规则是否已因连续失败被禁用（规则集级）。 */
+    public func ruleDisabled(ruleId: String): Bool {
+        failureGuard.isDisabled(ruleId)
+    }
+
+    /** 观测用：最近一次失败的分类；成功求值后清空。 */
+    public func lastFailureKind(ruleId: String): ?EvalFailureKind {
+        failureGuard.lastFailureKind(ruleId)
     }
 
     /** 校验通过后冻结空间集合与类型描述。 */

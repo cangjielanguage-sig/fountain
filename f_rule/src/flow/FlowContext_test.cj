@@ -24,7 +24,7 @@ import fountain::f_rule.fact.{DynamicFact, Fact, FactSpaceRegistry, FieldType}
 class CountingArchiver <: FactArchiver {
     public var count: Int64 = 0
 
-    public func archive(session: String, space: String, fact: Fact): Unit {
+    public func archive(_: String, _: String, _: Fact): Unit {
         count += 1
     }
 }

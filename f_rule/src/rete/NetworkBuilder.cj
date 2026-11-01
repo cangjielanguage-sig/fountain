@@ -46,7 +46,7 @@ public class NetworkBuilder {
     private static func attach(network: ReteNetwork, rule: Rule): Unit {
         let endpoints = ArrayList<AlphaNode>()
         for (pattern in rule.patterns) {
-            endpoints.add(alphaChain(network, pattern))
+            endpoints.add(alphaChain(network, pattern, rule.id))
         }
 
         var current: ?BetaNode = None
@@ -60,7 +60,7 @@ public class NetworkBuilder {
             let leftBinding = rule.patterns[index - 1].binding
             let joins = joinsAt(rule, index)
             let beta = network.betaNodeFor(leftSource, leftBinding, endpoints[index].id,
-                joins, rule.patterns[index].binding)
+                joins, rule.patterns[index].binding, rule.id)
             endpoints[index].addRightConsumer(beta)
             match (previous) {
                 case Some(outgoing) => outgoing.addConsumer(beta)
@@ -78,11 +78,13 @@ public class NetworkBuilder {
     }
 
     /** 单个模式的 alpha 链：类型过滤节点或逐约束路径。 */
-    private static func alphaChain(network: ReteNetwork, pattern: Pattern): AlphaNode {
+    private static func alphaChain(network: ReteNetwork, pattern: Pattern,
+        ruleId: String): AlphaNode {
         let constraints = sortedConstraints(pattern.constraints)
         if (constraints.size == 0) {
             let node = network.alphaNodeFor(AlphaSignature.typeOnly(pattern.typeTag),
                 { _fact: Fact => true })
+            node.addRule(ruleId)
             network.rootNode().addHead(node)
             return node
         }
@@ -95,6 +97,7 @@ public class NetworkBuilder {
             let signature = AlphaSignature.fromConstraint(pattern.typeTag, constraint,
                 parentKey: parentKey)
             let node = network.alphaNodeFor(signature, alphaTest(constraint))
+            node.addRule(ruleId)
             match (parent) {
                 case Some(existing) => existing.addChild(node)
                 case None => network.rootNode().addHead(node)

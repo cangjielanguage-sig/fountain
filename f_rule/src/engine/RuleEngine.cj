@@ -37,14 +37,20 @@ public class RuleEngine {
     private let executorsMtx_: Mutex
     private var closed_: Bool
 
-    /** 规则集必须是已构建且未关闭的，否则抛 `ILLEGAL_STATE`。 */
+    /** 规则集必须是已构建且未关闭的，否则抛 `ILLEGAL_STATE`；使用默认选项。 */
     public init(ruleSet: RuleSet) {
+        this(ruleSet, EngineOptions())
+    }
+
+    /** 带运行期选项的构造；`expressionTimeout` 作用于该规则集的全部会话。 */
+    public init(ruleSet: RuleSet, options: EngineOptions) {
         if (!ruleSet.isValid()) {
             throw RuleException(
                 RuleErrorCode.ILLEGAL_STATE,
                 "规则集 ${ruleSet.id} 校验失败或已关闭，不能构造引擎"
             )
         }
+        ruleSet.configureExpressionTimeout(options.expressionTimeout)
         this.ruleSet_ = ruleSet
         this.network_ = ShardedNetwork.shared(ruleSet)
         this.sessions_ = HashMap<String, RuleSession>()

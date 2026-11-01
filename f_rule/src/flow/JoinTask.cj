@@ -101,8 +101,8 @@ class TicktockJoinScheduler <: JoinTimeoutScheduler {
 
 /** 单个 session 的已到达分支集合；`arrived` 与元信息由 `lock` 保护。 */
 class JoinBranchState {
-    public let lock = Mutex()
-    public let arrived = HashSet<String>()
+    public let lock: Mutex = Mutex()
+    public let arrived: HashSet<String> = HashSet<String>()
     public var scheduled: Bool = false
     public var category: String = ""
     public var tag: String = ""

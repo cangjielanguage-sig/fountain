@@ -112,7 +112,7 @@ class RuleBuilder_test {
 }
 
 /** RuleBuilder 测试宿主类。 */
-public class RuleOrder {
+public class BuilderOrder {
     public var id: String
     public var amount: Int64
 

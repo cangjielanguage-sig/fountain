@@ -61,7 +61,7 @@ public enum Operator <: ToString & Hashable & Equatable<Operator> {
 | 情况 | 时机 |
 |---|---|
 | 常量与字段的静态类型已知（`FactSchema` 声明了类型） | 构建期 |
-| 字段类型未知（动态事实） | 运行期首次求值，失败抛 `TYPE_MISMATCH` 并禁用该规则 |
+| 字段类型未知（动态事实） | 运行期首次求值失败时按 `TYPE_MISMATCH` 语义处理（WARN + 共用失败计数） |
 | `JitExpression` | `f_jit` 编译期 |
 
 `FactSchema.field` 可选择性声明类型：
@@ -150,6 +150,9 @@ public class JitExpression {
      */
     public func eval(bindings: Bindings): Bool
 
+    /** 同 eval，但保留失败分类（Timeout / TypeMismatch / RuntimeFailure）。 */
+    public func evalDetailed(bindings: Bindings, timeout!: ?Duration = None): EvalOutcome
+
     /** 源码形参名，构建期从签名解析，用于校验绑定是否齐备。 */
     public prop parameters: Array<String>
     public prop source: String
@@ -166,7 +169,30 @@ public class JitExpression {
 |---|---|
 | 编译错误 | 构建期抛 `RuleException(SCRIPT_COMPILE)`，携带 f_jit 的 `site` 与 `report` |
 | 运行期异常（除零、越界） | 该次求值视为 `Unknown`，记录 `WARN` 日志（含规则 id、session、site）；同一规则连续失败 100 次后禁用并记 `ERROR` |
+| 动态事实类型不符 | 按 `TYPE_MISMATCH` 分类，走同一失败计数与禁用位，不另建第二套状态 |
 | 超时 | 通过 `CallContext(deadline:)` 中断，视为 `Unknown`；默认单次求值上限 50ms |
+
+失败计数是**规则集级**的，键为 `(ruleSetId, ruleId)`：同一规则集的所有会话共享一份
+状态，写错的规则不会让每个会话各自失败 100 次才止损。「连续」指成功求值一次即清零，
+`Unknown`/`False` 的正常返回也算成功；禁用位在规则集重建前保持不变。
+
+例外在三类求值点统一收敛：终端节点的脚本条件、alpha 节点的单事实约束、beta 节点的
+join 约束。alpha/beta 是共享结构，异常发生时按节点登记的规则 id 逐个记失败，仍写入
+同一份 `RuleFailureGuard`；任何异常都不穿透到 `f_egraph` 的事件循环。
+
+单次求值超时来自 `EngineOptions.expressionTimeout`：
+
+```cangjie
+public class EngineOptions {
+    public var expressionTimeout: Duration   // 默认 Duration.millisecond * 50
+}
+
+let engine = RuleEngine(ruleSet, EngineOptions(expressionTimeout: Duration.millisecond * 50))
+```
+
+`RuleEngine(ruleSet)` 等价于传入默认选项。JIT 路径把截止时间交给 `f_jit` 的
+`CallContext(deadline:)`；解释器路径在步进时检查同一截止时间，并保留节点数上限
+（默认 1e6）作为第二道保险。
 
 不允许表达式抛出的异常穿透到事件循环：`f_egraph` 的 `TaskExecutor` 会把异常包装成错误事件，导致整个流程终止。
 

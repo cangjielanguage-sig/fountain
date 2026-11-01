@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
-import std.collection.{ArrayList, HashMap}
+import std.collection.{ArrayList, HashMap, HashSet}
 import fountain::f_rule.condition.{JoinConstraint, Operator}
 import fountain::f_rule.fact.{Fact, FactHandle, ValueKey}
 
@@ -77,6 +77,8 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     public let rightBinding: String
     public let plan: JoinPlan
     private let consumers_: ArrayList<TokenSink>
+    /** 共享本节点的规则 id；join 求值异常时按规则记失败。 */
+    private let ruleIds_: HashSet<String>
 
     public init(id: Int64, leftSource: BetaLeft, leftBinding: String, rightAlphaId: Int64,
         joins: Array<JoinConstraint>, rightBinding: String, plan: JoinPlan) {
@@ -88,12 +90,22 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
         this.rightBinding = rightBinding
         this.plan = plan
         this.consumers_ = ArrayList<TokenSink>()
+        this.ruleIds_ = HashSet<String>()
     }
 
     public prop id: Int64 {
         get() {
             id_
         }
+    }
+
+    /** 登记使用本节点的规则（join 签名共享时多个规则共用同一节点）。 */
+    public func addRule(ruleId: String): Unit {
+        ruleIds_.add(ruleId)
+    }
+
+    public func ruleIds(): Array<String> {
+        ruleIds_.toArray()
     }
 
     /** 构建期决定探测计划。 */
@@ -143,7 +155,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
             match (memory.fact(handle)) {
                 case Some(fact) =>
                     base[rightBinding] = fact
-                    if (holds(joins, base) && !alreadyEmitted(session, token, handle)) {
+                    if (holds(session, joins, base) && !alreadyEmitted(session, token, handle)) {
                         emit(session, token, handle, fact)
                     }
                 case None => ()
@@ -154,7 +166,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     /** 右侧事实进入：用左侧 beta memory 的 join 索引找候选令牌。 */
     public func rightActivate(session: ReteSession, handle: FactHandle, fact: Fact): Unit {
         for (token in candidatesOf(session, fact)) {
-            if (holdsWith(token, fact) && !alreadyEmitted(session, token, handle)) {
+            if (holdsWith(session, token, fact) && !alreadyEmitted(session, token, handle)) {
                 emit(session, token, handle, fact)
             }
         }
@@ -290,7 +302,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
         memory.orderedList()
     }
 
-    private func holdsWith(token: Token, fact: Fact): Bool {
+    private func holdsWith(session: ReteSession, token: Token, fact: Fact): Bool {
         if (joins.size == 0) {
             return true
         }
@@ -302,7 +314,13 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
             }
         }
         for (join in joins) {
-            if (!join.evalWith(resolve).isTrue()) {
+            let result = try {
+                join.evalWith(resolve)
+            } catch (e: Exception) {
+                RuleFailureReporter.report(session, ruleIds_.toArray(), e, site())
+                return false
+            }
+            if (!result.isTrue()) {
                 return false
             }
         }
@@ -343,9 +361,16 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
         }
     }
 
-    private static func holds(joins: Array<JoinConstraint>, map: HashMap<String, Fact>): Bool {
+    private func holds(session: ReteSession, joins: Array<JoinConstraint>,
+        map: HashMap<String, Fact>): Bool {
         for (join in joins) {
-            if (!join.eval(map).isTrue()) {
+            let result = try {
+                join.eval(map)
+            } catch (e: Exception) {
+                RuleFailureReporter.report(session, ruleIds_.toArray(), e, site())
+                return false
+            }
+            if (!result.isTrue()) {
                 return false
             }
         }
@@ -372,5 +397,9 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
 
     public func toString(): String {
         "BetaNode(${id}, ${leftSource}, ${joins.size} joins)"
+    }
+
+    private func site(): String {
+        "beta#${id_}"
     }
 }

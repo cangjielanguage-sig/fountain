@@ -21,7 +21,7 @@ import std.sync.Mutex
 import fountain::f_rule.condition.{ExpressionMode, JitExpression, JoinConstraint}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{Fact, FactSpaceRegistry}
-import fountain::f_rule.rule.Rule
+import fountain::f_rule.rule.{Rule, RuleFailureGuard}
 import fountain::f_rule.runtime.RuleRuntime
 
 /**
@@ -50,10 +50,17 @@ public class ReteNetwork {
     private var frozen_: Bool
     /** 脚本求值模式；`Interpreted` 时终端脚本走内置解释器。 */
     private let expressionMode_: ExpressionMode
+    /** 构建脚本条件时解析绑定宿主类型；`build` 前为 `None`。 */
+    private var registry_: ?FactSpaceRegistry
+    /** 规则集级求值失败状态；终端节点共享同一实例。 */
+    private let failureGuard_: RuleFailureGuard
 
-    public init(space: String, expressionMode!: ExpressionMode = ExpressionMode.JitPreferred) {
+    public init(space: String, expressionMode!: ExpressionMode = ExpressionMode.JitPreferred,
+        failureGuard!: RuleFailureGuard = RuleFailureGuard("standalone")) {
         this.space = space
         this.expressionMode_ = expressionMode
+        this.failureGuard_ = failureGuard
+        this.registry_ = None
         this.generation = ReteNetwork.nextGeneration()
         this.root_ = RootNode(0)
         this.alphaNodes_ = ArrayList<AlphaNode>()
@@ -85,6 +92,7 @@ public class ReteNetwork {
             )
         }
         let _ = registry
+        registry_ = Some(registry)
         NetworkBuilder.build(this, rules)
         frozen_ = true
     }
@@ -96,7 +104,7 @@ public class ReteNetwork {
 
     /** 为指定会话打开运行态；同一网络可被多个会话复用（memory 隔离）。 */
     public func open(session: String, sink: ActivationSink): SessionNetwork {
-        SessionNetwork(this, session, sink)
+        SessionNetwork(this, session, sink, failureGuard: failureGuard_)
     }
 
     public func rootNode(): RootNode {
@@ -154,16 +162,19 @@ public class ReteNetwork {
 
     /** 按签名共享 beta 节点；探测计划在此一次性确定。 */
     func betaNodeFor(leftSource: BetaLeft, leftBinding: String, rightAlphaId: Int64,
-        joins: Array<JoinConstraint>, rightBinding: String): BetaNode {
+        joins: Array<JoinConstraint>, rightBinding: String, ruleId: String): BetaNode {
         let signature = JoinSignature(leftSource, rightAlphaId, joins)
         let key = signature.key()
         match (betaByKey_.get(key)) {
-            case Some(existing) => return existing
+            case Some(existing) =>
+                existing.addRule(ruleId)
+                return existing
             case None => ()
         }
         let plan = BetaNode.choosePlan(joins)
         let created = BetaNode(nextNodeId(), leftSource, leftBinding, rightAlphaId, joins,
             rightBinding, plan)
+        created.addRule(ruleId)
         betaByKey_[key] = created
         betaNodes_.add(created)
         created
@@ -175,14 +186,22 @@ public class ReteNetwork {
         if (rule.scripts.size > 0) {
             let compiler = RuleRuntime.compiler()
             for (source in rule.scripts) {
-                scripts.add(if (expressionMode_ == ExpressionMode.Interpreted) {
-                    JitExpression.interpretedOf(source)
-                } else {
-                    JitExpression.of(source, compiler)
-                })
+                let expression = match (registry_) {
+                    case Some(registry) =>
+                        JitExpression.forRule(source, rule.patterns, registry, rule.factSpace,
+                            compiler, expressionMode_, warn: false)
+                    case None =>
+                        if (expressionMode_ == ExpressionMode.Interpreted) {
+                            JitExpression.interpretedOf(source)
+                        } else {
+                            JitExpression.of(source, compiler)
+                        }
+                }
+                scripts.add(expression)
             }
         }
-        let created = TerminalNode(nextNodeId(), rule, scripts: scripts.toArray())
+        let created = TerminalNode(nextNodeId(), rule, scripts: scripts.toArray(),
+            failureGuard: failureGuard_)
         terminals_.add(created)
         created
     }

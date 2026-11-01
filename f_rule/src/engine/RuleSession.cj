@@ -71,7 +71,7 @@ class SessionActionRunner <: ActionRunner & FactPropagation {
         let ctx = SessionActionContext(activation, view,
             { space: String => views_.view(space, session_) }, outputs, propagation: this)
         for (action in activation.rule.actions) {
-            action(ctx)
+            action.execute(ctx)
         }
         outputs
     }

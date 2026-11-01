@@ -16,10 +16,12 @@ limitations under the License.
 package fountain::f_rule.condition
 
 import std.collection.{ArrayList, HashMap}
+import std.time.DateTime
 import fountain::f_jit.{Compiler, JitFunction}
+import fountain::f_jit.base.CallContext
 import fountain::f_log.LoggerFactory
 import fountain::f_rule.exception.*
-import fountain::f_rule.fact.{Fact, HostFact}
+import fountain::f_rule.fact.{Fact, FactSpaceRegistry, HostFact}
 
 /** 表达式求值模式（`doc/03-condition-expression.md` §7）。 */
 public enum ExpressionMode <: ToString & Equatable<ExpressionMode> {
@@ -116,6 +118,61 @@ public class JitExpression {
         JitExpression(lambda, names.toArray(), Some(compiled), None)
     }
 
+    /**
+     * 规则脚本条件入口：按模式的宿主类型选择 JIT 或解释器。
+     *
+     * - 完整 lambda（以 `{` 开头）在非动态绑定下直接编译；动态绑定改走 [interpretedOf]；
+     * - 裸表达式按模式绑定拼成 lambda（同 [ofExpression]）；
+     * - 任一绑定是动态事实时整条条件走解释器，构建期记一次 WARN。
+     */
+    public static func forRule(source: String, patterns: Array<Pattern>,
+        registry: FactSpaceRegistry, space: String, compiler: Compiler,
+        mode: ExpressionMode, warn!: Bool = true): JitExpression {
+        let bindings = JitExpression.ruleBindings(patterns, registry, space)
+        let names = ArrayList<String>()
+        var dynamic = false
+        for ((name, hostType) in bindings) {
+            names.add(name)
+            if (hostType == "" || hostType == "DynamicFact") {
+                dynamic = true
+            }
+        }
+        let trimmed = source.trimAscii()
+        if (trimmed.startsWith("{")) {
+            if (dynamic || mode == ExpressionMode.Interpreted) {
+                if (dynamic && warn) {
+                    warnInterpreter(source, "动态事实绑定")
+                }
+                return interpretedOf(trimmed)
+            }
+            return of(trimmed, compiler)
+        }
+        if (dynamic || mode == ExpressionMode.Interpreted) {
+            if (dynamic && warn) {
+                warnInterpreter(source, "动态事实绑定")
+            }
+            return interpreted(source, names.toArray())
+        }
+        ofExpression(trimmed, bindings, compiler)
+    }
+
+    private static func ruleBindings(patterns: Array<Pattern>, registry: FactSpaceRegistry,
+        space: String): Array<(String, String)> {
+        let out = ArrayList<(String, String)>()
+        let factSpace = match (registry.get(space)) {
+            case Some(found) => found
+            case None => return out.toArray()
+        }
+        for (pattern in patterns) {
+            let hostType = match (factSpace.descriptor(pattern.typeTag)) {
+                case Some(descriptor) => descriptor.hostSimpleName
+                case None => ""
+            }
+            out.add((pattern.binding, hostType))
+        }
+        out.toArray()
+    }
+
     /** 强制使用内置解释器（决策表 `expr` 列 / `ExpressionMode.Interpreted`）。 */
     public static func interpreted(source: String, parameters: Array<String>): JitExpression {
         let program = InterpreterProgram.compile(source)
@@ -171,8 +228,23 @@ public class JitExpression {
      * @param bindings 绑定名 → 事实；参数顺序按 lambda 形参，不依赖 `HashMap` 顺序
      */
     public func eval(bindings: HashMap<String, Fact>): Bool {
+        evalDetailed(bindings).value
+    }
+
+    /**
+     * 求值并保留失败分类（`doc/03-condition-expression.md` §6.2）。
+     *
+     * JIT 路径把截止时间交给 `f_jit` 的 `CallContext`；解释器路径在步进时检查同一
+     * 截止时间。任何异常/超时都不上抛，由调用方按 `Unknown` 处理。
+     */
+    public func evalDetailed(bindings: HashMap<String, Fact>,
+        timeout!: ?Duration = None): EvalOutcome {
+        let deadline: ?DateTime = match (timeout) {
+            case Some(limit) => Some(DateTime.now() + limit)
+            case None => None
+        }
         match (program_) {
-            case Some(program) => return program.eval(bindings).isTrue()
+            case Some(program) => return program.evalOutcome(bindings, deadline: deadline)
             case None => ()
         }
         match (compiled_) {
@@ -181,19 +253,24 @@ public class JitExpression {
                 for (name in parameters_) {
                     let fact = match (bindings.get(name)) {
                         case Some(found) => found
-                        case None => return false
+                        case None => return EvalOutcome.evaluated(false)
                     }
                     match (fact as HostFact) {
                         case Some(host) => args.add(host.hostObject())
-                        case None => return interpretFallback(bindings)
+                        case None => return interpretFallback(bindings, deadline)
                     }
                 }
                 try {
-                    compiled.call<Bool>(args.toArray())
-                } catch (_: Exception) {
-                    false
+                    EvalOutcome.evaluated(
+                        compiled.call<Bool>(args.toArray(), CallContext(deadline: deadline)))
+                } catch (e: Exception) {
+                    if (JitExpression.deadlinePassed(deadline)) {
+                        EvalOutcome.failed(EvalFailureKind.Timeout, e.message)
+                    } else {
+                        EvalOutcome.failed(EvalFailureKind.RuntimeFailure, e.message)
+                    }
                 }
-            case None => false
+            case None => EvalOutcome.evaluated(false)
         }
     }
 
@@ -275,20 +352,27 @@ public class JitExpression {
     }
 
     /** 非 HostFact（例如动态事实）在 JIT 表达式里出现时的兜底：按 lambda 体编译解释器。 */
-    private func interpretFallback(bindings: HashMap<String, Fact>): Bool {
+    private func interpretFallback(bindings: HashMap<String, Fact>,
+        deadline: ?DateTime): EvalOutcome {
         let arrow = JitExpression.indexOrMinusOne(source_, "=>")
         if (arrow < 0) {
-            return false
+            return EvalOutcome.evaluated(false)
         }
         var body = source_[arrow + 2..].trimAscii()
         if (body.endsWith("}")) {
             body = body[0..Int64(body.size) - 1].trimAscii()
         }
         try {
-            let program = InterpreterProgram.compile(body)
-            program.eval(bindings).isTrue()
-        } catch (_: Exception) {
-            false
+            InterpreterProgram.compile(body).evalOutcome(bindings, deadline: deadline)
+        } catch (e: Exception) {
+            EvalOutcome.failed(EvalFailureKind.RuntimeFailure, e.message)
+        }
+    }
+
+    private static func deadlinePassed(deadline: ?DateTime): Bool {
+        match (deadline) {
+            case Some(limit) => DateTime.now() >= limit
+            case None => false
         }
     }
 

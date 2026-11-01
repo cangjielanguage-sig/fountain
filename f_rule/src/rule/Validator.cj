@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.rule
 
 import std.collection.{HashMap, HashSet}
-import fountain::f_rule.condition.{ExpressionMode, JitExpression, Operator, Pattern}
+import fountain::f_rule.condition.{JitExpression, Operator, Pattern}
 import fountain::f_rule.exception.*
 import fountain::f_rule.fact.{FactSpace, FieldType}
 import fountain::f_rule.runtime.RuleRuntime
@@ -94,11 +94,8 @@ public class Validator {
             // 否则要到建网络时才暴露超出解释器子集的语法。
             let compiler = RuleRuntime.compiler()
             for (source in rule.scripts) {
-                let expression = if (ruleSet.expressionMode == ExpressionMode.Interpreted) {
-                    JitExpression.interpretedOf(source)
-                } else {
-                    JitExpression.of(source, compiler)
-                }
+                let expression = JitExpression.forRule(source, rule.patterns, registry,
+                    rule.factSpace, compiler, ruleSet.expressionMode)
                 expression.requireBindings(byBinding.keys().toArray())
             }
         }

@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashSet}
 import fountain::f_rule.fact.{Fact, FactHandle}
 
 /**
@@ -36,6 +36,8 @@ public class AlphaNode <: ReteNode {
     private let children_: ArrayList<AlphaNode>
     private let rightSinks_: ArrayList<RightSink>
     private let leftSinks_: ArrayList<LeftConsumer>
+    /** 共享本节点的规则 id；约束求值异常时按规则记失败。 */
+    private let ruleIds_: HashSet<String>
 
     public init(id: Int64, signature: AlphaSignature, test: (Fact) -> Bool) {
         this.id_ = id
@@ -44,12 +46,22 @@ public class AlphaNode <: ReteNode {
         this.children_ = ArrayList<AlphaNode>()
         this.rightSinks_ = ArrayList<RightSink>()
         this.leftSinks_ = ArrayList<LeftConsumer>()
+        this.ruleIds_ = HashSet<String>()
     }
 
     public prop id: Int64 {
         get() {
             id_
         }
+    }
+
+    /** 登记使用本节点的规则（签名共享时多个规则共用同一节点）。 */
+    public func addRule(ruleId: String): Unit {
+        ruleIds_.add(ruleId)
+    }
+
+    public func ruleIds(): Array<String> {
+        ruleIds_.toArray()
     }
 
     public func addChild(child: AlphaNode): Unit {
@@ -86,7 +98,14 @@ public class AlphaNode <: ReteNode {
 
     /** 沿链传播；测试失败立即短路，memory 幂等时不再重复通知下游。 */
     public func propagate(session: ReteSession, handle: FactHandle, fact: Fact): Unit {
-        if (!test(fact)) {
+        let passed = try {
+            test(fact)
+        } catch (e: Exception) {
+            // 动态事实字段类型在运行期才暴露；异常按 Unknown 处理，绝不穿透事件循环。
+            RuleFailureReporter.report(session, ruleIds_.toArray(), e, site())
+            return
+        }
+        if (!passed) {
             return
         }
         let memory = session.alphaMemory(id)
@@ -127,5 +146,9 @@ public class AlphaNode <: ReteNode {
 
     public func toString(): String {
         "AlphaNode(${id}, ${signature})"
+    }
+
+    private func site(): String {
+        "alpha#${id_}(${signature})"
     }
 }

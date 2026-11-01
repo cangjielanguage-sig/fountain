@@ -37,27 +37,27 @@ class TerminalTestSession <: ReteSession {
         }
     }
 
-    public func alphaMemory(nodeId: Int64): AlphaMemory {
+    public func alphaMemory(_: Int64): AlphaMemory {
         throw Exception("TerminalTestSession 不提供 alpha memory")
     }
 
-    public func betaMemory(nodeId: Int64): BetaMemory {
+    public func betaMemory(_: Int64): BetaMemory {
         throw Exception("TerminalTestSession 不提供 beta memory")
     }
 
-    public func betaProductions(nodeId: Int64): BetaProductions {
+    public func betaProductions(_: Int64): BetaProductions {
         throw Exception("TerminalTestSession 不提供 beta productions")
     }
 
-    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+    public func recordAlphaHits(_: FactHandle, _: Array<AlphaNode>): Unit {
         // 单节点用例不经过根节点分发，不需要命中记录。
     }
 
-    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+    public func alphaHits(_: FactHandle): ?Array<AlphaNode> {
         None
     }
 
-    public func forgetAlphaHits(handle: FactHandle): Unit {
+    public func forgetAlphaHits(_: FactHandle): Unit {
     }
 }
 

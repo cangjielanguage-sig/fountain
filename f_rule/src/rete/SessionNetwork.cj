@@ -18,6 +18,7 @@ package fountain::f_rule.rete
 import fountain::f_rule.agenda.ActivationSink
 import std.collection.HashMap
 import fountain::f_rule.fact.{Fact, FactHandle}
+import fountain::f_rule.rule.RuleFailureGuard
 
 /**
  * `(space, session)` 级网络运行态（`doc/04-rete-network.md` §1.1、D3）。
@@ -34,11 +35,15 @@ public class SessionNetwork <: ReteSession {
     private let productions_: HashMap<Int64, BetaProductions>
     /** 事实插入时命中的 alpha 链头；撤销时直接按记录回收，避免全链头扫描。 */
     private let alphaHits_: HashMap<FactHandle, Array<AlphaNode>>
+    /** 规则集级求值失败状态；与终端节点共享同一实例。 */
+    private let failureGuard_: RuleFailureGuard
 
-    public init(network: ReteNetwork, session: String, sink: ActivationSink) {
+    public init(network: ReteNetwork, session: String, sink: ActivationSink,
+        failureGuard!: RuleFailureGuard = RuleFailureGuard("standalone")) {
         this.network_ = network
         this.session = session
         this.sink_ = sink
+        this.failureGuard_ = failureGuard
         this.alphaMems_ = HashMap<Int64, AlphaMemory>()
         this.betaMems_ = HashMap<Int64, BetaMemory>()
         this.productions_ = HashMap<Int64, BetaProductions>()
@@ -48,6 +53,13 @@ public class SessionNetwork <: ReteSession {
     public prop sink: ActivationSink {
         get() {
             sink_
+        }
+    }
+
+    /** 规则集级求值失败状态（alpha/beta 节点报告约束异常时使用）。 */
+    public prop failureGuard: RuleFailureGuard {
+        get() {
+            failureGuard_
         }
     }
 

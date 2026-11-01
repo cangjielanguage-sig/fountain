@@ -15,44 +15,9 @@ limitations under the License.
 */
 package fountain::f_rule.agenda
 
-import std.collection.{ArrayList, HashMap}
-import fountain::f_rule.rule.{ActionContext, RuleAction}
-
 /**
- * 决策表动作：把 `then.*` 列的值写进输出槽（`doc/05-agenda-conflict-resolution.md` §7）。
+ * `TableAction` 已下沉到 `rule` 包（与 `RuleAction` 接口同包，避免包循环）。
  *
- * 不产生任何事实副作用，命中策略的聚合完全依赖输出槽。
- * 列值本身可以是字面量，也可以是绑定字段引用——引用解析在 M5 由决策表编译器完成，
- * 这里只负责写入最终值。
+ * 这里做公开重导出，保持 `fountain::f_rule.agenda.TableAction` 的历史导入路径不变。
  */
-public class TableAction {
-    private let entries_: ArrayList<(String, Any)>
-
-    public init(values: HashMap<String, Any>) {
-        let entries = ArrayList<(String, Any)>()
-        for ((name, value) in values) {
-            entries.add((name, value))
-        }
-        this.entries_ = entries
-    }
-
-    public init(entries: Array<(String, Any)>) {
-        let copy = ArrayList<(String, Any)>()
-        for (entry in entries) {
-            copy.add(entry)
-        }
-        this.entries_ = copy
-    }
-
-    public func execute(ctx: ActionContext): Unit {
-        for ((name, value) in entries_) {
-            ctx.set(name, value)
-        }
-    }
-
-    /** 转成 `RuleBuilder.then` 接受的函数类型。 */
-    public func asRuleAction(): RuleAction {
-        let self = this
-        { ctx: ActionContext => self.execute(ctx) }
-    }
-}
+public import fountain::f_rule.rule.TableAction

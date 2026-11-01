@@ -223,7 +223,7 @@ public interface RuleAction {
     func execute(ctx: ActionContext): Unit
 }
 
-public class ActionContext {
+public interface ActionContext {
     /** 当前激活所属事实库空间；动作默认只读写这个空间。 */
     public prop factSpace: String
     public func fact(binding: String): ?Fact
@@ -252,7 +252,24 @@ public class ActionContext {
 | `TableAction` | 决策表 `then.*` 列 | 写输出槽，不产生副作用 |
 | `ScriptAction` | f_jit 规则体 | 编译 `{ ctx: ActionContext => ... }` 后调用 |
 
-`ActionContext` 需要 `@JitBind` 才能在脚本里使用；闭包形参（`assert` 等）无法被宏展开，需在 `JitHostRegistry` 里手工注册。
+三种实现都在 `rule` 包（与 `RuleAction`、`ActionContext` 同包，避免包循环），
+`agenda` 包保留公开重导出，历史导入路径不变。`RuleBuilder` 的两个入口：
+
+```cangjie
+/** 公开签名不变；内部包装成 ClosureAction。 */
+public func then(action: (ActionContext) -> Unit): RuleBuilder
+
+/** 新增：脚本动作；编译失败在构建期抛 SCRIPT_COMPILE。 */
+public func thenScript(source: String): RuleBuilder
+```
+
+脚本动作的 `ActionContext` 方法表由 `ScriptAction` **手工注册**（不是 `@JitBind` 宏）：
+`set` 按实参静态类型注册 `Int64 / Float64 / Decimal / Bool / String` 五个重载，每个绑定
+使用独立函数名。原因是 f_jit 会把 `Any` 形参映射为 `HostObject`，宏展开后
+`ctx.set("x", 0.85)` 无法通过类型检查。脚本里写小数字面量时请显式带 `f64` 后缀
+（`0.85f64`）以命中 `Float64` 重载；裸 `0.85` 按 Cangjie 语义是 `Decimal`。
+返回 `Option`/`Any` 的方法（`fact`/`get`/`outputs`/`factIn`）尚不能表达为 f_jit 类型，
+暂不进入脚本面；需要这些能力时用宿主闭包 `then { ctx => ... }`。
 
 ## 8. 异常与事务
 

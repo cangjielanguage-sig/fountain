@@ -196,12 +196,12 @@ cjpm test --include-tags=perf --no-capture-output
 |---|---|
 | 冷构建（含全部路径依赖） | 约 4 分钟 |
 | 增量构建 | 约 3 秒 |
-| `cjpm test` 全量（418 用例，含性能门禁） | 约 2m45s |
+| `cjpm test` 全量（430 用例，含性能门禁） | 约 2m45s |
 | `cjpm test --exclude-tags=perf` | 约 1m20s |
 
 ## 状态
 
-**可用**：M0~M7 全部完成，`cjpm test` 418/418 通过，性能门禁 B-01~B-07 全部达标（见 [doc/perf.md](doc/perf.md)）。
+**可用**：M0~M7 全部完成，`cjpm test` 430/430 通过，性能门禁 B-01~B-07 全部达标（见 [doc/perf.md](doc/perf.md)）。
 
 已知边界：
 

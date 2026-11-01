@@ -27,15 +27,15 @@ import fountain::f_rule.fact.Fact
  * 只覆盖动态事实与决策表需要的子集：字段访问、字面量、比较、`&& || !`、白名单函数。
  * 没有算术与赋值——这些交给 JIT 路径。
  */
-enum Expr {
+enum InterpreterExpr {
     | Literal(Any)
     | NullLiteral
     | FieldRef(Array<String>)
-    | FuncCall(String, Array<Expr>)
-    | NotExpr(Expr)
-    | AndExpr(Expr, Expr)
-    | OrExpr(Expr, Expr)
-    | CompareExpr(Operator, Expr, Expr)
+    | FuncCall(String, Array<InterpreterExpr>)
+    | NotExpr(InterpreterExpr)
+    | AndExpr(InterpreterExpr, InterpreterExpr)
+    | OrExpr(InterpreterExpr, InterpreterExpr)
+    | CompareExpr(Operator, InterpreterExpr, InterpreterExpr)
 }
 
 /**
@@ -45,14 +45,16 @@ enum Expr {
  * 任何求值异常都视为 `Unknown`（不产生激活）；节点步数上限防止病态表达式拖死议程。
  */
 public class InterpreterProgram {
-    private let root: Expr
+    private let root: InterpreterExpr
     private let maxSteps: Int64
     private var steps: Int64
+    private var deadline: ?DateTime
 
-    private init(root: Expr, maxSteps: Int64) {
+    private init(root: InterpreterExpr, maxSteps: Int64) {
         this.root = root
         this.maxSteps = maxSteps
         this.steps = 0
+        this.deadline = None
     }
 
     /** 供 `JitExpression` 使用的公开入口；语法/函数错误抛 `SCRIPT_COMPILE`。 */
@@ -62,11 +64,39 @@ public class InterpreterProgram {
 
     /** 求值；异常与超限一律 `Unknown`，不穿透到事件循环。 */
     public func eval(bindings: HashMap<String, Fact>): Truth {
+        evaluate(bindings, None)[0]
+    }
+
+    /**
+     * 求值并保留失败分类；超时按 `ExpressionTimeoutException` 识别。
+     *
+     * @param deadline 单次求值截止时间；`None` 表示不设墙钟上限
+     */
+    public func evalOutcome(bindings: HashMap<String, Fact>,
+        deadline!: ?DateTime = None): EvalOutcome {
+        let result = evaluate(bindings, deadline)
+        match (result[1]) {
+            case EvalFailureKind.Evaluated => EvalOutcome.evaluated(result[0].isTrue())
+            case kind => EvalOutcome.failed(kind, result[2])
+        }
+    }
+
+    private func evaluate(bindings: HashMap<String, Fact>,
+        limit: ?DateTime): (Truth, EvalFailureKind, String) {
         steps = 0
+        deadline = limit
         try {
-            truthOf(root, bindings)
-        } catch (_: Exception) {
-            Truth.Unknown
+            (truthOf(root, bindings), EvalFailureKind.Evaluated, "")
+        } catch (e: ExpressionTimeoutException) {
+            (Truth.Unknown, EvalFailureKind.Timeout, e.message)
+        } catch (e: RuleException) {
+            if (e.code == RuleErrorCode.TYPE_MISMATCH) {
+                (Truth.Unknown, EvalFailureKind.TypeMismatch, e.message)
+            } else {
+                (Truth.Unknown, EvalFailureKind.RuntimeFailure, e.message)
+            }
+        } catch (e: Exception) {
+            (Truth.Unknown, EvalFailureKind.RuntimeFailure, e.message)
         }
     }
 
@@ -78,9 +108,16 @@ public class InterpreterProgram {
                 "表达式求值步数超过上限 ${maxSteps}"
             )
         }
+        match (deadline) {
+            case Some(limit) =>
+                if (DateTime.now() >= limit) {
+                    throw ExpressionTimeoutException()
+                }
+            case None => ()
+        }
     }
 
-    private func truthOf(expr: Expr, bindings: HashMap<String, Fact>): Truth {
+    private func truthOf(expr: InterpreterExpr, bindings: HashMap<String, Fact>): Truth {
         tick()
         match (expr) {
             case AndExpr(left, right) =>
@@ -127,7 +164,7 @@ public class InterpreterProgram {
         }
     }
 
-    private func valueOf(expr: Expr, bindings: HashMap<String, Fact>): ?Any {
+    private func valueOf(expr: InterpreterExpr, bindings: HashMap<String, Fact>): ?Any {
         tick()
         match (expr) {
             case Literal(value) => Some(value)
@@ -172,7 +209,7 @@ public class InterpreterProgram {
         None
     }
 
-    private func invoke(name: String, args: Array<Expr>, bindings: HashMap<String, Fact>): ?Any {
+    private func invoke(name: String, args: Array<InterpreterExpr>, bindings: HashMap<String, Fact>): ?Any {
         if (!InterpreterProgram.isWhitelisted(name)) {
             throw RuleException(RuleErrorCode.SCRIPT_COMPILE, "解释器不支持函数 ${name}")
         }
@@ -254,7 +291,7 @@ class ExpressionParser {
         this.nodes = 0
     }
 
-    static func parse(source: String, maxNodes: Int64): Expr {
+    static func parse(source: String, maxNodes: Int64): InterpreterExpr {
         let parser = ExpressionParser(source, maxNodes)
         let expr = parser.parseOr()
         parser.skipSpaces()
@@ -314,7 +351,7 @@ class ExpressionParser {
         true
     }
 
-    private func parseOr(): Expr {
+    private func parseOr(): InterpreterExpr {
         var left = parseAnd()
         while (true) {
             let save = pos
@@ -329,7 +366,7 @@ class ExpressionParser {
         left
     }
 
-    private func parseAnd(): Expr {
+    private func parseAnd(): InterpreterExpr {
         var left = parseUnary()
         while (true) {
             let save = pos
@@ -344,7 +381,7 @@ class ExpressionParser {
         left
     }
 
-    private func parseUnary(): Expr {
+    private func parseUnary(): InterpreterExpr {
         skipSpaces()
         if (matchText("!")) {
             countNode()
@@ -353,7 +390,7 @@ class ExpressionParser {
         parsePrimary()
     }
 
-    private func parsePrimary(): Expr {
+    private func parsePrimary(): InterpreterExpr {
         skipSpaces()
         if (matchText("(")) {
             let inner = parseOr()
@@ -365,7 +402,7 @@ class ExpressionParser {
         parseComparison()
     }
 
-    private func parseComparison(): Expr {
+    private func parseComparison(): InterpreterExpr {
         let left = parseTerm()
         skipSpaces()
         let op = matchComparison()
@@ -392,7 +429,7 @@ class ExpressionParser {
         None
     }
 
-    private func parseTerm(): Expr {
+    private func parseTerm(): InterpreterExpr {
         skipSpaces()
         countNode()
         match (peek()) {
@@ -408,7 +445,7 @@ class ExpressionParser {
         parseIdentifier()
     }
 
-    private func parseNumber(): Expr {
+    private func parseNumber(): InterpreterExpr {
         skipSpaces()
         var negative = false
         if (matchText("-")) {
@@ -471,7 +508,7 @@ class ExpressionParser {
         fail("字符串未闭合")
     }
 
-    private func parseIdentifier(): Expr {
+    private func parseIdentifier(): InterpreterExpr {
         skipSpaces()
         let start = pos
         while (pos < Int64(source.size)) {
@@ -525,14 +562,14 @@ class ExpressionParser {
         FieldRef(segments.toArray())
     }
 
-    private func parseCall(name: String): Expr {
+    private func parseCall(name: String): InterpreterExpr {
         if (!InterpreterProgram.isWhitelisted(name)) {
             fail("解释器不支持函数 ${name}")
         }
         if (!matchText("(")) {
             fail("缺少左括号")
         }
-        let args = ArrayList<Expr>()
+        let args = ArrayList<InterpreterExpr>()
         skipSpaces()
         let save = pos
         if (matchText(")")) {

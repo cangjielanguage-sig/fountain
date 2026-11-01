@@ -22,7 +22,7 @@ import fountain::f_egraph.base.{DummyEvent, EndEvent, Event, EventType, Immediat
 
 /** 记录残留分支实际被哪一轮的 start 消费。 */
 class ResidueBox {
-    public let arrivals = ArrayList<String>()
+    public let arrivals: ArrayList<String> = ArrayList<String>()
 }
 
 /**

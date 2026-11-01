@@ -143,7 +143,8 @@ public class ShardedNetwork {
     }
 
     private static func buildShard(ruleSet: RuleSet, space: String): ReteNetwork {
-        let network = ReteNetwork(space, expressionMode: ruleSet.expressionMode)
+        let network = ReteNetwork(space, expressionMode: ruleSet.expressionMode,
+            failureGuard: ruleSet.failureGuard)
         network.build(ruleSet.rules, ruleSet.registry)
         network
     }
