@@ -1497,7 +1497,7 @@ Persistence is split into two independent families, each with three choices:
 
 | Family | Stores | Implementations | Config key |
 |---|---|---|---|
-| Content | memories, experience, knowledge, documents | `postgres` / `mysql` / `fhydra` | `llm_contentStore` |
+| Content | memories, experience, knowledge, documents | `f_hydra` (default) / `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
 | Metadata | characters, skills, prompts, model configs | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
 
 - An unknown value **fails startup** with the list of available implementations; there is no silent fallback.
@@ -1505,12 +1505,16 @@ Persistence is split into two independent families, each with three choices:
 - Developers can implement `ContentStore` / `MetaStore` and register them via `Stores.registerContent` / `Stores.registerMeta`.
 
 ```cj
-// Metadata without a database; content still needs postgres / mysql / fhydra
+// Content defaults to f_hydra (in-process, no external dependency); switch to fhydra for HTTP
 Config.set<String>([
-    ('llm_contentStore', 'fhydra'),
+    ('llm_memoryStore', 'f_hydra'),
     ('llm_metaStore', 'f_store'),
     ('llm_metaStorePath', './data/f_llm-meta'),
-    ('llm_contentStoreUrl', 'http://127.0.0.1:8848')
+    ('llm_hydraPath', './data/f_hydra'),
+    // remote mode:
+    // ('llm_memoryStore', 'fhydra'),
+    // ('llm_hydraUrl', 'http://127.0.0.1:18081/rpc'),
+    // ('llm_hydraSecret', 'change-me')
 ])
 ```
 
@@ -1522,7 +1526,7 @@ Two config keys decide which implementation is used:
 
 ```cj
 Config.set<String>([
-    ('llm_memoryStore', 'postgres'),   // postgres / mysql / inMemory
+    ('llm_memoryStore', 'f_hydra'),    // f_hydra(default) / fhydra / postgres / mysql / inMemory
     ('llm_metaStore',   'f_store')     // postgres / mysql / f_store
 ]);
 ```
@@ -1531,8 +1535,10 @@ Config.set<String>([
 - **Metadata family** (characters / skills / prompts / model configs): `llm_metaStore` → `MetaStoreAdapter`;
 - Implementations are wired with `@Bean` + `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]`; adapters resolve them via `lookupOption<T>()`;
 - Call `StoreWiring.wire()` (from `fountain::f_llm.wiring`) at startup: it loads the implementation packages,
-  registers the `inMemory` / `postgres` / `mysql` content stores and runs the startup validation; an unregistered
+  registers the `inMemory` / `postgres` / `mysql` / `f_hydra` / `fhydra` content stores and runs the startup validation; an unregistered
   value fails immediately and lists the available implementations (no silent fallback);
+- `f_hydra` (default) is an in-process vector store configured by `llm_hydraPath`; `fhydra` is the remote
+  service and needs `llm_hydraUrl` + `llm_hydraSecret` (see `fhydra/README.md`);
 - `Memory` also calls `wire()` (idempotent) the first time it stores a summary, so a forgotten explicit wiring
   does not silently drop summaries (failures are logged as `warn`);
 - `wire()` also seeds the 7 predefined memory kinds into `llm_memory_kind` (`user_id=0`, weights from

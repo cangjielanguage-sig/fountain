@@ -1501,7 +1501,7 @@ Config.set<String>([
 
 ```cj
 Config.set<String>([
-    ('llm_memoryStore', 'postgres'),   // postgres / mysql / inMemory
+    ('llm_memoryStore', 'f_hydra'),    // f_hydra(榛樿) / fhydra / postgres / mysql / inMemory
     ('llm_metaStore',   'f_store')     // postgres / mysql / f_store
 ]);
 ```
