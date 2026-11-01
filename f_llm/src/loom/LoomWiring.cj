@@ -38,6 +38,11 @@ public class LoomWiring {
      * @param plannerModel 规划用模型；空串则 `LoomRequest.model` 优先、再回退默认
      * @return 已安装的 `LoomService`（同时写入 `LoomServices`）
      */
+    /** 零配置：直接用 `LLM.chatByName`（模型取 `plannerModel`，为空则调用时报错） */
+    public static func wire(plannerModel!: String = ''): LoomService {
+        wire(LoomDefaults.chat(plannerModel), plannerModel: plannerModel)
+    }
+
     public static func wire(chat: (String, String, String) -> String,
                             plannerModel!: String = ''): LoomService {
         let settings = StoreSettings.load()

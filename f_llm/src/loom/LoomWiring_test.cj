@@ -57,4 +57,16 @@ class LoomWiring_test {
         @Expect(service.status('not-exist'), '')
         LoomServices.reset()
     }
+
+    @TestCase
+    func testDefaultChatRejectsEmptyModel(): Unit {
+        let chat = LoomDefaults.chat('')
+        var message = ''
+        try{
+            chat('', '', 'hi')
+        }catch(e: Exception){
+            message = e.message
+        }
+        @Expect(message.contains('not configured'), true)
+    }
 }
