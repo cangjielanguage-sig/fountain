@@ -67,8 +67,10 @@ class HttpTransport <: HydraTransport {
             case Some(vector) => content = ',"contentDense":${numbers(vector)}'
             case None => ()
         }
+        // 元数据记录（seq / map）没有向量：给一个占位 dense，fhydra 要求至少一路非空
+        let dense = if(record.dense.isEmpty()){ [0.0f64] }else{ record.dense }
         let param = '{"collection":"${esc(collection)}","id":"${esc(record.id)}",'
-            + '"payload":"${esc(record.payload)}","denseB64":"${toBase64String(VectorCodecLike.encode(record.dense))}",'
+            + '"payload":"${esc(record.payload)}","denseB64":"${toBase64String(VectorCodecLike.encode(dense))}",'
             + '"saveTime":${record.saveTime}${title}${content}}'
         let body = call('hydra.upsert', '{"param":${param}}')
         let response = parse<BoolEnvelope>(body)
@@ -173,9 +175,11 @@ class HttpTransport <: HydraTransport {
                 throw IllegalStateException('hydra rpc failed, status ${response.status}')
             }
             let text = response.readEntire()
-            let envelope = parse<ErrorEnvelope>(text)
-            if(envelope.error.code != 0){
-                throw IllegalStateException('hydra rpc error ${envelope.error.code}: ${envelope.error.message}')
+            // 成功响应没有 error 字段；只有出现该键时才按错误解析（避免 populate 因缺字段失败）
+            if(text.contains('"error"')){
+                let envelope = parse<ErrorEnvelope>(text)
+                throw IllegalStateException(
+                    'hydra rpc error ${envelope.error.code}: ${envelope.error.message}')
             }
             text
         }
