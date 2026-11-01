@@ -1,5 +1,9 @@
 # Spec Delta — f-rule-engine-core
 
+## Purpose
+
+定义 f_rule 的对外门面与生命周期：规则集、引擎、会话的创建与关闭，构建期全量校验，统一错误模型，以及初始化与规模性能门禁。它是使用方唯一依赖的入口契约，保证「声明规则集 → 建会话 → 断言事实 → fire」的全流程行为稳定。
+
 ## ADDED Requirements
 
 ### Requirement: 门面与生命周期

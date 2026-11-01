@@ -1,6 +1,9 @@
-# Spec Delta — f-rule-condition
+# f-rule-condition Specification
 
-## ADDED Requirements
+## Purpose
+定义规则条件的表达与求值语义：算子集合、三值逻辑、操作数与模式的结构约束，以及表达式条件在即时编译与内置解释器两种求值模式下必须保持一致的判定结果。它为所有规则与决策表提供统一的「条件为真、为假、未知」契约。
+
+## Requirements
 
 ### Requirement: 算子语义
 

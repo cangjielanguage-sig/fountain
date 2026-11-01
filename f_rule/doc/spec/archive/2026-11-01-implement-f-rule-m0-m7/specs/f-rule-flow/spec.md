@@ -1,5 +1,9 @@
 # Spec Delta — f-rule-flow
 
+## Purpose
+
+定义规则与流程编排的接缝：单条规则如何映射为可独立启动的流程、规则集如何链式编排、扇出与汇合任务的语义，以及会话信息在流程中的透传方式。它保证规则执行可以被组合进更大的流程而语义不变。
+
 ## ADDED Requirements
 
 ### Requirement: 一条规则一个 Flow

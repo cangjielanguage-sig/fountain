@@ -1,6 +1,9 @@
-# Spec Delta — f-rule-rete
+# f-rule-rete Specification
 
-## ADDED Requirements
+## Purpose
+定义按事实库空间分片的 Rete 网络行为：alpha 与 beta 节点及令牌的构建、索引与规模策略、增量插入撤销更新的传播语义，以及冻结、重建与激活产出。它规定匹配结果必须与朴素匹配基准等价，同时满足性能门禁。
+
+## Requirements
 
 ### Requirement: 按 FactSpace 分片
 

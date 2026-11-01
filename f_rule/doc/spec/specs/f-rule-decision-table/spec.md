@@ -1,6 +1,9 @@
-# Spec Delta — f-rule-decision-table
+# f-rule-decision-table Specification
 
-## ADDED Requirements
+## Purpose
+定义以决策表形式声明规则的行为契约：表的模型与构建方式、单元格语法、命中策略，以及 CSV 与 XLSX 两种载体的读取与翻译规则。它保证同一张表在任一载体上加载后编译出的规则与执行结果一致，并携带可解释的出处信息。
+
+## Requirements
 
 ### Requirement: 表模型与构建 API
 

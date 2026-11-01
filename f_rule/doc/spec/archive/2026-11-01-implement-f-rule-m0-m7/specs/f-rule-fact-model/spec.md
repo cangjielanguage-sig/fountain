@@ -1,5 +1,9 @@
 # Spec Delta — f-rule-fact-model
 
+## Purpose
+
+定义事实的表示与事实库行为：强类型事实与动态字典事实的双形态、不可变与句柄语义、值的归一与比较，以及事实库空间的隔离与共享规则。它规定事实进入引擎后如何被标识、比较与跨规则可见。
+
 ## ADDED Requirements
 
 ### Requirement: 事实双形态
