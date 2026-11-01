@@ -107,4 +107,27 @@ class LoomFunctions_test {
         @Expect(registry.size(), 0)
         LoomServices.reset()
     }
+
+    @TestCase
+    func testExecuteAfterConfirmRunsFlow(): Unit {
+        let registry = install()
+        LoomServices.installHost(RunnerHost())
+        let function = LoomExecuteFunction()
+        function.call(param('{"nextEvent":"next","name":"daily","description":"d"}'))
+
+        function.call(param('{"nextEvent":"next","name":"daily","confirm":"true","execute":"true"}'))
+        @Expect(registry.get('daily').getOrThrow().status, LoomStatus.COMPILED)
+        LoomServices.reset()
+    }
+
+    @TestCase
+    func testExecuteAfterConfirmWithoutHostStillCompiles(): Unit {
+        let registry = install()
+        // 没装宿主：confirm+execute 只编译，跳过执行而不是抛错
+        let function = LoomExecuteFunction()
+        function.call(param('{"nextEvent":"next","name":"daily","description":"d"}'))
+        function.call(param('{"nextEvent":"next","name":"daily","confirm":"true","execute":"true"}'))
+        @Expect(registry.get('daily').getOrThrow().status, LoomStatus.COMPILED)
+        LoomServices.reset()
+    }
 }

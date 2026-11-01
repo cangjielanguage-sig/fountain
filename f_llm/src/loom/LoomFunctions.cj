@@ -20,12 +20,14 @@ import std.collection.*
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 import fountain::f_data.macros.*
+import fountain::f_egraph.base.*
 
 import fountain::f_llm.tool.*
 
-/** 服务实例的进程级持有者：宿主启动时 `install`，工具调用时取用 */
+/** 服务与宿主的进程级持有者：启动时安装，工具调用时取用 */
 public class LoomServices {
     private static var installed: ?LoomService = None
+    private static var host: ?LoomHost = None
 
     private init() {
     }
@@ -34,12 +36,21 @@ public class LoomServices {
         installed = Some(service)
     }
 
+    public static func installHost(value: LoomHost): Unit {
+        host = Some(value)
+    }
+
     public static func reset(): Unit {
         installed = None
+        host = None
     }
 
     public static func current(): ?LoomService {
         installed
+    }
+
+    public static func currentHost(): ?LoomHost {
+        host
     }
 }
 
@@ -61,6 +72,8 @@ public class LoomExecuteParam {
     private var dryRun: String = ''
     @JsonStringSchema[description:'"true" 时编译并注册；默认 false，只做预览']
     private var confirm: String = ''
+    @JsonStringSchema[description:'"true" 且 confirm=true 时，编译后立即执行一次；默认 false']
+    private var execute: String = ''
 }
 
 /**
@@ -94,6 +107,7 @@ public class LoomExecuteFunction <: FunctionCalling<LoomExecuteParam> {
         let result = if(confirm){
             service.confirmFlow(params.name)
         }else{
+
             if(params.description.trimAscii().isEmpty()){
                 return FunctionResult(event: params.nextEvent,
                     result: '[loomExecute] description is required when confirm=false')
@@ -102,7 +116,19 @@ public class LoomExecuteFunction <: FunctionCalling<LoomExecuteParam> {
                 tools: params.tools.toArray(), mcps: params.mcps.toArray(),
                 persona: params.persona), confirm: false)
         }
-        FunctionResult(event: params.nextEvent, result: summary(result))
+        var text = summary(result)
+        if(confirm && params.execute.trimAscii().toAsciiLower() == 'true'){
+            match(LoomServices.currentHost()){
+                case Some(host) =>
+                    let event = service.executeNow(params.name, host,
+                        StartEvent(category: 'loom', tag: params.name, name: 'start',
+                                   data: params.description))
+                    text += '\nexecuted: ${event.name}'
+                case None =>
+                    text += '\nexecute skipped: no loom host installed'
+            }
+        }
+        FunctionResult(event: params.nextEvent, result: text)
     }
 
     private static func summary(result: LoomResult): String {

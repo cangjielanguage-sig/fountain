@@ -46,6 +46,8 @@ public class LoomWiring {
         let planner = Planner({ system, user => chat(plannerModel, system, user) })
         let service = LoomService(planner, registry)
         LoomServices.install(service)
+        // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
+        LoomServices.installHost(DefaultLoomHost(chat))
         service
     }
 }
