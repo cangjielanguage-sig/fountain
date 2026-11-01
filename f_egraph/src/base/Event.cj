@@ -115,15 +115,15 @@ public class DummyEvent <: Event {
 }
 
 /**
- * 空事件：执行时什么也不做。
+ * 空事件：执行时什么也不做，只作为「取消指令」。
  *
- * - 单独入队时不参与执行（只作为「取消指令」）；
- * - `cancelPrev > 0` 表示删除队列中**前面** `cancelPrev` 条事件（跨优先级，按队列尾部往前数）。
+ * `cancelPrev > 0` 时删除队列中**前面** `cancelPrev` 条**同名 + 同优先级**的事件；
+ * `cancelPrev == 0` 时不做任何事。
  */
 public class EmptyEvent <: Event {
-    public init(priority!: Int64 = 2, cancelPrev!: Int64 = 0,
+    public init(name!: String = 'EmptyEvent', priority!: Int64 = 2, cancelPrev!: Int64 = 0,
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: 'EmptyEvent',
+        super(eventType: EventType.Dummy, category: '', tag: '', name: name,
               session: session, priority: priority, cancelPrev: cancelPrev)
     }
 }

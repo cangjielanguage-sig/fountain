@@ -32,7 +32,7 @@ import fountain::f_concurrent.*
  *
  * 取消：
  * - `cancelPrev > 0`：撤销队列中前面 N 条**同优先级**事件；
- * - [EmptyEvent] 的 `cancelPrev > 0`：撤销队列尾部 N 条事件（跨优先级），自身不执行。
+ * - [EmptyEvent] 的 `cancelPrev > 0`：撤销队列中前面 N 条**同名 + 同优先级**事件，自身不执行。
  *
  * 执行由 `runNext()` / `drain()` 驱动（便于单线程确定性；`exec` 里的 0 号事件除外，它是立即的）。
  */
@@ -78,7 +78,8 @@ public class QueuedClosureTask <: ClosureTask {
         synchronized(mutex){
             if(e.cancelPrev > 0){
                 if(e is EmptyEvent){
-                    dropTail(e.cancelPrev)
+                    // EmptyEvent：取消队列中「同名 + 同优先级」的前 cancelPrev 条
+                    dropTailByNameAndPriority(e.name, e.priority, e.cancelPrev)
                     return
                 }
                 dropTailSamePriority(e.priority, e.cancelPrev)
@@ -258,9 +259,15 @@ public class QueuedClosureTask <: ClosureTask {
         cmp
     }
 
-    /** 删除队列尾部 n 条（跨优先级，按入队序号从新到旧） */
-    private func dropTail(n: Int64): Unit {
-        let entries = queue.toArray()
+    /** 删除队列尾部 n 条「同名 + 同优先级」事件（EmptyEvent 的取消语义） */
+    private func dropTailByNameAndPriority(name: String, priority: Int64, n: Int64): Unit {
+        let matched = ArrayList<QueueEntry>()
+        for(item in queue.toArray()){
+            if(item.event.priority == priority && item.event.name == name){
+                matched.add(item)
+            }
+        }
+        let entries = matched.toArray()
         sortBySequenceDesc(entries)
         let limit = if(n > Int64(entries.size)){ Int64(entries.size) }else{ n }
         for(index in 0..limit){

@@ -134,11 +134,36 @@ class QueuedClosureTask_test {
         let recorder = RecordingDispatcher()
         let task = newTask(recorder)
         task.submit(ev('a', 2))
+        task.submit(ev('a', 2))
         task.submit(ev('b', 2))
-        task.submit(EmptyEvent(cancelPrev: 1))   // 删除队列尾部 1 条
+        // 取消 1 条「同名 a + 同优先级 2」的事件
+        task.submit(EmptyEvent(name: 'a', priority: 2, cancelPrev: 1))
+
+        @Expect(task.pending, 2)      // 剩 a、b
+        @Expect(task.drain(), 2)
+    }
+
+    @TestCase
+    func testEmptyEventOnlyCancelsSameName(): Unit {
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
+        task.submit(ev('a', 2))
+        // 名字不同：不取消任何事件
+        task.submit(EmptyEvent(name: 'x', priority: 2, cancelPrev: 1))
 
         @Expect(task.pending, 1)
         @Expect(task.drain(), 1)
+    }
+
+    @TestCase
+    func testEmptyEventOnlyCancelsSamePriority(): Unit {
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
+        task.submit(ev('a', 2))
+        // 优先级不同：不取消
+        task.submit(EmptyEvent(name: 'a', priority: 3, cancelPrev: 1))
+
+        @Expect(task.pending, 1)
     }
 
     @TestCase
