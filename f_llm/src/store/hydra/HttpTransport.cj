@@ -69,9 +69,20 @@ class HttpTransport <: HydraTransport {
         }
         // 元数据记录（seq / map）没有向量：给一个占位 dense，fhydra 要求至少一路非空
         let dense = if(record.dense.isEmpty()){ [0.0f64] }else{ record.dense }
+        var ids = ''
+        var weights = ''
+        for((token, weight) in record.sparse){
+            if(!ids.isEmpty()){
+                ids += ','
+                weights += ','
+            }
+            ids += token.toString()
+            weights += weight.toString()
+        }
         let param = '{"collection":"${esc(collection)}","id":"${esc(record.id)}",'
             + '"payload":"${esc(record.payload)}","denseB64":"${toBase64String(VectorCodecLike.encode(dense))}",'
-            + '"saveTime":${record.saveTime}${title}${content}}'
+            + '"saveTime":${record.saveTime}${title}${content},'
+            + '"tokenIds":[${ids}],"weights":[${weights}]}'
         let body = call('hydra.upsert', '{"param":${param}}')
         let response = parse<BoolEnvelope>(body)
         if(!response.result){
@@ -204,23 +215,49 @@ class HttpTransport <: HydraTransport {
         text + ']'
     }
 
+    /**
+     * JSON 字符串转义：全程按字节累积，最后一次 `fromUtf8`。
+     *
+     * 不用逐字节 `String.fromUtf8([ch])` 拼接——那会把 UTF-8 多字节字符（中文）
+     * 拆成非法单字节序列；也不依赖字符字面量的转义写法（易错）。
+     */
     private static func esc(text: String): String {
-        var result = ''
+        let out = ArrayList<Byte>()
         for(byte in text.toArray()){
             let ch = UInt8(byte)
             if(ch == 34u8){
-                result += '\\"'
+                out.add(92u8)
+                out.add(34u8)
             }else if(ch == 92u8){
-                result += '\\\\'
+                out.add(92u8)
+                out.add(92u8)
             }else if(ch == 10u8){
-                result += '\\n'
+                out.add(92u8)
+                out.add(110u8)
             }else if(ch == 13u8){
-                result += '\\r'
+                out.add(92u8)
+                out.add(114u8)
+            }else if(ch < 32u8){
+                // 其余控制字符（如记忆 payload 的分隔符 0x01）必须转成 \u00XX
+                out.add(92u8)
+                out.add(117u8)
+                out.add(48u8)
+                out.add(48u8)
+                out.add(hexOf(ch >> 4))
+                out.add(hexOf(ch & 0x0Fu8))
             }else{
-                result += String.fromUtf8([ch])
+                out.add(ch)
             }
         }
-        result
+        String.fromUtf8(out.toArray())
+    }
+
+    private static func hexOf(value: UInt8): Byte {
+        if(value < 10u8){
+            48u8 + value
+        }else{
+            97u8 + (value - 10u8)
+        }
     }
 }
 

@@ -38,6 +38,9 @@ public class UpsertParam {
     public var contentDense: ArrayList<Float64> = ArrayList<Float64>()
     /** 业务时间（epoch 秒），ids 排序用 */
     public var saveTime: Int64 = 0
+    /** sparse：tokenIds 与 weights 一一对应 */
+    public var tokenIds: ArrayList<Int64> = ArrayList<Int64>()
+    public var weights: ArrayList<Float64> = ArrayList<Float64>()
 
     public init() {
     }

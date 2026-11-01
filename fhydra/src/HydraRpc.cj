@@ -200,7 +200,14 @@ public class HydraRpc {
         if(!param.contentDense.isEmpty()){
             vectors['content'] = param.contentDense.toArray()
         }
+        let sparse = HashMap<Int64, Float64>()
+        for(index in 0..param.tokenIds.size){
+            if(index < param.weights.size){
+                sparse[param.tokenIds[index]] = param.weights[index]
+            }
+        }
         VectorRecord(id, payload, dense,
+                     sparse: sparse,
                      filters: filtersOf(param.kind, param.saveDay, param.tags),
                      vectors: vectors, saveTime: param.saveTime)
     }
