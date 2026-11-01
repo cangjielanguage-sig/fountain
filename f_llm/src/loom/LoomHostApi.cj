@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_llm.loom
 
+import std.collection.*
+
 import fountain::f_egraph.base.*
 
 /**
@@ -28,23 +30,33 @@ import fountain::f_egraph.base.*
  */
 public class LoomHostApi {
     private static var current: ?LoomHost = None
+    /** 已执行步骤的输出：`{id.output}` 模板从这里取值 */
+    private static var values = HashMap<String, String>()
 
     private init() {
     }
 
     public static func bind(host: LoomHost): Unit {
         current = Some(host)
+        values = HashMap<String, String>()
     }
 
     public static func unbind(): Unit {
         current = None
+        values = HashMap<String, String>()
     }
 
+    /**
+     * 模板替换：把 `{stepId.output}` 换成该步骤已产出的数据。
+     *
+     * 未命中的占位符原样保留——让模型/开发者看到「这里没取到值」，比静默替换成空串好排错。
+     */
     public static func render(template: String, e: Event): String {
-        match(current){
-            case Some(host) => host.render(template, e)
-            case None => template
+        var text = template
+        for((name, value) in values){
+            text = text.replace('{${name}.output}', value)
         }
+        text
     }
 
     public static func callTool(name: String, argsJson: String): String {
@@ -54,19 +66,36 @@ public class LoomHostApi {
         }
     }
 
-    /**
-     * 生成事件：f_jit 不支持命名实参，所以由宿主代建 `TaskEvent`。
-     *
-     * 生成的步骤体只需要一次位置参数调用，编译期不依赖构造器的具名参数。
-     */
-    public static func taskEvent(e: Event, name: String, data: Any): Event {
-        TaskEvent(category: e.category, tag: e.tag, name: name, data: data)
-    }
-
     public static func callLlm(model: String, system: String, input: String): String {
         match(current){
             case Some(host) => host.callLlm(model, system, input)
             case None => throw LoomException('loom host is not bound, cannot call llm: ${model}')
+        }
+    }
+
+    /**
+     * 生成事件：f_jit 不支持命名实参，所以由宿主代建 `TaskEvent`。
+     *
+     * 同时把输出记进 `values`，供后续步骤的 `{id.output}` 模板取值。
+     */
+    public static func taskEvent(e: Event, name: String, data: Any): Event {
+        values[name] = textOf(data)
+        TaskEvent(category: e.category, tag: e.tag, name: name, data: data)
+    }
+
+    /** 供测试/诊断：某步骤当前记录的输出 */
+    public static func valueOf(name: String): String {
+        values.get(name) ?? ''
+    }
+
+    private static func textOf(data: Any): String {
+        match(data as String){
+            case Some(text) => text
+            case None =>
+                match(data as Int64){
+                    case Some(number) => number.toString()
+                    case None => ''
+                }
         }
     }
 }
