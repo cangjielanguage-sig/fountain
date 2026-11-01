@@ -1,3 +1,13 @@
+2026-11-01
+    feat(f_rule): M5.5 装配层 —— `TableSource` 接口反转，`RuleSetBuilder.table(source)` 把决策表
+      编译进规则集；`TableCompiler` / `TableExecutor` / `resolvedFactType` 入参收窄为
+      `FactSpaceRegistry`，表可脱离完整 `RuleSet` 编译
+    feat(f_rule): `RuleEngine.executeTable(table, session, trace)`，执行器按 `(id, version)` 缓存
+    feat(f_rule): 议程 `activationGroup` 通用互斥组：同组只执行一条，`activationGroup` 不参与激活相等键；
+      HitPolicy 映射为组 + 行序 salience（`Priority`/`Any`/`OutputOrder`/`Unique` 运行期降级并 WARN）
+    feat(f_rule): 表两条执行路径实例级硬互斥，跨模式抛新增的第 27 个错误码 `TABLE_MODE_CONFLICT`
+    docs(f_rule): doc/07 §2.1 两条路径等价表、doc/08 CSV 示例拆分聚合/议程路径
+
 2026-10-31
     chore(f_rule): M0 骨架 —— 9 个包（exception/fact/condition/rule/rete/agenda/flow/table）、
       26 个错误码与 RuleException、RuleRuntime 共享编译器、RuleInitializer（f_app 注册）

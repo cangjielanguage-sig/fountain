@@ -18,8 +18,7 @@ package fountain::f_rule.table
 import std.collection.{ArrayList, HashMap}
 import fountain::f_jit.Compiler
 import fountain::f_rule.condition.Truth
-import fountain::f_rule.fact.{Fact, FactBaseView}
-import fountain::f_rule.rule.RuleSet
+import fountain::f_rule.fact.{Fact, FactBaseView, FactSpaceRegistry}
 
 /** 单行求值结果：是否命中、命中的事实与逐列 trace。 */
 class RowOutcome {
@@ -45,13 +44,14 @@ public class TableExecutor {
     private let compiled_: CompiledTable
 
     /** 无 `expr` 列时使用；有 `expr` 列请用带 `compiler` 的重载。 */
-    public init(table: DecisionTable, ruleSet: RuleSet) {
-        this(table, ruleSet, Compiler())
+    public init(table: DecisionTable, registry: FactSpaceRegistry) {
+        this(table, registry, Compiler())
     }
 
-    public init(table: DecisionTable, ruleSet: RuleSet, compiler: Compiler) {
+    public init(table: DecisionTable, registry: FactSpaceRegistry, compiler: Compiler) {
+        table.markExecuted()
         this.table_ = table
-        this.compiled_ = TableCompiler(table, ruleSet, compiler).compile()
+        this.compiled_ = TableCompiler(table, registry, compiler).compile()
     }
 
     /** 在给定事实视图上执行；`trace = true` 时返回逐行逐列判定明细。 */

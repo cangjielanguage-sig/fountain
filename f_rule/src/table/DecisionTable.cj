@@ -16,10 +16,12 @@ limitations under the License.
 package fountain::f_rule.table
 
 import std.collection.ArrayList
+import std.sync.Mutex
 import fountain::f_jit.Compiler
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
-import fountain::f_rule.fact.FactSpace
-import fountain::f_rule.rule.{Rule, RuleSet}
+import fountain::f_rule.fact.FactSpaceRegistry
+import fountain::f_rule.rule.{Rule, RuleSet, TableSource}
+import fountain::f_rule.runtime.RuleRuntime
 
 /**
  * 决策表模型（`doc/07-decision-table.md` §1）。
@@ -27,7 +29,7 @@ import fountain::f_rule.rule.{Rule, RuleSet}
  * 一张表绑定一个 `factSpace` 与一个 `factType`；`factType` 未声明时按空间内
  * 唯一类型推断（设计 D9）。`hitPolicy` 只影响结果聚合，不进入单条规则。
  */
-public class DecisionTable {
+public class DecisionTable <: TableSource {
     public let id: String
     public let name: String
     public let version: String
@@ -41,6 +43,8 @@ public class DecisionTable {
     public let salience: Int64
     /** `Priority` / `OutputOrder` 使用的输出列顺序。 */
     public let outputOrder: Array<String>
+    private let modeMutex_: Mutex
+    private var mode_: TableMode
 
     init(id: String, name: String, version: String, factSpace: String, factType: String,
         hitPolicy: HitPolicy, columns: Array<Column>, rows: Array<TableRow>, salience: Int64,
@@ -55,6 +59,47 @@ public class DecisionTable {
         this.rows = rows
         this.salience = salience
         this.outputOrder = outputOrder
+        this.modeMutex_ = Mutex()
+        this.mode_ = TableMode.Unbound
+    }
+
+    /** 当前执行路径；两条路径硬互斥（`doc/11-assembly.md` §4.5）。 */
+    public prop mode: TableMode {
+        get() {
+            synchronized(modeMutex_) {
+                mode_
+            }
+        }
+    }
+
+    /** 装配路径占用实例；已被聚合路径使用时抛 `TABLE_MODE_CONFLICT`。 */
+    func markAssembled(): Unit {
+        synchronized(modeMutex_) {
+            match (mode_) {
+                case Executed =>
+                    throw RuleException(
+                        RuleErrorCode.TABLE_MODE_CONFLICT,
+                        "决策表 ${id} 已用于聚合路径（TableExecutor），不能再装配进规则集；" +
+                        "两条路径互斥，请新建表实例"
+                    )
+                case _ => mode_ = TableMode.Assembled
+            }
+        }
+    }
+
+    /** 聚合路径占用实例；已被装配路径使用时抛 `TABLE_MODE_CONFLICT`。 */
+    func markExecuted(): Unit {
+        synchronized(modeMutex_) {
+            match (mode_) {
+                case Assembled =>
+                    throw RuleException(
+                        RuleErrorCode.TABLE_MODE_CONFLICT,
+                        "决策表 ${id} 已装配进规则集，不能再用于 TableExecutor；" +
+                        "两条路径互斥，请新建表实例"
+                    )
+                case _ => mode_ = TableMode.Executed
+            }
+        }
     }
 
     public static func builder(id: String): DecisionTableBuilder {
@@ -88,8 +133,8 @@ public class DecisionTable {
      *
      * 显式 `factType` 优先；未声明时空间必须恰好有一个类型，否则 `TABLE_INVALID`。
      */
-    public func resolvedFactType(ruleSet: RuleSet): String {
-        let space = match (ruleSet.registry.get(factSpace)) {
+    public func resolvedFactType(registry: FactSpaceRegistry): String {
+        let space = match (registry.get(factSpace)) {
             case Some(found) => found
             case None =>
                 throw RuleException(
@@ -129,11 +174,22 @@ public class DecisionTable {
      * `RuleSetBuilder.table()` 或带 `compiler` 的重载，以复用应用的共享编译器。
      */
     public func compile(ruleSet: RuleSet): Array<Rule> {
-        compile(ruleSet, Compiler())
+        compileInto(ruleSet.registry)
     }
 
     public func compile(ruleSet: RuleSet, compiler: Compiler): Array<Rule> {
-        TableCompiler(this, ruleSet, compiler).compile().rules
+        markAssembled()
+        TableCompiler(this, ruleSet.registry, compiler, agendaPath: true).compile().rules
+    }
+
+    /**
+     * 编译成规则（`TableSource`，`doc/11-assembly.md` §4.1）。
+     *
+     * 使用进程级共享编译器，脚本条件与代码规则命中同一份类型注册表。
+     */
+    public func compileInto(registry: FactSpaceRegistry): Array<Rule> {
+        markAssembled()
+        TableCompiler(this, registry, RuleRuntime.compiler(), agendaPath: true).compile().rules
     }
 
     public func toString(): String {

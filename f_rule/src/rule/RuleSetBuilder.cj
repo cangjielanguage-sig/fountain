@@ -109,6 +109,20 @@ public class RuleSetBuilder {
         this
     }
 
+    /**
+     * 把一张决策表编译成规则后加入规则集（`doc/11-assembly.md` §4.1）。
+     *
+     * 表引用的 `factSpace` 必须已通过 `factSpace(id)` 声明、且已注册对应的
+     * `FactSchema`；否则编译期抛 `UNKNOWN_FACT_SPACE` / `UNKNOWN_TYPE`。
+     * 编译出的规则 id 冲突时抛 `DUPLICATE_RULE`。
+     */
+    public func table(source: TableSource): RuleSetBuilder {
+        for (rule in source.compileInto(registry_)) {
+            let _ = this.rule(rule)
+        }
+        this
+    }
+
     /** 表达式求值模式，缺省 `JitPreferred`。 */
     public func expressionMode(mode: ExpressionMode): RuleSetBuilder {
         expressionMode_ = mode

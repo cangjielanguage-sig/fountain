@@ -37,6 +37,8 @@ public class Activation <: Hashable & Equatable<Activation> & ToString {
     public let salience: Int64
     public let seq: Int64
     public let specificity: Int64
+    /** 互斥组名；只影响调度，不参与 `key_`（相等键）。 */
+    public let activationGroup: ?String
     private let key_: String
 
     public init(rule: Rule, bindings: Bindings) {
@@ -46,6 +48,7 @@ public class Activation <: Hashable & Equatable<Activation> & ToString {
         this.salience = rule.salience
         this.seq = Activation.nextSeq()
         this.specificity = Activation.specificityOf(rule)
+        this.activationGroup = rule.activationGroup
         this.key_ = "${rule.factSpace}|${rule.id}|${bindings.sortKey()}"
     }
 

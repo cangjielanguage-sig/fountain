@@ -52,7 +52,8 @@ public class RuleSetBuilder {
     public func registerDynamicType(space: String, typeTag: String, fields: Array<String>): RuleSetBuilder
     public func rule(rule: Rule): RuleSetBuilder
     public func rules(rules: Array<Rule>): RuleSetBuilder
-    public func table(table: DecisionTable): RuleSetBuilder
+    /** 把决策表编译成规则后加入规则集；表只依赖 `TableSource` 接口。 */
+    public func table(source: TableSource): RuleSetBuilder
     /** 表达式求值模式，缺省 JitPreferred。 */
     public func expressionMode(mode: ExpressionMode): RuleSetBuilder
     /** 冲突消解策略，缺省 salience → specificity → ruleOrder → seq。 */
@@ -175,11 +176,12 @@ import std.fs.Path
 
 main() {
     // orderSchema 沿用 §5 的定义
+
+    // ① 聚合路径：直接执行整表，拿到 TableResult / RowTrace
     let table = CsvTableParser.parseFile(Path("./rules/pricing.csv"))
     let ruleSet = RuleSetBuilder(table.id)
         .version(table.version)
         .registerFact(table.factSpace, orderSchema)
-        .table(table)
         .build()
 
     let engine = RuleEngine(ruleSet)
@@ -190,6 +192,21 @@ main() {
     for (output in result.outputs) {
         println(output.get("discount").getOrThrow())
     }
+
+    // ② 议程路径：表编译成规则进入规则集，与代码规则一起 fire。
+    //    两条路径对同一实例互斥，必须重新解析一份表。
+    let agendaTable = CsvTableParser.parseFile(Path("./rules/pricing.csv"))
+    let mixed = RuleSetBuilder(agendaTable.id)
+        .version(agendaTable.version)
+        .registerFact(agendaTable.factSpace, orderSchema)
+        .table(agendaTable)
+        .build()
+
+    let mixedEngine = RuleEngine(mixed)
+    let mixedSession = mixedEngine.session("order-1001")
+    mixedSession.assert(agendaTable.factSpace, TypedFact(Order("1001", 500, 3), orderSchema))
+    let outputs = mixedSession.fire()
+    println(outputs.get("discount").getOrThrow())
 }
 ```
 
@@ -248,8 +265,12 @@ public class RuleEngine {
     /** 释放会话及其事实、令牌、议程。 */
     public func release(id: String): Bool
 
-    /** 按决策表的 hitPolicy 执行并聚合输出。M5 实现。 */
-    public func executeTable(table: DecisionTable, session: RuleSession): TableResult
+    /**
+     * 按决策表的 hitPolicy 执行并聚合输出；执行器按 `(id, version)` 缓存。
+     * 与 `.table()` 装配路径对同一张表硬互斥（`TABLE_MODE_CONFLICT`）。
+     */
+    public func executeTable(table: DecisionTable, session: RuleSession,
+        trace!: Bool = false): TableResult
 
     public prop ruleSet: RuleSet
     public prop closed: Bool

@@ -186,7 +186,7 @@ match (activation.activationGroup) {
 | `RuleOrder` | 不分组 + 按 salience，等价 | 完整 |
 | `OutputOrder` | 不分组 + **按行序**执行：无法按输出值排序 | 完整：按输出值升序 |
 
-三项降级（`Unique` 的运行期检查、`Priority`、`Any`、`OutputOrder`）不是实现偷懒，是议程的固有边界——议程按激活调度，看不到「表的整批输出」。需要完整语义时用 `executeTable`。
+上述降级（`Unique` 的运行期检查、`Priority`、`Any`、`OutputOrder`）不是实现偷懒，是议程的固有边界——议程按激活调度，看不到「表的整批输出」。需要完整语义时用 `executeTable`。
 
 ### 4.5 两条路径互斥（实例级）
 

@@ -57,6 +57,8 @@ public enum RuleErrorCode <: ToString & Hashable & Equatable<RuleErrorCode> {
     | TABLE_NO_MATCH
     /** `Unique`/`Any` 命中策略下多命中。 */
     | TABLE_MULTI_MATCH
+    /** 同一张决策表被装配路径与聚合路径同时使用。 */
+    | TABLE_MODE_CONFLICT
     /** 网络/空间集合已冻结后仍尝试注册规则或空间。 */
     | NETWORK_FROZEN
     /** `Agenda.fire` 超过循环上限。 */
@@ -96,6 +98,7 @@ public enum RuleErrorCode <: ToString & Hashable & Equatable<RuleErrorCode> {
             case TABLE_INVALID => "TABLE_INVALID"
             case TABLE_NO_MATCH => "TABLE_NO_MATCH"
             case TABLE_MULTI_MATCH => "TABLE_MULTI_MATCH"
+            case TABLE_MODE_CONFLICT => "TABLE_MODE_CONFLICT"
             case NETWORK_FROZEN => "NETWORK_FROZEN"
             case CYCLE_LIMIT => "CYCLE_LIMIT"
             case SCRIPT_COMPILE => "SCRIPT_COMPILE"
@@ -109,7 +112,7 @@ public enum RuleErrorCode <: ToString & Hashable & Equatable<RuleErrorCode> {
         }
     }
 
-    /** 由稳定名派生，保证与 `==` 自洽且 26 个变体互不相同。 */
+    /** 由稳定名派生，保证与 `==` 自洽且 27 个变体互不相同。 */
     public func hashCode(): Int64 {
         "fountain::f_rule.exception.RuleErrorCode.${this}".hashCode()
     }
@@ -132,6 +135,7 @@ public enum RuleErrorCode <: ToString & Hashable & Equatable<RuleErrorCode> {
             case (TABLE_INVALID, TABLE_INVALID) => true
             case (TABLE_NO_MATCH, TABLE_NO_MATCH) => true
             case (TABLE_MULTI_MATCH, TABLE_MULTI_MATCH) => true
+            case (TABLE_MODE_CONFLICT, TABLE_MODE_CONFLICT) => true
             case (NETWORK_FROZEN, NETWORK_FROZEN) => true
             case (CYCLE_LIMIT, CYCLE_LIMIT) => true
             case (SCRIPT_COMPILE, SCRIPT_COMPILE) => true

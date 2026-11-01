@@ -17,11 +17,13 @@ package fountain::f_rule.table
 
 import std.collection.{ArrayList, HashMap}
 import std.convert.*
+import std.sync.Mutex
 import fountain::f_jit.Compiler
+import fountain::f_log.LoggerFactory
 import fountain::f_rule.condition.{Constraint, JitExpression, Operand, Operator, Pattern}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
-import fountain::f_rule.fact.{Fact, FactSpace, FieldType}
-import fountain::f_rule.rule.{ActionContext, Rule, RuleAction, RuleSet, Validator}
+import fountain::f_rule.fact.{Fact, FactSpace, FactSpaceRegistry, FieldType}
+import fountain::f_rule.rule.{ActionContext, Rule, RuleAction, Validator}
 
 /** 编译后的一个条件列：`when` 列产出约束，`expr` 列产出 JIT 表达式。 */
 public class CompiledCondition {
@@ -95,17 +97,28 @@ public class CompiledTable {
  * 空表 → 类型推断 → 字段/算子/值 → 输出引用 → 行级 salience → `Unique` 重复行。
  */
 public class TableCompiler {
+    private static let log = LoggerFactory.getLogger<TableCompiler>()
+    private static let countMtx = Mutex()
+    private static var compileCount_: Int64 = 0
     private let table_: DecisionTable
     private let compiler_: Compiler
     private let space_: FactSpace
     private let factType_: String
     private let hostType_: String
+    /** `true` 表示编译结果为议程路径（`RuleSetBuilder.table`），需要提示 HitPolicy 降级。 */
+    private let agendaPath_: Bool
 
-    public init(table: DecisionTable, ruleSet: RuleSet, compiler: Compiler) {
+    /**
+     * @param agendaPath 编译目标是议程路径时为 `true`，会对无法完整表达的 HitPolicy 打 WARN；
+     *                   `TableExecutor` 的聚合路径传 `false`。
+     */
+    public init(table: DecisionTable, registry: FactSpaceRegistry, compiler: Compiler,
+        agendaPath!: Bool = false) {
         this.table_ = table
         this.compiler_ = compiler
-        this.factType_ = table.resolvedFactType(ruleSet)
-        this.space_ = match (ruleSet.registry.get(table.factSpace)) {
+        this.agendaPath_ = agendaPath
+        this.factType_ = table.resolvedFactType(registry)
+        this.space_ = match (registry.get(table.factSpace)) {
             case Some(found) => found
             case None =>
                 throw RuleException(
@@ -119,7 +132,21 @@ public class TableCompiler {
         }
     }
 
+    /**
+     * 测试观测点：进程内累计编译次数（`doc/11-assembly.md` §7 AS-07）。
+     *
+     * 不属于稳定 API；生产代码不应依赖。用于断言引擎的执行器缓存只编译一次。
+     */
+    public static func compileCount(): Int64 {
+        synchronized(countMtx) {
+            compileCount_
+        }
+    }
+
     public func compile(): CompiledTable {
+        synchronized(countMtx) {
+            compileCount_ += 1
+        }
         if (table_.rows.isEmpty()) {
             throw RuleException(
                 RuleErrorCode.TABLE_INVALID,
@@ -129,20 +156,25 @@ public class TableCompiler {
         if (table_.hitPolicy == HitPolicy.Unique) {
             requireUniqueRows()
         }
+        if (agendaPath_) {
+            warnAgendaDegradation()
+        }
         let fieldTypes = space_.fieldTypes(factType_)
         let fieldNames = space_.fieldNames(factType_)
         let binding = table_.binding
         let rows = ArrayList<CompiledRow>()
         let rules = ArrayList<Rule>()
+        var rowIndex: Int64 = 0
         for (row in table_.rows) {
-            let compiled = compileRow(row, binding, fieldTypes, fieldNames)
+            let compiled = compileRow(row, rowIndex, binding, fieldTypes, fieldNames)
             rows.add(compiled)
             rules.add(compiled.rule)
+            rowIndex += 1
         }
         CompiledTable(factType_, binding, rows.toArray(), rules.toArray())
     }
 
-    private func compileRow(row: TableRow, binding: String,
+    private func compileRow(row: TableRow, rowIndex: Int64, binding: String,
         fieldTypes: HashMap<String, FieldType>, fieldNames: Array<String>): CompiledRow {
         let conditions = ArrayList<CompiledCondition>()
         let pattern = Pattern(factType_, binding)
@@ -176,7 +208,7 @@ public class TableCompiler {
             index += 1
         }
         let outputs = compileOutputs(row, binding, fieldNames)
-        let salience = salienceOf(row)
+        let salience = agendaSalience(row, rowIndex)
         let action = actionFor(binding, outputs)
         let rule = buildRule(row, pattern, scripts, action, salience)
         CompiledRow(row, rule, conditions.toArray(), outputs, salience)
@@ -185,14 +217,63 @@ public class TableCompiler {
     /** 先构造模式再建规则；动作闭包按行绑定解析输出。 */
     private func buildRule(row: TableRow, pattern: Pattern, scripts: ArrayList<String>,
         action: RuleAction, salience: Int64): Rule {
-        let builder = Rule.builder(row.ruleId)
+        // 表 id 前缀避免不同表的同名行冲突（AS-02）
+        let builder = Rule.builder("${table_.id}/${row.ruleId}")
             .salience(salience)
             .facts(table_.factSpace)
             .addPattern(pattern)
+        match (agendaGroup()) {
+            case Some(group) => builder.activationGroup(group)
+            case None => ()
+        }
         for (source in scripts) {
             builder.script(source)
         }
         builder.then(action).build()
+    }
+
+    /**
+     * 议程路径下的互斥组：只有「只执行一行」的策略需要分组。
+     *
+     * `First` / `Unique` / `Priority` 语义都是多命中时取一条，落到议程即同组互斥；
+     * 其余策略允许全部命中，不分组。
+     */
+    private func agendaGroup(): ?String {
+        match (table_.hitPolicy) {
+            case First | Unique | Priority => Some(table_.id)
+            case _ => None
+        }
+    }
+
+    /**
+     * 议程路径的 salience：以表/行声明的 salience 为基准，按行序递减。
+     *
+     * `First`/`Unique`/`Priority`/`Collect`/`OutputOrder` 需要行序语义；首行保持原值，
+     * 后续行逐行减 1，因此显式 salience 的差异仍然优先，同行基准时才由行序决定。
+     * `RuleOrder` 与 `Any` 保留原始 salience。
+     */
+    private func agendaSalience(row: TableRow, rowIndex: Int64): Int64 {
+        let base = salienceOf(row)
+        match (table_.hitPolicy) {
+            case First | Unique | Priority | Collect | OutputOrder => base - rowIndex
+            case _ => base
+        }
+    }
+
+    /** 议程路径无法完整表达的 HitPolicy 降级；在编译入口提示一次，避免逐行刷屏。 */
+    private func warnAgendaDegradation(): Unit {
+        var detail = ""
+        match (table_.hitPolicy) {
+            case Unique => detail = "运行期多命中只执行一条、不报错（构建期仍检查重复行）"
+            case Priority => detail = "按行序执行，无法按 outputOrder 比较运行期输出"
+            case Any => detail = "不校验多命中的输出一致性"
+            case OutputOrder => detail = "按行序执行，无法按输出值排序"
+            case _ => return
+        }
+        TableCompiler.log.warn(
+            "决策表 ${table_.id} 的 HitPolicy ${table_.hitPolicy} 在议程路径降级：${detail}；" +
+            "需要完整语义请使用 RuleEngine.executeTable"
+        )
     }
 
     private func compileOutputs(row: TableRow, binding: String,

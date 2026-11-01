@@ -34,6 +34,12 @@ public class Rule {
     public let factSpace: String
     /** `false` 表示未显式 `.facts(...)`，归入 default；校验器据此区分 F-14/F-15。 */
     public let explicitSpace: Bool
+    /**
+     * 互斥组名；同组激活只执行一个（`doc/11-assembly.md` §4.4）。
+     *
+     * 组只影响议程调度，不参与 [Activation] 的相等键。`None` 表示不分组。
+     */
+    public let activationGroup: ?String
     public let patterns: Array<Pattern>
     public let joins: Array<JoinConstraint>
     public let scripts: Array<String>
@@ -41,12 +47,13 @@ public class Rule {
     public let order: Int64
 
     init(id: String, salience: Int64, factSpace: String, explicitSpace: Bool,
-        patterns: Array<Pattern>, joins: Array<JoinConstraint>, scripts: Array<String>,
-        actions: Array<RuleAction>, order: Int64) {
+        activationGroup: ?String, patterns: Array<Pattern>, joins: Array<JoinConstraint>,
+        scripts: Array<String>, actions: Array<RuleAction>, order: Int64) {
         this.id = id
         this.salience = salience
         this.factSpace = factSpace
         this.explicitSpace = explicitSpace
+        this.activationGroup = activationGroup
         this.patterns = patterns
         this.joins = joins
         this.scripts = scripts
@@ -60,7 +67,8 @@ public class Rule {
 
     /** 复制并设置规则序号（`RuleSet` 装配用）。 */
     public func withOrder(value: Int64): Rule {
-        Rule(id, salience, factSpace, explicitSpace, patterns, joins, scripts, actions, value)
+        Rule(id, salience, factSpace, explicitSpace, activationGroup, patterns, joins, scripts,
+            actions, value)
     }
 
     public func toString(): String {
@@ -79,6 +87,7 @@ public class RuleBuilder {
     private var salience_: Int64
     private var factSpace_: String
     private var explicitSpace_: Bool
+    private var activationGroup_: ?String
     private let patterns_: ArrayList<Pattern>
     private let joins_: ArrayList<JoinConstraint>
     private let scripts_: ArrayList<String>
@@ -89,6 +98,7 @@ public class RuleBuilder {
         this.salience_ = 0
         this.factSpace_ = TypeTag.DEFAULT_SPACE
         this.explicitSpace_ = false
+        this.activationGroup_ = None
         this.patterns_ = ArrayList<Pattern>()
         this.joins_ = ArrayList<JoinConstraint>()
         this.scripts_ = ArrayList<String>()
@@ -104,6 +114,12 @@ public class RuleBuilder {
     public func facts(space: String): RuleBuilder {
         factSpace_ = space
         explicitSpace_ = true
+        this
+    }
+
+    /** 互斥组名；同组激活只执行一个，其余在首个执行后失效。 */
+    public func activationGroup(name: String): RuleBuilder {
+        activationGroup_ = Some(name)
         this
     }
 
@@ -142,7 +158,7 @@ public class RuleBuilder {
             )
         }
         Pattern.requireUniqueBindings(patterns_.toArray())
-        Rule(id_, salience_, factSpace_, explicitSpace_, patterns_.toArray(), joins_.toArray(),
-            scripts_.toArray(), actions_.toArray(), -1)
+        Rule(id_, salience_, factSpace_, explicitSpace_, activationGroup_, patterns_.toArray(),
+            joins_.toArray(), scripts_.toArray(), actions_.toArray(), -1)
     }
 }

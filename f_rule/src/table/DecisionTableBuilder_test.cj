@@ -98,7 +98,7 @@ class DecisionTableBuilder_test {
             .row([">=3", "0.85"])
             .build()
 
-        @Expect(table.resolvedFactType(ruleSet), "Order")
+        @Expect(table.resolvedFactType(ruleSet.registry), "Order")
         @Assert(table.binding, "order")
         @Assert(table.factSpace, "orders")
     }
@@ -120,7 +120,7 @@ class DecisionTableBuilder_test {
         var code = RuleErrorCode.ILLEGAL_STATE
         var message = ""
         try {
-            let _ = table.resolvedFactType(ruleSet)
+            let _ = table.resolvedFactType(ruleSet.registry)
         } catch (e: RuleException) {
             code = e.code
             message = e.message
@@ -144,7 +144,7 @@ class DecisionTableBuilder_test {
             .row([">=3", "0.85"])
             .build()
 
-        @Expect(table.resolvedFactType(ruleSet), "Order")
+        @Expect(table.resolvedFactType(ruleSet.registry), "Order")
     }
 
     /** 列数与行值不一致时构建期报 `TABLE_INVALID` 并带行号。 */

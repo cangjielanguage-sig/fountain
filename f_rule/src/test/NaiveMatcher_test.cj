@@ -18,7 +18,6 @@ package fountain::f_rule.test
 import std.collection.HashMap
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_rule.*
 import fountain::f_rule.condition.*
 import fountain::f_rule.fact.*
 import fountain::f_rule.rule.*

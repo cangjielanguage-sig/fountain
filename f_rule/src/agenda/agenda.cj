@@ -176,6 +176,11 @@ public class Agenda <: ActivationSink {
                 let outputs = runOne(activation)
                 lastFired_.add(FireRecord(activation.ruleId, outputs))
                 count += 1
+                // 互斥组：首个激活执行后，同组其余激活全部失效（doc/11 §4.4）
+                match (activation.activationGroup) {
+                    case Some(group) => invalidateGroup(group, activation)
+                    case None => ()
+                }
                 match (mode_) {
                     case Loop =>
                         // 仍有效则放回堆，等待下一轮或 limit 终止
@@ -200,6 +205,29 @@ public class Agenda <: ActivationSink {
 
     public func setMode(mode: FireMode): Unit {
         mode_ = mode
+    }
+
+    /**
+     * 移除同组剩余激活（`doc/11-assembly.md` §4.4）。
+     *
+     * `except` 是刚刚执行的激活，保留它以支持 `Loop` 模式回堆；其余同组激活只改有效性位，
+     * 惰性堆会在后续弹出时丢弃。组语义限定为「已进入议程的同组激活」，未命中行从未入队。
+     */
+    public func invalidateGroup(group: String, except: Activation): Unit {
+        // 保留刚刚执行的激活；其余同组激活失效
+        let doomed = ArrayList<Activation>()
+        for ((item, _) in index_) {
+            match (item.activationGroup) {
+                case Some(found) =>
+                    if (found == group && !(item == except)) {
+                        doomed.add(item)
+                    }
+                case None => ()
+            }
+        }
+        for (item in doomed) {
+            let _ = index_.remove(item)
+        }
     }
 
     public func size(): Int64 {

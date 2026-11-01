@@ -16,9 +16,12 @@ limitations under the License.
 package fountain::f_rule.engine
 
 import std.collection.HashMap
+import std.sync.Mutex
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.rete.ShardedNetwork
 import fountain::f_rule.rule.RuleSet
+import fountain::f_rule.runtime.RuleRuntime
+import fountain::f_rule.table.{DecisionTable, TableExecutor, TableResult}
 
 /**
  * 规则引擎门面（`doc/08-api.md` §8）。
@@ -30,6 +33,8 @@ public class RuleEngine {
     private let ruleSet_: RuleSet
     private let network_: ShardedNetwork
     private let sessions_: HashMap<String, RuleSession>
+    private let tableExecutors_: HashMap<String, TableExecutor>
+    private let executorsMtx_: Mutex
     private var closed_: Bool
 
     /** 规则集必须是已构建且未关闭的，否则抛 `ILLEGAL_STATE`。 */
@@ -43,6 +48,8 @@ public class RuleEngine {
         this.ruleSet_ = ruleSet
         this.network_ = ShardedNetwork(ruleSet)
         this.sessions_ = HashMap<String, RuleSession>()
+        this.tableExecutors_ = HashMap<String, TableExecutor>()
+        this.executorsMtx_ = Mutex()
         this.closed_ = false
     }
 
@@ -80,6 +87,28 @@ public class RuleEngine {
         }
     }
 
+    /**
+     * 按决策表的 hitPolicy 执行并聚合输出（`doc/11-assembly.md` §4.3）。
+     *
+     * 用 `table.factSpace` 对应的事实视图作为输入；表在执行前编译一次并缓存，
+     * 键为 `(table.id, table.version)`。表变更需换版本号或新建引擎。
+     */
+    public func executeTable(table: DecisionTable, session: RuleSession,
+        trace!: Bool = false): TableResult {
+        ensureOpen()
+        let key = "${table.id}@${table.version}"
+        let executor = synchronized(executorsMtx_) {
+            match (tableExecutors_.get(key)) {
+                case Some(existing) => existing
+                case None =>
+                    let created = TableExecutor(table, ruleSet_.registry, RuleRuntime.compiler())
+                    tableExecutors_[key] = created
+                    created
+            }
+        }
+        executor.execute(session.factsOf(table.factSpace), trace: trace)
+    }
+
     func network(): ShardedNetwork {
         network_
     }
@@ -94,6 +123,9 @@ public class RuleEngine {
             session.dispose()
         }
         sessions_.clear()
+        synchronized(executorsMtx_) {
+            tableExecutors_.clear()
+        }
         ruleSet_.close()
     }
 

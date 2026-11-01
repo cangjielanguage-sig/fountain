@@ -141,6 +141,25 @@
 - [x] 6.17 夹具 `src/fixtures/pricing.csv`、`orders.csv`、`users.csv` 并接入测试
 - [x] 6.18 `cjpm test` 全绿，T-01~T-11 全部覆盖
 
+## 7.5 M5.5 装配层（设计见 `f_rule/doc/11-assembly.md`，在 M6 之前执行）
+
+- [x] 7.5.1 失败用例 `ActivationGroup_test`：同组两条激活只执行 salience 高的那条、不同组互不影响、无组规则执行数与改动前一致（AS-13/AS-14）
+- [x] 7.5.2 `Rule.activationGroup: ?String` + `RuleBuilder.activationGroup(name)` + `Activation.activationGroup`（不参与相等键）
+- [x] 7.5.3 `Agenda.fire` 执行后调 `invalidateGroup(group, except)` 移除同组剩余激活
+- [x] 7.5.4 失败用例 `TableSource_test`：`compileInto(registry)` 返回行数条规则、未声明空间抛 `UNKNOWN_FACT_SPACE`
+- [x] 7.5.5 `TableCompiler` / `TableExecutor` / `DecisionTable.resolvedFactType` 入参由 `RuleSet` 收窄为 `FactSpaceRegistry`；`DecisionTable.compile(ruleSet)` 内部转
+- [x] 7.5.6 `DecisionTable` 实现 `TableSource.compileInto`，编译器改用 `RuleRuntime.compiler()`
+- [x] 7.5.7 失败用例：`TableCompiler` 按 HitPolicy 注入组与 salience —— `First`/`Unique` 同组且行序降序、`Priority` 同组但降级行序、`Collect`/`RuleOrder` 不分组、`Any`/`OutputOrder` 不分组
+- [x] 7.5.8 实现 HitPolicy → `activationGroup` + `salience` 映射；三项降级打 WARN
+- [x] 7.5.9 失败用例 `TableAssembly_test`（AS-01~AS-05）：规则进入规则集、id 前缀、未声明空间、重复 id、未注册字段
+- [x] 7.5.10 `RuleSetBuilder.table(source: TableSource)`
+- [x] 7.5.11 `TableMode`（Unbound/Assembled/Executed）实例级互斥，跨模式抛 `TABLE_MODE_CONFLICT`（第 27 个错误码）；同步 `RuleException_test` 的 26 → 27
+- [x] 7.5.12 失败用例 `EngineTable_test`（AS-06~AS-08）：端到端、缓存只编译一次、表换版本重编译
+- [x] 7.5.13 `RuleEngine.executeTable(table, session, trace)` + 按 `(id, version)` 缓存执行器
+- [x] 7.5.14 AS-09~AS-12 补全：`First` 只执行第一行、`Collect` 全执行、双向模式冲突、同模式重复使用
+- [x] 7.5.15 `doc/07` §2.1 等价表、`doc/08` 示例、`CHANGELOG` 同步
+- [x] 7.5.16 `cjpm test` 全绿（预期 352 + 14 = 366）
+
 ## 7. M6 决策表 XLSX
 
 - [ ] 7.1 失败用例 `XlsxTableParser_test`：表头解析、`_meta` sheet 表属性、类型行覆盖推断、sheet 名作为表 id（T-12 前置）

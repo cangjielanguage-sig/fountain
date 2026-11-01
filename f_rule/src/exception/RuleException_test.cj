@@ -22,13 +22,13 @@ import std.unittest.testmacro.*
 /**
  * `RuleErrorCode` 与 `RuleException` 的契约（`doc/01-architecture.md` §6、`doc/10-roadmap.md` D12）。
  *
- * 26 个错误码的名字是日志与决策表错误定位的稳定契约，不允许随重构改名；
+ * 27 个错误码的名字是日志与决策表错误定位的稳定契约，不允许随重构改名；
  * 枚举值同时要能作为 `HashMap` 键（`==` 与 `hashCode` 必须自洽）。
  */
 @Test
 class RuleException_test {
     /**
-     * 26 个错误码与它们的稳定名。
+     * 27 个错误码与它们的稳定名。
      *
      * 名字重排/改名会让下游按日志文本做的匹配失效，因此这里是**显式清单**而非 `toString()` 回读。
      */
@@ -49,6 +49,7 @@ class RuleException_test {
         (RuleErrorCode.TABLE_INVALID, "TABLE_INVALID"),
         (RuleErrorCode.TABLE_NO_MATCH, "TABLE_NO_MATCH"),
         (RuleErrorCode.TABLE_MULTI_MATCH, "TABLE_MULTI_MATCH"),
+        (RuleErrorCode.TABLE_MODE_CONFLICT, "TABLE_MODE_CONFLICT"),
         (RuleErrorCode.NETWORK_FROZEN, "NETWORK_FROZEN"),
         (RuleErrorCode.CYCLE_LIMIT, "CYCLE_LIMIT"),
         (RuleErrorCode.SCRIPT_COMPILE, "SCRIPT_COMPILE"),
@@ -61,10 +62,10 @@ class RuleException_test {
         (RuleErrorCode.CLOSED, "CLOSED")
     ]
 
-    /** 26 个码逐一 `toString()`，结果是大写蛇形名。 */
+    /** 27 个码逐一 `toString()`，结果是大写蛇形名。 */
     @TestCase
     public func toStringIsStableUpperSnakeCase(): Unit {
-        @Assert(RuleException_test.names.size, 26)
+        @Assert(RuleException_test.names.size, 27)
         for ((code, name) in RuleException_test.names) {
             @Assert(code.toString(), name)
         }
@@ -89,7 +90,7 @@ class RuleException_test {
         @Assert(seen, "crossfield")
     }
 
-    /** `hashCode` 自洽且 26 个码互不相同，可直接作 `HashMap` 键。 */
+    /** `hashCode` 自洽且 27 个码互不相同，可直接作 `HashMap` 键。 */
     @TestCase
     public func hashCodeIsUniquePerVariant(): Unit {
         let hashes = HashSet<Int64>()
@@ -97,7 +98,7 @@ class RuleException_test {
             @Assert(code.hashCode(), code.hashCode())
             hashes.add(code.hashCode())
         }
-        @Assert(hashes.size, 26)
+        @Assert(hashes.size, 27)
     }
 
     /** 异常携带 `code` 与 `message`。 */

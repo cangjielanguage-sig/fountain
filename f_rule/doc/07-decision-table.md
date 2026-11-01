@@ -73,7 +73,7 @@ public enum HitPolicy <: ToString {
 
 ### 2.1 两条执行路径下的差异
 
-上表描述的是**聚合路径**（`RuleEngine.executeTable`，整表求值）。决策表也可以编译成规则进议程（`RuleSetBuilder.table`），此时 `HitPolicy` 由 `activationGroup` + `salience` 表达，有三项降级：
+上表描述的是**聚合路径**（`RuleEngine.executeTable`，整表求值）。决策表也可以编译成规则进议程（`RuleSetBuilder.table`），此时 `HitPolicy` 由 `activationGroup` + `salience` 表达，存在以下降级：
 
 | 策略 | 聚合路径 | 议程路径 |
 |---|---|---|
@@ -97,6 +97,8 @@ public class DecisionTable {
     public prop rows: Array<TableRow>
     /** 编译成规则。构建期做全量校验。 */
     public func compile(ruleSet: RuleSet): Array<Rule>
+    /** `TableSource` 实现：只依赖事实空间注册表，供 `RuleSetBuilder.table()` 调用。 */
+    public func compileInto(registry: FactSpaceRegistry): Array<Rule>
 }
 
 public class DecisionTableBuilder {
@@ -334,7 +336,7 @@ Array<Rule>（每条规则 = 一个模式 + 一组约束 + 一组输出动作）
 | `when.<field>` 列 | `Pattern(typeTag, binding).where(field, op, value)` |
 | `expr.<name>` 列 | `ConditionExpr.Script(JitExpression)` |
 | `then.<name>` 列 | `TableAction` 写输出槽 `name` |
-| `id` 列 | `Rule.id` |
+| `id` 列 | `Rule.id`（`<tableId>/<rowId>`，避免跨表同名行冲突） |
 | `salience` 列 | `Rule.salience` |
 | `hitPolicy` | 表级，不进单条 Rule；由 `TableExecutor` 在收集结果后应用 |
 
@@ -342,9 +344,10 @@ Array<Rule>（每条规则 = 一个模式 + 一组约束 + 一组输出动作）
 
 ```cangjie
 public class TableExecutor {
-    public init(table: DecisionTable, ruleSet: RuleSet)
-    /** 跑完议程后按 hitPolicy 聚合输出。 */
-    public func execute(facts: FactBaseView): TableResult
+    public init(table: DecisionTable, registry: FactSpaceRegistry)
+    public init(table: DecisionTable, registry: FactSpaceRegistry, compiler: Compiler)
+    /** 在事实视图上逐行求值，再按 hitPolicy 聚合输出。 */
+    public func execute(facts: FactBaseView, trace!: Bool = false): TableResult
 }
 ```
 

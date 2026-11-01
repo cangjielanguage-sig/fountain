@@ -63,12 +63,12 @@ class TableCompiler_test {
             .row("R2", [">=1", ">500", "0.90"])
             .build()
 
-        let compiled = TableCompiler(table, orderRuleSet(), compiler()).compile()
+        let compiled = TableCompiler(table, orderRuleSet().registry, compiler()).compile()
         @Assert(compiled.factType, "Order")
         @Assert(compiled.binding, "order")
         @Expect(compiled.rules.size, 2)
         let rule = compiled.rules[0]
-        @Assert(rule.id, "R1")
+        @Assert(rule.id, "pricing/R1")
         @Expect(rule.factSpace, "orders")
         @Expect(rule.salience, 100)
         @Expect(rule.patterns.size, 1)
@@ -97,7 +97,7 @@ class TableCompiler_test {
             .build()
         let rules = table.compile(orderRuleSet())
         @Expect(rules.size, 1)
-        @Assert(rules[0].id, "R1")
+        @Assert(rules[0].id, "pricing/R1")
         @Expect(rules[0].patterns[0].typeTag, "Order")
     }
 
@@ -113,7 +113,7 @@ class TableCompiler_test {
             .row([">=3", "0.85", "99"])
             .build()
 
-        let compiled = TableCompiler(table, orderRuleSet(), compiler()).compile()
+        let compiled = TableCompiler(table, orderRuleSet().registry, compiler()).compile()
         @Expect(compiled.rules[0].salience, 99)
     }
 
@@ -127,7 +127,7 @@ class TableCompiler_test {
             .column("salience")
             .row([">=3", "0.85", "high"])
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.TABLE_INVALID)
     }
 
@@ -140,7 +140,7 @@ class TableCompiler_test {
             .thenColumn("discount")
             .row(["1", "0.85"])
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.UNKNOWN_FIELD)
     }
 
@@ -153,7 +153,7 @@ class TableCompiler_test {
             .thenColumn("discount")
             .row(["abc", "0.85"])
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.TYPE_MISMATCH)
     }
 
@@ -166,7 +166,7 @@ class TableCompiler_test {
             .thenColumn("discount")
             .row([">=3", "\${u.level}"])
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.UNKNOWN_BINDING)
     }
 
@@ -179,7 +179,7 @@ class TableCompiler_test {
             .thenColumn("discount")
             .row([">=3", "\${order.missing}"])
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.UNKNOWN_FIELD)
     }
 
@@ -191,7 +191,7 @@ class TableCompiler_test {
             .whenColumn("order.level")
             .thenColumn("discount")
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.TABLE_INVALID)
     }
 
@@ -206,7 +206,7 @@ class TableCompiler_test {
             .row([">=3", "0.85"])
             .row([">=3", "0.90"])
             .build()
-        @Expect(codeOf({ => TableCompiler(table, orderRuleSet(), compiler()).compile() }),
+        @Expect(codeOf({ => TableCompiler(table, orderRuleSet().registry, compiler()).compile() }),
             RuleErrorCode.TABLE_INVALID)
     }
 
@@ -221,7 +221,7 @@ class TableCompiler_test {
             .row([">=3", "order.amount > 200", "0.85"])
             .build()
 
-        let compiled = TableCompiler(table, orderRuleSet(), compiler()).compile()
+        let compiled = TableCompiler(table, orderRuleSet().registry, compiler()).compile()
         @Assert(compiled.rules[0].scripts.size, 1)
         @Expect(compiled.rules[0].scripts[0].startsWith("{"), true)
         @Expect(compiled.rows[0].conditions.size, 2)

@@ -59,7 +59,7 @@ class FixtureTable_test {
         @Assert(table.rows.size, 3)
         @Assert(table.rows[2].ruleId, "R3")
 
-        let compiled = TableCompiler(table, ordersRuleSet(), compiler()).compile()
+        let compiled = TableCompiler(table, ordersRuleSet().registry, compiler()).compile()
         @Expect(compiled.factType, "Order")
         @Expect(compiled.rules.size, 3)
         @Expect(compiled.rules[0].salience, 100)
@@ -72,7 +72,7 @@ class FixtureTable_test {
         @Assert(table.id, "orders")
         @Assert(table.factType, "Order")
         @Assert(table.rows.size, 2)
-        let compiled = TableCompiler(table, ordersRuleSet(), compiler()).compile()
+        let compiled = TableCompiler(table, ordersRuleSet().registry, compiler()).compile()
         @Expect(compiled.rules.size, 2)
         @Expect(compiled.factType, "Order")
     }
@@ -84,7 +84,7 @@ class FixtureTable_test {
         @Assert(table.id, "users")
         @Assert(table.factSpace, "users")
         @Expect(table.hitPolicy, HitPolicy.Collect)
-        let compiled = TableCompiler(table, usersRuleSet(), compiler()).compile()
+        let compiled = TableCompiler(table, usersRuleSet().registry, compiler()).compile()
         @Expect(compiled.rules.size, 2)
         @Expect(compiled.factType, "User")
     }
@@ -96,7 +96,7 @@ class FixtureTable_test {
         let table = CsvTableParser.parseFile(Path("src/fixtures/pricing.csv"))
         let view = FactBaseViewStore(ruleSet.registry).view("orders", "fixture")
         let _ = view.assert(TypedFact(TableOrder("A", 3, 500), tableOrderSchema()))
-        let result = TableExecutor(table, ruleSet, compiler()).execute(view)
+        let result = TableExecutor(table, ruleSet.registry, compiler()).execute(view)
         @Assert(result.hits[0].ruleId, "R1")
         @Assert(result.outputs[0].get("discount").getOrThrow() as Float64, 0.85)
     }

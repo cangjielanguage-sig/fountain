@@ -79,7 +79,7 @@ class TableExecutor_test {
     public func executesEndToEnd(): Unit {
         let ruleSet = orderRuleSet()
         let table = pricingTable(HitPolicy.First)
-        let result = TableExecutor(table, ruleSet)
+        let result = TableExecutor(table, ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 500)]))
 
         @Assert(result.hits.size, 1)
@@ -100,7 +100,7 @@ class TableExecutor_test {
             .thenColumn("levelCopy")
             .row([">=1", "\${order.level}"])
             .build()
-        let result = TableExecutor(table, ruleSet)
+        let result = TableExecutor(table, ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 500)]))
         @Assert(result.outputs[0].get("levelCopy").getOrThrow() as Int64, 3)
     }
@@ -118,7 +118,7 @@ class TableExecutor_test {
             .row("R2", [">=2", "0.90"])
             .row("R3", [">=3", "0.95"])
             .build()
-        let result = TableExecutor(table, ruleSet)
+        let result = TableExecutor(table, ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 500)]))
 
         @Expect(result.hits.size, 3)
@@ -142,7 +142,7 @@ class TableExecutor_test {
             .thenColumn("discount")
             .row(["> 1000", "0.5"])
             .build()
-        @Expect(codeOf({ => TableExecutor(table, ruleSet)
+        @Expect(codeOf({ => TableExecutor(table, ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 500)])) }),
             RuleErrorCode.TABLE_NO_MATCH)
     }
@@ -159,7 +159,7 @@ class TableExecutor_test {
             .row("R1", [">=1", "0.85"])
             .row("R2", [">=2", "0.90"])
             .build()
-        @Expect(codeOf({ => TableExecutor(table, ruleSet)
+        @Expect(codeOf({ => TableExecutor(table, ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 500)])) }),
             RuleErrorCode.TABLE_MULTI_MATCH)
     }
@@ -169,7 +169,7 @@ class TableExecutor_test {
     public func traceRecordsEachColumn(): Unit {
         let ruleSet = orderRuleSet()
         let table = pricingTable(HitPolicy.First)
-        let result = TableExecutor(table, ruleSet)
+        let result = TableExecutor(table, ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 300)]), trace: true)
 
         @Expect(result.trace.size, 2)
@@ -190,7 +190,7 @@ class TableExecutor_test {
     @TestCase
     public func traceIsOptIn(): Unit {
         let ruleSet = orderRuleSet()
-        let result = TableExecutor(pricingTable(HitPolicy.First), ruleSet)
+        let result = TableExecutor(pricingTable(HitPolicy.First), ruleSet.registry)
             .execute(view(ruleSet, [TableOrder("A", 3, 500)]))
         @Expect(result.trace.size, 0)
     }
@@ -206,7 +206,7 @@ class TableExecutor_test {
             .thenColumn("discount")
             .row(["o.amount > 200", "0.85"])
             .build()
-        let executor = TableExecutor(table, ruleSet, compiler())
+        let executor = TableExecutor(table, ruleSet.registry, compiler())
 
         let hit = executor.execute(view(ruleSet, [TableOrder("A", 3, 500)]))
         @Assert(hit.hits.size, 1)
