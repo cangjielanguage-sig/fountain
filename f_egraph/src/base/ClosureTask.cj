@@ -26,7 +26,7 @@ import fountain::f_jit.macros.*
  * - 编译错误与运行期错误原样上抛（保留 f_jit 的站点与错误码），不包装成 `GraphException`。
  */
 @JitBind
-public class ClosureTask <: Task {
+public open class ClosureTask <: Task {
     private static let compilerMtx = Mutex()
     private static var sharedCompiler: ?Compiler = None
 
@@ -138,7 +138,12 @@ public class ClosureTask <: Task {
         }
     }
 
-    public func exec(e: Event): Event {
+    public open func exec(e: Event): Event {
+        body_(e)
+    }
+
+    /** 子类调度器执行队列时调用：直接跑任务体，不经过 exec 的入队逻辑 */
+    protected func evaluate(e: Event): Event {
         body_(e)
     }
 }
