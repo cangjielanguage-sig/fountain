@@ -114,7 +114,8 @@
 SHALL 返回同一视图，不同组合互不可见。
 
 `fork` 的默认隔离级别为 `Isolated`：子视图事实对父不可见，`commitToParent` 时合并；规则流默认使用
-`Shared`：`FlowContext.facts(space)` 返回同一视图。
+`Shared`：`FlowContext.factsOf(space)` 返回同一视图（`facts` 是缺省空间属性，仓颉不允许属性与方法同名，
+故指定空间的方法命名动词化为 `factsOf`）。
 
 #### Scenario: 会话隔离
 

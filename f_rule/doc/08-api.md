@@ -339,12 +339,17 @@ public class FireResult {
 
 ## 9. Pattern 便捷构造
 
+`where` 是仓颉关键字，因此条件方法统一命名为 `constrain*`：
+
 ```cangjie
 public class Pattern {
     public init(typeTag: String, binding: String)
-    public func where(field: String, op: Operator, value: Any): Pattern
-    public func where(field: String, op: Operator, rightField: String): Pattern
-    public func whereNot(field: String, op: Operator, value: Any): Pattern
+    /** 字段 op 常量。 */
+    public func constrain(field: String, op: Operator, value: Any): Pattern
+    /** 字段 op 另一字段（join 条件）。 */
+    public func constrainField(field: String, op: Operator, rightField: String): Pattern
+    /** 字段 op 常量 的否定形式。 */
+    public func constrainNot(field: String, op: Operator, value: Any): Pattern
     /** 无条件模式：匹配该类型的所有事实。 */
     public static func any(typeTag: String, binding: String): Pattern
 }

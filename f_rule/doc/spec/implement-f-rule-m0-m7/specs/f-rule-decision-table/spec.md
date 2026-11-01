@@ -155,7 +155,7 @@
 ### Requirement: 编译与校验清单
 
 `DecisionTable.compile(ruleSet)` SHALL 输出 `Array<Rule>`：`factSpace` 属性 → `Rule.factSpace`；
-`when.<field>` → `Pattern(factType, binding).where(...)`；`expr.<name>` → `ConditionExpr.Script`；
+`when.<field>` → `Pattern(factType, binding).constrain(...)`（`where` 是关键字）；`expr.<name>` → `ConditionExpr.Script`；
 `then.<name>` → `TableAction` 写输出槽；`id` 列 → `Rule.id`；`salience` 列 → `Rule.salience`。
 
 构建期 SHALL 通过 `doc/07-decision-table.md` §8 的校验清单：表头列名合法（`TABLE_INVALID`）、

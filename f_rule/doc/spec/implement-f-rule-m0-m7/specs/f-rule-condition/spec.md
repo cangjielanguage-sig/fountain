@@ -52,7 +52,8 @@ In / NotIn / IsNull / NotNull / Matches / Between`，语义与可索引性 SHALL
 
 `Constraint(field, op, right)` SHALL 校验 `field` 已在所属类型的字段声明中，否则构建期抛
 `UNKNOWN_FIELD`。`Pattern(typeTag, binding)` SHALL 要求 `binding` 在同一规则内唯一；
-`where(field, op, value)`、`where(field, op, rightField)`、`whereNot`、`Pattern.any` SHALL 可用。
+`constrain(field, op, value)`、`constrainField(field, op, rightField)`、`constrainNot`、`Pattern.any` SHALL 可用。
+`where` 是仓颉关键字，故条件方法统一命名为 `constrain*`。
 
 约束顺序 SHALL 不影响语义；`NetworkBuilder` MAY 按"可索引性 + 选择率"重排执行顺序。
 

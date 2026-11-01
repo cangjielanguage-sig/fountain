@@ -107,7 +107,7 @@ public class DecisionTableBuilder {
     /** 整表绑定事实库空间，缺省 "default"。 */
     public func factSpace(space: String): DecisionTableBuilder
     public func hitPolicy(policy: HitPolicy): DecisionTableBuilder
-    public func salience(default: Int64): DecisionTableBuilder
+    public func salience(value: Int64): DecisionTableBuilder
 
     /** 条件列。 */
     public func when(fieldPath: String): DecisionTableBuilder
@@ -133,10 +133,10 @@ let table = DecisionTable.builder("pricing")
     .name("订单折扣")
     .version("v1")
     .hitPolicy(HitPolicy.First)
-    .when("order.level")
-    .when("order.amount")
-    .then("discount")
-    .then("event")
+    .whenColumn("order.level")     // `when` 是仓颉关键字，故命名为 whenColumn
+    .whenColumn("order.amount")
+    .thenColumn("discount")
+    .thenColumn("event")
     .row("R1", [">=3", ">200", "0.85", "order.discounted"])
     .row("R2", [">=1", ">500", "0.90", "order.discounted"])
     .row("R3", [null, null, "1.0", "order.discounted"])

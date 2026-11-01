@@ -391,7 +391,7 @@ public class DiscountTask <: Task {
 
     public func exec(e: Event): Event {
         let ctx = FlowContext.attach(RuleEnvelope.from(e))
-        let orders = ctx.facts("orders")          // 显式指定空间
+        let orders = ctx.factsOf("orders")        // 显式指定空间
         let order = orders.get(...)               // 业务逻辑
         orders.assert(DynamicFact("Discount", ...))
         TaskEvent(category: e.category, tag: e.tag,

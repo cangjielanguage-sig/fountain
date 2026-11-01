@@ -123,9 +123,9 @@ SHALL NOT 存在通往 `EndEvent` / `registerEnd()` 的路径。
 `FlowContext` SHALL 是"一个会话在多个 `FactSpace` 上的视图集合"，提供
 `attach(envelope)` / `detach()` / `create(ruleSetId, session)` / `release(session)` /
 `current()` / `bind(ctx)` / `unbind()`，以及 `session`、`ruleSetId`、`facts`（缺省空间）、
-`facts(space)`、`spaces()`。
+`factsOf(space)`、`spaces()`。
 
-`facts(space)` SHALL 惰性创建视图，空间未声明时抛 `UNKNOWN_FACT_SPACE`；`current()` 未绑定时抛
+`factsOf(space)` SHALL 惰性创建视图，空间未声明时抛 `UNKNOWN_FACT_SPACE`；`current()` 未绑定时抛
 `NO_CONTEXT`。`attach`/`detach` SHALL 以 ThreadLocal 绑定，供 `f_jit` 脚本读取。
 
 `release(session)` SHALL 对该会话的全部空间生效，并按 `Release.Discard`（默认）/ `Archive` / `Retain`

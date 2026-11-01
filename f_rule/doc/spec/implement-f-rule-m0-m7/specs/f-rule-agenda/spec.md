@@ -44,12 +44,17 @@
 
 ### Requirement: 冲突消解策略
 
-`ConflictResolver` SHALL 提供 `compare(a, b): Int64`（负数 a 优先、正数 b 优先、0 交给下一个），
-并 SHALL 提供 6 种预置策略：`salience()`、`specificity()`、`fifo()`、`lifo()`、`ruleOrder()`、`ruleId()`，
-以及 `composite(resolvers)` 依次比较、全 0 时用 `seq` 兜底。
+`ConflictResolver` SHALL 提供 `compare(left, right: ConflictKey): Ordering`（`LT` 表示 left 先执行、
+`EQ` 表示本策略无法区分，交给组合链下一环），并 SHALL 提供 6 种预置策略：
+`SalienceResolver`、`SpecificityResolver`、`FifoResolver`、`LifoResolver`、`RuleOrderResolver`、
+`RuleIdResolver`，以及 `CompositeResolver` 依次比较、全 `EQ` 时用 `(factSpace, ruleId)` 兜底。
+策略实例通过 `Resolvers.salience()` 等工厂获取。
+
+接口用 `ConflictKey` 而非 `Activation`：`rule` 包要保存解析器，若签名收 `Activation` 会让 `rule`
+反向依赖 `agenda`。用 `Ordering` 而非 `Int64`：`LT` 即「左先执行」，避免调用方记错符号方向。
 
 默认链 SHALL 为 `salience -> specificity -> ruleOrder -> seq`，且 SHALL 构成全序：
-任意两个不同激活的比较结果都不为 0。
+任意两个不同激活的比较结果都不为 `EQ`。
 
 #### Scenario: 优先级
 
