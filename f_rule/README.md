@@ -15,7 +15,7 @@
 | 决策流 | 一条规则一个 `f_egraph.Flow`；`ResolveTask` 扇出，`JoinTask` 汇合 |
 | 共享事实库 | 按 `(space, session)` 隔离，流程与产生式模式共用 |
 
-## 三种典型用法
+## 四种典型用法
 
 ### 1. 产生式模式
 
@@ -202,18 +202,18 @@ cjpm test --include-tags=perf --no-capture-output
 |---|---|
 | 冷构建（含全部路径依赖） | 约 4 分钟 |
 | 增量构建 | 约 3 秒 |
-| `cjpm test` 全量（430 用例，含性能门禁） | 约 2m45s |
+| `cjpm test` 全量（446 用例，含性能门禁） | 约 2m45s |
 | `cjpm test --exclude-tags=perf` | 约 1m20s |
 
 ## 状态
 
-**可用**：M0~M7 全部完成，`cjpm test` 430/430 通过，性能门禁 B-01~B-07 全部达标（见 [doc/perf.md](doc/perf.md)）。
+**可用**：M0~M7 全部完成，`cjpm test` 446/446 通过，性能门禁 B-01~B-07 全部达标（见 [doc/perf.md](doc/perf.md)）。
 
 已知边界：
 
-- **决策表在议程路径有三项 `HitPolicy` 降级**（`Unique` 运行期不报错、`Priority` 降级行序、`Any` 不校验输出一致、`OutputOrder` 按行序）。需要完整语义用 `executeTable`，详见 [doc/07](doc/07-decision-table.md) §2.1。
+- **决策表在议程路径有四项 `HitPolicy` 降级**（`Unique` 运行期不报错、`Priority` 降级行序、`Any` 不校验输出一致、`OutputOrder` 按行序）。需要完整语义用 `executeTable`，详见 [doc/07](doc/07-decision-table.md) §2.1。
 - **B-02 的余量约 42%**（1162 ms / 2000 ms），后续改动涉及插入路径必须重跑门禁。
-- **`cjlint` 在当前 SDK 发行版不可用**：`$CANGJIE_HOME/modules` 及其平台子目录都无法被定位，各路径均报 `Can not find modules`。
+- **`cjlint` 仍有仓库风格类告警**：正确用法是 `cjlint -f ./src -m $CANGJIE_HOME`（`-m` 指 SDK 根，不是 `modules` 子目录）。代码级 error 已归零（修了 `G.FUN.02` 30、`G.ENU.01` 4、`G.DCL.02` 4、`G.EXP.03` 3），现存 184 error 全部是 `G.OTH.03`（License 头 URL 硬编码），1301 warning 主要是 `G.PKG.01`（wildcard import）、`G.ITF.04`、`G.NAM.*`（PascalCase 文件名、全大写错误码枚举）——这些是全仓库统一风格（`f_egraph` 同样存在），需项目级 `cjlintignore.cfg` 统一处理。
 - **`cjfmt` 默认配置与项目 License 头惯例冲突**：全仓库（含 `f_egraph` 等既有模块）统一写 `*/`，`cjfmt` 期望 ` */`。未为通过检查而批量改写。
 
 ## 许可
