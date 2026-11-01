@@ -47,7 +47,7 @@ public class FStoreMetaStore <: MetaStore {
 
     /** 容器用：路径取 `llm_metaStorePath` */
     public init() {
-        let path = StoreSettings.load().metaStorePath
+        let path = DeployPaths.resolve(StoreSettings.load().metaStorePath)
         this.store = Store(path)
         this.characterStore = FStoreCharacterStore(store, CHARACTER_PREFIX)
         this.confStore = FStoreLLMConfStore(store)

@@ -64,7 +64,7 @@ public class StoreWiring {
             ensure('fhydra', { => FhydraContentStore() })
             ensureMeta('postgres', { => PostgresMetaStore() })
             ensureMeta('mysql', { => MySqlMetaStore() })
-            ensureMeta('f_store', { => FStoreMetaStore(StoreSettings.load().metaStorePath) })
+            ensureMeta('f_store', { => FStoreMetaStore(DeployPaths.resolve(StoreSettings.load().metaStorePath)) })
             Stores.bootstrap()
             seedKinds()
         }

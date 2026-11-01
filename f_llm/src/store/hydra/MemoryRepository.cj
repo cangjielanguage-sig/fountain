@@ -46,7 +46,7 @@ public class HydraMemoryRepository <: MemoryRepository {
 
     public init(path!: String = '') {
         let location = if(path.isEmpty()){
-            getVariable('llm_hydraPath') ?? './data/f_hydra'
+            DeployPaths.resolve(getVariable('llm_hydraPath') ?? './data/f_hydra')
         }else{
             path
         }

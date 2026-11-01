@@ -32,7 +32,7 @@ public class HydraContentStore <: ContentStore {
     private var cachedKnowledge: ?KnowledgeStore = None
 
     public init() {
-        let location = getVariable('llm_hydraPath') ?? './data/f_hydra'
+        let location = DeployPaths.resolve(getVariable('llm_hydraPath') ?? './data/f_hydra')
         this.transport = InProcessTransport(FStoreVectorStore(location))
         this.model = requireEmbedder()
     }

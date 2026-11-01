@@ -36,7 +36,7 @@ public class MetaStoreAdapter <: MetaStore {
         let settings = StoreSettings.load()
         let name = settings.metaStore
         if(name == 'f_store'){
-            this.delegate = FStoreMetaStore(settings.metaStorePath)
+            this.delegate = FStoreMetaStore(DeployPaths.resolve(settings.metaStorePath))
         }else if(name == 'postgres' || name == 'mysql'){
             this.delegate = match(lookupOption<MetaStore>()){
                 case Some(bean) => bean
