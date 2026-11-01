@@ -152,7 +152,7 @@ public class Planner {
             step.system = item.system
             step.input = item.input
             if(!item.args.isEmpty()){
-                step.args = item.args
+                step.args = argsJson(item.args)
             }
             if(item.async == 'false'){
                 step.async = 'false'
@@ -170,6 +170,20 @@ public class Planner {
         }
         plan.validate()
         plan
+    }
+
+    /** 参数模板 → JSON 文本（step.args 保存原始 JSON，供 CodeGen 替换变量） */
+    private static func argsJson(args: HashMap<String, String>): String {
+        var text = '{'
+        var first = true
+        for((key, value) in args){
+            if(!first){
+                text += ','
+            }
+            first = false
+            text += '${FlowPlan.jsonQuote(key)}:${FlowPlan.jsonQuote(value)}'
+        }
+        text + '}'
     }
 
     private static func questionsOf(dto: PlanDto): ArrayList<ClarifyQuestion> {
@@ -259,7 +273,7 @@ public class StepDto {
     public var model: String = ''
     public var system: String = ''
     public var input: String = ''
-    public var args: String = ''
+    public var args: HashMap<String, String> = HashMap<String, String>()
     public var async: String = 'auto'
     public var external: Bool = false
 

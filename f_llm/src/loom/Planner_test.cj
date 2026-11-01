@@ -68,6 +68,7 @@ class Planner_test {
         @Expect(plan.persona, 'whimsical')
         @Expect(plan.steps.size, 2)
         @Expect(plan.steps[0].tool, 'webSearch')
+        @Expect(plan.steps[0].args.contains('"query"'), true)
         @Expect(plan.steps[1].async, 'false')
         @Expect(plan.edges.size, 1)
         @Expect(plan.edges[0].from, 'fetch')
