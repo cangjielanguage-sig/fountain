@@ -138,17 +138,17 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 
 ---
 
-## 6. fhydra 内容族尚未实现
+## 6. `MemoryRepository` bean 与内容族是两条路径（已实现，非缺陷）
 
-**现象**：`MemoryStoreAdapter` / 内容族注册表的默认实现按设计应指向 fhydra，
-当前 `f_hydra` / `fhydra` 都没有可用实现。
+**现状**：`f_hydra` / `fhydra` 内容族**已实现并注册**，`DEFAULT_CONTENT` 默认就是 `f_hydra`。
+它们通过 `ContentStore` 提供记忆/知识能力，内部使用 `SqlMemoryStore` + `HydraMemoryRepository`，
+**不会注册 `MemoryRepository` bean**。
 
-**影响**：`llm_memoryStore` 配成 `f_store` / 未知值且没有 bean 匹配时，适配器**显式抛错**
-（列出可用值），不会静默回退到 PG。
+**影响**：直接 `lookupOption<MemoryRepository>()`（或容器里没有匹配的 bean）时会抛错；
+错误信息已改为说明「f_hydra/fhydra 走 ContentStore，不注册 MemoryRepository bean」，
+需要 bean 的场景请配置 `llm_memoryStore=postgres|mysql`。
 
-**当前替代**：`llm_memoryStore=postgres|mysql|inMemory`。
-
-**解除条件**：fhydra 提供 `MemoryStore` 实现并注册为 bean。
+**不是缺陷**：`llm_memoryStore=f_hydra|fhydra` 是受支持的默认路径，只是不产出 `MemoryRepository` bean。
 
 ---
 

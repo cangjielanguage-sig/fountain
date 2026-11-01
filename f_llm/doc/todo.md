@@ -89,3 +89,32 @@ public class TodoFunction {
     public func updateStatus(param: TodoStatusParam): FunctionResult 
 }
 ```
+
+---
+
+## 待办：暂不实现（2026-11-01 记录）
+
+以下项**不在当前实现范围**，先登记，避免被误认为遗漏。loom 单独排期（见 `f_llm-memory-design.md` §9）。
+
+### B. 占位实现
+
+| 项 | 位置 | 现状 |
+|---|---|---|
+| 余额查询 zhipu / siliconflow / aliyun | `balance/BalanceQueriers.cj` | 调用抛 `BalanceUnsupportedException`；见 `known-limitations.md` §7 |
+
+### C. 单一实现 / 降级路径
+
+| 项 | 现状 |
+|---|---|
+| 联网搜索 provider | 只有 `DeepSeekSearchProvider`；Bing/Google/百度等需外部凭据，未实现（§9） |
+| OpenAI 兼容端点的 sparse / colbert | `LlmEmbeddingTransport` 只有 dense，用它会 `degraded=true`；三路需 `BgeM3Transport`（§2） |
+
+### D. 外部 / 设计约束
+
+| 项 | 说明 |
+|---|---|
+| 运行期修改配置 | 永久不支持，必须重启（§0） |
+| HTTP 连接级超时 | `stdx.net.http` 无 `connectTimeout`（§1） |
+| MySQL 向量索引 | 依赖 MyVector 组件 + 手工 `myvector_index_build`（§3） |
+| f_store 单实例、无事务 | 外部组件语义，靠 `repair()` 兜底（§4） |
+| 历史数据重建 sparse/colbert | 需显式调用重建工具（§5） |

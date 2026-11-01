@@ -74,11 +74,14 @@ public class MemoryRepositoryAdapter <: MemoryRepository {
 }
 
 /**
- * 默认实现：按设计应由 fhydra 内容族提供；当前尚未实现，明确报错而不是静默回退。
- * 等 f_hydra / fhydra 落地后，把这里换成它们的 bean。
+ * 默认实现：f_hydra / fhydra 内容族不注册 `MemoryRepository` bean
+ * （它们经 `ContentStore` 内部使用 `SqlMemoryStore` + `HydraMemoryRepository`）。
+ *
+ * 需要 `MemoryRepository` bean 时请配置 `llm_memoryStore=postgres|mysql`。
  */
 private func defaultRepository(): MemoryRepository {
     throw IllegalStateException(
         'no MemoryRepository bean matched llm_memoryStore="${StoreSettings.load().memoryStore}"; '
-        + 'fhydra 内容族尚未实现，请配置 llm_memoryStore=postgres|mysql')
+        + 'f_hydra/fhydra 通过 ContentStore 提供记忆能力、不注册 MemoryRepository bean，'
+        + '需要 bean 时请配置 llm_memoryStore=postgres|mysql')
 }
