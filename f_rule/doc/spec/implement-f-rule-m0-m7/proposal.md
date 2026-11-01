@@ -20,7 +20,7 @@
 | **M4 流程编排** | `RuleEnvelope`、`FlowContext`、`RuleFlow`（一条规则一个 `ImmediateFlow`）、`RuleSetFlow` 链式编排、`ResolveTask` 扇出、`JoinTask` 汇合（含超时）、`RuleTask`、扇出可达性构建期检查 |
 | **M5 决策表 API + CSV** | `DecisionTable` / `Column` / `TableRow`、`HitPolicy` 7 种、单元格语法（算子 / `${}` / `expr`）、`CsvTableParser`、`TableCompiler`、`TableExecutor` |
 | **M6 决策表 XLSX** | `XlsxTableParser`（整表 / 指定 sheet / 流式）、类型行与合并单元格、`_meta` sheet 表属性、夹具生成脚本 |
-| **M7 门禁与收尾** | B-01~B-07 性能门禁、差分回归（Rete vs 朴素、f_jit vs 解释器）、README / CHANGELOG / 文档回填、`cjlint` / `cjfmt` 无告警 |
+| **M7 门禁与收尾** | B-01~B-07 性能门禁、差分回归（Rete vs 朴素、f_jit vs 解释器）、README / CHANGELOG / 文档回填、`cjlint` 非 License error 归零（`cjfmt` 因项目 License 头惯例与工具默认配置冲突，未纳入验收） |
 
 ### 已拍板事项与本变更的落点
 

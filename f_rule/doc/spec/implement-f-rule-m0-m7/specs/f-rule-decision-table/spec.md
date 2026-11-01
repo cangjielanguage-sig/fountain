@@ -178,8 +178,11 @@
 
 ### Requirement: 执行与可解释性
 
-`TableExecutor(table, ruleSet).execute(facts: FactBaseView)` SHALL 运行议程并按 `hitPolicy` 聚合输出，
+`TableExecutor(table, registry: FactSpaceRegistry).execute(facts: FactBaseView)` SHALL 运行议程并按 `hitPolicy` 聚合输出，
 返回 `TableResult(hits, outputs, trace)`。
+
+> 实施修订：入参由 `RuleSet` 收窄为 `FactSpaceRegistry`（`doc/11-assembly.md` S2）。编译器原本只用
+> `ruleSet.registry` 一处，收窄后表可脱离完整 `RuleSet` 编译，也是解开 `rule ↔ table` 包循环的前提。
 
 `TableResult.hits` SHALL 是按 `hitPolicy` 处理后的命中行；`outputs` SHALL 单值时 size == 1、
 `Collect` 类策略时按行序多条；`trace` SHALL 仅在显式开启 tracing 时非空，且每条 `RowTrace` 记录

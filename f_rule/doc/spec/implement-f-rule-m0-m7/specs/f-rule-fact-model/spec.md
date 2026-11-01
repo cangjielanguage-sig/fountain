@@ -27,8 +27,11 @@
 
 #### Scenario: 非法字段值
 
-- **WHEN** 断言字段值为 `Object` 等未支持类型的 `DynamicFact`
-- **THEN** `assert` 抛 `RuleException(TYPE_MISMATCH)`
+- **WHEN** 为 `DynamicFact` 的字段设置 `Object` 等未支持类型的值
+- **THEN** `set` 期即抛 `RuleException(TYPE_MISMATCH)`，坏值进不了事实对象，也就进不了网络
+
+> 实施修订：校验点在 `set` 而非 `assert`。约束更早生效——坏事实根本构造不出来，
+> 不必等到断言时才发现，`assert` 只做重复插入检查。
 
 ### Requirement: 不可变与句柄语义
 

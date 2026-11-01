@@ -38,8 +38,13 @@
 `AlphaMemory` SHALL 提供 `add` / `remove` / `size` / `probe(field, key)` / `range(field, low, high)` /
 `all`；`add` SHALL 幂等（同一句柄重复加入不改变大小），并 SHALL 通知全部 `rightConsumers`。
 
-`In [A, B, C]` SHALL 展开为 `Or(Eq A, Eq B, Eq C)` 的三个 alpha 节点加一个布尔聚合节点，
+`In [A, B, C]` MAY 展开为 `Or(Eq A, Eq B, Eq C)` 的三个 alpha 节点加一个布尔聚合节点，
 聚合节点不占 memory。
+
+> 实施取舍：当前实现把 `In` / `NotIn` 作为**单个 alpha 测试节点**求值
+> （`condition/Truth.cj` 的 `membership`），匹配结果正确（`Operator_test.inWithEmptyCollection`
+> 与差分测试覆盖），但拿不到等值索引的定位能力。展开会改变节点共享粒度与 `B-01` 节点数口径，
+> 留待后续按 `doc/04` 的「已知边界」处理。
 
 #### Scenario: 单模式规则
 

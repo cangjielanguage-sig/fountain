@@ -97,7 +97,12 @@ SHALL NOT 存在通往 `EndEvent` / `registerEnd()` 的路径。
 #### Scenario: 残留事件回归
 
 - **WHEN** 故意构造缺 `JoinTask` 的流程并连续 `start()` 两次
-- **THEN** 测试断言第二次 `start` 不会消费第一次残留分支（构建期已拦截；该用例锁定上游行为，防回归）
+- **THEN** 测试断言第二次 `start` **会**消费第一次的残留分支（`arrivals[0] == "first-round"`），
+  锁定 `f_egraph` 的 `dispatch` 遇 `EndExecutor` 提前返回且不清队列这一上游行为，防回归
+
+> 本 Scenario 的目的是**锁定现状**而非期望值：构建期的 `FANOUT_WITHOUT_JOIN` 拦截让合法编排不会
+> 走到这条路径，但一旦有人绕过校验，残留事件会被下一次 `start` 重放。用例断言「会消费」是为了让
+> 上游行为变化时立刻暴露，而不是把错误行为当成约定。
 
 ### Requirement: session 透传（RuleEnvelope）
 

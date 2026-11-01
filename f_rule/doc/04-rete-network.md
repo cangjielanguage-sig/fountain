@@ -214,6 +214,14 @@ internal class AlphaSignature <: Hashable & Equatable<AlphaSignature> {
 
 `In` 算子展开：`In [A, B, C]` 拆成 `Or(Eq A, Eq B, Eq C)` 三个 alpha 节点 + 一个或节点，或节点只做布尔聚合，不占 memory。
 
+> **实施现状（已知边界）**：当前把 `In` / `NotIn` 实现为**单个 alpha 测试节点**，由
+> `condition/Truth.cj` 的 `membership` 求值。匹配结果正确（`Operator_test.inWithEmptyCollection`
+> 与差分测试覆盖），但拿不到等值索引的定位能力——`AlphaMemory.select` 对 `In` 落到全扫分支。
+>
+> 未按本节展开的原因：展开会改变节点共享粒度（一个 `In` 变成三个 `Eq` 共享签名 + 一个聚合节点），
+> 影响 `B-01` 的节点数口径；且大表以 `In` 为主时才体现收益。若后续出现该形态的性能问题，
+> 按本节方案实现，并同步扩充 `B` 类门禁的夹具。
+
 ### 4.2 Beta 共享
 
 ```cangjie

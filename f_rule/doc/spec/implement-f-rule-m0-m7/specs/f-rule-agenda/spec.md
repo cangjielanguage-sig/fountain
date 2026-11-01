@@ -29,8 +29,9 @@
 `Agenda` SHALL 实现为惰性堆：`fire` 取堆顶前 SHALL 校验激活是否仍有效（对应令牌未撤回），
 失效则丢弃并继续取；`remove` SHALL NOT 做队列中间删除。
 
-`Agenda` SHALL 提供 `add` / `remove` / `fire(limit: Int64 = -1)` / `size` / `clear` / `snapshot`，
-`fire` SHALL 返回实际执行的激活数。
+`Agenda` SHALL 提供 `add` / `remove` / `fire(limit!: Int64 = -1)` / `size` / `clear` / `snapshot`，
+`fire` SHALL 返回实际执行的激活数。`limit` 是命名参数（仓颉惯用 `name!:` 形式），调用写作
+`fire(limit: 10)`。
 
 #### Scenario: 失效跳过
 
