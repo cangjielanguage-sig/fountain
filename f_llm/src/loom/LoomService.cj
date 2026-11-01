@@ -17,6 +17,8 @@ package fountain::f_llm.loom
 
 import std.collection.*
 
+import fountain::f_egraph.base.*
+
 /** `loomExecute` 的返回：要么是预览，要么是澄清问题 */
 public class LoomResult {
     public let status: String
@@ -105,13 +107,26 @@ public class LoomService {
             case Some(value) => value
             case None => throw LoomException('loom flow not found: ${name}')
         }
-        let plan = Planner.parse(flow.planJson, LoomRequest(name, flow.description))
+        let plan = Planner.parse(flow.planJson, LoomBootstrap.requestOf(flow))
         let target = plan.plan.getOrThrow()
         compiler.compileSteps(target)
         flow.mark(LoomStatus.COMPILED)
         registry.put(flow)
         LoomResult('compiled', name, planJson: flow.planJson,
                    stepSources: flow.stepSources, flowSource: flow.flowSource)
+    }
+
+    /** 编译成功后可立即执行一次（§9.6 的「可选立即执行」） */
+    public func executeNow(name: String, host: LoomHost, input: Event): Event {
+        let flow = match(registry.get(name)){
+            case Some(value) => value
+            case None => throw LoomException('loom flow not found: ${name}')
+        }
+        if(flow.status != LoomStatus.COMPILED){
+            throw LoomException('loom flow is not compiled: ${name} (status=${flow.status})')
+        }
+        let planned = Planner.parse(flow.planJson, LoomBootstrap.requestOf(flow))
+        LoomRunner(compiler: compiler).run(planned.plan.getOrThrow(), host, input)
     }
 
     public func delete(name: String): Bool {
