@@ -24,28 +24,27 @@ import fountain::f_concurrent.*
 /**
  * 带事件优先级队列的 [ClosureTask]，队列用 [fountain::f_concurrent.SyncPriorityQueue]。
  *
- * Flow 收到事件后立即调用 `exec(e)`——本类只入队、立刻返回 [DummyEvent]，
- * 真正的执行由 `runNext()` / `drain()` 驱动（便于单线程确定性，也便于外部接入线程池）。
+ * Flow 收到事件后立即调用 `exec(e)`：
+ * - `priority = 0`：**在提交线程立即执行**；若当前正在执行的事件**同名**，把它标记为被顶替，
+ *   其返回结果被丢弃（协作式：Cangjie 无法强杀闭包，任务体可轮询 `generation` 提前退出）；
+ * - `priority = 1`：入队，等当前事件结束后，把**同名的 1 号事件**合并成一批执行；
+ * - `priority >= 2`：入队，按 `(priority, birth, 入队序号)` 顺序逐条执行。
  *
- * 队列顺序：`priority` 升序；同优先级按 `birth` 先进先出，`birth` 相同再按入队序号
- * （堆不保证稳定，所以把序号放进比较器，而不是依赖插入顺序）。
+ * 取消：
+ * - `cancelPrev > 0`：撤销队列中前面 N 条**同优先级**事件；
+ * - [EmptyEvent] 的 `cancelPrev > 0`：撤销队列尾部 N 条事件（跨优先级），自身不执行。
  *
- * 执行批次：
- * - `priority = 0`：所有 0 号事件合并成一批，**抢占**当前执行——执行中的高优先级批次返回后
- *   发现版本号已变，结果被丢弃（协作式：Cangjie 无法强制终止闭包，长任务应自行轮询 `generation`）；
- * - `priority = 1`：所有 1 号事件合并成一批，等当前结束后执行；
- * - `priority >= 2`：逐条执行。
- *
- * 取消：`cancelPrev > 0` 撤销队列中前面 N 条**同优先级**事件；[EmptyEvent] 的
- * `cancelPrev > 0` 撤销队列尾部 N 条事件（跨优先级），自身不执行。
+ * 执行由 `runNext()` / `drain()` 驱动（便于单线程确定性；`exec` 里的 0 号事件除外，它是立即的）。
  */
 public class QueuedClosureTask <: ClosureTask {
-    /** 我们的锁保护「批量取出 + 版本号」，队列表自身也是线程安全的（内层锁） */
     private let mutex = Mutex()
     private let queue: SyncPriorityQueue<QueueEntry>
     private var sequence: Int64 = 0
     private var epoch: Int64 = 0
     private var cancelled: Int64 = 0
+    private var currentName: String = ''
+    private var currentToken: ?CancelToken = None
+    private var tokenCounter: Int64 = 0
     private let sink: (Event) -> Unit
 
     public init(name: String, acceptableEvents: Array<String>, producingEvents: Array<String>,
@@ -55,8 +54,11 @@ public class QueuedClosureTask <: ClosureTask {
         this.queue = SyncPriorityQueue<QueueEntry>(QueuedClosureTask.compareEntries)
     }
 
-    /** Flow 调用入口：只入队，立即返回 */
+    /** Flow 调用入口：0 号立即执行并返回其结果，其余入队后返回 [DummyEvent] */
     public override func exec(e: Event): Event {
+        if(e.priority == 0){
+            return submitImmediate(e)
+        }
         submit(e)
         DummyEvent.instance
     }
@@ -73,13 +75,51 @@ public class QueuedClosureTask <: ClosureTask {
             if(e is EmptyEvent){
                 return
             }
-            if(e.priority == 0){
-                // 0 号事件抢占：正在执行的高优先级批次结束后会丢弃结果
-                epoch++
-            }
             sequence++
             queue.add(QueueEntry(e, sequence))
         }
+    }
+
+    /**
+     * 0 号事件：提交线程立即执行。
+     *
+     * 若当前执行中的事件与它**同名**，给当前执行打取消标记——外层结束后结果丢弃，
+     * 由本条 0 号事件顶替。
+     */
+    private func submitImmediate(e: Event): Event {
+        var token = CancelToken(0)
+        synchronized(mutex){
+            tokenCounter++
+            token = CancelToken(tokenCounter)
+            epoch++
+            if(currentName == e.name){
+                match(currentToken){
+                    case Some(running) =>
+                        if(!running.cancelled){
+                            running.cancelled = true
+                            cancelled++
+                        }
+                    case None => ()
+                }
+            }
+            currentName = e.name
+            currentToken = Some(token)
+        }
+        let result = evaluate(e)
+        synchronized(mutex){
+            if(!token.cancelled){
+                sink(result)
+            }
+            match(currentToken){
+                case Some(active) =>
+                    if(active.id == token.id){
+                        currentName = ''
+                        currentToken = None
+                    }
+                case None => ()
+            }
+        }
+        result
     }
 
     public prop pending: Int64 {
@@ -88,7 +128,7 @@ public class QueuedClosureTask <: ClosureTask {
         }
     }
 
-    /** 因被 0 号事件抢占而丢弃结果的次数 */
+    /** 被同名 0 号事件顶替而丢弃结果的次数 */
     public prop cancelledCount: Int64 {
         get() {
             synchronized(mutex){
@@ -97,7 +137,7 @@ public class QueuedClosureTask <: ClosureTask {
         }
     }
 
-    /** 当前执行版本号：0 号事件入队即递增 */
+    /** 当前执行版本号：0 号事件提交即递增 */
     public prop generation: Int64 {
         get() {
             synchronized(mutex){
@@ -108,24 +148,37 @@ public class QueuedClosureTask <: ClosureTask {
 
     /** 执行下一批；返回是否执行了（队列为空返回 false） */
     public func runNext(): Bool {
-        let batch = takeBatch()
-        if(batch.isEmpty()){
-            return false
+        var token = CancelToken(0)
+        var batch: ArrayList<Event> = ArrayList<Event>()
+        synchronized(mutex){
+            tokenCounter++
+            token = CancelToken(tokenCounter)
+            batch = takeBatchLocked()
+            if(batch.isEmpty()){
+                return false
+            }
+            currentName = batch[0].name
+            currentToken = Some(token)
         }
-        let priority = batch[0].priority
-        let deadline = generation
         let payload = if(batch.size == 1){
             batch[0]
         }else{
             MultiEvent(category: batch[0].category, tag: batch[0].tag,
-                       name: 'priority-batch', events: batch)
+                       name: batch[0].name, events: batch)
         }
         let result = evaluate(payload)
-        if(priority != 0 && generation != deadline){
-            synchronized(mutex){
-                cancelled++
+        synchronized(mutex){
+            match(currentToken){
+                case Some(active) =>
+                    if(active.id == token.id){
+                        currentName = ''
+                        currentToken = None
+                    }
+                case None => ()
             }
-            return true
+            if(token.cancelled){
+                return true
+            }
         }
         sink(result)
         true
@@ -142,35 +195,36 @@ public class QueuedClosureTask <: ClosureTask {
 
     // ---- queue internals ----
 
-    private func takeBatch(): ArrayList<Event> {
-        synchronized(mutex){
-            let batch = ArrayList<Event>()
-            match(queue.peek()){
-                case Some(head) =>
-                    if(head.event.priority <= 1){
-                        while(true){
-                            match(queue.peek()){
-                                case Some(top) =>
-                                    if(top.event.priority != head.event.priority){
-                                        break
-                                    }
-                                    match(queue.remove()){
-                                        case Some(item) => batch.add(item.event)
-                                        case None => break
-                                    }
-                                case None => break
-                            }
-                        }
-                    }else{
-                        match(queue.remove()){
-                            case Some(item) => batch.add(item.event)
-                            case None => ()
+    /** 取一批：0/1 号按「同优先级 + 同名」合并，>=2 取一条（调用方持有 mutex） */
+    private func takeBatchLocked(): ArrayList<Event> {
+        let batch = ArrayList<Event>()
+        match(queue.peek()){
+            case Some(head) =>
+                let priority = head.event.priority
+                let name = head.event.name
+                if(priority <= 1){
+                    while(true){
+                        match(queue.peek()){
+                            case Some(top) =>
+                                if(top.event.priority != priority || top.event.name != name){
+                                    break
+                                }
+                                match(queue.remove()){
+                                    case Some(item) => batch.add(item.event)
+                                    case None => break
+                                }
+                            case None => break
                         }
                     }
-                case None => ()
-            }
-            batch
+                }else{
+                    match(queue.remove()){
+                        case Some(item) => batch.add(item.event)
+                        case None => ()
+                    }
+                }
+            case None => ()
         }
+        batch
     }
 
     private static func compareEntries(a: QueueEntry, b: QueueEntry): Ordering {
@@ -235,5 +289,15 @@ class QueueEntry {
     init(event: Event, sequence: Int64) {
         this.event = event
         this.sequence = sequence
+    }
+}
+
+/** 执行令牌：0 号事件顶替同名执行时把它标记为 cancelled */
+class CancelToken {
+    let id: Int64
+    var cancelled: Bool = false
+
+    init(id: Int64) {
+        this.id = id
     }
 }

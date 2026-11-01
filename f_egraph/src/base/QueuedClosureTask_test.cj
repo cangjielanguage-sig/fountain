@@ -32,6 +32,18 @@ class QueuedClosureTask_test {
     }
 
     @TestCase
+    func testPriorityZeroRunsImmediately(): Unit {
+        let seen = ArrayList<String>()
+        let task = newTask(seen)
+        task.submit(ev('z', 0))
+
+        // 0 号不等 drain，提交即执行
+        @Expect(seen.size, 1)
+        @Expect(seen[0], 'z')
+        @Expect(task.pending, 0)
+    }
+
+    @TestCase
     func testOrdersByPriorityThenBirth(): Unit {
         let seen = ArrayList<String>()
         let task = newTask(seen)
@@ -40,33 +52,37 @@ class QueuedClosureTask_test {
         task.submit(ev('p2-b', 2))
         task.submit(ev('p0', 0))
 
-        @Expect(task.drain(), 3)          // 0 批 + 1 批 + 两条 2 号
-        @Expect(seen[0], 'priority-batch')  // p0 合并批
-        @Expect(seen[1], 'priority-batch')  // p1 合并批
-        @Expect(seen[2], 'p2-a')            // 同优先级按 birth（提交顺序）
+        @Expect(seen[0], 'p0')          // 0 号先执行（提交时）
+        @Expect(task.drain(), 3)        // p1 批 + 两条 2 号
+        @Expect(seen[1], 'p1')          // 1 号同名合并批，name 取批内首条
+        @Expect(seen[2], 'p2-a')        // 同优先级按 birth（提交顺序）
         @Expect(seen[3], 'p2-b')
     }
 
     @TestCase
-    func testPriorityZeroBatchesIntoOneExecution(): Unit {
+    func testPriorityOneBatchesSameName(): Unit {
         let seen = ArrayList<String>()
         let task = newTask(seen)
-        task.submit(ev('a', 0))
-        task.submit(ev('b', 0))
+        task.submit(ev('a', 1))
+        task.submit(ev('b', 1))         // 同名合并成一批
+        task.submit(ev('c', 1))         // 同名，仍在同一批
 
         @Expect(task.drain(), 1)
         @Expect(seen.size, 1)
+        @Expect(seen[0], 'a')
     }
 
     @TestCase
-    func testPriorityOneBatchesIntoOneExecution(): Unit {
+    func testPriorityOneBatchesPerName(): Unit {
         let seen = ArrayList<String>()
         let task = newTask(seen)
         task.submit(ev('a', 1))
         task.submit(ev('b', 1))
+        task.submit(ev('a', 1))
 
-        @Expect(task.drain(), 1)
-        @Expect(seen.size, 1)
+        // 同名 a 一批、b 一批
+        @Expect(task.drain(), 2)
+        @Expect(seen.size, 2)
     }
 
     @TestCase
@@ -123,19 +139,28 @@ class QueuedClosureTask_test {
         @Expect(message.contains('priority'), true)
     }
 
+    /** 0 号事件顶替**同名**的正在执行事件：外层结果丢弃，内层立即执行 */
     @TestCase
-    func testPriorityZeroPreemptsCurrentResult(): Unit {
+    func testPriorityZeroReplacesSameNameExecution(): Unit {
         let seen = ArrayList<String>()
         let holder = Holder()
         let task = QueuedClosureTask('preempt', ['c'], ['c'],
             { e =>
-                if(e.name == 'slow'){
-                    // 模拟执行中被 0 号事件抢占：发布事件后当前批次结果应被丢弃
+                let payload = match(e){
+                    case d: DataEvent => match(d.tryGet<String>()){
+                        case Some(text) => text
+                        case None => ''
+                    }
+                    case _ => ''
+                }
+                if(payload == 'slow'){
                     match(holder.task){
-                        case Some(target) => target.submit(ev('urgent', 0))
+                        case Some(target) => target.submit(ev('slow', 0))
                         case None => ()
                     }
-                    holder.executed = true
+                    holder.slow++
+                }else if(payload == 'urgent'){
+                    holder.urgent++
                 }
                 e
             },
@@ -143,14 +168,47 @@ class QueuedClosureTask_test {
         holder.task = Some(task)
 
         task.submit(ev('slow', 2))
-        @Expect(task.drain(), 2)          // slow 被抢占（结果丢弃）+ urgent 批
+        @Expect(task.drain(), 1)          // 只执行外层一次（结果被丢弃）
+        @Expect(holder.slow, 1)           // 外层任务体确实跑完了（协作式）
+        @Expect(holder.urgent, 1)         // 0 号立即执行
         @Expect(task.cancelledCount, 1)
-        @Expect(seen.size, 1)             // 只有 urgent 批的结果
-        @Expect(holder.executed, true)    // 任务体确实跑完了（协作式，不能强杀）
+        @Expect(seen.size, 1)             // 只有 0 号的结果进入 sink
+    }
+
+    /** 不同名的 0 号事件不取消正在执行的事件 */
+    @TestCase
+    func testPriorityZeroWithOtherNameDoesNotCancel(): Unit {
+        let seen = ArrayList<String>()
+        let holder = Holder()
+        let task = QueuedClosureTask('preempt', ['c'], ['c'],
+            { e =>
+                let payload = match(e){
+                    case d: DataEvent => match(d.tryGet<String>()){
+                        case Some(text) => text
+                        case None => ''
+                    }
+                    case _ => ''
+                }
+                if(payload == 'slow'){
+                    match(holder.task){
+                        case Some(target) => target.submit(ev('other', 0))
+                        case None => ()
+                    }
+                }
+                e
+            },
+            onResult: { r => seen.add(r.name) })
+        holder.task = Some(task)
+
+        task.submit(ev('slow', 2))
+        @Expect(task.drain(), 1)
+        @Expect(task.cancelledCount, 0)
+        @Expect(seen.size, 2)             // 0 号 + 外层都进 sink
     }
 }
 
 class Holder {
     public var task: ?QueuedClosureTask = None
-    public var executed: Bool = false
+    public var slow: Int64 = 0
+    public var urgent: Int64 = 0
 }
