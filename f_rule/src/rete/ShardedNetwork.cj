@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_rule.rete
 
 import std.collection.{ArrayList, HashMap}
+import std.sync.Mutex
 import fountain::f_rule.agenda.{Activation, ActivationSink}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.Fact
@@ -45,6 +46,11 @@ public type NaiveActivationFn = (Array<Rule>, HashMap<String, Array<Fact>>) -> A
  * 运行态都不受影响（R-16~R-18）。
  */
 public class ShardedNetwork {
+    /** 结构缓存：只保留最近一个 `RuleSet` 的网络，避免缓存无限增长。 */
+    private static let cacheMtx = Mutex()
+    private static var cachedRuleSet: ?RuleSet = None
+    private static var cachedNetwork: ?ShardedNetwork = None
+
     private let ruleSet_: RuleSet
     private let shards_: HashMap<String, ReteNetwork>
     private let spaces_: ArrayList<String>
@@ -69,6 +75,36 @@ public class ShardedNetwork {
         get() {
             ruleSet_
         }
+    }
+
+    /**
+     * 取规则集对应的网络结构；同一 `RuleSet` 实例重复调用命中缓存（B-06）。
+     *
+     * 结构构建完成后即冻结，只有 memory 随会话变化，因此多个引擎共享同一份结构是
+     * 安全的。缓存只保留最近一次构建，`RuleSet` 变化后自然替换，不会无限增长。
+     */
+    public static func shared(ruleSet: RuleSet): ShardedNetwork {
+        let cached = synchronized(cacheMtx) {
+            var found: ?ShardedNetwork = None
+            match (cachedRuleSet) {
+                case Some(existing) =>
+                    if (refEq(existing, ruleSet)) {
+                        found = cachedNetwork
+                    }
+                case None => ()
+            }
+            found
+        }
+        match (cached) {
+            case Some(found) => return found
+            case None => ()
+        }
+        let built = ShardedNetwork(ruleSet)
+        synchronized(cacheMtx) {
+            cachedRuleSet = Some(ruleSet)
+            cachedNetwork = Some(built)
+        }
+        built
     }
 
     public prop mode: MatcherMode {
@@ -107,7 +143,7 @@ public class ShardedNetwork {
     }
 
     private static func buildShard(ruleSet: RuleSet, space: String): ReteNetwork {
-        let network = ReteNetwork(space)
+        let network = ReteNetwork(space, expressionMode: ruleSet.expressionMode)
         network.build(ruleSet.rules, ruleSet.registry)
         network
     }

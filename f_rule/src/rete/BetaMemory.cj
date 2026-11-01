@@ -40,18 +40,27 @@ class JoinProbe {
 }
 
 public class BetaMemory <: ReteNode {
+    /** 空候选的共享实例：join 探测经常没有命中，避免每次分配空表。 */
+    private static let sharedEmpty = ArrayList<Token>()
+
     private let id_: Int64
     private let tokens_: ArrayList<Token>
     private let set_: HashSet<Token>
+    /** 令牌在 `tokens_` 中的槽位，使撤销为 O(1)（尾元素填补）。 */
+    private let slots_: HashMap<Token, Int64>
     private let eqIndex_: HashMap<String, HashMap<ValueKey, ArrayList<Token>>>
     private let ordIndex_: HashMap<String, ConcurrentSkipListMap<RangeKey, Token>>
+    /** `"binding.field"` 的解析缓存。 */
+    private let parts_: HashMap<String, (String, String)>
 
     public init(id: Int64) {
         this.id_ = id
         this.tokens_ = ArrayList<Token>()
         this.set_ = HashSet<Token>()
+        this.slots_ = HashMap<Token, Int64>()
         this.eqIndex_ = HashMap<String, HashMap<ValueKey, ArrayList<Token>>>()
         this.ordIndex_ = HashMap<String, ConcurrentSkipListMap<RangeKey, Token>>()
+        this.parts_ = HashMap<String, (String, String)>()
     }
 
     public prop id: Int64 {
@@ -66,6 +75,7 @@ public class BetaMemory <: ReteNode {
             return false
         }
         set_.add(token)
+        slots_[token] = Int64(tokens_.size)
         tokens_.add(token)
         token.retain()
         for ((fieldKey, index) in eqIndex_) {
@@ -82,14 +92,17 @@ public class BetaMemory <: ReteNode {
         if (!set_.remove(token)) {
             return false
         }
-        var i = 0
-        while (i < tokens_.size) {
-            if (tokens_[i] == token) {
-                tokens_.remove(at: i)
-                break
-            }
-            i += 1
+        let slot = match (slots_.remove(token)) {
+            case Some(found) => found
+            case None => return false
         }
+        let last = Int64(tokens_.size) - 1
+        if (slot != last) {
+            let moved = tokens_[last]
+            tokens_[slot] = moved
+            slots_[moved] = slot
+        }
+        tokens_.remove(at: last)
         for ((fieldKey, index) in eqIndex_) {
             unindexEq(index, fieldKey, token)
         }
@@ -144,17 +157,50 @@ public class BetaMemory <: ReteNode {
      * 无可用索引时回退全扫。
      */
     public func probeByJoin(joins: Array<JoinConstraint>, fact: Fact, factBinding: String): Array<Token> {
+        let out = ArrayList<Token>()
+        for (token in probeJoinList(joins, fact, factBinding)) {
+            out.add(token)
+        }
+        out.toArray()
+    }
+
+    /** 索引直读版本（内部热路径）：返回内部列表或共享空表，调用方只读。 */
+    func probeJoinList(joins: Array<JoinConstraint>, fact: Fact,
+        factBinding: String): ArrayList<Token> {
         for (join in joins) {
             match (BetaMemory.joinProbe(join, fact, factBinding)) {
                 case Some(probe) =>
                     match (BetaMemory.keyOf(probe.raw)) {
-                        case Some(key) => return select(probe.fieldKey, probe.op, key)
+                        case Some(key) => return selectList(probe.fieldKey, probe.op, key)
                         case None => ()
                     }
                 case None => ()
             }
         }
-        tokens()
+        tokens_
+    }
+
+    /** 按算子选候选令牌；等值走哈希桶直读，其余回退全表。 */
+    func selectList(fieldKey: String, op: Operator, value: ValueKey): ArrayList<Token> {
+        match (op) {
+            case Operator.Eq =>
+                ensureEqIndex(fieldKey)
+                match (eqIndex_[fieldKey].get(value)) {
+                    case Some(found) => return found
+                    case None => return BetaMemory.sharedEmpty
+                }
+            case _ => ()
+        }
+        let out = ArrayList<Token>()
+        for (token in select(fieldKey, op, value)) {
+            out.add(token)
+        }
+        out
+    }
+
+    /** 全部令牌（内部热路径）：返回内部列表，调用方只读。 */
+    func tokensList(): ArrayList<Token> {
+        tokens_
     }
 
     /** 令牌侧字段键 + 令牌侧应满足的算子 + 事实侧取值；不适用于索引时返回 None。 */
@@ -253,7 +299,7 @@ public class BetaMemory <: ReteNode {
 
     private func indexEq(index: HashMap<ValueKey, ArrayList<Token>>, fieldKey: String,
         token: Token): Unit {
-        match (BetaMemory.valueAt(token, fieldKey)) {
+        match (valueAt(token, fieldKey)) {
             case Some(raw) =>
                 match (BetaMemory.keyOf(raw)) {
                     case Some(key) =>
@@ -272,7 +318,7 @@ public class BetaMemory <: ReteNode {
 
     private func unindexEq(index: HashMap<ValueKey, ArrayList<Token>>, fieldKey: String,
         token: Token): Unit {
-        match (BetaMemory.valueAt(token, fieldKey)) {
+        match (valueAt(token, fieldKey)) {
             case Some(raw) =>
                 match (BetaMemory.keyOf(raw)) {
                     case Some(key) =>
@@ -299,7 +345,7 @@ public class BetaMemory <: ReteNode {
 
     private func indexOrd(index: ConcurrentSkipListMap<RangeKey, Token>, fieldKey: String,
         token: Token): Unit {
-        match (BetaMemory.valueAt(token, fieldKey)) {
+        match (valueAt(token, fieldKey)) {
             case Some(raw) =>
                 match (BetaMemory.keyOf(raw)) {
                     case Some(key) => let _ = index.add(RangeKey(key, token.id), token)
@@ -311,7 +357,7 @@ public class BetaMemory <: ReteNode {
 
     private func unindexOrd(index: ConcurrentSkipListMap<RangeKey, Token>, fieldKey: String,
         token: Token): Unit {
-        match (BetaMemory.valueAt(token, fieldKey)) {
+        match (valueAt(token, fieldKey)) {
             case Some(raw) =>
                 match (BetaMemory.keyOf(raw)) {
                     case Some(key) => let _ = index.remove(RangeKey(key, token.id))
@@ -322,13 +368,22 @@ public class BetaMemory <: ReteNode {
     }
 
     /** 从 `"binding.field"` 取出令牌里的字段值。 */
-    private static func valueAt(token: Token, fieldKey: String): ?Any {
-        let parts = fieldKey.split('.')
-        if (parts.size != 2) {
-            return None
+    private func valueAt(token: Token, fieldKey: String): ?Any {
+        // 字段键在索引生命周期内固定，解析结果缓存，避免每次索引操作都 split 一次。
+        let path = match (parts_.get(fieldKey)) {
+            case Some(found) => found
+            case None =>
+                let segments = fieldKey.split('.')
+                if (segments.size != 2) {
+                    return None
+                }
+                let created = (segments[0], segments[1])
+                parts_[fieldKey] = created
+                created
         }
-        match (token.bindings().resolve(parts[0])) {
-            case Some(fact) => fact.get(parts[1])
+        let (binding, field) = path
+        match (token.factOf(binding)) {
+            case Some(fact) => fact.get(field)
             case None => None
         }
     }

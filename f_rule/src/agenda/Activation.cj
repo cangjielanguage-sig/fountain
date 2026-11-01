@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.agenda
 
-import std.sync.Mutex
+import std.sync.AtomicInt64
 import fountain::f_rule.rule.Rule
 
 /**
@@ -28,8 +28,8 @@ import fountain::f_rule.rule.Rule
  * 差分测试依赖这一点逐条比对两侧激活集合。
  */
 public class Activation <: Hashable & Equatable<Activation> & ToString {
-    private static let seqMtx = Mutex()
-    private static var seqCounter: Int64 = 0
+    /** 计数走原子操作：激活产出是高频路径，互斥锁会成为瓶颈。 */
+    private static let seqCounter = AtomicInt64(0)
 
     public let rule: Rule
     public let factSpace: String
@@ -96,9 +96,6 @@ public class Activation <: Hashable & Equatable<Activation> & ToString {
     }
 
     private static func nextSeq(): Int64 {
-        synchronized(seqMtx) {
-            seqCounter += 1
-            seqCounter
-        }
+        seqCounter.fetchAdd(1) + 1
     }
 }

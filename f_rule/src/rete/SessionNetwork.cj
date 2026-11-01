@@ -31,6 +31,9 @@ public class SessionNetwork <: ReteSession {
     private let sink_: ActivationSink
     private let alphaMems_: HashMap<Int64, AlphaMemory>
     private let betaMems_: HashMap<Int64, BetaMemory>
+    private let productions_: HashMap<Int64, BetaProductions>
+    /** 事实插入时命中的 alpha 链头；撤销时直接按记录回收，避免全链头扫描。 */
+    private let alphaHits_: HashMap<FactHandle, Array<AlphaNode>>
 
     public init(network: ReteNetwork, session: String, sink: ActivationSink) {
         this.network_ = network
@@ -38,6 +41,8 @@ public class SessionNetwork <: ReteSession {
         this.sink_ = sink
         this.alphaMems_ = HashMap<Int64, AlphaMemory>()
         this.betaMems_ = HashMap<Int64, BetaMemory>()
+        this.productions_ = HashMap<Int64, BetaProductions>()
+        this.alphaHits_ = HashMap<FactHandle, Array<AlphaNode>>()
     }
 
     public prop sink: ActivationSink {
@@ -70,6 +75,16 @@ public class SessionNetwork <: ReteSession {
         }
     }
 
+    public func betaProductions(nodeId: Int64): BetaProductions {
+        match (productions_.get(nodeId)) {
+            case Some(found) => found
+            case None =>
+                let created = BetaProductions()
+                productions_[nodeId] = created
+                created
+        }
+    }
+
     /** 插入事实：路由到本分片根节点。 */
     public func assert(handle: FactHandle, fact: Fact): Unit {
         network_.rootNode().propagate(this, handle, fact)
@@ -77,6 +92,19 @@ public class SessionNetwork <: ReteSession {
 
     public func retract(handle: FactHandle): Unit {
         network_.rootNode().retract(this, handle)
+        let _ = alphaHits_.remove(handle)
+    }
+
+    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+        alphaHits_[handle] = hits
+    }
+
+    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+        alphaHits_.get(handle)
+    }
+
+    public func forgetAlphaHits(handle: FactHandle): Unit {
+        let _ = alphaHits_.remove(handle)
     }
 
     /** 等价于 retract + assert，句柄 id 不变（§6.3）。 */
@@ -110,5 +138,7 @@ public class SessionNetwork <: ReteSession {
     public func clearMemories(): Unit {
         alphaMems_.clear()
         betaMems_.clear()
+        productions_.clear()
+        alphaHits_.clear()
     }
 }

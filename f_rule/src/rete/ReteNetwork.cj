@@ -18,7 +18,7 @@ package fountain::f_rule.rete
 import fountain::f_rule.agenda.ActivationSink
 import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
-import fountain::f_rule.condition.{JitExpression, JoinConstraint}
+import fountain::f_rule.condition.{ExpressionMode, JitExpression, JoinConstraint}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{Fact, FactSpaceRegistry}
 import fountain::f_rule.rule.Rule
@@ -48,9 +48,12 @@ public class ReteNetwork {
     private let terminals_: ArrayList<TerminalNode>
     private var nextId_: Int64
     private var frozen_: Bool
+    /** 脚本求值模式；`Interpreted` 时终端脚本走内置解释器。 */
+    private let expressionMode_: ExpressionMode
 
-    public init(space: String) {
+    public init(space: String, expressionMode!: ExpressionMode = ExpressionMode.JitPreferred) {
         this.space = space
+        this.expressionMode_ = expressionMode
         this.generation = ReteNetwork.nextGeneration()
         this.root_ = RootNode(0)
         this.alphaNodes_ = ArrayList<AlphaNode>()
@@ -172,7 +175,11 @@ public class ReteNetwork {
         if (rule.scripts.size > 0) {
             let compiler = RuleRuntime.compiler()
             for (source in rule.scripts) {
-                scripts.add(JitExpression.of(source, compiler))
+                scripts.add(if (expressionMode_ == ExpressionMode.Interpreted) {
+                    JitExpression.interpretedOf(source)
+                } else {
+                    JitExpression.of(source, compiler)
+                })
             }
         }
         let created = TerminalNode(nextNodeId(), rule, scripts: scripts.toArray())

@@ -27,11 +27,13 @@ class BetaTestSession <: ReteSession {
     private let sink_: RecordingSink
     private let alphaMems: HashMap<Int64, AlphaMemory>
     private let betaMems: HashMap<Int64, BetaMemory>
+    private let productions: HashMap<Int64, BetaProductions>
 
     BetaTestSession() {
         this.sink_ = RecordingSink()
         this.alphaMems = HashMap<Int64, AlphaMemory>()
         this.betaMems = HashMap<Int64, BetaMemory>()
+        this.productions = HashMap<Int64, BetaProductions>()
     }
 
     public prop sink: ActivationSink {
@@ -58,6 +60,27 @@ class BetaTestSession <: ReteSession {
                 betaMems[nodeId] = created
                 created
         }
+    }
+
+    public func betaProductions(nodeId: Int64): BetaProductions {
+        match (productions.get(nodeId)) {
+            case Some(found) => found
+            case None =>
+                let created = BetaProductions()
+                productions[nodeId] = created
+                created
+        }
+    }
+
+    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+        // 单节点用例不经过根节点分发，不需要命中记录。
+    }
+
+    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+        None
+    }
+
+    public func forgetAlphaHits(handle: FactHandle): Unit {
     }
 }
 

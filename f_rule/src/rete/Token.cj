@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.rete
 
 import std.collection.HashMap
-import std.sync.Mutex
+import std.sync.AtomicInt64
 import fountain::f_rule.agenda.Bindings
 import fountain::f_rule.fact.{Fact, FactHandle}
 
@@ -33,8 +33,8 @@ import fountain::f_rule.fact.{Fact, FactHandle}
  * `fact` 只保存引用（事实对象由 `FactBase` 持有），供 [bindings] 展开绑定表。
  */
 public class Token <: Hashable & Equatable<Token> & ToString {
-    private static let idMtx = Mutex()
-    private static var idCounter: Int64 = 0
+    /** 计数走原子操作：每个令牌都要取号，锁会成为插入路径的瓶颈。 */
+    private static let idCounter = AtomicInt64(0)
 
     /** 进程内单调 id；范围索引用它区分同值令牌。 */
     public let id: Int64
@@ -56,10 +56,7 @@ public class Token <: Hashable & Equatable<Token> & ToString {
     }
 
     private static func nextId(): Int64 {
-        synchronized(idMtx) {
-            idCounter += 1
-            idCounter
-        }
+        idCounter.fetchAdd(1) + 1
     }
 
     /** 首模式的哑令牌：没有父链。 */
@@ -125,7 +122,20 @@ public class Token <: Hashable & Equatable<Token> & ToString {
             facts[current.binding] = current.fact
             cursor = current.parent
         }
-        Bindings.of(handles, facts)
+        // 两个映射刚构造好且不再被修改，直接交给 Bindings 接管，避免再复制一遍。
+        Bindings.adopt(handles, facts)
+    }
+
+    /** 沿父链取某个绑定的事实；不构造绑定表（join 探测热路径）。 */
+    func factOf(binding: String): ?Fact {
+        var cursor: ?Token = Some(this)
+        while (let Some(current) <- cursor) {
+            if (current.binding == binding) {
+                return Some(current.fact)
+            }
+            cursor = current.parent
+        }
+        None
     }
 
     public operator func ==(other: Token): Bool {

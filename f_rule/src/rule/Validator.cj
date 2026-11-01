@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.rule
 
 import std.collection.{HashMap, HashSet}
-import fountain::f_rule.condition.{JitExpression, Operator, Pattern}
+import fountain::f_rule.condition.{ExpressionMode, JitExpression, Operator, Pattern}
 import fountain::f_rule.exception.*
 import fountain::f_rule.fact.{FactSpace, FieldType}
 import fountain::f_rule.runtime.RuleRuntime
@@ -90,9 +90,15 @@ public class Validator {
             }
             // 脚本条件在构建期编译并校验形参：编译失败抛 SCRIPT_COMPILE，
             // 形参不在模式绑定中抛 SCRIPT_BINDING_MISSING。运行时不再兜底。
+            // 求值模式与网络构建保持一致：`Interpreted` 也必须在这里先过解释器，
+            // 否则要到建网络时才暴露超出解释器子集的语法。
             let compiler = RuleRuntime.compiler()
             for (source in rule.scripts) {
-                let expression = JitExpression.of(source, compiler)
+                let expression = if (ruleSet.expressionMode == ExpressionMode.Interpreted) {
+                    JitExpression.interpretedOf(source)
+                } else {
+                    JitExpression.of(source, compiler)
+                }
                 expression.requireBindings(byBinding.keys().toArray())
             }
         }

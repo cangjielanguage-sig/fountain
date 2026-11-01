@@ -23,44 +23,35 @@ import fountain::f_rule.fact.{Fact, FactHandle}
 /** 追踪激活汇：维护会话级激活集合，并转发给真正的下游（议程）。 */
 class TrackingSink <: ActivationSink {
     private let delegate: ActivationSink
-    private let items: ArrayList<Activation>
+    /** 按激活键去重；O(1) 加入/撤销，避免大规模事实下的线性扫描。 */
+    private let items: HashMap<String, Activation>
 
     TrackingSink(delegate: ActivationSink) {
         this.delegate = delegate
-        this.items = ArrayList<Activation>()
+        this.items = HashMap<String, Activation>()
     }
 
     public func add(activation: Activation): Unit {
-        if (contains(activation)) {
+        if (items.contains(activation.sortKey())) {
             return
         }
-        items.add(activation)
+        items[activation.sortKey()] = activation
         delegate.add(activation)
     }
 
     public func remove(activation: Activation): Unit {
-        var i = 0
-        while (i < items.size) {
-            if (items[i] == activation) {
-                items.remove(at: i)
-                delegate.remove(activation)
-                return
-            }
-            i += 1
+        if (items.remove(activation.sortKey()).isNone()) {
+            return
         }
+        delegate.remove(activation)
     }
 
     public func activations(): Array<Activation> {
-        items.toArray()
-    }
-
-    private func contains(activation: Activation): Bool {
-        for (item in items) {
-            if (item == activation) {
-                return true
-            }
+        let out = ArrayList<Activation>()
+        for ((_, activation) in items) {
+            out.add(activation)
         }
-        false
+        out.toArray()
     }
 }
 

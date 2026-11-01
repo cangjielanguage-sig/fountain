@@ -49,6 +49,17 @@ public class Bindings {
         Bindings(copyHandles(handles), copyFacts(facts))
     }
 
+    /**
+     * 接管两个映射的所有权（**不复制**）。
+     *
+     * 供高频路径使用：调用方必须是这两个映射的唯一持有者，交出后不得再修改。
+     * 令牌展开时刚构造好的映射直接交给 `Bindings`，省掉一次全量复制。
+     */
+    public static func adopt(handles: HashMap<String, FactHandle>,
+        facts: HashMap<String, Fact>): Bindings {
+        Bindings(handles, facts)
+    }
+
     /** 只有事实的视图（朴素匹配 / 手工测试）；[get] 永远返回 `None`。 */
     public static func ofFacts(facts: HashMap<String, Fact>): Bindings {
         Bindings(HashMap<String, FactHandle>(), copyFacts(facts))

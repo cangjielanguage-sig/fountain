@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.fact
 
-import std.collection.{ArrayList, HashMap}
+import std.collection.{ArrayList, HashMap, HashSet}
 import fountain::f_rule.exception.*
 
 /**
@@ -30,6 +30,10 @@ public class FactBase {
     private let session_: String
     private var nextId_: Int64
     private let buckets_: HashMap<String, ArrayList<FactHandle>>
+    /** `(typeTag, 句柄) → 槽位`；撤销不再线性扫描桶（大规模事实下会退化成 O(n²)）。 */
+    private let slots_: HashMap<String, HashMap<FactHandle, Int64>>
+    /** 已撤销但仍占槽位的下标；`scan` 跳过，过半时整理一次。 */
+    private let dead_: HashMap<String, HashSet<Int64>>
     private let facts_: HashMap<FactHandle, Fact>
     private let byIdentity_: HashMap<Int64, FactHandle>
     private let looseFacts_: ArrayList<Fact>
@@ -39,6 +43,8 @@ public class FactBase {
         this.session_ = session
         this.nextId_ = 1
         this.buckets_ = HashMap<String, ArrayList<FactHandle>>()
+        this.slots_ = HashMap<String, HashMap<FactHandle, Int64>>()
+        this.dead_ = HashMap<String, HashSet<Int64>>()
         this.facts_ = HashMap<FactHandle, Fact>()
         this.byIdentity_ = HashMap<Int64, FactHandle>()
         this.looseFacts_ = ArrayList<Fact>()
@@ -75,7 +81,9 @@ public class FactBase {
         let handle = FactHandle(space_.id, nextId_, fact.typeTag)
         nextId_ += 1
         facts_[handle] = fact
-        bucket(fact.typeTag).add(handle)
+        let bucket = bucket(fact.typeTag)
+        slotIndex(fact.typeTag)[handle] = Int64(bucket.size)
+        bucket.add(handle)
         recordIdentity(fact, handle)
         handle
     }
@@ -145,10 +153,20 @@ public class FactBase {
 
     /** 按类型枚举句柄，保持插入顺序。 */
     public func scan(typeTag: String): Array<FactHandle> {
-        match (buckets_.get(typeTag)) {
-            case Some(handles) => handles.toArray()
-            case None => Array<FactHandle>()
+        let handles = match (buckets_.get(typeTag)) {
+            case Some(found) => found
+            case None => return Array<FactHandle>()
         }
+        let dead = deadOf(typeTag)
+        let out = ArrayList<FactHandle>()
+        var i: Int64 = 0
+        while (i < Int64(handles.size)) {
+            if (!dead.contains(i)) {
+                out.add(handles[i])
+            }
+            i += 1
+        }
+        out.toArray()
     }
 
     public func size(): Int64 {
@@ -158,6 +176,8 @@ public class FactBase {
     public func clear(): Unit {
         facts_.clear()
         buckets_.clear()
+        slots_.clear()
+        dead_.clear()
         byIdentity_.clear()
         looseFacts_.clear()
     }
@@ -172,19 +192,53 @@ public class FactBase {
         }
     }
 
-    private func removeFromBucket(handle: FactHandle): Unit {
-        match (buckets_.get(handle.typeTag)) {
-            case Some(handles) =>
-                var i = 0
-                while (i < handles.size) {
-                    if (handles[i] == handle) {
-                        handles.remove(at: i)
-                        break
-                    }
-                    i += 1
-                }
-            case None => ()
+    private func slotIndex(typeTag: String): HashMap<FactHandle, Int64> {
+        match (slots_.get(typeTag)) {
+            case Some(found) => found
+            case None =>
+                let created = HashMap<FactHandle, Int64>()
+                slots_[typeTag] = created
+                created
         }
+    }
+
+    private func deadOf(typeTag: String): HashSet<Int64> {
+        match (dead_.get(typeTag)) {
+            case Some(found) => found
+            case None =>
+                let created = HashSet<Int64>()
+                dead_[typeTag] = created
+                created
+        }
+    }
+
+    /** 撤销桶内句柄：标记墓碑，过半时整理（保持 `scan` 的插入顺序）。 */
+    private func removeFromBucket(handle: FactHandle): Unit {
+        let slots = slotIndex(handle.typeTag)
+        let slot = match (slots.remove(handle)) {
+            case Some(found) => found
+            case None => return
+        }
+        let dead = deadOf(handle.typeTag)
+        dead.add(slot)
+        let handles = bucket(handle.typeTag)
+        if (Int64(dead.size) * 2 <= Int64(handles.size)) {
+            return
+        }
+        let kept = ArrayList<FactHandle>()
+        var i: Int64 = 0
+        while (i < Int64(handles.size)) {
+            if (!dead.contains(i)) {
+                slots[handles[i]] = Int64(kept.size)
+                kept.add(handles[i])
+            }
+            i += 1
+        }
+        handles.clear()
+        for (item in kept) {
+            handles.add(item)
+        }
+        dead.clear()
     }
 
     private func recordIdentity(fact: Fact, handle: FactHandle): Unit {

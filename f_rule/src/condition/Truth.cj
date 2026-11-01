@@ -122,8 +122,8 @@ public class OperatorEvaluator {
         }
 
         match (op) {
-            case Eq => bool(ValueKey.of(leftValue) == ValueKey.of(rightValue))
-            case Ne => bool(ValueKey.of(leftValue) != ValueKey.of(rightValue))
+            case Eq => bool(equalValues(leftValue, rightValue))
+            case Ne => bool(!equalValues(leftValue, rightValue))
             case Gt => compare(leftValue, rightValue, { o => o == Ordering.GT })
             case Ge => compare(leftValue, rightValue, { o => o != Ordering.LT })
             case Lt => compare(leftValue, rightValue, { o => o == Ordering.LT })
@@ -139,6 +139,21 @@ public class OperatorEvaluator {
         }
     }
 
+    /**
+     * 等值判定。
+     *
+     * 同类型基本值直比，省掉两次 `ValueKey` 归一分配；跨类型（`Int64` vs `Float64`、
+     * 时间、列表）仍走 `ValueKey`，保证 `Int64(1) == Float64(1.0)` 等契约不变。
+     */
+    private static func equalValues(left: Any, right: Any): Bool {
+        match ((left, right)) {
+            case (a: Int64, b: Int64) => a == b
+            case (a: String, b: String) => a == b
+            case (a: Bool, b: Bool) => a == b
+            case _ => ValueKey.of(left) == ValueKey.of(right)
+        }
+    }
+
     private static func bool(value: Bool): Truth {
         if (value) {
             Truth.True
@@ -147,8 +162,34 @@ public class OperatorEvaluator {
         }
     }
 
+    /** 排序比较；同类型基本值直比，跨类型仍由 `ValueKey.strictCompare` 抛 `TYPE_MISMATCH`。 */
     private static func compare(left: Any, right: Any, test: (Ordering) -> Bool): Truth {
-        bool(test(ValueKey.of(left).strictCompare(ValueKey.of(right))))
+        let ordering = match ((left, right)) {
+            case (a: Int64, b: Int64) => orderingOf(a, b)
+            case (a: String, b: String) => orderingOf(a, b)
+            case _ => ValueKey.of(left).strictCompare(ValueKey.of(right))
+        }
+        bool(test(ordering))
+    }
+
+    private static func orderingOf(left: Int64, right: Int64): Ordering {
+        if (left == right) {
+            Ordering.EQ
+        } else if (left < right) {
+            Ordering.LT
+        } else {
+            Ordering.GT
+        }
+    }
+
+    private static func orderingOf(left: String, right: String): Ordering {
+        if (left == right) {
+            Ordering.EQ
+        } else if (left < right) {
+            Ordering.LT
+        } else {
+            Ordering.GT
+        }
     }
 
     private static func stringPair(left: Any, right: Any, test: (String, String) -> Bool): Truth {

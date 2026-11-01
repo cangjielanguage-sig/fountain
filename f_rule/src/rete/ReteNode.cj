@@ -50,6 +50,14 @@ public interface ReteSession {
     prop sink: ActivationSink
     func alphaMemory(nodeId: Int64): AlphaMemory
     func betaMemory(nodeId: Int64): BetaMemory
+    /** 该会话内某个 beta 节点的产出索引（会话运行态，不能放在共享节点上）。 */
+    func betaProductions(nodeId: Int64): BetaProductions
+    /** 记录某事实插入时命中的 alpha 链头，供撤销时按记录回收（不重算字段值）。 */
+    func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit
+    /** 该事实的命中记录；没有记录时返回 `None`（撤销走逐链头回收）。 */
+    func alphaHits(handle: FactHandle): ?Array<AlphaNode>
+    /** 丢弃命中记录；撤销完成后调用。 */
+    func forgetAlphaHits(handle: FactHandle): Unit
 }
 
 /** alpha memory 的左侧消费者：同一个共享 memory 可以被多个不同绑定名驱动。 */

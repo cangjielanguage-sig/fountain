@@ -193,7 +193,9 @@ RuleFlow(rule-1) ──Event──▶ RuleFlow(rule-2) ──▶ ... ──▶ E
 
 ## 6. 错误处理
 
-统一异常 `RuleException <: BaseException`，分类由 `RuleErrorCode` 区分：
+统一异常 `RuleException <: BaseException`，分类由 `RuleErrorCode`（27 个）区分。
+
+**规则集装配期**
 
 | 码 | 场景 |
 |---|---|
@@ -203,13 +205,51 @@ RuleFlow(rule-1) ──Event──▶ RuleFlow(rule-2) ──▶ ... ──▶ E
 | `EMPTY_FACT_SPACE_SET` | 规则集没有任何事实库空间 |
 | `CROSS_SPACE_JOIN` | 同一规则的模式或 join 跨事实库空间 |
 | `DUPLICATE_TYPE` | 同一空间内 `typeTag` 被不一致的 schema 重复注册 |
-| `UNKNOWN_TYPE` | 模式引用了未注册的 `typeTag` |
+| `UNKNOWN_TYPE` | 模式或 join 引用了未注册的 `typeTag` |
 | `UNKNOWN_FIELD` | 约束引用了未注册字段 |
+| `UNKNOWN_BINDING` | join 引用了不存在的绑定名 |
 | `TYPE_MISMATCH` | 算子与操作数类型不兼容 |
-| `TABLE_INVALID` | 决策表结构/单元格非法 |
-| `TABLE_NO_MATCH` | `Unique` 命中策略下零命中 |
-| `TABLE_MULTI_MATCH` | `Unique` 命中策略下多命中 |
 | `NETWORK_FROZEN` | 网络已冻结后仍尝试注册规则或空间 |
-| `CYCLE_LIMIT` | `Agenda.fire` 超过循环上限 |
 
-编译期错误（决策表、规则定义）一律在构建阶段抛出，不留到运行期；运行期只保留事实类型不匹配、表达式运行时异常两类。
+**事实**
+
+| 码 | 场景 |
+|---|---|
+| `DUPLICATE_FACT` | 同一对象被重复插入 |
+| `ILLEGAL_STATE` | 规则集校验失败或已关闭，不能构造引擎 |
+
+**决策表**
+
+| 码 | 场景 |
+|---|---|
+| `TABLE_INVALID` | 结构/单元格非法、空表、`Formula(_, None)` 或 `Error` 单元格 |
+| `TABLE_NO_MATCH` | `Unique` 命中策略下零命中 |
+| `TABLE_MULTI_MATCH` | `Unique` / `Any` 命中策略下多命中冲突 |
+| `TABLE_MODE_CONFLICT` | 同一张表既装配进规则集又用于聚合执行 |
+
+**脚本**
+
+| 码 | 场景 |
+|---|---|
+| `SCRIPT_COMPILE` | 脚本类条件编译失败 |
+| `SCRIPT_BINDING_MISSING` | 脚本形参不在模式绑定中 |
+
+**流程编排**
+
+| 码 | 场景 |
+|---|---|
+| `SAME_SPACE_FANOUT` | 扇出分支属于同一 `factSpace` |
+| `FANOUT_WITHOUT_JOIN` | 扇出分支未全部汇入 `JoinTask` |
+| `EMPTY_FANOUT` | `ResolveTask` 产出为空 |
+| `NO_CONTEXT` | 未绑定 `FlowContext` 就访问会话上下文 |
+
+**议程运行时**
+
+| 码 | 场景 |
+|---|---|
+| `CYCLE_LIMIT` | `Agenda.fire` 超过循环上限 |
+| `REENTRANT_FIRE` | 议程执行期间再次调用 `fire` |
+| `ACTION_FAILED` | 动作抛出异常（`caused` 保留原异常） |
+| `CLOSED` | 引擎/会话已关闭后仍执行 |
+
+编译期错误（决策表、规则定义、脚本）一律在构建阶段抛出，不留到运行期；运行期只保留事实类型不匹配、表达式运行时异常、动作异常、状态非法四类。

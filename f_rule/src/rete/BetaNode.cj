@@ -63,8 +63,9 @@ public enum JoinPlan <: ToString {
  * 左右两个入口产出的是**同一批令牌**：父令牌相同、右侧句柄相同，`Token` 的相等性
  * 让重复路径自然去重（R-02 的对称性由此保证）。
  *
- * `produced` 记录"右侧句柄 → 产出令牌"，使 `rightRetract` 为 O(k) 而不是全扫重算；
- * `producedByParent` 是 `leftRetract` 的对应索引。
+ * 产出索引（右事实 → 子令牌、父令牌 → 子令牌）属于**会话运行态**，由
+ * [ReteSession.betaProductions] 按 `(space, session)` 提供；节点本身在构建后不可变，
+ * 多个会话共享同一张网络也不会互相污染。
  */
 public class BetaNode <: ReteNode & TokenSink & RightSink {
     private let id_: Int64
@@ -76,8 +77,6 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     public let rightBinding: String
     public let plan: JoinPlan
     private let consumers_: ArrayList<TokenSink>
-    private let produced_: HashMap<FactHandle, ArrayList<Token>>
-    private let producedByParent_: HashMap<Token, ArrayList<Token>>
 
     public init(id: Int64, leftSource: BetaLeft, leftBinding: String, rightAlphaId: Int64,
         joins: Array<JoinConstraint>, rightBinding: String, plan: JoinPlan) {
@@ -89,8 +88,6 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
         this.rightBinding = rightBinding
         this.plan = plan
         this.consumers_ = ArrayList<TokenSink>()
-        this.produced_ = HashMap<FactHandle, ArrayList<Token>>()
-        this.producedByParent_ = HashMap<Token, ArrayList<Token>>()
     }
 
     public prop id: Int64 {
@@ -140,12 +137,13 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     public func leftActivate(session: ReteSession, token: Token): Unit {
         let memory = session.alphaMemory(rightAlphaId)
         let candidates = probeRight(memory, token)
-        let base = token.bindings().toFactMap()
+        // 只为本次展开建一次映射；候选事实逐个覆盖右绑定后复用。
+        let base = BetaNode.factMapOf(token)
         for (handle in candidates) {
             match (memory.fact(handle)) {
                 case Some(fact) =>
                     base[rightBinding] = fact
-                    if (holds(joins, base)) {
+                    if (holds(joins, base) && !alreadyEmitted(session, token, handle)) {
                         emit(session, token, handle, fact)
                     }
                 case None => ()
@@ -156,7 +154,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     /** 右侧事实进入：用左侧 beta memory 的 join 索引找候选令牌。 */
     public func rightActivate(session: ReteSession, handle: FactHandle, fact: Fact): Unit {
         for (token in candidatesOf(session, fact)) {
-            if (holdsWith(token, fact)) {
+            if (holdsWith(token, fact) && !alreadyEmitted(session, token, handle)) {
                 emit(session, token, handle, fact)
             }
         }
@@ -164,14 +162,14 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
 
     /** 左令牌撤回：移除它产出的全部子令牌，并通知下游。 */
     public func leftRetract(session: ReteSession, token: Token): Unit {
-        let children = match (producedByParent_.remove(token)) {
+        let children = match (session.betaProductions(id).takeByParent(token)) {
             case Some(found) => found
             case None => return
         }
         let output = session.betaMemory(id)
         for (child in children) {
             let _ = output.remove(child)
-            forgetProduced(child)
+            session.betaProductions(id).forget(child)
             for (consumer in consumers_) {
                 consumer.leftRetract(session, child)
             }
@@ -180,16 +178,13 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
 
     /** 右事实撤回：只移除 `produced` 里记录的子令牌（O(k)）。 */
     public func rightRetract(session: ReteSession, handle: FactHandle): Unit {
-        let children = match (produced_.remove(handle)) {
+        let children = match (session.betaProductions(id).takeByHandle(handle)) {
             case Some(found) => found
             case None => return
         }
         let output = session.betaMemory(id)
         for (child in children) {
-            match (child.parent) {
-                case Some(parent) => BetaNode.removeChild(producedByParent_, parent, child)
-                case None => ()
-            }
+            session.betaProductions(id).forget(child)
             let _ = output.remove(child)
             for (consumer in consumers_) {
                 consumer.leftRetract(session, child)
@@ -198,66 +193,141 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     }
 
     /** 右侧候选句柄：能走索引时只取匹配值，否则全扫。 */
-    private func probeRight(memory: AlphaMemory, token: Token): Array<FactHandle> {
+    private func probeRight(memory: AlphaMemory, token: Token): ArrayList<FactHandle> {
         match (plan) {
-            case LeftScan | RightScan => return memory.all()
+            case LeftScan | RightScan => return memory.orderedList()
             case _ => ()
         }
-        let bindings = token.bindings()
         for (join in joins) {
             if (join.rightBinding != rightBinding) {
                 continue
             }
-            let leftFact = bindings.resolve(join.leftBinding)
-            if (leftFact.isNone()) {
-                continue
+            let leftFact = match (token.factOf(join.leftBinding)) {
+                case Some(found) => found
+                case None => continue
             }
-            let leftValue = leftFact.getOrThrow().get(join.leftField)
-            if (leftValue.isNone()) {
-                continue
+            let leftValue = match (leftFact.get(join.leftField)) {
+                case Some(value) => value
+                case None => continue
             }
-            let key = BetaNode.keyOf(leftValue.getOrThrow())
-            if (key.isNone()) {
-                continue
+            let key = match (BetaNode.keyOf(leftValue)) {
+                case Some(found) => found
+                case None => continue
             }
             if (join.op == Operator.Eq) {
-                return memory.probe(join.rightField, key.getOrThrow())
+                return memory.probeList(join.rightField, key)
             }
             if (join.op.ordering) {
-                return memory.select(join.rightField, BetaNode.inverse(join.op), key.getOrThrow())
+                return BetaNode.asList(memory.select(join.rightField, BetaNode.inverse(join.op), key))
             }
         }
-        memory.all()
+        memory.orderedList()
+    }
+
+    /** 范围探测返回数组，统一成列表以便与索引直读路径共用调用点。 */
+    private static func asList(items: Array<FactHandle>): ArrayList<FactHandle> {
+        let out = ArrayList<FactHandle>()
+        for (item in items) {
+            out.add(item)
+        }
+        out
     }
 
     /** 右侧事实的左侧候选令牌。 */
-    private func candidatesOf(session: ReteSession, fact: Fact): Array<Token> {
+    private func candidatesOf(session: ReteSession, fact: Fact): ArrayList<Token> {
         match (leftSource) {
             case FromBeta(id) =>
                 let memory = session.betaMemory(id)
                 match (plan) {
-                    case LeftScan | RightScan => memory.tokens()
-                    case _ => memory.probeByJoin(joins, fact, rightBinding)
+                    case LeftScan | RightScan => memory.tokensList()
+                    case _ => memory.probeJoinList(joins, fact, rightBinding)
                 }
             case FromAlpha(id) =>
                 // 首模式的左令牌由 alpha memory 的哑令牌驱动；右侧先到时按需构造等价令牌。
+                // 有可用 join 时必须走索引探测，否则每条事实都会全扫左 memory（O(n) 退化）。
                 let memory = session.alphaMemory(id)
+                let handles = match (plan) {
+                    case LeftScan | RightScan => memory.orderedList()
+                    case _ => probeLeftAlpha(memory, fact)
+                }
                 let out = ArrayList<Token>()
-                for (handle in memory.all()) {
+                for (handle in handles) {
                     match (memory.fact(handle)) {
-                        case Some(leftFact) =>
-                            out.add(Token.root(handle, leftBinding, leftFact))
+                        case Some(leftFact) => out.add(Token.root(handle, leftBinding, leftFact))
                         case None => ()
                     }
                 }
-                out.toArray()
+                out
         }
     }
 
+    /**
+     * 用右侧事实的 join 值探测左侧 alpha memory。
+     *
+     * 与 [probeRight] 对称：只定位候选，最终仍由 [holdsWith] 逐条重算，返回超集是安全的。
+     * 没有任何可用索引时退回全扫。
+     */
+    private func probeLeftAlpha(memory: AlphaMemory, fact: Fact): ArrayList<FactHandle> {
+        for (join in joins) {
+            if (join.rightBinding != rightBinding) {
+                continue
+            }
+            let raw = match (fact.get(join.rightField)) {
+                case Some(value) => value
+                case None => continue
+            }
+            let key = match (BetaNode.keyOf(raw)) {
+                case Some(found) => found
+                case None => continue
+            }
+            if (join.op == Operator.Eq) {
+                return memory.probeList(join.leftField, key)
+            }
+            if (join.op.ordering) {
+                return BetaNode.asList(memory.select(join.leftField, join.op, key))
+            }
+        }
+        memory.orderedList()
+    }
+
     private func holdsWith(token: Token, fact: Fact): Bool {
-        let map = token.bindings().toFactMap()
-        map[rightBinding] = fact
-        holds(joins, map)
+        if (joins.size == 0) {
+            return true
+        }
+        let resolve = { binding: String =>
+            if (binding == rightBinding) {
+                Some(fact)
+            } else {
+                token.factOf(binding)
+            }
+        }
+        for (join in joins) {
+            if (!join.evalWith(resolve).isTrue()) {
+                return false
+            }
+        }
+        true
+    }
+
+    /**
+     * 该 (父令牌, 右侧事实) 是否已产出过子令牌。
+     *
+     * 左/右激活是对称的两条路径，同一组合必然相遇一次；先查 `produced_` 可以避免
+     * 为重复组合构造令牌再丢弃（占大规模插入的多数候选）。
+     */
+    private func alreadyEmitted(session: ReteSession, parent: Token, handle: FactHandle): Bool {
+        session.betaProductions(id).contains(parent, handle)
+    }
+
+    /** 沿父链展开 `绑定名 → 事实`；只为 join 求值服务，不构造句柄表。 */
+    private static func factMapOf(token: Token): HashMap<String, Fact> {
+        let map = HashMap<String, Fact>()
+        var cursor: ?Token = Some(token)
+        while (let Some(current) <- cursor) {
+            map[current.binding] = current.fact
+            cursor = current.parent
+        }
+        map
     }
 
     private func emit(session: ReteSession, parent: Token, handle: FactHandle, fact: Fact): Unit {
@@ -267,69 +337,9 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
             let _ = child.release()
             return
         }
-        BetaNode.recordByHandle(produced_, handle, child)
-        BetaNode.recordByParent(producedByParent_, parent, child)
+        session.betaProductions(id).record(handle, parent, child)
         for (consumer in consumers_) {
             consumer.leftActivate(session, child)
-        }
-    }
-
-    private func forgetProduced(child: Token): Unit {
-        match (produced_.get(child.handle)) {
-            case Some(children) =>
-                var i = 0
-                while (i < children.size) {
-                    if (children[i] == child) {
-                        children.remove(at: i)
-                        break
-                    }
-                    i += 1
-                }
-                if (children.isEmpty()) {
-                    produced_.remove(child.handle)
-                }
-            case None => ()
-        }
-    }
-
-    private static func recordByHandle(map: HashMap<FactHandle, ArrayList<Token>>,
-        key: FactHandle, token: Token): Unit {
-        match (map.get(key)) {
-            case Some(found) => found.add(token)
-            case None =>
-                let found = ArrayList<Token>()
-                found.add(token)
-                map[key] = found
-        }
-    }
-
-    private static func recordByParent(map: HashMap<Token, ArrayList<Token>>, key: Token,
-        token: Token): Unit {
-        match (map.get(key)) {
-            case Some(found) => found.add(token)
-            case None =>
-                let found = ArrayList<Token>()
-                found.add(token)
-                map[key] = found
-        }
-    }
-
-    private static func removeChild(map: HashMap<Token, ArrayList<Token>>, parent: Token,
-        child: Token): Unit {
-        match (map.get(parent)) {
-            case Some(children) =>
-                var i = 0
-                while (i < children.size) {
-                    if (children[i] == child) {
-                        children.remove(at: i)
-                        break
-                    }
-                    i += 1
-                }
-                if (children.isEmpty()) {
-                    map.remove(parent)
-                }
-            case None => ()
         }
     }
 

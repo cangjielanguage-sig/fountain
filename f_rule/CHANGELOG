@@ -1,3 +1,19 @@
+2026-11-01  v1.0.0（首个可用版本）
+    feat(f_rule): M7 性能门禁 B-01~B-07 全部达标（实测见 doc/perf.md）；集成用例 I-01~I-06 补齐
+    fix(f_rule): 会话隔离破洞 —— `BetaNode.produced_` 是会话态却挂在共享节点上，同网络第二个会话
+      插入同一批事实会命中上个会话的索引，表现为新会话零激活；下沉为 `BetaProductions` 按
+      `(space, session)` 持有
+    fix(f_rule): `ExpressionMode.Interpreted` 是死配置，脚本始终走 f_jit；打通 `JitExpression.interpretedOf`
+      与 Validator/ReteNetwork 的按模式编译
+    perf(f_rule): 首模式 beta 节点改为按 join 值走 alpha 索引探测（B-02 2288→1032 ms）；
+      根节点按 (字段, 值) 分桶（`RootDispatch`）；撤销按命中记录回收；`FactBase` 桶内槽位索引 + 墓碑；
+      `ShardedNetwork.shared` 单条结构缓存
+    feat(f_rule): M6 XLSX 载体 —— `XlsxTableParser` 整表 + 流式两条路径、`_meta` 表属性、
+      类型行、合并单元格、`CellValue` 八变体；`DecisionTable` 支持惰性 `TableRowSource`
+    fix(f_excel): `t="n"`（openpyxl 显式数值类型）落进未知分支，每格一条 warning 且数值列被当 Text；
+      按 OOXML §18.18.11 与省略 `t` 同义处理
+    docs(f_rule): README 状态改为可用并补四种典型用法与约束表；doc/perf.md 记录测量方法与实测值
+
 2026-11-01
     feat(f_rule): M5.5 装配层 —— `TableSource` 接口反转，`RuleSetBuilder.table(source)` 把决策表
       编译进规则集；`TableCompiler` / `TableExecutor` / `resolvedFactType` 入参收窄为
@@ -9,8 +25,33 @@
     docs(f_rule): doc/07 §2.1 两条路径等价表、doc/08 CSV 示例拆分聚合/议程路径
 
 2026-10-31
+    feat(f_rule): M5 决策表 —— `DecisionTable` 模型与 Builder、7 种 `HitPolicy` + `HitAggregator`、
+      `CellParser`（13 种条件写法）、`OutputCell`（`${binding.field}`）、`expr` 列接线 `JitExpression`、
+      `CsvTableParser`（RFC 4180 + `# key: value` 元数据 + BOM + UTF-8 校验）、`TableCompiler` /
+      `TableExecutor` / `TableResult` / `RowTrace`
+    feat(f_rule): M4 流程编排 —— `RuleEnvelope`（载荷携带 session）、`FlowContext`、`RuleFlow`、
+      `ResolveTask`（扇出）、`JoinTask`（汇合 + `f_ticktock` 超时）、`Reachability`（构建期拦截
+      `FANOUT_WITHOUT_JOIN`）、`RuleSetFlow`、`RuleTask`
+    feat(f_rule): M3 议程 —— `Activation` / `Agenda`（惰性二叉堆 + 去重 + 重入保护）、6 种冲突消解策略、
+      3 种 `FireMode`、`ActionContext`（`factIn` 只读 / `copyTo` 物化）、`CycleDetector`、
+      `RuleEngine` / `RuleSession` 门面
+    feat(f_rule): M2 Rete —— alpha/beta 节点与内存、`RangeKey` 全序键 + `ConcurrentSkipListMap` 范围索引、
+      按签名共享、按 `FactSpace` 分片、`Token` 父链共享 + 引用计数、增量插入与撤销
+    fix(f_rule): `Rule.scripts` 在 Rete 路径完全不求值（规则退化为「模式匹配即触发」）；
+      `TerminalNode` 改为构建期编译脚本、激活前求值，`Validator` 校验脚本形参
+    feat(f_rule): M1 事实与条件 —— `Fact` / `FactHandle` / `FactSchema` / `TypedFact` / `DynamicFact`、
+      `FactSpace` / `FactBase` / `FactBaseView`、15 个算子 + 三值逻辑、`ConditionExpr`、
+      `JitExpression` + 内置解释器、`Rule` / `RuleSet` / `Validator`、`NaiveMatcher` 差分基准
+    perf(f_rule): `ValueKey` 列表编码修复（`Between [1,2]` 与 `[3,4]` 曾共用 alpha 节点）、
+      alpha 链闭包捕获循环变量、范围算子同值多事实边界
+
+2026-10-31
     chore(f_rule): M0 骨架 —— 9 个包（exception/fact/condition/rule/rete/agenda/flow/table）、
       26 个错误码与 RuleException、RuleRuntime 共享编译器、RuleInitializer（f_app 注册）
     chore(f_rule): cjpm.toml 补 f_app / f_ticktock 路径依赖；.modules 收录 f_rule
     docs(f_rule): doc/03 §6.4 记录 f_jit spike 实测：?Any 映射 HostObject（动态事实走内置解释器）、
       call<T> 的 T 必须精确等于返回类型、@JitBind 静态成员不可在脚本中使用
+
+2026-10-31
+    docs(f_rule): 技术文档 11 篇（doc/01~11）与模块骨架：事实模型、条件与表达式、Rete 网络、
+      议程与冲突消解、流程编排、决策表、对外 API、测试策略、里程碑、装配层设计

@@ -44,6 +44,21 @@ class TerminalTestSession <: ReteSession {
     public func betaMemory(nodeId: Int64): BetaMemory {
         throw Exception("TerminalTestSession 不提供 beta memory")
     }
+
+    public func betaProductions(nodeId: Int64): BetaProductions {
+        throw Exception("TerminalTestSession 不提供 beta productions")
+    }
+
+    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+        // 单节点用例不经过根节点分发，不需要命中记录。
+    }
+
+    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+        None
+    }
+
+    public func forgetAlphaHits(handle: FactHandle): Unit {
+    }
 }
 
 /** 极简激活汇：只记录 add/remove 调用，验证终端只依赖 `ActivationSink`。 */

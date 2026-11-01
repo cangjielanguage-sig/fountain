@@ -31,9 +31,14 @@ import fountain::f_rule.fact.{Fact, FactHandle, ValueKey}
  * （D4：范围探测 O(log n)，不做"索引过大退化"）。
  */
 public class AlphaMemory <: ReteNode {
+    /** 空候选的共享实例：高频探测里大多数索引桶为空，避免每次分配空表。 */
+    private static let sharedEmpty = ArrayList<FactHandle>()
+
     private let id_: Int64
     private let facts_: HashMap<FactHandle, Fact>
     private let order_: ArrayList<FactHandle>
+    /** 句柄在 `order_` 中的槽位，使撤销为 O(1)（尾元素填补）。 */
+    private let slots_: HashMap<FactHandle, Int64>
     private let eqIndex_: HashMap<String, HashMap<ValueKey, ArrayList<FactHandle>>>
     private let ordIndex_: HashMap<String, ConcurrentSkipListMap<RangeKey, FactHandle>>
     private let nullSet_: HashMap<String, HashSet<FactHandle>>
@@ -42,6 +47,7 @@ public class AlphaMemory <: ReteNode {
         this.id_ = id
         this.facts_ = HashMap<FactHandle, Fact>()
         this.order_ = ArrayList<FactHandle>()
+        this.slots_ = HashMap<FactHandle, Int64>()
         this.eqIndex_ = HashMap<String, HashMap<ValueKey, ArrayList<FactHandle>>>()
         this.ordIndex_ = HashMap<String, ConcurrentSkipListMap<RangeKey, FactHandle>>()
         this.nullSet_ = HashMap<String, HashSet<FactHandle>>()
@@ -53,6 +59,7 @@ public class AlphaMemory <: ReteNode {
             return false
         }
         facts_[handle] = fact
+        slots_[handle] = Int64(order_.size)
         order_.add(handle)
         for ((field, index) in eqIndex_) {
             indexEq(index, field, handle, fact)
@@ -66,20 +73,23 @@ public class AlphaMemory <: ReteNode {
         true
     }
 
-    /** 移除事实；不存在返回 false。 */
+    /** 移除事实；不存在返回 false。尾元素填补槽位，均摊 O(1)。 */
     public func remove(handle: FactHandle): Bool {
         let fact = match (facts_.remove(handle)) {
             case Some(found) => found
             case None => return false
         }
-        var i = 0
-        while (i < order_.size) {
-            if (order_[i] == handle) {
-                order_.remove(at: i)
-                break
-            }
-            i += 1
+        let slot = match (slots_.remove(handle)) {
+            case Some(found) => found
+            case None => return false
         }
+        let last = Int64(order_.size) - 1
+        if (slot != last) {
+            let moved = order_[last]
+            order_[slot] = moved
+            slots_[moved] = slot
+        }
+        order_.remove(at: last)
         for ((field, index) in eqIndex_) {
             unindexEq(index, field, handle, fact)
         }
@@ -112,17 +122,25 @@ public class AlphaMemory <: ReteNode {
 
     /** 等值探测。 */
     public func probe(field: String, key: ValueKey): Array<FactHandle> {
-        ensureEqIndex(field)
-        let index = eqIndex_[field]
         let out = ArrayList<FactHandle>()
-        match (index.get(key)) {
-            case Some(handles) =>
-                for (handle in handles) {
-                    out.add(handle)
-                }
-            case None => ()
+        for (handle in probeList(field, key)) {
+            out.add(handle)
         }
         out.toArray()
+    }
+
+    /** 索引桶直读（内部热路径）：返回内部列表，调用方只读。 */
+    func probeList(field: String, key: ValueKey): ArrayList<FactHandle> {
+        ensureEqIndex(field)
+        match (eqIndex_[field].get(key)) {
+            case Some(handles) => handles
+            case None => AlphaMemory.sharedEmpty
+        }
+    }
+
+    /** 按插入顺序的全部句柄（内部热路径）：返回内部列表，调用方只读。 */
+    func orderedList(): ArrayList<FactHandle> {
+        order_
     }
 
     /** 闭区间范围探测 `[low, high]`。 */

@@ -25,10 +25,12 @@ import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle, ValueKey}
 class AlphaTestSession <: ReteSession {
     private let sink_: ActivationSink
     private let alphaMems: HashMap<Int64, AlphaMemory>
+    private let productions: HashMap<Int64, BetaProductions>
 
     AlphaTestSession(sink: ActivationSink) {
         this.sink_ = sink
         this.alphaMems = HashMap<Int64, AlphaMemory>()
+        this.productions = HashMap<Int64, BetaProductions>()
     }
 
     public prop sink: ActivationSink {
@@ -53,6 +55,27 @@ class AlphaTestSession <: ReteSession {
 
     public func betaMemory(nodeId: Int64): BetaMemory {
         throw Exception("AlphaTestSession 不提供 beta memory")
+    }
+
+    public func betaProductions(nodeId: Int64): BetaProductions {
+        match (productions.get(nodeId)) {
+            case Some(found) => found
+            case None =>
+                let created = BetaProductions()
+                productions[nodeId] = created
+                created
+        }
+    }
+
+    public func recordAlphaHits(handle: FactHandle, hits: Array<AlphaNode>): Unit {
+        // 单节点用例不经过根节点分发，不需要命中记录。
+    }
+
+    public func alphaHits(handle: FactHandle): ?Array<AlphaNode> {
+        None
+    }
+
+    public func forgetAlphaHits(handle: FactHandle): Unit {
     }
 }
 

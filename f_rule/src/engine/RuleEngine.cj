@@ -46,7 +46,7 @@ public class RuleEngine {
             )
         }
         this.ruleSet_ = ruleSet
-        this.network_ = ShardedNetwork(ruleSet)
+        this.network_ = ShardedNetwork.shared(ruleSet)
         this.sessions_ = HashMap<String, RuleSession>()
         this.tableExecutors_ = HashMap<String, TableExecutor>()
         this.executorsMtx_ = Mutex()

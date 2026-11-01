@@ -122,6 +122,25 @@ public class JitExpression {
         JitExpression(source, parameters, None, Some(program))
     }
 
+    /**
+     * 从完整 lambda 字面量构造解释器版本（`ExpressionMode.Interpreted`）。
+     *
+     * 形参名从 lambda 头部解析，lambda 体交给内置解释器；解释器只覆盖白名单子集，
+     * 超出子集抛 `SCRIPT_COMPILE`——这是能力边界，不静默降级为 JIT。
+     */
+    public static func interpretedOf(source: String): JitExpression {
+        let trimmed = source.trimAscii()
+        if (!trimmed.startsWith("{")) {
+            throw RuleException(
+                RuleErrorCode.SCRIPT_COMPILE,
+                "interpretedOf 要求完整 lambda 字面量（以 { 开头）: ${source}"
+            )
+        }
+        let parameters = parseLambdaParameters(trimmed)
+        let body = lambdaBody(trimmed)
+        interpreted(body, parameters)
+    }
+
     public prop parameters: Array<String> {
         get() {
             parameters_

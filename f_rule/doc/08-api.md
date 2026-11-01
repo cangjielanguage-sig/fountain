@@ -84,6 +84,8 @@ public class Rule {
     public prop patterns: Array<Pattern>
     public prop joins: Array<JoinConstraint>
     public prop actions: Array<RuleAction>
+    /** 互斥组名；同组激活只执行一个。不参与激活相等键。 */
+    public prop activationGroup: ?String
 }
 
 public class RuleBuilder {
@@ -93,6 +95,11 @@ public class RuleBuilder {
      * 同一规则集内相同 id 的规则共享事实与网络分片。
      */
     public func facts(space: String): RuleBuilder
+    /**
+     * 互斥组：同组激活按冲突消解序取第一个执行，其余在首个执行后失效。
+     * 与 Drools 的 activation-group 同义；非决策表规则也可用。
+     */
+    public func activationGroup(name: String): RuleBuilder
     /** 追加一个模式。`when` 是仓颉关键字，故命名为 addPattern。 */
     public func addPattern(pattern: Pattern): RuleBuilder
     public func join(constraint: JoinConstraint): RuleBuilder
@@ -168,6 +175,17 @@ main() {
 ```
 
 ## 6. 完整示例：决策表（CSV）
+
+`RuleSetBuilder.table()` 接受 `TableSource`——`rule` 包定义的最小契约，`DecisionTable` 实现它：
+
+```cangjie
+public interface TableSource {
+    /** 编译成规则；`registry` 用于校验条件/输出列引用的字段。 */
+    func compileInto(registry: FactSpaceRegistry): Array<Rule>
+}
+```
+
+接口只有这一个方法：表的 id、版本、空间属于表自己的编译输入，装配器不需要，`rule` 包也不该认识。自定义载体（如从数据库读的表）实现该接口即可接入装配。
 
 ```cangjie
 import fountain::f_rule.*

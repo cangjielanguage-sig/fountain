@@ -9,11 +9,17 @@ M0 骨架与 spike
            ├─▶ M3 议程与冲突消解
            └─▶ M4 流程编排
                 └─▶ M5 决策表 API + CSV
-                     └─▶ M6 决策表 XLSX
-                          └─▶ M7 性能门禁与收尾
+                     └─▶ M5.5 装配层（table / executeTable / activationGroup）
+                          └─▶ M6 决策表 XLSX
+                               └─▶ M7 性能门禁与收尾
 ```
 
 M3 与 M4 可并行；M5 依赖 M2 + M3；M6 依赖 M5。
+
+**M5.5 是实施中新增的里程碑**：M5 交付后 `doc/08` 的 `.table()` 与 `executeTable()` 无法编译——
+`rule ↔ table` 包循环阻塞，且决策表与议程缺乏统一语义。设计见 [11-assembly.md](11-assembly.md)，
+交付 `TableSource` 接口反转、`activationGroup`、两条执行路径的实例级互斥。M6 必须在 M5.5 之后，
+否则 XLSX 表同样走不通门面。
 
 ## 2. 里程碑
 
@@ -147,13 +153,22 @@ M1 的顺序匹配器**长期保留**，不作为生产路径，只作为 M2 的
 
 ## 7. 验收清单
 
-模块可发布需同时满足：
+模块可发布需同时满足。状态截至 2026-11-01（`cjpm test` 418/418）：
 
-- [ ] M0~M7 全部退出条件达成
-- [ ] 公开 API 均有单元测试
-- [ ] 差分测试（Rete vs 朴素、f_jit vs 解释器）通过
-- [ ] 性能门禁 B-01~B-07 达标并记录在 `doc/perf.md`
-- [ ] README 含快速开始与三种典型用法
-- [ ] 文档与实现一致（API 签名、配置项、错误码）
-- [ ] `cjlint` / `cjfmt` 无告警（遵循项目 `cjlintignore.cfg`）
-- [ ] CHANGELOG 记录本模块首个版本
+- [x] M0~M7 全部退出条件达成（含 M5.5）
+- [x] 公开 API 均有单元测试
+- [x] 差分测试（Rete vs 朴素、f_jit vs 解释器）通过
+- [x] 性能门禁 B-01~B-07 达标并记录在 [`perf.md`](perf.md)
+- [x] README 含快速开始与三种典型用法（实际写了四种：产生式 / 决策表聚合 / 决策表进议程 / 决策流）
+- [x] 文档与实现一致（API 签名、配置项、错误码 27 个）
+- [ ] `cjlint` / `cjfmt` 无告警 —— **未满足，工具链原因，非代码问题**
+- [x] CHANGELOG 记录本模块首个版本
+
+最后一项的实测情况：
+
+| 工具 | 结果 | 原因 |
+|---|---|---|
+| `cjlint` | 无法运行 | 依次尝试 `-m` 指向 `./target`、`./target/release`、`$CANGJIE_HOME/lib`、`$CANGJIE_HOME/lib/linux_aarch64_cjnative`、`$CANGJIE_HOME/modules`、`$CANGJIE_HOME/modules/linux_aarch64_cjnative`，全部报 `Can not find modules` |
+| `cjfmt` | 172 文件有差异 | 差异集中在 License 头的 `*/` 与 ` */`。对照组 `f_egraph/src/base/Task.cj` 同样有差异，说明是项目统一的格式惯例与 `cjfmt` 默认配置冲突，不是 `f_rule` 特有 |
+
+未为通过检查而批量改写既有格式：那会让 `f_rule` 与仓库其余模块不一致，且改动 172 个文件只为对齐一个注释空格。待项目提供 `cangjie-format.toml` 后再执行。

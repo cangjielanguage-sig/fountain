@@ -52,6 +52,24 @@ public class JoinConstraint {
         OperatorEvaluator.apply(op, left, right)
     }
 
+    /**
+     * 用解析函数取绑定事实。
+     *
+     * Rete 的 join 热路径不需要完整绑定表（令牌只持有父链 + 事实），
+     * 这个重载避免为每次候选判定构造 `HashMap`。
+     */
+    public func evalWith(resolve: (String) -> ?Fact): Truth {
+        let left = match (resolve(leftBinding)) {
+            case Some(fact) => fact.get(leftField)
+            case None => return Truth.Unknown
+        }
+        let right = match (resolve(rightBinding)) {
+            case Some(fact) => fact.get(rightField)
+            case None => return Truth.Unknown
+        }
+        OperatorEvaluator.apply(op, left, right)
+    }
+
     public func toString(): String {
         "\$${leftBinding}.${leftField} ${op} \$${rightBinding}.${rightField}"
     }
