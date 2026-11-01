@@ -24,21 +24,22 @@ import fountain::f_hydra.*
 
 import fountain::f_llm.store.*
 
-/** 进程内 f_hydra 内容族：记忆走 HydraMemoryRepository，知识走 dense+sparse 混合检索 */
+/** 进程内 f_hydra 内容族（默认）：记忆 + 知识都走 InProcessTransport */
 public class HydraContentStore <: ContentStore {
-    private let store: FStoreVectorStore
+    private let transport: HydraTransport
     private let model: Embedder
     private var cachedMemory: ?MemoryStore = None
     private var cachedKnowledge: ?KnowledgeStore = None
 
     public init() {
-        let path = getVariable('llm_hydraPath') ?? './data/f_hydra'
-        this.store = FStoreVectorStore(path)
-        this.model = match(lookupOption<Embedder>()){
-            case Some(value) => value
-            case None => throw IllegalStateException(
-                'llm_memoryStore=f_hydra requires an Embedder bean (DefaultEmbedder)')
-        }
+        let location = getVariable('llm_hydraPath') ?? './data/f_hydra'
+        this.transport = InProcessTransport(FStoreVectorStore(location))
+        this.model = requireEmbedder()
+    }
+
+    init(transport: HydraTransport) {
+        this.transport = transport
+        this.model = requireEmbedder()
     }
 
     public prop memory: MemoryStore {
@@ -46,7 +47,7 @@ public class HydraContentStore <: ContentStore {
             match(cachedMemory){
                 case Some(value) => value
                 case None =>
-                    let impl = SqlMemoryStore(HydraMemoryRepository(), model)
+                    let impl = SqlMemoryStore(HydraMemoryRepository(transport), model)
                     cachedMemory = Some(impl)
                     impl
             }
@@ -58,16 +59,41 @@ public class HydraContentStore <: ContentStore {
             match(cachedKnowledge){
                 case Some(value) => value
                 case None =>
-                    let impl = HydraKnowledgeStore(store, model)
+                    let impl = HydraKnowledgeStore(transport, model)
                     cachedKnowledge = Some(impl)
                     impl
             }
         }
     }
+
+    private static func requireEmbedder(): Embedder {
+        match(lookupOption<Embedder>()){
+            case Some(value) => value
+            case None => throw IllegalStateException(
+                'content store requires an Embedder bean (DefaultEmbedder)')
+        }
+    }
+}
+
+/** 远程 fhydra 内容族：复用同一套仓库/知识实现，只把传输换成 HTTP */
+public class FhydraContentStore <: ContentStore {
+    private let delegate: HydraContentStore
+
+    public init() {
+        this.delegate = HydraContentStore(HttpTransport())
+    }
+
+    public prop memory: MemoryStore {
+        get() { delegate.memory }
+    }
+
+    public prop knowledge: KnowledgeStore {
+        get() { delegate.knowledge }
+    }
 }
 
 /**
- * f_hydra 知识库：块级记录，dense（content）+ sparse 两路召回。
+ * 知识库：块级记录，dense（content）+ sparse 两路召回。
  *
  * - collection `f_llm:kb`：`doc:{docId}` 存标题+正文，`{docId}#{seq}` 存块；
  * - `f_llm:kb:docs`：docId → 块数（覆盖写时据此清理旧块）。
@@ -77,36 +103,34 @@ class HydraKnowledgeStore <: KnowledgeStore {
     private static let DOCS = 'f_llm:kb:docs'
     private static let SEP = String.fromUtf8([1u8])
 
-    private let store: FStoreVectorStore
+    private let transport: HydraTransport
     private let model: Embedder
 
-    init(store: FStoreVectorStore, model: Embedder) {
-        this.store = store
+    init(transport: HydraTransport, model: Embedder) {
+        this.transport = transport
         this.model = model
     }
 
     public func upsert(doc: KnowledgeDoc): Unit {
         purgeChunks(doc.docId)
-        store.upsert(KB,
-                     VectorRecord('doc:${doc.docId}',
-                                  '${doc.title}${SEP}${doc.content}',
-                                  Array<Float64>()))
+        transport.upsert(KB, VectorRecord('doc:${doc.docId}',
+                                          '${doc.title}${SEP}${doc.content}',
+                                          Array<Float64>()))
         var seq: Int64 = 0
         for(chunk in KnowledgeChunker.split(doc.content)){
+            let vector = model.embed(chunk)
             let vectors = HashMap<String, Array<Float64>>()
-            vectors['content'] = model.embed(chunk)
-            store.upsert(KB,
-                         VectorRecord('${doc.docId}#${seq}', chunk, vectors['content'],
-                                      sparse: model.tokenize(chunk), vectors: vectors,
-                                      saveTime: DateTime.now().toUnixTimeStamp().toSeconds()))
+            vectors['content'] = vector
+            transport.upsert(KB, VectorRecord('${doc.docId}#${seq}', chunk, vector,
+                                              sparse: model.tokenize(chunk), vectors: vectors,
+                                              saveTime: DateTime.now().toUnixTimeStamp().toSeconds()))
             seq++
         }
-        store.upsert(DOCS,
-                     VectorRecord(doc.docId, seq.toString(), Array<Float64>()))
+        transport.upsert(DOCS, VectorRecord(doc.docId, seq.toString(), Array<Float64>()))
     }
 
     public func get(docId: String): ?KnowledgeDoc {
-        match(store.get(KB, 'doc:${docId}')){
+        match(transport.get(KB, 'doc:${docId}')){
             case Some(record) =>
                 let parts = record.payload.split(SEP)
                 if(parts.size < 2){
@@ -119,8 +143,16 @@ class HydraKnowledgeStore <: KnowledgeStore {
 
     public func remove(docId: String): Bool {
         purgeChunks(docId)
-        store.remove(DOCS, docId)
-        store.remove(KB, 'doc:${docId}')
+        transport.remove(DOCS, docId)
+        transport.remove(KB, 'doc:${docId}')
+    }
+
+    public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
+        let ids = ArrayList<String>()
+        for(id in transport.ids(DOCS, offset, limit)){
+            ids.add(id)
+        }
+        ids
     }
 
     public func search(query: KnowledgeQuery): ArrayList<KnowledgeHit> {
@@ -130,18 +162,17 @@ class HydraKnowledgeStore <: KnowledgeStore {
         }
         let scores = HashMap<String, Float64>()
         if(!query.text.isEmpty()){
-            for(hit in store.searchDenseField(
-                    VectorQuery(KB, model.embed(query.text), limit: 200), 'content')){
+            for(hit in transport.searchDenseField(KB, 'content', model.embed(query.text), 200)){
                 scores[hit.id] = hit.score
             }
             let tokens = model.tokenize(query.text)
-            for(hit in store.searchSparse(SparseQuery(KB, tokens, limit: 200))){
+            for(hit in transport.searchSparse(KB, tokens, 200)){
                 let current = scores.get(hit.id) ?? 0.0f64
                 scores[hit.id] = current + hit.score * 0.1f64
             }
         }
         for((id, score) in scores){
-            match(store.get(KB, id)){
+            match(transport.get(KB, id)){
                 case Some(record) =>
                     let parts = id.split('#')
                     if(parts.size < 2){
@@ -159,20 +190,12 @@ class HydraKnowledgeStore <: KnowledgeStore {
         KnowledgeSearch.rank(hits, query.limit)
     }
 
-    public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
-        let ids = ArrayList<String>()
-        for(id in store.ids(DOCS, offset, limit)){
-            ids.add(id)
-        }
-        ids
-    }
-
     private func purgeChunks(docId: String): Unit {
-        match(store.get(DOCS, docId)){
+        match(transport.get(DOCS, docId)){
             case Some(record) =>
                 let count = Int64.tryParse(record.payload) ?? 0
                 for(seq in 0..count){
-                    store.remove(KB, '${docId}#${seq}')
+                    transport.remove(KB, '${docId}#${seq}')
                 }
             case None => ()
         }
@@ -192,3 +215,4 @@ class HydraKnowledgeStore <: KnowledgeStore {
 }
 
 let _hydraContentRegistered = Stores.registerContent('f_hydra', { => HydraContentStore() })
+let _fhydraContentRegistered = Stores.registerContent('fhydra', { => FhydraContentStore() })

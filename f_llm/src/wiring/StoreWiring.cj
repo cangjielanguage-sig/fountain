@@ -61,6 +61,7 @@ public class StoreWiring {
             ensure('postgres', { => PostgresContentStore() })
             ensure('mysql', { => MySqlContentStore() })
             ensure('f_hydra', { => HydraContentStore() })
+            ensure('fhydra', { => FhydraContentStore() })
             ensureMeta('postgres', { => PostgresMetaStore() })
             ensureMeta('mysql', { => MySqlMetaStore() })
             ensureMeta('f_store', { => FStoreMetaStore(StoreSettings.load().metaStorePath) })

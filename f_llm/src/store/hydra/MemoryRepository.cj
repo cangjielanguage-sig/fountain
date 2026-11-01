@@ -53,6 +53,11 @@ public class HydraMemoryRepository <: MemoryRepository {
         this.transport = InProcessTransport(FStoreVectorStore(location))
     }
 
+    /** 远程/自定义传输（fhydra 内容族用） */
+    init(transport: HydraTransport) {
+        this.transport = transport
+    }
+
     public func upsert(write: MemoryWrite, titleVector: Array<Float64>,
                        contentVector: Array<Float64>): Int64 {
         let id = nextId()
