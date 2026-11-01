@@ -401,6 +401,49 @@ class BetaMemory {
 
 选择规则在构建期确定并记录（`BetaNode.plan`），运行期不重新决策。
 
+### 7.4 构建期索引覆盖率
+
+索引缺失只影响候选定位效率，不影响匹配结果；但大量回退全扫会把 join 退化成笛卡尔积。
+`NetworkBuilder` 在构建分片网络时统计一次覆盖率，**只读规则结构，不改变节点与匹配语义**：
+
+- alpha 约束：按 `Operator.indexable` 归类（等值、范围、`In`、`IsNull`/`NotNull` 计为可索引）；
+- join：按连接算子的 `indexable` 归类；不可索引时建议两侧字段加索引；
+- 覆盖率 = 可索引项 / 全部 alpha 约束与 join 项；没有可统计项时按 `1.0` 处理。
+
+```cangjie
+public class IndexCoverage {
+    public let indexed: Int64
+    public let total: Int64
+    /** 去重后的 (typeTag, field) 建议字段。 */
+    public let suggestions: Array<(String, String)>
+    public prop coverage: Float64
+}
+
+public class NetworkBuilder {
+    /** 默认阈值 0.8。 */
+    public static let DEFAULT_INDEX_COVERAGE_THRESHOLD: Float64
+    public static func coverageOf(rules: Array<Rule>, space: String): IndexCoverage
+    public static func indexCoverageWarningCount(): Int64
+}
+
+public class ReteNetwork {
+    /** 覆盖率低于阈值时，构建期写 WARN；阈值可通过 build 覆盖。 */
+    public func build(rules: Array<Rule>, registry: FactSpaceRegistry,
+                      coverageThreshold!: Float64 = 0.8): Unit
+    public prop indexCoverage: Float64
+    public prop indexCoverageSuggestions: Array<(String, String)>
+}
+```
+
+覆盖率低于阈值时写一条 WARN，包含空间、覆盖率、阈值与建议字段，例如：
+
+```
+Rete 网络（空间 default）索引覆盖率 0.0 低于阈值 0.8（0/1）；
+建议为字段加索引: Order.code
+```
+
+`indexCoverageWarningCount()` 仅用于测试与观测累计 WARN 次数。
+
 ## 8. 激活产出
 
 ```cangjie
@@ -448,7 +491,7 @@ public class ReteNetwork {
 | 激活产出 | O(模式数)（展开绑定表） |
 | 内存 | O(alpha 事实数 + beta 令牌数)，令牌共享父链；按空间分别计量 |
 
-不限规模的前提是**索引覆盖 join 字段**。如果规则里出现大量无索引的回退 join，复杂度退化为笛卡尔积——`NetworkBuilder` 在构建期统计每个 join 的索引覆盖率，低于阈值时写 `WARN` 日志并给出建议字段。
+不限规模的前提是**索引覆盖 join 字段**。如果规则里出现大量无索引的回退 join，复杂度退化为笛卡尔积——`NetworkBuilder` 在构建期统计每个 join 的索引覆盖率，低于阈值时写 `WARN` 日志并给出建议字段（见 §7.4）。
 
 分片对规模的影响：
 

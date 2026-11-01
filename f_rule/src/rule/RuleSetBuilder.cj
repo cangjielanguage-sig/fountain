@@ -155,16 +155,18 @@ public class RuleSetBuilder {
      * 构建并把失败留在 `RuleSet.status` 里（`Invalid`），不抛校验异常。
      *
      * 供测试与诊断使用：`build()` 是它的"失败即抛"薄封装。
+     * 条件树在这里展开成普通规则（DNF），展开后的结果再走 [Validator]。
      */
     public func buildOrInvalid(): RuleSet {
-        let ordered = ArrayList<Rule>()
-        var index: Int64 = 0
-        for (rule in rules_) {
-            ordered.add(rule.withOrder(index))
-            index += 1
-        }
-        let ruleSet = RuleSet(id_, version_, ordered.toArray(), registry_, expressionMode_, conflictResolver_)
+        var ruleSet = assemble(rules_)
         try {
+            let expanded = ArrayList<Rule>()
+            for (rule in rules_) {
+                for (item in ConditionExpander.expand(rule)) {
+                    expanded.add(item)
+                }
+            }
+            ruleSet = assemble(expanded)
             Validator.validate(ruleSet)
             ruleSet.freeze()
         } catch (e: RuleException) {
@@ -172,6 +174,16 @@ public class RuleSetBuilder {
             lastError_ = Some(e)
         }
         ruleSet
+    }
+
+    private func assemble(source: ArrayList<Rule>): RuleSet {
+        let ordered = ArrayList<Rule>()
+        var index: Int64 = 0
+        for (rule in source) {
+            ordered.add(rule.withOrder(index))
+            index += 1
+        }
+        RuleSet(id_, version_, ordered.toArray(), registry_, expressionMode_, conflictResolver_)
     }
 
     private var lastError_: ?RuleException = None

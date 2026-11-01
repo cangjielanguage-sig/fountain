@@ -44,6 +44,17 @@ public class Pattern {
         }
     }
 
+    /**
+     * 直接追加已构造的约束。
+     *
+     * 条件树展开需要保留 `Operand.Field` 右值与 `negated`，无法用 `constrain*`
+     * 的 `Any` 参数无损表达，因此保留这个入口。
+     */
+    public func addConstraint(constraint: Constraint): Pattern {
+        constraints_.add(constraint)
+        this
+    }
+
     /** 常量右值约束。 */
     public func constrain(field: String, op: Operator, value: Any): Pattern {
         constraints_.add(Constraint(field, op, right: Operand.Const(value)))

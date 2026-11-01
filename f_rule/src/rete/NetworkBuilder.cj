@@ -15,7 +15,9 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
-import std.collection.{ArrayList, HashSet}
+import std.collection.{ArrayList, HashMap, HashSet}
+import std.sync.Mutex
+import fountain::f_log.LoggerFactory
 import fountain::f_rule.condition.{Constraint, JoinConstraint, Operand, Pattern}
 import fountain::f_rule.fact.{Fact, ValueKey}
 import fountain::f_rule.rule.Rule
@@ -32,14 +34,119 @@ import fountain::f_rule.rule.Rule
  * 构建完成后由 `ReteNetwork` 冻结，运行期不再增加节点。
  */
 public class NetworkBuilder {
+    private static let log = LoggerFactory.getLogger<NetworkBuilder>()
+
+    /** 索引覆盖率默认阈值；低于该值写 WARN（`doc/04` §7.4）。 */
+    public static let DEFAULT_INDEX_COVERAGE_THRESHOLD: Float64 = 0.8
+
+    private static let warnMtx = Mutex()
+    private static var warnCount: Int64 = 0
+
     private init() {}
 
-    public static func build(network: ReteNetwork, rules: Array<Rule>): Unit {
+    /**
+     * 构建分片网络并统计索引覆盖率。
+     *
+     * @param coverageThreshold 覆盖率低于该值时写 WARN，缺省 0.8
+     */
+    public static func build(network: ReteNetwork, rules: Array<Rule>,
+        coverageThreshold!: Float64 = DEFAULT_INDEX_COVERAGE_THRESHOLD): Unit {
+        let stats = coverageOf(rules, network.space)
+        network.setIndexCoverage(stats)
+        if (stats.total > 0 && stats.coverage < coverageThreshold) {
+            warnCoverage(network.space, stats, coverageThreshold)
+        }
         for (rule in rules) {
             if (rule.factSpace != network.space) {
                 continue
             }
             attach(network, rule)
+        }
+    }
+
+    /**
+     * 统计某分片的索引覆盖率。
+     *
+     * 只做静态归类，不改变节点、不改变匹配语义：
+     * - alpha 约束按 `Operator.indexable` 归类；
+     * - join 按连接算子归类，不可索引时建议两侧字段加索引。
+     */
+    public static func coverageOf(rules: Array<Rule>, space: String): IndexCoverage {
+        var indexed: Int64 = 0
+        var total: Int64 = 0
+        let suggestions = ArrayList<(String, String)>()
+        let seen = HashSet<String>()
+        for (rule in rules) {
+            if (rule.factSpace != space) {
+                continue
+            }
+            let bindingTypes = HashMap<String, String>()
+            for (pattern in rule.patterns) {
+                bindingTypes[pattern.binding] = pattern.typeTag
+                for (constraint in pattern.constraints) {
+                    total += 1
+                    if (constraint.op.indexable) {
+                        indexed += 1
+                    } else {
+                        suggest(suggestions, seen, pattern.typeTag, constraint.field)
+                    }
+                }
+            }
+            for (join in rule.joins) {
+                total += 1
+                if (join.op.indexable) {
+                    indexed += 1
+                } else {
+                    match (bindingTypes.get(join.leftBinding)) {
+                        case Some(typeTag) =>
+                            suggest(suggestions, seen, typeTag, join.leftField)
+                        case None => ()
+                    }
+                    match (bindingTypes.get(join.rightBinding)) {
+                        case Some(typeTag) =>
+                            suggest(suggestions, seen, typeTag, join.rightField)
+                        case None => ()
+                    }
+                }
+            }
+        }
+        IndexCoverage(indexed, total, suggestions.toArray())
+    }
+
+    /** 观测用：累计写入的索引覆盖率 WARN 条数。 */
+    public static func indexCoverageWarningCount(): Int64 {
+        synchronized(warnMtx) {
+            warnCount
+        }
+    }
+
+    private static func suggest(suggestions: ArrayList<(String, String)>,
+        seen: HashSet<String>, typeTag: String, field: String): Unit {
+        let key = "${typeTag}\u{0001}${field}"
+        if (seen.contains(key)) {
+            return
+        }
+        seen.add(key)
+        suggestions.add((typeTag, field))
+    }
+
+    private static func warnCoverage(space: String, stats: IndexCoverage,
+        threshold: Float64): Unit {
+        var fields = ""
+        var index = 0
+        for ((typeTag, field) in stats.suggestions) {
+            if (index > 0) {
+                fields += ", "
+            }
+            fields += "${typeTag}.${field}"
+            index += 1
+        }
+        NetworkBuilder.log.warn(
+            "Rete 网络（空间 ${space}）索引覆盖率 ${stats.coverage} 低于阈值 ${threshold}" +
+            "（${stats.indexed}/${stats.total}）；建议为字段加索引: ${fields}"
+        )
+        synchronized(warnMtx) {
+            warnCount += 1
         }
     }
 

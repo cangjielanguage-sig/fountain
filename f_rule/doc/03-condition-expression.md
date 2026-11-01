@@ -105,6 +105,8 @@ public class Pattern {
     public init(typeTag: String, binding: String)
     public func where(field: String, op: Operator, value: Any): Pattern
     public func where(field: String, op: Operator, rightField: String): Pattern
+    /** 直接追加已构造的约束；条件树展开保持 Field 右值与 negated。 */
+    public func addConstraint(constraint: Constraint): Pattern
     public prop typeTag: String
     public prop binding: String
     public prop constraints: Array<Constraint>
@@ -136,6 +138,56 @@ public enum ConditionExpr {
 - `Or` 的分支如果跨越不同 `typeTag`，不能进入同一 alpha 链，会退化为多条规则（构建期展开，规则 id 加后缀 `#1`、`#2`）；
 - `Not` 只允许包裹单事实约束；包裹 join 需要改为否定模式（`NotPattern`，M2 之后支持）；
 - 嵌套深度上限 32，超出抛 `TABLE_INVALID`（防止构造期栈溢出）。
+
+### 5.1 接入构建期
+
+`Rule` 保存原始条件树与类型标签，入口在 `RuleBuilder`：
+
+```cangjie
+public class Rule {
+    /** 无条件树时为 None。 */
+    public let condition: ?ConditionExpr
+    /** 条件树的事实类型；无条件是空串，混合类型析取也是空串。 */
+    public let conditionType: String
+}
+
+Rule.builder("R1")
+    .condition("Order", And([
+        Leaf(Constraint("amount", Operator.Gt, right: Operand.Const(100))),
+        Leaf(Constraint("level", Operator.Ge, right: Operand.Const(3)))
+    ]))
+    .build()
+```
+
+单次 `condition(typeTag, expr)` 表示一个带类型的条件分支；多次调用表示**析取**
+（同类型合并为一个 `Or`，不同类型展开成多条单类型规则）。跨类型 `Or` 因此可以写成：
+
+```cangjie
+Rule.builder("R1")
+    .condition("Order", Leaf(Constraint("amount", Operator.Gt, right: Operand.Const(100))))
+    .condition("User", Leaf(Constraint("level", Operator.Ge, right: Operand.Const(3))))
+    .build()
+```
+
+`RuleSetBuilder.buildOrInvalid()` 在走 `Validator` 之前把条件树转成 DNF（析取范式）：
+
+| 条件节点 | 展开结果 |
+|---|---|
+| `Leaf(c)` | `Pattern(typeTag, "o").addConstraint(c)` |
+| `Not(Leaf(c))` | 同一模式上的否定约束（`negated` 翻转） |
+| `And(children)` | 各子式的约束合并到同一个 `Pattern`（笛卡尔积） |
+| `Or(children)` | 拆成多条规则；嵌套时按分配律展开 |
+| `Join(j)` | 追加到 `rule.joins`；可引用 `addPattern` 声明的其他绑定 |
+| `Script(e)` | `e.source` 追加到 `rule.scripts` |
+
+展开规则：
+
+- 展开后每条规则 id 为 `<id>#<n>`（`n` 从 1 起）；只展开出一条时保持原 id；
+- 单条规则的条件树展开数量上限 64，超出抛 `TABLE_INVALID` 并在消息中说明
+  “条件树展开爆炸”；
+- 展开结果与普通规则一样经过 `Validator`（id 唯一、空间/类型/字段/绑定校验）；
+- `Not(Join)` 与 `Not(Script)` 没有对应模式，构建期抛 `ILLEGAL_STATE`；
+- 条件树生成的绑定名固定为 `o`；规则里已有同名绑定时抛 `ILLEGAL_STATE`。
 
 ## 6. f_jit 表达式
 

@@ -194,3 +194,12 @@
 - [x] 9.3 C4：`RuleAction` 改为 `execute(ctx: ActionContext)` 接口；`ClosureAction`/`TableAction`/`ScriptAction` 三实现；`then(action: (ActionContext) -> Unit)` 签名不变，新增 `thenScript(source)`，脚本编译失败抛 `SCRIPT_COMPILE`
 - [x] 9.4 lint：修掉全部 41 条非 License error，`cjlint -f ./src -m $CANGJIE_HOME` 只剩 G.OTH.03
 - [x] 9.5 回归：`cjpm test` 430 个用例全绿（原 418 + 新增 12），`doc/03`、`doc/05`、`doc/08` 同步完成
+
+## 10. 第三次 verify 跟进（C1/W2）
+
+- [x] 10.1 失败用例 `RuleSetBuilderCondition_test`：叶子/And 合并、同类型与跨类型 Or 展开（`#1`/`#2`）、嵌套分配律、Not、Script、Join、展开上限 64、展开后过 Validator
+- [x] 10.2 C1 实现：`Rule.condition`/`conditionType`、`RuleBuilder.condition(typeTag, expr)`、`ConditionExpander`（DNF + id 后缀 + 64 条上限）接入 `RuleSetBuilder.buildOrInvalid()`；`Pattern.addConstraint` 保留 Field 右值与 negated
+- [x] 10.3 失败用例 `IndexCoverage_test`：全覆盖/空条件/不可索引约束/不可索引 join/阈值可配置，断言覆盖率、建议字段与 WARN 计数
+- [x] 10.4 W2 实现：`NetworkBuilder.coverageOf` 统计 alpha 约束与 join 覆盖率，`IndexCoverage` 暴露 `coverage`/`suggestions`，`ReteNetwork` 暴露只读属性；阈值命名常量 + `build(coverageThreshold:)` 可配置，低于阈值写 WARN
+- [x] 10.5 `doc/03` §5.1（条件树接入与展开口径）、`doc/04` §7.4（索引覆盖率）同步
+- [x] 10.6 回归：`cjpm test` 446 个用例全绿（原 430 + 新增 16），既有用例零退化

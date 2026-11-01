@@ -54,6 +54,8 @@ public class ReteNetwork {
     private var registry_: ?FactSpaceRegistry
     /** 规则集级求值失败状态；终端节点共享同一实例。 */
     private let failureGuard_: RuleFailureGuard
+    /** 构建期索引覆盖率；`build` 前为空统计。 */
+    private var indexCoverage_: IndexCoverage
 
     public init(space: String, expressionMode!: ExpressionMode = ExpressionMode.JitPreferred,
         failureGuard!: RuleFailureGuard = RuleFailureGuard("standalone")) {
@@ -70,6 +72,7 @@ public class ReteNetwork {
         this.terminals_ = ArrayList<TerminalNode>()
         this.nextId_ = 1
         this.frozen_ = false
+        this.indexCoverage_ = IndexCoverage(0, 0, [])
     }
 
     private static func nextGeneration(): Int64 {
@@ -83,8 +86,10 @@ public class ReteNetwork {
      * 构建本分片的规则子集，完成后冻结。
      *
      * `rules` 中不属于本空间的规则被忽略；冻结后再次构建抛 `NETWORK_FROZEN`（R-11）。
+     * 构建期同时统计索引覆盖率，低于 `coverageThreshold` 时写 WARN。
      */
-    public func build(rules: Array<Rule>, registry: FactSpaceRegistry): Unit {
+    public func build(rules: Array<Rule>, registry: FactSpaceRegistry,
+        coverageThreshold!: Float64 = NetworkBuilder.DEFAULT_INDEX_COVERAGE_THRESHOLD): Unit {
         if (frozen_) {
             throw RuleException(
                 RuleErrorCode.NETWORK_FROZEN,
@@ -93,8 +98,26 @@ public class ReteNetwork {
         }
         let _ = registry
         registry_ = Some(registry)
-        NetworkBuilder.build(this, rules)
+        NetworkBuilder.build(this, rules, coverageThreshold: coverageThreshold)
         frozen_ = true
+    }
+
+    /** 构建期索引覆盖率；无统计项时为 1.0。 */
+    public prop indexCoverage: Float64 {
+        get() {
+            indexCoverage_.coverage
+        }
+    }
+
+    /** 索引覆盖率低于阈值时的建议字段（去重后的 `(typeTag, field)`）。 */
+    public prop indexCoverageSuggestions: Array<(String, String)> {
+        get() {
+            indexCoverage_.suggestions
+        }
+    }
+
+    func setIndexCoverage(value: IndexCoverage): Unit {
+        indexCoverage_ = value
     }
 
     /** 网络结构是否已冻结。 */

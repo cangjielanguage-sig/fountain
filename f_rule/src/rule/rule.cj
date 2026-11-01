@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.rule
 
 import std.collection.ArrayList
-import fountain::f_rule.condition.{JoinConstraint, Pattern}
+import fountain::f_rule.condition.{ConditionExpr, JoinConstraint, Pattern, TypedClause}
 import fountain::f_rule.exception.*
 import fountain::f_rule.fact.TypeTag
 
@@ -47,10 +47,23 @@ public class Rule {
     public let scripts: Array<String>
     public let actions: Array<RuleAction>
     public let order: Int64
+    /** 构建期条件树；`None` 表示用 `patterns`/`joins` 直接描述条件。 */
+    public let condition: ?ConditionExpr
+    /**
+     * 条件树的事实类型；无条件是空串。
+     *
+     * 多次 `condition(typeTag, expr)` 表达跨类型析取时，类型不一致则为空串
+     * （此时以 [conditionClauses] 里每个分支自己的类型为准）。
+     */
+    public let conditionType: String
+    /** 每个 `condition(typeTag, expr)` 调用保留的带类型分支；展开时使用。 */
+    let conditionClauses: Array<TypedClause>
 
     init(id: String, salience: Int64, factSpace: String, explicitSpace: Bool,
         activationGroup: ?String, patterns: Array<Pattern>, joins: Array<JoinConstraint>,
-        scripts: Array<String>, actions: Array<RuleAction>, order: Int64) {
+        scripts: Array<String>, actions: Array<RuleAction>, order: Int64,
+        condition: ?ConditionExpr, conditionType: String,
+        conditionClauses: Array<TypedClause>) {
         this.id = id
         this.salience = salience
         this.factSpace = factSpace
@@ -61,6 +74,9 @@ public class Rule {
         this.scripts = scripts
         this.actions = actions
         this.order = order
+        this.condition = condition
+        this.conditionType = conditionType
+        this.conditionClauses = conditionClauses
     }
 
     public static func builder(id: String): RuleBuilder {
@@ -70,7 +86,13 @@ public class Rule {
     /** 复制并设置规则序号（`RuleSet` 装配用）。 */
     public func withOrder(value: Int64): Rule {
         Rule(id, salience, factSpace, explicitSpace, activationGroup, patterns, joins, scripts,
-            actions, value)
+            actions, value, condition, conditionType, conditionClauses)
+    }
+
+    /** 条件树展开后改写规则 id（内部使用）。 */
+    func withId(value: String): Rule {
+        Rule(value, salience, factSpace, explicitSpace, activationGroup, patterns, joins, scripts,
+            actions, order, condition, conditionType, conditionClauses)
     }
 
     public func toString(): String {
@@ -94,6 +116,7 @@ public class RuleBuilder {
     private let joins_: ArrayList<JoinConstraint>
     private let scripts_: ArrayList<String>
     private let actions_: ArrayList<RuleAction>
+    private let conditions_: ArrayList<TypedClause>
 
     init(id: String) {
         this.id_ = id
@@ -105,6 +128,7 @@ public class RuleBuilder {
         this.joins_ = ArrayList<JoinConstraint>()
         this.scripts_ = ArrayList<String>()
         this.actions_ = ArrayList<RuleAction>()
+        this.conditions_ = ArrayList<TypedClause>()
     }
 
     public func salience(value: Int64): RuleBuilder {
@@ -128,6 +152,18 @@ public class RuleBuilder {
     /** 追加模式（文档中的 `when`）。 */
     public func addPattern(pattern: Pattern): RuleBuilder {
         patterns_.add(pattern)
+        this
+    }
+
+    /**
+     * 条件树入口（`doc/03-condition-expression.md` §5）。
+     *
+     * 多次调用表示析取：同类型的多个分支在构建期合并成一个 `Or`，
+     * 不同类型的多个分支展开成多条单类型规则。叶子统一绑定到 `"o"`；
+     * 若需要 join 到别的模式，先 `addPattern` 再在条件树里写 `Join`。
+     */
+    public func condition(typeTag: String, expr: ConditionExpr): RuleBuilder {
+        conditions_.add(TypedClause(typeTag, expr))
         this
     }
 
@@ -161,17 +197,53 @@ public class RuleBuilder {
     /**
      * 构建规则。
      *
-     * 无模式抛 `EMPTY_PATTERN`；同一规则内绑定名重复抛 `ILLEGAL_STATE`。
+     * 无模式且无条件树抛 `EMPTY_PATTERN`；同一规则内绑定名重复抛 `ILLEGAL_STATE`。
+     * 条件树的深度与 `Not` 限制在此校验，展开在 `RuleSetBuilder`。
      */
     public func build(): Rule {
-        if (patterns_.isEmpty()) {
+        if (patterns_.isEmpty() && conditions_.isEmpty()) {
             throw RuleException(
                 RuleErrorCode.EMPTY_PATTERN,
                 "规则 ${id_} 没有任何模式"
             )
         }
         Pattern.requireUniqueBindings(patterns_.toArray())
+
+        var condition: ?ConditionExpr = None
+        var conditionType = ""
+        if (!conditions_.isEmpty()) {
+            let branches = ArrayList<ConditionExpr>()
+            for (clause in conditions_) {
+                branches.add(clause.expr)
+            }
+            condition = if (branches.size == 1) {
+                Some(branches[0])
+            } else {
+                Some(Or(branches.toArray()))
+            }
+            // 按合并后的树校验：多次 condition(...) 会多一层 Or。
+            condition.getOrThrow().validate()
+            conditionType = if (sameTypeTag(conditions_)) {
+                conditions_[0].typeTag
+            } else {
+                ""
+            }
+        }
         Rule(id_, salience_, factSpace_, explicitSpace_, activationGroup_, patterns_.toArray(),
-            joins_.toArray(), scripts_.toArray(), actions_.toArray(), -1)
+            joins_.toArray(), scripts_.toArray(), actions_.toArray(), -1,
+            condition, conditionType, conditions_.toArray())
+    }
+
+    private func sameTypeTag(clauses: ArrayList<TypedClause>): Bool {
+        if (clauses.isEmpty()) {
+            return false
+        }
+        let first = clauses[0].typeTag
+        for (clause in clauses) {
+            if (clause.typeTag != first) {
+                return false
+            }
+        }
+        true
     }
 }
