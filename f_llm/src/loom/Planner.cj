@@ -34,6 +34,8 @@ public class LoomRequest {
     /** 澄清轮次用尽时的策略：ask | default | abort */
     public let onUnresolved: String
     public let dryRun: Bool
+    /** 规划用模型；空串表示由 chat 回调使用默认模型 */
+    public let model: String
 
     public init(name: String, description: String,
                 tools!: Array<String> = Array<String>(),
@@ -41,7 +43,8 @@ public class LoomRequest {
                 persona!: String = '',
                 answers!: HashMap<String, String> = HashMap<String, String>(),
                 onUnresolved!: String = 'ask',
-                dryRun!: Bool = true) {
+                dryRun!: Bool = true,
+                model!: String = '') {
         if(name.trimAscii().isEmpty()){
             throw LoomException('loom name must not be blank')
         }
@@ -56,6 +59,7 @@ public class LoomRequest {
         this.answers = answers
         this.onUnresolved = onUnresolved
         this.dryRun = dryRun
+        this.model = model
     }
 }
 
