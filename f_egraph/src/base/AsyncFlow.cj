@@ -92,7 +92,8 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public func toString(): String {
         '${category}-${tag}'
     }
-    private func getDispatcher(){
+    /** 该流程所属的派发器：供 `QueuedClosureTask` 等自驱动任务回灌结果 */
+    public func getDispatcher(): AsyncDispatcher {
         dispatcher.getOrThrow()
     }
     public prop dependencied: ConcurrentHashSet<String>{
