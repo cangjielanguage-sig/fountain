@@ -45,25 +45,36 @@ public class QueuedClosureTask <: ClosureTask {
     private var currentName: String = ''
     private var currentToken: ?CancelToken = None
     private var tokenCounter: Int64 = 0
-    private let sink: (Event) -> Unit
+    private let dispatcher: Dispatcher
 
     public init(name: String, acceptableEvents: Array<String>, producingEvents: Array<String>,
-        body: (Event) -> Event, onResult!: (Event) -> Unit = { _ => () }) {
+        dispatcher: Dispatcher, body: (Event) -> Event) {
         super(name, acceptableEvents, producingEvents, body)
-        this.sink = onResult
+        this.dispatcher = dispatcher
         this.queue = SyncPriorityQueue<QueueEntry>(QueuedClosureTask.compareEntries)
     }
 
-    /** Flow 调用入口：0 号立即执行并返回其结果，其余入队后返回 [DummyEvent] */
-    public override func exec(e: Event): Event {
-        if(e.priority == 0){
-            return submitImmediate(e)
+    /** 所属 Dispatcher：执行结果通过它回灌流程 */
+    public prop owner: Dispatcher {
+        get() {
+            dispatcher
         }
+    }
+
+    /**
+     * Flow 调用入口：先把事件入队（0 号在提交线程立即执行），
+     * 然后**自动消费队列**，每个批次的结果通过 `dispatcher.accept` 回灌流程。
+     */
+    public override func exec(e: Event): Event {
         submit(e)
+        while(runNext()){
+            // 结果已在 runNext 内推给 dispatcher
+        }
         DummyEvent.instance
     }
 
     public func submit(e: Event): Unit {
+        var immediate = false
         synchronized(mutex){
             if(e.cancelPrev > 0){
                 if(e is EmptyEvent){
@@ -75,8 +86,15 @@ public class QueuedClosureTask <: ClosureTask {
             if(e is EmptyEvent){
                 return
             }
-            sequence++
-            queue.add(QueueEntry(e, sequence))
+            if(e.priority == 0){
+                immediate = true
+            }else{
+                sequence++
+                queue.add(QueueEntry(e, sequence))
+            }
+        }
+        if(immediate){
+            submitImmediate(e)
         }
     }
 
@@ -108,7 +126,7 @@ public class QueuedClosureTask <: ClosureTask {
         let result = evaluate(e)
         synchronized(mutex){
             if(!token.cancelled){
-                sink(result)
+                dispatcher.accept(result)
             }
             match(currentToken){
                 case Some(active) =>
@@ -180,7 +198,7 @@ public class QueuedClosureTask <: ClosureTask {
                 return true
             }
         }
-        sink(result)
+        dispatcher.accept(result)
         true
     }
 

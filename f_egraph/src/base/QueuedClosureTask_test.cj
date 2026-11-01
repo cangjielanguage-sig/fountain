@@ -26,32 +26,52 @@ class QueuedClosureTask_test {
                   data: name, priority: priority, cancelPrev: cancelPrev)
     }
 
-    private func newTask(seen: ArrayList<String>): QueuedClosureTask {
-        QueuedClosureTask('queued', ['c'], ['c'], { e => e },
-                          onResult: { r => seen.add(r.name) })
+    private func newTask(recorder: RecordingDispatcher): QueuedClosureTask {
+        QueuedClosureTask('queued', ['c'], ['c'], recorder, { e => e })
+    }
+
+    private func names(recorder: RecordingDispatcher): ArrayList<String> {
+        let result = ArrayList<String>()
+        for(item in recorder.events){
+            result.add(item.name)
+        }
+        result
     }
 
     @TestCase
     func testPriorityZeroRunsImmediately(): Unit {
-        let seen = ArrayList<String>()
-        let task = newTask(seen)
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('z', 0))
 
-        // 0 号不等 drain，提交即执行
-        @Expect(seen.size, 1)
-        @Expect(seen[0], 'z')
+        // 0 号不等 drain，提交即执行，结果进 dispatcher
+        @Expect(recorder.events.size, 1)
+        @Expect(recorder.events[0].name, 'z')
+        @Expect(task.pending, 0)
+    }
+
+    @TestCase
+    func testExecDrainsQueueIntoDispatcher(): Unit {
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
+
+        let returned = task.exec(ev('a', 2))
+        @Expect(returned is DummyEvent, true)   // 返回值给 TaskExecutor，会被 dispatch 跳过
+        @Expect(recorder.events.size, 1)
+        @Expect(recorder.events[0].name, 'a')
         @Expect(task.pending, 0)
     }
 
     @TestCase
     func testOrdersByPriorityThenBirth(): Unit {
-        let seen = ArrayList<String>()
-        let task = newTask(seen)
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('p2-a', 2))
         task.submit(ev('p1', 1))
         task.submit(ev('p2-b', 2))
         task.submit(ev('p0', 0))
 
+        let seen = names(recorder)
         @Expect(seen[0], 'p0')          // 0 号先执行（提交时）
         @Expect(task.drain(), 3)        // p1 批 + 两条 2 号
         @Expect(seen[1], 'p1')          // 1 号同名合并批，name 取批内首条
@@ -61,45 +81,46 @@ class QueuedClosureTask_test {
 
     @TestCase
     func testPriorityOneBatchesSameName(): Unit {
-        let seen = ArrayList<String>()
-        let task = newTask(seen)
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('a', 1))
-        task.submit(ev('b', 1))         // 同名合并成一批
-        task.submit(ev('c', 1))         // 同名，仍在同一批
+        task.submit(ev('b', 1))
+        task.submit(ev('c', 1))
 
         @Expect(task.drain(), 1)
-        @Expect(seen.size, 1)
-        @Expect(seen[0], 'a')
+        @Expect(recorder.events.size, 1)
+        @Expect(recorder.events[0].name, 'a')
     }
 
     @TestCase
     func testPriorityOneBatchesPerName(): Unit {
-        let seen = ArrayList<String>()
-        let task = newTask(seen)
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('a', 1))
         task.submit(ev('b', 1))
         task.submit(ev('a', 1))
 
         // 同名 a 一批、b 一批
         @Expect(task.drain(), 2)
-        @Expect(seen.size, 2)
+        @Expect(recorder.events.size, 2)
     }
 
     @TestCase
     func testPriorityTwoRunsSequentially(): Unit {
-        let seen = ArrayList<String>()
-        let task = newTask(seen)
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('a', 2))
         task.submit(ev('b', 2))
 
         @Expect(task.drain(), 2)
-        @Expect(seen[0], 'a')
-        @Expect(seen[1], 'b')
+        @Expect(recorder.events[0].name, 'a')
+        @Expect(recorder.events[1].name, 'b')
     }
 
     @TestCase
     func testCancelPrevRemovesSamePriority(): Unit {
-        let task = newTask(ArrayList<String>())
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('a', 2))
         task.submit(ev('b', 2))
         task.submit(ev('c', 2, cancelPrev: 1))   // 撤销前一条同优先级（b）
@@ -110,7 +131,8 @@ class QueuedClosureTask_test {
 
     @TestCase
     func testEmptyEventDeletesQueuedEvents(): Unit {
-        let task = newTask(ArrayList<String>())
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(ev('a', 2))
         task.submit(ev('b', 2))
         task.submit(EmptyEvent(cancelPrev: 1))   // 删除队列尾部 1 条
@@ -121,7 +143,8 @@ class QueuedClosureTask_test {
 
     @TestCase
     func testEmptyEventWithoutCancelIsNoop(): Unit {
-        let task = newTask(ArrayList<String>())
+        let recorder = RecordingDispatcher()
+        let task = newTask(recorder)
         task.submit(EmptyEvent())
 
         @Expect(task.pending, 0)
@@ -142,9 +165,9 @@ class QueuedClosureTask_test {
     /** 0 号事件顶替**同名**的正在执行事件：外层结果丢弃，内层立即执行 */
     @TestCase
     func testPriorityZeroReplacesSameNameExecution(): Unit {
-        let seen = ArrayList<String>()
+        let recorder = RecordingDispatcher()
         let holder = Holder()
-        let task = QueuedClosureTask('preempt', ['c'], ['c'],
+        let task = QueuedClosureTask('preempt', ['c'], ['c'], recorder,
             { e =>
                 let payload = match(e){
                     case d: DataEvent => match(d.tryGet<String>()){
@@ -163,8 +186,7 @@ class QueuedClosureTask_test {
                     holder.urgent++
                 }
                 e
-            },
-            onResult: { r => seen.add(r.name) })
+            })
         holder.task = Some(task)
 
         task.submit(ev('slow', 2))
@@ -172,15 +194,15 @@ class QueuedClosureTask_test {
         @Expect(holder.slow, 1)           // 外层任务体确实跑完了（协作式）
         @Expect(holder.urgent, 1)         // 0 号立即执行
         @Expect(task.cancelledCount, 1)
-        @Expect(seen.size, 1)             // 只有 0 号的结果进入 sink
+        @Expect(recorder.events.size, 1)  // 只有 0 号的结果进入 dispatcher
     }
 
     /** 不同名的 0 号事件不取消正在执行的事件 */
     @TestCase
     func testPriorityZeroWithOtherNameDoesNotCancel(): Unit {
-        let seen = ArrayList<String>()
+        let recorder = RecordingDispatcher()
         let holder = Holder()
-        let task = QueuedClosureTask('preempt', ['c'], ['c'],
+        let task = QueuedClosureTask('preempt', ['c'], ['c'], recorder,
             { e =>
                 let payload = match(e){
                     case d: DataEvent => match(d.tryGet<String>()){
@@ -196,14 +218,13 @@ class QueuedClosureTask_test {
                     }
                 }
                 e
-            },
-            onResult: { r => seen.add(r.name) })
+            })
         holder.task = Some(task)
 
         task.submit(ev('slow', 2))
         @Expect(task.drain(), 1)
         @Expect(task.cancelledCount, 0)
-        @Expect(seen.size, 2)             // 0 号 + 外层都进 sink
+        @Expect(recorder.events.size, 2)  // 0 号 + 外层都进 dispatcher
     }
 }
 
@@ -211,4 +232,52 @@ class Holder {
     public var task: ?QueuedClosureTask = None
     public var slow: Int64 = 0
     public var urgent: Int64 = 0
+}
+
+/** 记录收到的结果事件（只实现管道所需的接口） */
+class RecordingDispatcher <: Dispatcher {
+    let events = ArrayList<Event>()
+
+    public func accept(event: Event): Unit {
+        events.add(event)
+    }
+
+    protected func dispatch(): Unit {
+    }
+
+    public func registerStart(category!: String, tag!: String, eventName!: String): Unit {
+    }
+
+    public func registerError(category!: String, tag!: String): Unit {
+    }
+
+    public func registerEnd(category!: String, tag!: String): Unit {
+    }
+
+    public func registerTask(category!: String, tag!: String, eventName!: String,
+                             task!: (Event) -> Event): Unit {
+    }
+
+    protected func doRegisterMulti(category!: String, tag!: String,
+                                   task!: (Event) -> Event): Unit {
+    }
+
+    protected func doStartEventName(category!: String, tag!: String): ?String {
+        None
+    }
+
+    public func start(event: StartEvent): Dispatcher {
+        this
+    }
+
+    public func get(): EndExecutor {
+        throw GraphException('RecordingDispatcher has no EndExecutor')
+    }
+
+    public func tryGet(): ?EndExecutor {
+        None
+    }
+
+    public func removeIf(predicate: (Event) -> Bool): Unit {
+    }
 }
