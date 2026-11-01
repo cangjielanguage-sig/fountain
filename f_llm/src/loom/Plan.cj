@@ -203,7 +203,7 @@ extend StepPlan {
             text += ', "input": ${jsonQuote(input)}'
         }
         text += ', "args": ${args}'
-        text += ', "async": ${async}'
+        text += ', "async": ${jsonQuote(async)}'
         if(external){
             text += ', "external": true'
         }
