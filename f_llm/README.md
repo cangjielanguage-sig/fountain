@@ -1476,7 +1476,7 @@ f_llm 的持久化分两族，各自三选一，可交叉组合：
 
 | 族 | 存什么 | 可选实现 | 配置键 |
 |---|---|---|---|
-| 内容族 | 记忆、经验、知识、文档 | `postgres` / `mysql` / `fhydra` | `llm_contentStore` |
+| 内容族 | 记忆、经验、知识、文档 | `f_hydra`（默认）/ `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
 | 元数据族 | 人格、技能、提示词、模型配置 | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
 
 - 未知配置值**启动失败**并打印可选列表，不静默回退；
@@ -1484,12 +1484,16 @@ f_llm 的持久化分两族，各自三选一，可交叉组合：
 - 开发者可实现 `ContentStore` / `MetaStore`，用 `Stores.registerContent` / `Stores.registerMeta` 注册后按名字选中。
 
 ```cj
-// 元数据不依赖数据库；内容族仍需在 postgres / mysql / fhydra 中选一个
+// 内容族默认 f_hydra（进程内、零外部依赖）；也可切到 fhydra（远程 HTTP）
 Config.set<String>([
-    ('llm_contentStore', 'fhydra'),
+    ('llm_memoryStore', 'f_hydra'),
     ('llm_metaStore', 'f_store'),
     ('llm_metaStorePath', './data/f_llm-meta'),
-    ('llm_contentStoreUrl', 'http://127.0.0.1:8848')
+    ('llm_hydraPath', './data/f_hydra'),
+    // 远程时改用：
+    // ('llm_memoryStore', 'fhydra'),
+    // ('llm_hydraUrl', 'http://127.0.0.1:18081/rpc'),
+    // ('llm_hydraSecret', 'change-me')
 ])
 ```
 
