@@ -946,7 +946,7 @@ public class LoomRequest {
 ```
 
 **LLM 不生成仓颉代码**——只产出 JSON 计划，代码由 `CodeGen` 模板生成。这是刻意的：
-让模型写 `ClosureTask` 语句序列的失败率远高于写结构化计划，且错误只能在编译期暴露。
+让模型写 `QueuedClosureTask` 语句序列的失败率远高于写结构化计划，且错误只能在编译期暴露。
 
 **另一种合法输出：需要澄清**（§9.11）。描述有歧义时不要硬猜，返回：
 
@@ -973,14 +973,18 @@ public class LoomRequest {
 ### 9.4 代码生成（两级 JIT）
 
 1. **步骤级**：每个 step 生成一段语句序列（形参固定 `e: Event`，返回 `Event`），
-   交给 `ClosureTask.compile(name, acceptableEvents, producingEvents, exec)`；
+   由 `ClosureTask.compile` 的编译流程产出闭包，再装进
+   `QueuedClosureTask(name, acceptableEvents, producingEvents, dispatcher, body)`——
+   步骤 Task 持有自己所在的 `Dispatcher`，`exec` 把事件入队、按优先级执行并把结果回灌流程；
    数据通过 `Event.data`（`JsonObject`）传递，模板负责 `${x.output}` 的取值与拼装。
 2. **流程级**：生成单个 lambda 源码，形参是宿主对象 `FlowHost`（`Compiler.registerClass` 注册），
    体内按 `edges` 组装 `ImmediateFlow` / `AsyncFlow`（有 async 步骤用后者），
-   `registerStart` → `registerTask(host.task("id"))` → `registerEnd`，最后 `host.run(flow, input)`。
-   这段源码由 `Compiler().compile(source)` 编译成 `JitFunction`，即「一个流程就是一个 JitFunction」。
+   `registerStart` → `registerTask(queuedTask)` → `registerEnd`，最后 `host.run(flow, input)`。
+   每个步骤都是 `QueuedClosureTask`，用 `Flow.registerTask(task: Task)` 注册（内部展开为
+   `task.acceptableEvents` 各自的 `task.exec`）；这段源码由 `Compiler().compile(source)` 编译成
+   `JitFunction`，即「一个流程就是一个 JitFunction」。
 
-**为什么不让流程闭包直接内联步骤源码**：`ClosureTask.compile` 的 `exec` 是字符串，
+**为什么不让流程闭包直接内联步骤源码**：步骤闭包编译（`ClosureTask.compile`）的 `exec` 是字符串，
 内联需要嵌套转义（`\"` 套 `\\\"`），可读性和可测性都会崩；两级编译把转义限制在一步之内。
 
 ### 9.5 异步决策
