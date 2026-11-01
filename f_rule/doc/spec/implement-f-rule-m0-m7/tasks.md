@@ -43,7 +43,7 @@
 - [x] 2.20 失败用例 `JitExpression_test`：完整 lambda 编译、裸表达式按绑定类型包装、语法错误抛 `SCRIPT_COMPILE`、形参缺失抛 `SCRIPT_BINDING_MISSING`、动态事实绑定走解释器并 WARN
 - [x] 2.21 实现 `condition/JitExpression.cj`（两种构造 + `f_jit` 错误包装）与 `condition/Interpreter.cj`（白名单 10 函数 + 节点计数上限）
 - [x] 2.22 失败用例 `InterpreterVsJit_test`：同一批表达式在 `JitPreferred` 与 `Interpreted` 下结果逐条一致（I-03）
-- [x] 2.23 失败用例 `RuleBuilder_test`：`salience`/`facts`/`when`/`join`/`where`/`then`/`build`，无模式规则抛 `EMPTY_PATTERN`，重复规则 id 抛 `DUPLICATE_RULE`
+- [x] 2.23 失败用例 `RuleBuilder_test`：`salience`/`facts`/`addPattern`/`join`/`script`/`then`/`build`（`when`/`where` 是仓颉关键字，故改名为 `addPattern`/`script`），无模式规则抛 `EMPTY_PATTERN`，重复规则 id 抛 `DUPLICATE_RULE`
 - [x] 2.24 实现 `rule/Rule.cj`、`rule/RuleBuilder.cj`、`rule/Bindings.cj`
 - [x] 2.25 失败用例 `RuleSetBuilder_test`：空间自动声明、`registerFact(space, schema)`、`registerDynamicType`、`expressionMode`、`conflictResolver`、缺省空间 `default`（F-15）
 - [x] 2.26 实现 `rule/RuleSet.cj` 与根包 `RuleSetBuilder` 的装配部分（不含网络构建）

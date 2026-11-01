@@ -6,8 +6,11 @@
 
 `DecisionTable` SHALL 由 `id`、`name`、`version`、`factSpace`、`factType`、`hitPolicy`、`columns`、
 `rows`、默认 `salience` 构成；`DecisionTable.builder(id)` SHALL 提供 `name` / `version` /
-`factSpace` / `factType` / `hitPolicy` / `salience` / `when(fieldPath)` / `expr(name)` / `then(name)` /
+`factSpace` / `factType` / `hitPolicy` / `salience` / `whenColumn(fieldPath)` / `exprColumn(name)` /
+`thenColumn(name)` /
 `row(values)` / `row(ruleId, values)` / `build()`。
+
+`when` 是仓颉关键字，列方法统一以 `Column` 结尾。
 
 `TableRow` SHALL 携带 `line`（物理行号，从 1 开始）、`values: Array<?String>`、`ruleId`；
 `ColumnKind` SHALL 为 `When / Then / Expr / Salience / Metadata`。

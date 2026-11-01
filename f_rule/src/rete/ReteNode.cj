@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
-import fountain::f_rule.agenda.{Activation, ActivationSink}
+import fountain::f_rule.agenda.ActivationSink
 import fountain::f_rule.fact.{Fact, FactHandle}
 
 /** 网络节点公共契约：构建期分配的唯一 id（共享键与传播顺序都依赖它）。 */

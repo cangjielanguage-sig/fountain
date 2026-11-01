@@ -20,7 +20,6 @@ import fountain::f_rule.agenda.*
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{Fact, FactBaseView, FactBaseViewStore, FactHandle, TypeTag}
 import fountain::f_rule.rete.{SessionRuntime, ShardedNetwork}
-import fountain::f_rule.rule.ActionContext
 
 /** 一条规则本次执行的输出槽。 */
 public class FiredRule {

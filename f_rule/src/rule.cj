@@ -30,4 +30,6 @@ public import fountain::f_rule.agenda.{Agenda, Bindings, FireMode, Activation}
 public import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle, FactSchema, FactSpace, TypedFact}
 public import fountain::f_rule.condition.{Operator, Pattern}
 public import fountain::f_rule.engine.{FiredRule, FireResult, RuleEngine, RuleSession}
+public import fountain::f_rule.table.{Column, ColumnKind, CsvTableParser, DecisionTable,
+    DecisionTableBuilder, HitPolicy, RowTrace, TableMode, TableResult, TableRow, XlsxTableParser}
 public import fountain::f_rule.flow.*

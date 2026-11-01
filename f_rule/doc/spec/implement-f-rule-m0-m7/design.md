@@ -52,26 +52,34 @@
 
 ## Decisions
 
-### D1. 包结构：9 个包，根包只做重导出
+### D1. 包结构：12 个包，根包只做重导出
+
+> **实施后修订**：D1 原写「9 个包、RuleEngine/RuleSession 在根包」。实施中因包循环
+> （`flow` 要引 `RuleEngine`，而根包要重导出 `flow`）下移出 `engine` 与 `runtime` 两个包，
+> 决策表期间又新增 `table` 的装配层依赖。最终结构如下，公开 API 未变（根包重导出）。
 
 ```
 f_rule/src/
-├── rule.cj                 fountain::f_rule            门面重导出 + RuleSet/RuleEngine/RuleSession
-├── RuleInitializer.cj      同上                        f_app Initializer
-├── RuleRuntime.cj          同上                        共享 Compiler / 全局配置
+├── rule.cj                 fountain::f_rule            门面重导出 + RuleInitializer
 ├── exception/              fountain::f_rule.exception  RuleException / RuleErrorCode
 ├── fact/                   fountain::f_rule.fact       Fact/TypedFact/DynamicFact/FactSchema/FactSpace/FactBase/ValueKey
-├── condition/              fountain::f_rule.condition  Operator/Operand/Constraint/Pattern/JoinConstraint/ConditionExpr/JitExpression
-├── rule/                   fountain::f_rule.rule       Rule/RuleBuilder/RuleSet(模型侧)
+├── condition/              fountain::f_rule.condition  Operator/Operand/Constraint/Pattern/JoinConstraint/ConditionExpr/JitExpression/EvalOutcome
+├── runtime/                fountain::f_rule.runtime    RuleRuntime（共享 Compiler / 全局配置，最底层）
+├── rule/                   fountain::f_rule.rule       Rule/RuleBuilder/RuleSet/RuleSetBuilder/Validator/
+│                                                       ActionContext/ClosureAction/TableAction/ScriptAction/
+│                                                       RuleFailureGuard/TableSource/ConflictResolver
 ├── rete/                   fountain::f_rule.rete       Root/Alpha/Beta/Token/Terminal/NetworkBuilder/ReteNetwork/SessionNetwork
-├── agenda/                 fountain::f_rule.agenda     Activation/Bindings/Agenda/ConflictResolver/ActionContext
+├── agenda/                 fountain::f_rule.agenda     Activation/Bindings/Agenda/ConflictResolver 实现/CycleDetector
+├── engine/                 fountain::f_rule.engine     RuleEngine/RuleSession/EngineOptions/FireResult
 ├── flow/                   fountain::f_rule.flow       RuleFlow/RuleSetFlow/ResolveTask/JoinTask/RuleEnvelope/FlowContext/RuleTask
 ├── table/                  fountain::f_rule.table      DecisionTable/HitPolicy/CsvTableParser/XlsxTableParser/TableCompiler/TableExecutor
 └── test/                   fountain::f_rule.test       NaiveMatcher / PropertyGen（仅测试与差分用）
 ```
 
 - 子目录包名必须与目录路径一致（与 `f_jit` 的 `base/`、`backend/` 相同），`cjpm` 自动识别，无需额外 `cjpm.toml`。
-- `RuleSet` 的**构建器**放根包（`RuleSetBuilder`），模型与校验规则放 `rule/`，避免循环依赖。
+- `RuleSet` 的**构建器**（`RuleSetBuilder`）放 `rule/`，模型与校验规则同包，避免循环依赖。
+- 包依赖单向：`runtime → exception → fact → condition → rule → (rete, agenda, table) → engine → flow`；
+  子包**禁止** `import fountain::f_rule.*`，否则根包无法重导出上层包。
 - `src/test/` 的类型声明为 `public`（跨包测试无法访问 `internal`），但在 README 与 `@IgnoreJitBinding` 中标注
   "仅测试使用"，且不进入根包重导出。这是对 `doc/09` §7"internal"的显式偏差，原因是仓颉的 `internal`
   是模块级、跨包不可见，而差分测试需要在 `rete` 包外构造规则与事实。
@@ -219,7 +227,7 @@ XLSX `_meta`），未声明时若空间只有一个类型则自动取，否则 `
 以 `doc/01` §6 的 14 个码为基线，补足文档其他章节实际使用但未列入的：
 `DUPLICATE_FACT`、`ILLEGAL_STATE`、`UNKNOWN_BINDING`、`SCRIPT_COMPILE`、`SCRIPT_BINDING_MISSING`、
 `FANOUT_WITHOUT_JOIN`、`SAME_SPACE_FANOUT`、`EMPTY_FANOUT`、`REENTRANT_FIRE`、`ACTION_FAILED`、
-`NO_CONTEXT`、`CLOSED`。共 26 个（见 engine-core spec）。全部为 `public enum`，`toString()` 输出
+`NO_CONTEXT`、`CLOSED`、`TABLE_MODE_CONFLICT`。共 27 个（见 engine-core spec）。全部为 `public enum`，`toString()` 输出
 大写蛇形名，日志与决策表定位共用同一套字符串。
 
 ### D13. 测试与差分

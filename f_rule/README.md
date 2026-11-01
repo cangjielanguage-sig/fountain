@@ -69,6 +69,9 @@ main() {
 整表求值 + `HitPolicy` 聚合，输出 `TableResult`（含行级 `RowTrace`），不进议程。
 
 ```cangjie
+import fountain::f_rule.*          // 含 CsvTableParser / XlsxTableParser / TableResult
+import std.fs.Path
+
 let table = CsvTableParser.parseFile(Path("./rules/pricing.csv"))
 
 let ruleSet = RuleSetBuilder(table.id)
@@ -92,6 +95,9 @@ for (hit in result.hits) {
 表按行编译成规则，与代码规则在同一条议程上排序。适合「表给人的是一张决策矩阵，但要和手写规则互斥或分级」。
 
 ```cangjie
+import fountain::f_rule.*
+import std.fs.Path
+
 let agendaTable = XlsxTableParser.parse(Path("./rules/pricing.xlsx"), "pricing")
 
 let ruleSet = RuleSetBuilder("pricing")

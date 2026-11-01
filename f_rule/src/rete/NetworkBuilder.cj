@@ -83,7 +83,7 @@ public class NetworkBuilder {
         let constraints = sortedConstraints(pattern.constraints)
         if (constraints.size == 0) {
             let node = network.alphaNodeFor(AlphaSignature.typeOnly(pattern.typeTag),
-                { _fact: Fact => true })
+                { _: Fact => true })
             node.addRule(ruleId)
             network.rootNode().addHead(node)
             return node
