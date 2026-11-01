@@ -51,6 +51,9 @@ public class ZipWriter {
     private var dirty = false
     private var dirtyEntry = ""
     private var closed = false
+    /** 推模式条目正在写入时，禁止其它 `add*` / `close()`。 */
+    private var entryOpen = false
+    private var openEntryName = ""
 
     public init(output: OutputStream, options!: ZipWriterOptions = ZipWriterOptions()) {
         this.out = CountingOutputStream(output)
@@ -205,6 +208,104 @@ public class ZipWriter {
     }
 
     /**
+     * 推模式流式条目：把条目输出流交给调用方，边生成边压缩写出。
+     *
+     * 与 `addFileStream` 的差别只在数据来源方向：那个从 `InputStream` 拉，这个让调用方推。
+     * 条目关闭前**不得**调用其它 `add*` / `openEntry` / `close()`。
+     */
+    public func openEntry(name: String): ZipEntryOutputStream {
+        ensureUsable()
+        spillingFlag.store(false)
+        let realName = names.allocate(name)
+        let (nameBytes, utf8) = encodeName(realName)
+        let method = options.method.value
+        let now = DateTime.now()
+
+        let header = LocalHeader()
+        header.method = method
+        header.flags = if (utf8) {
+            ZipLayout.FLAG_UTF8_NAME
+        } else {
+            0
+        }
+        header.dosTime = encodeDosTime(now)
+        header.dosDate = encodeDosDate(now)
+        header.nameBytes = nameBytes
+        header.streaming = true
+
+        let offset = position
+        try {
+            writeLocalHeader(out, header)
+        } catch (e: Exception) {
+            markDirty(realName)
+            throw e
+        }
+        entryOpen = true
+        openEntryName = realName
+        ZipEntryOutputStream(
+            this,
+            out,
+            realName,
+            nameBytes,
+            utf8,
+            method,
+            header.dosTime,
+            header.dosDate,
+            offset
+        )
+    }
+
+    /** 推模式条目正常结束：写 descriptor + 登记中央目录信息。 */
+    internal func finishEntry(
+        name: String,
+        nameBytes: Array<Byte>,
+        utf8: Bool,
+        method: UInt16,
+        dosTime: UInt16,
+        dosDate: UInt16,
+        crc: UInt32,
+        compressedSize: Int64,
+        uncompressedSize: Int64,
+        offset: Int64
+    ): Unit {
+        try {
+            writeU32LE(out, ZipLayout.SIGNATURE_DATA_DESCRIPTOR)
+            writeU32LE(out, crc)
+            writeU64LE(out, UInt64(compressedSize))
+            writeU64LE(out, UInt64(uncompressedSize))
+        } catch (e: Exception) {
+            markDirty(name)
+            clearEntryOpen()
+            throw e
+        }
+        record(
+            nameBytes,
+            utf8,
+            method,
+            dosTime,
+            dosDate,
+            crc,
+            compressedSize,
+            uncompressedSize,
+            offset,
+            0,
+            true
+        )
+        clearEntryOpen()
+    }
+
+    /** 条目流写入失败：writer 进入脏状态（半截 local header 无法修补）。 */
+    internal func entryFailed(name: String): Unit {
+        markDirty(name)
+        clearEntryOpen()
+    }
+
+    private func clearEntryOpen(): Unit {
+        entryOpen = false
+        openEntryName = ""
+    }
+
+    /**
      * 以流式路径写入一个磁盘文件。传入符号链接路径时**跟随**链接
      * （调用方指名道姓要这个文件，它知道自己在干什么）。
      */
@@ -281,6 +382,9 @@ public class ZipWriter {
         if (closed) {
             return
         }
+        if (entryOpen) {
+            throw ZipException("条目 ${openEntryName} 仍在写入，先关闭条目流")
+        }
         if (dirty) {
             throw ZipException("条目 ${dirtyEntry} 写入中断，ZIP 结构不完整")
         }
@@ -349,6 +453,9 @@ public class ZipWriter {
     private func ensureUsable(): Unit {
         if (closed) {
             throw ZipException("ZipWriter 已关闭，不能再写入")
+        }
+        if (entryOpen) {
+            throw ZipException("条目 ${openEntryName} 仍在写入，先关闭条目流")
         }
         if (dirty) {
             throw ZipException("条目 ${dirtyEntry} 写入中断，ZIP 结构不完整")

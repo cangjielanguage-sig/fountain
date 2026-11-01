@@ -24,14 +24,22 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
         public let tid!: Int64 = Thread.currentThread.id,
         public let hostId!: Int64 = ProtocolConfig.getProtocolHostId()
     ){
+        // hostId 必填：`(pid, tid, 时间戳)` 只在单机内唯一，跨机器 pid/tid 会重复（容器里都是 1），
+        // 集群维度只能由 hostId 提供；配 0 等于放弃跨节点唯一性，直接拒绝而不是静默降级
+        if (hostId == 0) {
+            throw IllegalArgumentException(
+                "MessageID.hostId must not be 0: set '${ProtocolConfig.protocol_hostId}' to a unique id per host in the cluster")
+        }
         // 用绝对时刻算hash：同一时刻不管在哪一侧以什么时区表示（本地/UTC），都必须是同一个id
-        hash = HashBuilder().append(pid).append(tid).append(time.toUnixTimeStamp().toNanoseconds()).build()
+        hash = HashBuilder().append(hostId).append(pid).append(tid)
+            .append(time.toUnixTimeStamp().toNanoseconds()).build()
     }
     public func hashCode(): Int64 {
         hash
     }
     public operator func ==(other: MessageID): Bool {
         this.hash == other.hash && 
+        this.hostId == other.hostId &&
         this.pid == other.pid && 
         this.tid == other.tid &&
         this.time.toUnixTimeStamp() == other.time.toUnixTimeStamp()

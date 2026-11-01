@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-30
+x-scope: M1 + M2-e + M2-f
+x-milestone: M1
+x-design-doc: f_excel/doc/f_excel模块设计.md

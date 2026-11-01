@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-10-29
+x-scope: M1-followup
+x-milestone: M1
+x-design-doc: f_xml/doc/f_xml模块设计.md
+x-predecessor: f_xml/doc/spec/implement-f-xml-m1
+x-gate: performance
