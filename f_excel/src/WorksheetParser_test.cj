@@ -91,9 +91,24 @@ public class WorksheetParser_test {
         }, 42.0)
     }
 
+    /**
+     * 显式数值类型 `t="n"`。
+     *
+     * OOXML 允许省略 `t`，也允许显式写 `t="n"`（openpyxl 等写出工具会这样写）；
+     * 两者语义相同，都不能落进「未知单元格类型」。
+     */
     @TestCase
-    public func sharedStringLookup(): Unit {
-        let table = SharedStringTable.load(
+    public func explicitNumericType(): Unit {
+        let parsed = parse("<row r=\"1\"><c r=\"A1\" t=\"n\"><v>1.5</v></c></row>")
+        @Assert(parsed.warnings.size, 0)
+        @Assert(match (parsed.rows[0].cells[0].value) {
+            case Number(v) => v
+            case _ => 0.0
+        }, 1.5)
+    }
+
+    @TestCase
+    public func sharedStringLookup(): Unit {        let table = SharedStringTable.load(
             ("<sst xmlns=\"${NS_MAIN}\"><si><t>hi</t></si><si><t>there</t></si></sst>").toArray()
         )
         let parsed = WorksheetParser.parseSheet(

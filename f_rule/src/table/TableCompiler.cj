@@ -80,12 +80,16 @@ public class CompiledTable {
     public let binding: String
     public let rows: Array<CompiledRow>
     public let rules: Array<Rule>
+    /** 构建期诊断（WARN 级），便于测试与工具展示；不参与编译结果。 */
+    public let warnings: Array<String>
 
-    init(factType: String, binding: String, rows: Array<CompiledRow>, rules: Array<Rule>) {
+    init(factType: String, binding: String, rows: Array<CompiledRow>, rules: Array<Rule>,
+        warnings!: Array<String> = Array<String>()) {
         this.factType = factType
         this.binding = binding
         this.rows = rows
         this.rules = rules
+        this.warnings = warnings
     }
 }
 
@@ -107,6 +111,7 @@ public class TableCompiler {
     private let hostType_: String
     /** `true` 表示编译结果为议程路径（`RuleSetBuilder.table`），需要提示 HitPolicy 降级。 */
     private let agendaPath_: Bool
+    private let warnings_: ArrayList<String>
 
     /**
      * @param agendaPath 编译目标是议程路径时为 `true`，会对无法完整表达的 HitPolicy 打 WARN；
@@ -117,6 +122,7 @@ public class TableCompiler {
         this.table_ = table
         this.compiler_ = compiler
         this.agendaPath_ = agendaPath
+        this.warnings_ = ArrayList<String>()
         this.factType_ = table.resolvedFactType(registry)
         this.space_ = match (registry.get(table.factSpace)) {
             case Some(found) => found
@@ -147,31 +153,78 @@ public class TableCompiler {
         synchronized(countMtx) {
             compileCount_ += 1
         }
-        if (table_.rows.isEmpty()) {
-            throw RuleException(
-                RuleErrorCode.TABLE_INVALID,
-                "决策表 ${table_.id} 没有任何数据行（空表）"
-            )
-        }
-        if (table_.hitPolicy == HitPolicy.Unique) {
-            requireUniqueRows()
+        if (!table_.streaming) {
+            if (table_.rows.isEmpty()) {
+                throw RuleException(
+                    RuleErrorCode.TABLE_INVALID,
+                    "决策表 ${table_.id} 没有任何数据行（空表）"
+                )
+            }
+            // 流式表构建期不做跨行去重（`doc/07` §6.4），Unique 的运行期检查仍然生效
+            if (table_.hitPolicy == HitPolicy.Unique) {
+                requireUniqueRows()
+            }
         }
         if (agendaPath_) {
             warnAgendaDegradation()
         }
         let fieldTypes = space_.fieldTypes(factType_)
         let fieldNames = space_.fieldNames(factType_)
+        checkColumnTypes(fieldTypes)
         let binding = table_.binding
         let rows = ArrayList<CompiledRow>()
         let rules = ArrayList<Rule>()
         var rowIndex: Int64 = 0
-        for (row in table_.rows) {
+        for (row in table_.rowIterator()) {
             let compiled = compileRow(row, rowIndex, binding, fieldTypes, fieldNames)
             rows.add(compiled)
             rules.add(compiled.rule)
             rowIndex += 1
         }
-        CompiledTable(factType_, binding, rows.toArray(), rules.toArray())
+        CompiledTable(factType_, binding, rows.toArray(), rules.toArray(), warnings: warnings_.toArray())
+    }
+
+    /**
+     * 载体类型与字段声明比对（`doc/07` §6.3）。
+     *
+     * 单元格/类型行给出的是**提示**，字段声明才是权威：冲突时按字段声明解析，
+     * 并记一条 WARN。文本单元格是万能回退（任何类型都能从文本解析），不报警。
+     */
+    private func checkColumnTypes(fieldTypes: HashMap<String, FieldType>): Unit {
+        var index: Int64 = 0
+        for (column in table_.columns) {
+            if (column.kind == ColumnKind.When) {
+                match (table_.columnTypeAt(index)) {
+                    case Some(declared) => match (fieldTypes.get(column.field)) {
+                        case Some(field) =>
+                            if (TableCompiler.conflicts(declared, field)) {
+                                let message = "决策表 ${table_.id} 的列 ${column.name}：" +
+                                    "载体类型 ${declared} 与字段声明 ${factType_}.${column.field}（${field}）" +
+                                    "冲突，以字段声明为准"
+                                warnings_.add(message)
+                                TableCompiler.log.warn(message)
+                            }
+                        case None => ()
+                    }
+                    case None => ()
+                }
+            }
+            index += 1
+        }
+    }
+
+    /** 文本可解析为任意声明类型，`Any`/`Scalar` 不作约束，因此这三者不算冲突。 */
+    private static func conflicts(carrier: FieldType, declared: FieldType): Bool {
+        if (carrier == declared) {
+            return false
+        }
+        if (carrier == FieldType.Text || carrier == FieldType.`Any` || carrier == FieldType.Scalar) {
+            return false
+        }
+        if (declared == FieldType.`Any` || declared == FieldType.Scalar) {
+            return false
+        }
+        true
     }
 
     private func compileRow(row: TableRow, rowIndex: Int64, binding: String,

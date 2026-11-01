@@ -18,6 +18,7 @@ package fountain::f_rule.table
 /**
  * 决策表（`doc/07-decision-table.md`）。
  *
- * M5 已落地模型、命中策略、条件/输出单元格、CSV 解析、编译与执行；
- * XLSX 载体（`XlsxTableParser`）在 M6 补齐。
+ * 模型、命中策略、条件/输出单元格、编译与执行、CSV 与 XLSX 两种载体
+ * （`CsvTableParser` / `XlsxTableParser`）均已落地；XLSX 另有流式入口
+ * `XlsxTableParser.stream`，供 10 万行级大表使用。
  */

@@ -17,6 +17,7 @@ package fountain::f_rule.table
 
 import std.collection.ArrayList
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
+import fountain::f_rule.fact.FieldType
 
 /**
  * 决策表构建器（`doc/07-decision-table.md` §3）。
@@ -35,6 +36,8 @@ public class DecisionTableBuilder {
     private let outputOrder_: ArrayList<String>
     private let columns_: ArrayList<Column>
     private let rows_: ArrayList<TableRow>
+    private let columnTypes_: ArrayList<?FieldType>
+    private var rowSource_: ?TableRowSource
 
     init(id: String) {
         this.id_ = id
@@ -47,6 +50,8 @@ public class DecisionTableBuilder {
         this.outputOrder_ = ArrayList<String>()
         this.columns_ = ArrayList<Column>()
         this.rows_ = ArrayList<TableRow>()
+        this.columnTypes_ = ArrayList<?FieldType>()
+        this.rowSource_ = None
     }
 
     public func name(value: String): DecisionTableBuilder {
@@ -102,6 +107,21 @@ public class DecisionTableBuilder {
             }
         }
         columns_.add(parsed)
+        columnTypes_.add(None<FieldType>)
+        this
+    }
+
+    /**
+     * 记录列在载体中声明的类型（`doc/07` §6.3）。
+     *
+     * XLSX 解析器在读表头之后、读完数据行之前按列回填；越界下标被忽略，
+     * 因为调用方拿到的是解析器自己建立的列序。
+     */
+    func columnType(index: Int64, fieldType: FieldType): DecisionTableBuilder {
+        if (index < 0 || index >= Int64(columnTypes_.size)) {
+            return this
+        }
+        columnTypes_[index] = Some(fieldType)
         this
     }
 
@@ -118,6 +138,16 @@ public class DecisionTableBuilder {
     /** 表达式条件列；`name` 可写 `risk` 或 `expr.risk`。 */
     public func exprColumn(name: String): DecisionTableBuilder {
         column(DecisionTableBuilder.header("expr", name))
+    }
+
+    /**
+     * 改为惰性行来源（流式 XLSX 表，`doc/07` §6.4）。
+     *
+     * 设置后 [rows] 保持为空，数据行由来源现读现给，不回写整表。
+     */
+    func rowSource(source: TableRowSource): DecisionTableBuilder {
+        rowSource_ = Some(source)
+        this
     }
 
     /** 追加数据行，规则 id 自动生成 `R1`、`R2`…。 */
@@ -156,7 +186,8 @@ public class DecisionTableBuilder {
         }
         DecisionTableBuilder.ensureSingleBinding(id_, columns_.toArray())
         DecisionTable(id_, name_, version_, factSpace_, factType_, hitPolicy_, columns_.toArray(),
-            rows_.toArray(), salience_, outputOrder_.toArray())
+            rows_.toArray(), salience_, outputOrder_.toArray(), columnTypes: columnTypes_.toArray(),
+            rowSource: rowSource_)
     }
 
     /** 单模式表：全部条件列必须使用同一个绑定名。 */

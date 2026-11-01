@@ -162,17 +162,17 @@
 
 ## 7. M6 决策表 XLSX
 
-- [ ] 7.1 失败用例 `XlsxTableParser_test`：表头解析、`_meta` sheet 表属性、类型行覆盖推断、sheet 名作为表 id（T-12 前置）
-- [ ] 7.2 实现 `table/XlsxTableParser.cj` 的整表路径（`ExcelDocument` + `sheet(name)` + `cell(row,col)`）
-- [ ] 7.3 失败用例：`CellValue` 八变体映射、`Formula(_, None)` 与 `Error` 抛 `TABLE_INVALID`、字段声明与单元格类型冲突时以字段声明为准并 WARN
-- [ ] 7.4 实现类型推断优先级（单元格 > 类型行 > 字段声明）
-- [ ] 7.5 失败用例：合并单元格取左上角值（T-13）、`mergedValue` 与合并范围重叠
-- [ ] 7.6 实现合并单元格处理
-- [ ] 7.7 失败用例：`parse(path)` 返回多表、`parse(path, sheet)` 返回单表、`stream(path)` 逐表迭代
-- [ ] 7.8 实现流式路径（`ExcelSheetStream.open` + `rows(sheet)`），10 万行内存恒定（T-14）
-- [ ] 7.9 夹具生成脚本 `doc/tools/gen_fixtures.py` 生成 `pricing.xlsx`、`pricing_large.xlsx`
-- [ ] 7.10 失败用例：`pricing.xlsx` 与 `pricing.csv` 编译结果逐字段相同（T-12）
-- [ ] 7.11 `cjpm test` 全绿，T-12~T-15 全部覆盖
+- [x] 7.1 失败用例 `XlsxTableParser_test`：表头解析、`_meta` sheet 表属性、类型行覆盖推断、sheet 名作为表 id（T-12 前置）
+- [x] 7.2 实现 `table/XlsxTableParser.cj` 的整表路径（`ExcelDocument` + `sheet(name)` + `cell(row,col)`）
+- [x] 7.3 失败用例：`CellValue` 八变体映射、`Formula(_, None)` 与 `Error` 抛 `TABLE_INVALID`、字段声明与单元格类型冲突时以字段声明为准并 WARN
+- [x] 7.4 实现类型推断优先级（单元格 > 类型行 > 字段声明）
+- [x] 7.5 失败用例：合并单元格取左上角值（T-13）、`mergedValue` 与合并范围重叠
+- [x] 7.6 实现合并单元格处理
+- [x] 7.7 失败用例：`parse(path)` 返回多表、`parse(path, sheet)` 返回单表、`stream(path)` 逐表迭代
+- [x] 7.8 实现流式路径（`ExcelSheetStream.open` + `rows(sheet)`），10 万行内存恒定（T-14）
+- [x] 7.9 夹具生成脚本 `doc/tools/gen_fixtures.py` 生成 `pricing.xlsx`、`pricing_large.xlsx`
+- [x] 7.10 失败用例：`pricing.xlsx` 与 `pricing.csv` 编译结果逐字段相同（T-12）
+- [x] 7.11 `cjpm test` 全绿，T-12~T-15 全部覆盖
 
 ## 8. M7 性能门禁与收尾
 

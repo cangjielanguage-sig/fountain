@@ -308,6 +308,13 @@ let name = sheet.cell("A1")
 
 Excel 单元格本身带类型（`CellValue.Number` / `.Text` / `.Bool` / `.Date`），优先用单元格类型，其次用类型行，最后用字段声明。三者冲突时以**字段声明**为准并记 `WARN`。
 
+落到实现上是两层：
+
+- **单格**：单元格自身的类型只决定它怎么被渲染成文本（文本/数字/布尔/时间），值本身不丢；
+- **列级**：类型行显式声明的列取声明值（覆盖按单元格的推断），没写类型行的列按数据行的单元格类型推断，一列混用多种类型时不给结论。结果落在 `DecisionTable.columnTypes`。
+
+编译期 `TableCompiler` 把 `columnTypes` 与 `FactSchema` 的字段声明比对：冲突时**按字段声明解析**，WARN 同时进日志与 `CompiledTable.warnings`。文本单元格是万能回退（任何类型都能从文本解析），不报警；`Number` 单元格配 `Text` 字段这类真实冲突才报。
+
 ### 6.4 大表
 
 超过 10 万行时：
@@ -315,6 +322,27 @@ Excel 单元格本身带类型（`CellValue.Number` / `.Text` / `.Bool` / `.Date
 1. 用 `ExcelSheetStream` 逐行读，不整体加载；
 2. 逐行编译为 `Rule`，直接注入 `RuleSet`，不回写 `DecisionTable.rows`；
 3. 构建期不做跨行去重（`Unique` 策略的运行期检查仍然生效）。
+
+实现上 `stream(path)` 返回的 `DecisionTable` 带惰性的 `TableRowSource`（`DecisionTable.streaming == true`、`rows` 为空），表头与类型行在建表时读一次，数据行每次 `rowIterator()` 现开 `RowReader` 现取；`TableCompiler` 遍历 `rowIterator()` 而不是 `rows`。两处限制：合并区域只在流结束后才可得，流式路径不展开合并（读到流尾发现合并区域会记 WARN）；列类型只取类型行，不做按单元格推断（不会为了推断回头扫数据）。需要完整语义时用 `parse`。
+
+**流式表不可并发遍历**：`XlsxRowSource` 共享同一个 `ExcelSheetStream`，两个 `rowIterator()` 同时推进会争用底层 ZIP 流。串行多次迭代是安全的（每次 `rows()` 重开 entry），并发请先 `parse` 成整表。
+
+### 6.5 实现约束
+
+`CellValue` 八变体到文本的映射（其他包不得依赖 `CellValue`）：
+
+| 变体 | 文本 | 载体类型 |
+|---|---|---|
+| `Empty` | 空单元格 | — |
+| `Text(s)` | `s`（空白视为空单元格） | `text` |
+| `Number(v)` | 整数不带小数点，其余最短可回读十进制 | `number` |
+| `Boolean(b)` | `true` / `false` | `bool` |
+| `Date(d)` | `yyyy-MM-dd HH:mm:ss` | `time` |
+| `TimeSpan(d)` | 总秒数（值模型没有时长类型，秒数最接近可用的数值语义） | `number` |
+| `Formula(_, Some(v))` | 按 `v` 渲染 | 同 `v` |
+| `Formula(_, None)` / `Error` | 抛 `TABLE_INVALID` | — |
+
+`_meta` 的属性名大小写不敏感（`factSpace` 与 `factspace` 等价）；表 id 以 sheet 名为准，`_meta.id` 不一致时记 WARN。夹具由 `doc/tools/gen_fixtures.py`（openpyxl 3.1.5）生成：`pricing.xlsx`（与 `pricing.csv` 等价）与 `pricing_large.xlsx`（10 万行）。
 
 ## 7. 编译
 
