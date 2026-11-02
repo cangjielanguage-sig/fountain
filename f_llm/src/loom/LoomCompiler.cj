@@ -68,7 +68,7 @@ public class LoomCompiler {
         let fn = compiler.compile(jitSourceOf(step))
         { e =>
             let value = fn.call<String>([e])
-            TaskEvent(category: e.category, tag: e.tag, name: step.id, data: value)
+            LoomHostApi.taskEvent(e, step.id, value)
         }
     }
 
@@ -81,6 +81,6 @@ public class LoomCompiler {
             let input = LoomHostApi.render(step.input, e)
             LoomHostApi.callLlm(step.model, step.system, input)
         }
-        TaskEvent(category: e.category, tag: e.tag, name: step.id, data: value)
+        LoomHostApi.taskEvent(e, step.id, value)
     }
 }
