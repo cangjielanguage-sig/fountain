@@ -26,8 +26,8 @@ import fountain::f_jit.*
  * 分工（受 f_jit 的当前能力约束）：
  * - `kind = jit`：纯计算步骤，JIT 编译 `{ e: Event => <语句序列>; <id>_result }`，
  *   返回值由宿主包装成事件；语句序列里**不能**出现宿主类（f_jit 不把静态类当类型解析）；
- * - `tool` / `mcp` / `llm`：不走 JIT，直接用宿主原生闭包调 `LoomHostApi`
- *   （工具/模型的入参是对象、返回是字符串，JIT 化没有收益，反而要注册一堆宿主类型）。
+ * - `tool` / `mcp`：编译成 `{ args: String => loomCallTool(...) }`；
+ * - `llm`：编译成 `{ input: String => loomCallLlm(...) }`。
  *
  * 流程级 lambda 由 `LoomRunner` 原生组装（步骤闭包已经 JIT 化，
  * 流程再套一层 JIT 只增加诊断复杂度）；`CodeGen.flowSource` 只作预览/落库原文。
@@ -62,7 +62,7 @@ public class LoomCompiler {
         if(step.kind == 'llm'){
             return compileLlm(step)
         }
-        return { e => nativeStep(step, e) }
+        throw LoomException('loom step kind is not executable: ${step.kind} (${step.id})')
     }
 
     public func compileSteps(plan: FlowPlan): HashMap<String, (Event) -> Event> {
@@ -120,15 +120,4 @@ public class LoomCompiler {
         }
     }
 
-    /** 兜底：`http` 等未 JIT 化的步骤仍走宿主原生执行 */
-    private static func nativeStep(step: StepPlan, e: Event): Event {
-        let value = if(step.kind == 'tool' || step.kind == 'mcp'){
-            let args = LoomHostApi.render(step.args, e)
-            LoomHostApi.callTool(step.tool, args)
-        }else{
-            let input = LoomHostApi.render(step.input, e)
-            LoomHostApi.callLlm(step.model, step.system, input)
-        }
-        LoomHostApi.taskEvent(e, step.id, value)
-    }
 }

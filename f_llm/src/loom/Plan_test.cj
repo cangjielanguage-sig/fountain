@@ -142,4 +142,17 @@ class ToolScope_test {
         // 白名单包含且已注册 → 通过
         ToolScope.verifyPlan(plan, ['webSearch'], ['webSearch'])
     }
+
+    @TestCase
+    func testHttpKindRejectedUntilImplemented(): Unit {
+        let plan = FlowPlan('http-plan')
+        plan.steps.add(StepPlan('s1', 'http'))
+        var message = ''
+        try{
+            plan.validate()
+        }catch(e: Exception){
+            message = e.message
+        }
+        @Expect(message.contains('http is not implemented'), true)
+    }
 }

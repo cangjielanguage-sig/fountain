@@ -70,7 +70,8 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 其它约定：
 
 - 流程级没有走 JIT：`CodeGen.flowSource` 只作预览/落库原文；
-- `jit` 步骤由 f_jit 编译；`tool` / `mcp` / `llm` 步骤走宿主原生闭包（f_jit 当前不支持命名实参与静态类）；
+- 所有步骤都由 f_jit 编译：`jit` 编译整段语句，`tool`/`mcp` 编译成 `loomCallTool(...)`，`llm` 编译成 `loomCallLlm(...)`；模板替换（`{step.output}`）与事件包装留在原生侧；
+- `http` 步骤**尚未实现**，`validate()` 会直接拒绝，不会被当成 `llm` 静默执行；
 - 模板 `{stepId.output}` 由 `LoomHostApi` 的跨步骤输出表替换，未命中的占位符原样保留；
 - 每次执行用 `loom/{name}#{seq}` 作为流程 tag，执行完 `flow.remove()` 释放派发器——否则重复执行同一计划会撞上 `StartExecutor has already been registered`。
 

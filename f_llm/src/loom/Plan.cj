@@ -103,7 +103,9 @@ public class FlowPlan {
             }
             seen[item.id] = true
             match(item.kind){
-                case 'tool' | 'llm' | 'mcp' | 'jit' | 'http' => ()
+                case 'tool' | 'llm' | 'mcp' | 'jit' => ()
+                // http 尚未实现：明确拒绝，避免被当成 llm 步骤静默执行
+                case 'http' => throw LoomException('loom step kind http is not implemented yet: ${item.id}')
                 case _ => throw LoomException('unknown loom step kind: ${item.kind} (step ${item.id})')
             }
             if(item.kind == 'tool' && item.tool.isEmpty()){
