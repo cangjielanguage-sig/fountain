@@ -94,6 +94,32 @@ class LoomBootstrap_test {
         @Expect(event.name, 'fetch')
     }
 
+    /** 重启恢复的流程按计划里的 parallel 值执行（走 AsyncFlow） */
+    @TestCase
+    func testRestoredFlowKeepsParallelExecution(): Unit {
+        let store = MemoryLoomStore()
+        let flow = LoomFlow('diamond-parallel', description: '菱形并发')
+        flow.planJson = '{"status":"planned","name":"diamond-parallel","parallel":true,"steps":['
+            + '{"id":"a","kind":"tool","tool":"echo"},'
+            + '{"id":"b","kind":"tool","tool":"echo"},'
+            + '{"id":"c","kind":"tool","tool":"echo"},'
+            + '{"id":"d","kind":"tool","tool":"echo"}],'
+            + '"edges":[["a","b"],["a","c"],["b","d"],["c","d"]]}'
+        flow.status = LoomStatus.COMPILED
+        store.save(flow)
+
+        let registry = LoomRegistry(store: store)
+        let reloaded = LoomBootstrap.startup(registry)
+        @Expect(reloaded.compiled, 1)
+
+        let service = LoomService(Planner({ _, _ => '' }), registry)
+        let host = RunnerHost()
+        let out = service.executeNow('diamond-parallel', host,
+            StartEvent(category: 'loom', tag: 'diamond-parallel', name: 'start', data: 'go'))
+        @Expect(out.name, 'd')
+        @Expect(host.toolCalls, 4)
+    }
+
     @TestCase
     func testExecuteNowRejectsUncompiledFlow(): Unit {
         let store = MemoryLoomStore()

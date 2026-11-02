@@ -63,6 +63,7 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 | 开发者（代码） | `LoomRunner.run(..., parallel: true)` | 直接指定本轮执行是否并发 |
 | 开发者（装配） | `LoomService.executeNow(..., parallel: true)` | 单次执行覆盖计划里的值 |
 | 模型（计划） | 计划 JSON 的 `"parallel": true`，或 `loomExecute` 的 `parallel:"true"` | 请求级开关会并入计划，模型也可自行决定 |
+| 重启恢复 | `LoomBootstrap.startup` + `LoomService.executeNow` | 重编译后按计划里的 `parallel` 值执行，不需要再传参 |
 
 生效规则：`计划.parallel || 调用方 parallel`。并发走 `AsyncFlow`（分叉分支并行），同步走 `ImmediateFlow`。
 
