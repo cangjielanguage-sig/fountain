@@ -44,10 +44,23 @@ public class LoomCompiler {
         this.compiler = instance
     }
 
-    /** 编译单个步骤；返回的闭包可直接交给 `QueuedClosureTask` 作为任务体 */
+    /**
+     * 编译单个步骤；返回的闭包可直接交给 `QueuedClosureTask` 作为任务体。
+     *
+     * 三类步骤都走 f_jit：
+     * - `jit`：整段语句序列编译；
+     * - `tool` / `mcp`：编译成 `{ args: String => loomCallTool(…) }`，模板替换留给原生侧；
+     * - `llm`：编译成 `{ input: String => loomCallLlm(…) }`。
+     */
     public func compileStep(step: StepPlan): (Event) -> Event {
         if(step.kind == 'jit'){
             return compileJit(step)
+        }
+        if(step.kind == 'tool' || step.kind == 'mcp'){
+            return compileTool(step)
+        }
+        if(step.kind == 'llm'){
+            return compileLlm(step)
         }
         return { e => nativeStep(step, e) }
     }
@@ -74,7 +87,40 @@ public class LoomCompiler {
         }
     }
 
-    /** 工具/模型步骤：宿主原生执行，模板替换与调用都交给 `LoomHostApi` */
+    /** 工具步骤的编译源码：入参已渲染，调用走注册进 f_jit 的 `loomCallTool` */
+    public static func toolSourceOf(step: StepPlan): String {
+        '{ args: String =>\n'
+            + 'let ${step.id}_out = loomCallTool(${FlowPlan.jsonQuote(step.tool)}, args)\n'
+            + '${step.id}_out\n}'
+    }
+
+    /** 模型步骤的编译源码：输入已渲染，调用走注册进 f_jit 的 `loomCallLlm` */
+    public static func llmSourceOf(step: StepPlan): String {
+        '{ input: String =>\n'
+            + 'let ${step.id}_out = loomCallLlm(${FlowPlan.jsonQuote(step.model)}, '
+            + '${FlowPlan.jsonQuote(step.system)}, input)\n'
+            + '${step.id}_out\n}'
+    }
+
+    private func compileTool(step: StepPlan): (Event) -> Event {
+        let fn = compiler.compile(toolSourceOf(step))
+        { e =>
+            let args = LoomHostApi.render(step.args, e)
+            let value = fn.call<String>([args])
+            LoomHostApi.taskEvent(e, step.id, value)
+        }
+    }
+
+    private func compileLlm(step: StepPlan): (Event) -> Event {
+        let fn = compiler.compile(llmSourceOf(step))
+        { e =>
+            let input = LoomHostApi.render(step.input, e)
+            let value = fn.call<String>([input])
+            LoomHostApi.taskEvent(e, step.id, value)
+        }
+    }
+
+    /** 兜底：`http` 等未 JIT 化的步骤仍走宿主原生执行 */
     private static func nativeStep(step: StepPlan, e: Event): Event {
         let value = if(step.kind == 'tool' || step.kind == 'mcp'){
             let args = LoomHostApi.render(step.args, e)

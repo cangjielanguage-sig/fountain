@@ -63,9 +63,19 @@ public class LoomStoreGateway {
             if(action == 'remove'){
                 return content.knowledge.remove(strOf(args, 'docId')).toString()
             }
+            if(action == 'upsert'){
+                content.knowledge.upsert(KnowledgeDoc(strOf(args, 'docId'),
+                    strOf(args, 'title'), strOf(args, 'content')))
+                return 'ok'
+            }
         }
         if(name == 'memory' && action == 'remove'){
             return content.memory.remove(intOf(args, 'userId'), intOf(args, 'id')).toString()
+        }
+        if(name == 'memory' && action == 'add'){
+            let write = MemoryWrite(intOf(args, 'userId'), strOf(args, 'namespace'),
+                strOf(args, 'title'), strOf(args, 'content'), strOf(args, 'kind'))
+            return content.memory.add(write).id.toString()
         }
         if(name == 'skill' && action == 'remove'){
             return meta.skills.remove(intOf(args, 'id')).toString()

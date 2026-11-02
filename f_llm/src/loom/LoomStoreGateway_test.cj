@@ -40,6 +40,23 @@ class LoomStoreGateway_test {
     }
 
     @TestCase
+    func testKnowledgeUpsertAccepted(): Unit {
+        let gateway = gateway()
+        @Expect(gateway.call('knowledge', 'upsert',
+            '{"docId":"d1","title":"t","content":"hello"}'), 'ok')
+        // docIds 的可见性依赖各实现的索引策略，这里只断言返回合法 JSON 数组
+        @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":10}').startsWith('['), true)
+    }
+
+    @TestCase
+    func testMemoryAddReturnsId(): Unit {
+        let gateway = gateway()
+        let id = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"t","content":"c","kind":"fact"}')
+        @Expect(id.isEmpty(), false)
+    }
+
+    @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''
         try{

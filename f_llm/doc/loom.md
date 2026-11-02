@@ -109,6 +109,22 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 
 `step_sources` **不用 JSON**：`id\u0001source` 以 `\u0002` 分隔。源码里全是引号与换行，用 JSON 要完整转义/反转义（历史上被转义 bug 咬过），控制字符在仓颉源码里不会出现，比 JSON 更省事且无损。
 
+### `loomStore` 网关（`LoomStoreGateway`）
+
+`loomStore(kind, op, payload)` 是 JIT 步骤访问记忆/知识/技能的入口，装配时由 `LoomWiring` 自动安装。
+
+| kind | op | payload | 返回 |
+|---|---|---|---|
+| `knowledge` | `docIds` | `{"offset":0,"limit":50}` | JSON 字符串数组 |
+| `knowledge` | `upsert` | `{"docId":"d1","title":"t","content":"…"}` | `ok` |
+| `knowledge` | `remove` | `{"docId":"d1"}` | `true/false` |
+| `memory` | `add` | `{"userId":1,"namespace":"n","title":"t","content":"c","kind":"fact"}` | 记录 id |
+| `memory` | `remove` | `{"userId":1,"id":2}` | `true/false` |
+| `skill` | `count` | `{}` | 整数 |
+| `skill` | `remove` | `{"id":3}` | `true/false` |
+
+未列出的 op 一律抛错，不静默返回空值。
+
 ### f_store 版（键布局）
 
 按字段拆键，进一步绕开拼接与转义：
