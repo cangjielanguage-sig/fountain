@@ -39,9 +39,14 @@ public class LoomAgent {
     private let plannerModel: String
     private let compiler: LoomCompiler
 
-    public init(chat: (String, String, String) -> String, plannerModel!: String = '') {
+    /** 开发者指定的编排提示词；为空时用内置的 `Prompts.PLANNER_SYSTEM` */
+    private let instructions: String
+
+    public init(chat: (String, String, String) -> String, plannerModel!: String = '',
+                instructions!: String = '') {
         this.chat = chat
         this.plannerModel = plannerModel
+        this.instructions = instructions
         this.compiler = LoomCompiler()
     }
 
@@ -55,7 +60,8 @@ public class LoomAgent {
     public func compile(description: String, name!: String = ''): LoomProgram {
         let flowName = if(name.isEmpty()){ 'loom-${LoomAgent.nextSeq()}' }else{ name }
         let request = LoomRequest(flowName, description, model: plannerModel)
-        let planned = Planner({ system, user => chat(plannerModel, system, user) }).plan(request)
+        let planned = Planner({ system, user => chat(plannerModel, system, user) },
+                              systemPrompt: instructions).plan(request)
         if(planned.status == 'need_clarification'){
             throw LoomException('loom agent needs clarification: ${description}')
         }

@@ -120,12 +120,21 @@ public class PlannerResult {
 public class Planner {
     private let llm: (String, String) -> String
 
-    public init(llm: (String, String) -> String) {
+    private let systemPrompt: String
+
+    /** 开发者自定义的编排提示词；为空时用 [Prompts.PLANNER_SYSTEM] */
+    public init(llm: (String, String) -> String, systemPrompt!: String = '') {
         this.llm = llm
+        this.systemPrompt = systemPrompt
     }
 
     public func plan(request: LoomRequest): PlannerResult {
-        let raw = llm(Prompts.PLANNER_SYSTEM, Planner.userPrompt(request))
+        let system = if(systemPrompt.trimAscii().isEmpty()){
+            Prompts.PLANNER_SYSTEM
+        }else{
+            systemPrompt
+        }
+        let raw = llm(system, Planner.userPrompt(request))
         Planner.parse(raw, request)
     }
 

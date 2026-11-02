@@ -131,6 +131,32 @@ class Planner_test {
     }
 
     @TestCase
+    func testDefaultPromptContainsOrchestrationPrinciples(): Unit {
+        let recorder = PromptRecorder()
+        let planner = Planner({ system, user =>
+            recorder.system = system
+            recorder.user = user
+            PLANNED_JSON
+        })
+        planner.plan(request())
+        @Expect(recorder.system.contains('结果优先'), true)
+        @Expect(recorder.system.contains('尊重边界'), true)
+        @Expect(recorder.system.contains('先自查'), true)
+    }
+
+    @TestCase
+    func testCustomSystemPromptReplacesDefault(): Unit {
+        let recorder = PromptRecorder()
+        let planner = Planner({ system, user =>
+            recorder.system = system
+            recorder.user = user
+            PLANNED_JSON
+        }, systemPrompt: 'CUSTOM-ORCHESTRATION-RULES')
+        planner.plan(request())
+        @Expect(recorder.system, 'CUSTOM-ORCHESTRATION-RULES')
+    }
+
+    @TestCase
     func testParsesParallelFlagFromModel(): Unit {
         let raw = '{"status":"planned","name":"p","parallel":true,'
             + '"steps":[{"id":"s","kind":"jit","input":"let s_result = 1"}],"edges":[]}'
