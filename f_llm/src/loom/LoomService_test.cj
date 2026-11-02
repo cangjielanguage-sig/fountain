@@ -19,6 +19,8 @@ import std.collection.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import fountain::f_egraph.base.*
+
 @Test
 class LoomService_test {
     /** 用拼接构造：多行字符串会吃掉反斜杠，导致 JSON 里的引号未转义 */
@@ -107,6 +109,28 @@ class LoomService_test {
         @Expect(target.delete('daily'), true)
         @Expect(registry.get('daily').isNone(), true)
         @Expect(target.status('daily'), '')
+    }
+
+    /** 分叉 + 汇聚的流程可以走「确认 → 立即执行」整条链路 */
+    @TestCase
+    func testExecuteNowRunsForkPlanWithBarrier(): Unit {
+        let registry = LoomRegistry()
+        let flow = LoomFlow('diamond', description: '菱形')
+        flow.planJson = '{"status":"planned","name":"diamond","steps":['
+            + '{"id":"a","kind":"tool","tool":"echo"},'
+            + '{"id":"b","kind":"tool","tool":"echo"},'
+            + '{"id":"c","kind":"tool","tool":"echo"},'
+            + '{"id":"d","kind":"tool","tool":"echo"}],'
+            + '"edges":[["a","b"],["a","c"],["b","d"],["c","d"]]}'
+        flow.status = LoomStatus.COMPILED
+        registry.put(flow)
+
+        let service = LoomService(Planner({ _, _ => '' }), registry)
+        let host = RunnerHost()
+        let out = service.executeNow('diamond', host,
+            StartEvent(category: 'loom', tag: 'diamond', name: 'start', data: 'go'))
+        @Expect(out.name, 'd')
+        @Expect(host.toolCalls, 4)
     }
 
     @TestCase

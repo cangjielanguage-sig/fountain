@@ -114,7 +114,7 @@ class LoomRunner_test {
         @Expect(message.contains('not bound'), true)
     }
 
-    /** 菱形 DAG：a 分叉到 b/c，b、c 汇聚到 d；汇聚节点按入边执行两次 */
+    /** 菱形 DAG：a 分叉到 b/c，b、c 汇聚到 d；屏障保证 d 只执行一次 */
     @TestCase
     func testForkRunsBothBranches(): Unit {
         let plan = FlowPlan('diamond')
@@ -132,8 +132,8 @@ class LoomRunner_test {
         let host = RunnerHost()
         let out = LoomRunner().run(plan, host, start())
         @Expect(out.name, 'd')
-        // a + b + c + d(两条入边各一次)
-        @Expect(host.toolCalls, 5)
+        // a + b + c + d（屏障保证 d 只跑一次）
+        @Expect(host.toolCalls, 4)
     }
 }
 

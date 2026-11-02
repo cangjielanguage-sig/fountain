@@ -16,12 +16,56 @@ limitations under the License.
 package fountain::f_llm.loom
 
 import std.collection.*
+import std.sync.*
 
 import fountain::f_egraph.base.*
 
 /** 记录最后一个步骤的输出（闭包不能捕获可变局部变量） */
 class LastEventBox {
     public var value: ?Event = None
+}
+
+class JudgeBox {
+    public var value: Bool = false
+}
+
+class SeqBox {
+    public var value: Int64 = 0
+}
+
+/**
+ * 汇聚屏障：入度 > 1 的步骤要等所有前驱事件到齐才执行。
+ *
+ * 计数在 `Mutex` 内维护；`release` 返回 true 表示本次可以执行（计数归零）。
+ */
+class JoinBarrier {
+    private let mutex = Mutex()
+    private let expected: HashMap<String, Int64>
+    private var arrived = HashMap<String, Int64>()
+
+    init(expected: HashMap<String, Int64>) {
+        this.expected = expected
+    }
+
+    public func release(id: String): Bool {
+        let box = JudgeBox()
+        synchronized(mutex){
+            let need = expected.get(id) ?? 1
+            if(need <= 1){
+                box.value = true
+            }else{
+                let current = (arrived.get(id) ?? 0) + 1
+                if(current >= need){
+                    arrived[id] = 0
+                    box.value = true
+                }else{
+                    arrived[id] = current
+                    box.value = false
+                }
+            }
+        }
+        box.value
+    }
 }
 
 /**
@@ -33,7 +77,7 @@ class LastEventBox {
  * 约束（当前实现）：
  * - 单后继：结果事件名改写成该后继的 id；
  * - 多后继（分叉）：返回 `MultiEvent`，由 `registerMultiEventTask` 注册的 Multi 执行器逐条 emit；
- * - **汇聚节点按入边逐次执行**（没有屏障），菱形 DAG 中汇合步骤会跑两次；
+ * - 汇聚节点（入度 > 1）有屏障：所有入边事件到齐后才执行一次，未到齐的事件被吞掉；
  * - 事件名必须等于下一步的 id——返回自己的名字会「自己喂自己」，派发循环停不下来；
  * - 结束事件名固定为 `EventType.End.toString()`，由 `registerEnd()` 的 EndExecutor 匹配。
  */
@@ -60,7 +104,9 @@ public class LoomRunner {
         }
         let steps = compiler.compileSteps(plan)
         let successors = successorsOf(plan)
-        let flow = ImmediateFlow(category: 'loom', tag: plan.name)
+        let barrier = JoinBarrier(indegreesOf(plan))
+        // 流程按 (category, tag) 全局缓存：同一计划重复执行必须换 tag，否则 StartExecutor 冲突
+        let flow = ImmediateFlow(category: 'loom', tag: nextTag(plan.name))
         flow.registerStart(order[0])
         let record = LastEventBox()
 
@@ -73,6 +119,10 @@ public class LoomRunner {
             let sink = next.isEmpty()
             let producing = if(sink){ [EventType.End.toString()] }else{ next.toArray() }
             let body = { e: Event =>
+                // 汇聚节点：前驱没到齐就吞掉本次事件（Dummy 会被派发循环跳过）
+                if(!barrier.release(id)){
+                    return DummyEvent.instance
+                }
                 let produced = compiled(e)
                 record.value = produced
                 let data = match(produced as DataEvent){
@@ -109,11 +159,30 @@ public class LoomRunner {
             }
         }finally{
             LoomHostApi.unbind()
+            // 释放这次执行专用的派发器；被其它流程依赖时忽略（不影响结果）
+            try{
+                flow.remove()
+            }catch(error: Exception){
+                ()
+            }
         }
         match(record.value){
             case Some(event) => event
             case None => DummyEvent.instance
         }
+    }
+
+    private static let tagMutex = Mutex()
+    private static var tagSeq: Int64 = 0
+
+    /** 每次执行用一个新 tag，避免复用全局缓存里的旧派发器 */
+    private static func nextTag(name: String): String {
+        let box = SeqBox()
+        synchronized(tagMutex){
+            tagSeq++
+            box.value = tagSeq
+        }
+        '${name}#${box.value}'
     }
 
     /** 每个步骤的后继列表（保持计划中的顺序） */
@@ -123,6 +192,18 @@ public class LoomRunner {
             let list = result.get(edge.from) ?? ArrayList<String>()
             list.add(edge.to)
             result[edge.from] = list
+        }
+        result
+    }
+
+    /** 每个步骤的入度：> 1 表示汇聚节点，需要屏障 */
+    private static func indegreesOf(plan: FlowPlan): HashMap<String, Int64> {
+        let result = HashMap<String, Int64>()
+        for(step in plan.steps){
+            result[step.id] = 0
+        }
+        for(edge in plan.edges){
+            result[edge.to] = (result.get(edge.to) ?? 0) + 1
         }
         result
     }
