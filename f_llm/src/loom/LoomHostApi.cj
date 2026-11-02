@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_llm.loom
 
 import std.collection.*
+import std.sync.*
 
 import fountain::f_egraph.base.*
 
@@ -28,7 +29,13 @@ import fountain::f_egraph.base.*
  * 约束：**单线程使用**。执行前 `bind`，执行完 `unbind`；并发流程需各自持有独立进程
  * 或改为显式传参（当前 loom 的执行模型是单流程串行）。
  */
+/** `synchronized` 的块是 Unit 语义，返回值用持有者带出 */
+class TextBox {
+    public var value: String = ''
+}
+
 public class LoomHostApi {
+    private static let mutex = Mutex()
     private static var current: ?LoomHost = None
     /** 已执行步骤的输出：`{id.output}` 模板从这里取值 */
     private static var values = HashMap<String, String>()
@@ -37,13 +44,17 @@ public class LoomHostApi {
     }
 
     public static func bind(host: LoomHost): Unit {
-        current = Some(host)
-        values = HashMap<String, String>()
+        synchronized(mutex){
+            current = Some(host)
+            values = HashMap<String, String>()
+        }
     }
 
     public static func unbind(): Unit {
-        current = None
-        values = HashMap<String, String>()
+        synchronized(mutex){
+            current = None
+            values = HashMap<String, String>()
+        }
     }
 
     /**
@@ -52,11 +63,15 @@ public class LoomHostApi {
      * 未命中的占位符原样保留——让模型/开发者看到「这里没取到值」，比静默替换成空串好排错。
      */
     public static func render(template: String, e: Event): String {
-        var text = template
-        for((name, value) in values){
-            text = text.replace('{${name}.output}', value)
+        let box = TextBox()
+        synchronized(mutex){
+            var text = template
+            for((name, value) in values){
+                text = text.replace('{${name}.output}', value)
+            }
+            box.value = text
         }
-        text
+        box.value
     }
 
     public static func callTool(name: String, argsJson: String): String {
@@ -79,13 +94,19 @@ public class LoomHostApi {
      * 同时把输出记进 `values`，供后续步骤的 `{id.output}` 模板取值。
      */
     public static func taskEvent(e: Event, name: String, data: Any): Event {
-        values[name] = textOf(data)
+        synchronized(mutex){
+            values[name] = textOf(data)
+        }
         TaskEvent(category: e.category, tag: e.tag, name: name, data: data)
     }
 
     /** 供测试/诊断：某步骤当前记录的输出 */
     public static func valueOf(name: String): String {
-        values.get(name) ?? ''
+        let box = TextBox()
+        synchronized(mutex){
+            box.value = values.get(name) ?? ''
+        }
+        box.value
     }
 
     private static func textOf(data: Any): String {
