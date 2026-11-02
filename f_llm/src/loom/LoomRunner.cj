@@ -20,8 +20,27 @@ import std.sync.*
 
 import fountain::f_egraph.base.*
 
-/** 记录最后一个步骤的输出（闭包不能捕获可变局部变量） */
+/** 记录最后一个步骤的输出（多线程下用锁保护） */
 class LastEventBox {
+    private let mutex = Mutex()
+    private var last: ?Event = None
+
+    public func set(event: Event): Unit {
+        synchronized(mutex){
+            last = Some(event)
+        }
+    }
+
+    public func get(): ?Event {
+        let box = EventBox()
+        synchronized(mutex){
+            box.value = last
+        }
+        box.value
+    }
+}
+
+class EventBox {
     public var value: ?Event = None
 }
 
@@ -36,7 +55,7 @@ class SeqBox {
 /**
  * 汇聚屏障：入度 > 1 的步骤要等所有前驱事件到齐才执行。
  *
- * 计数在 `Mutex` 内维护；`release` 返回 true 表示本次可以执行（计数归零）。
+ * `AsyncFlow` 下分支并发到达，计数必须在锁内维护。
  */
 class JoinBarrier {
     private let mutex = Mutex()
@@ -71,15 +90,12 @@ class JoinBarrier {
 /**
  * 流程执行器（§9.6 的执行段）。
  *
- * 用 `ImmediateFlow` 组装：每个步骤是一个 `QueuedClosureTask`，步骤闭包的结果按计划的边
- * 改写成**下一个步骤 id** 的事件并回灌派发器；出度为 0 的步骤改写成 `End` 事件收尾。
+ * 每个步骤是一个 `QueuedClosureTask`，结果按计划的边改写成**下一个步骤 id** 的事件；
+ * 出度为 0 的步骤改写成 `End` 事件收尾。分叉返回 `MultiEvent`，汇聚用 [JoinBarrier] 等齐。
  *
- * 约束（当前实现）：
- * - 单后继：结果事件名改写成该后继的 id；
- * - 多后继（分叉）：返回 `MultiEvent`，由 `registerMultiEventTask` 注册的 Multi 执行器逐条 emit；
- * - 汇聚节点（入度 > 1）有屏障：所有入边事件到齐后才执行一次，未到齐的事件被吞掉；
- * - 事件名必须等于下一步的 id——返回自己的名字会「自己喂自己」，派发循环停不下来；
- * - 结束事件名固定为 `EventType.End.toString()`，由 `registerEnd()` 的 EndExecutor 匹配。
+ * 两种派发方式：
+ * - `parallel = false`（默认）：`ImmediateFlow`，同步派发，分叉按顺序 emit；
+ * - `parallel = true`：`AsyncFlow`，分叉的分支可并发执行，`start` 后 `get()` 等结束。
  */
 public class LoomRunner {
     private let compiler: LoomCompiler
@@ -89,14 +105,12 @@ public class LoomRunner {
     }
 
     /**
-     * 按计划的边执行整条流程。
-     *
-     * @param plan 通过校验的计划（内部会再校验一次）
-     * @param host 工具/模型宿主；执行期间由 `LoomHostApi` 持有
      * @param input 起始事件（通常是 StartEvent）
+     * @param parallel 是否用 `AsyncFlow` 并发执行分叉
      * @return 最后一个步骤产出的事件（名字为步骤 id）
      */
-    public func run(plan: FlowPlan, host: LoomHost, input: Event): Event {
+    public func run(plan: FlowPlan, host: LoomHost, input: Event,
+                    parallel!: Bool = false): Event {
         plan.validate()
         let order = topologicalOrder(plan)
         if(order.isEmpty()){
@@ -105,11 +119,11 @@ public class LoomRunner {
         let steps = compiler.compileSteps(plan)
         let successors = successorsOf(plan)
         let barrier = JoinBarrier(indegreesOf(plan))
-        // 流程按 (category, tag) 全局缓存：同一计划重复执行必须换 tag，否则 StartExecutor 冲突
-        let flow = ImmediateFlow(category: 'loom', tag: nextTag(plan.name))
-        flow.registerStart(order[0])
         let record = LastEventBox()
+        let tag = nextTag(plan.name)
 
+        let bodies = HashMap<String, (Event) -> Event>()
+        let producing = HashMap<String, Array<String>>()
         for(id in order){
             let compiled = match(steps.get(id)){
                 case Some(value) => value
@@ -117,58 +131,135 @@ public class LoomRunner {
             }
             let next = successors.get(id) ?? ArrayList<String>()
             let sink = next.isEmpty()
-            let producing = if(sink){ [EventType.End.toString()] }else{ next.toArray() }
-            let body = { e: Event =>
-                // 汇聚节点：前驱没到齐就吞掉本次事件（Dummy 会被派发循环跳过）
-                if(!barrier.release(id)){
-                    return DummyEvent.instance
-                }
-                let produced = compiled(e)
-                record.value = produced
-                let data = match(produced as DataEvent){
-                    case Some(event) => event.data
-                    case None => ''
-                }
-                if(sink){
-                    DataEvent(eventType: EventType.End, category: e.category, tag: e.tag,
-                              name: EventType.End.toString(), data: data)
-                }else if(next.size == 1){
-                    DataEvent(eventType: EventType.Task, category: e.category, tag: e.tag,
-                              name: next[0], data: data)
-                }else{
-                    // 分叉：交给 registerMultiEventTask 注册的 Multi 执行器逐条 emit
-                    let events = ArrayList<Event>()
-                    for(target in next){
-                        events.add(DataEvent(eventType: EventType.Task, category: e.category,
-                                             tag: e.tag, name: target, data: data))
-                    }
-                    MultiEvent(category: e.category, tag: e.tag,
-                               name: EventType.Multi.toString(), events: events)
-                }
-            }
-            let queued = QueuedClosureTask(id, [id], producing, flow.getDispatcher(), body)
-            flow.registerTask(queued)
+            producing[id] = if(sink){ [EventType.End.toString()] }else{ next.toArray() }
+            bodies[id] = bodyOf(id, next, sink, compiled, barrier, record)
         }
-        flow.registerEnd()
 
         LoomHostApi.bind(host)
+        try{
+            if(parallel){
+                runAsync(plan, order, bodies, producing, tag, input)
+            }else{
+                runSync(plan, order, bodies, producing, tag, input)
+            }
+        }finally{
+            LoomHostApi.unbind()
+        }
+        match(record.get()){
+            case Some(event) => event
+            case None => DummyEvent.instance
+        }
+    }
+
+    private func runSync(plan: FlowPlan, order: ArrayList<String>,
+                         bodies: HashMap<String, (Event) -> Event>,
+                         producing: HashMap<String, Array<String>>,
+                         tag: String, input: Event): Unit {
+        let flow = ImmediateFlow(category: 'loom', tag: tag)
+        flow.registerStart(order[0])
+        for(id in order){
+            flow.registerTask(QueuedClosureTask(id, [id], producing[id],
+                                                flow.getDispatcher(), bodies[id]))
+        }
+        flow.registerEnd()
         try{
             match(input as DataEvent){
                 case Some(event) => flow.start(event.data)
                 case None => flow.start(input)
             }
         }finally{
-            LoomHostApi.unbind()
-            // 释放这次执行专用的派发器；被其它流程依赖时忽略（不影响结果）
-            try{
-                flow.remove()
-            }catch(error: Exception){
-                ()
+            release(flow)
+        }
+    }
+
+    private static let asyncInitMutex = Mutex()
+    private static var asyncReady = false
+
+    /** `AsyncFlow` 依赖全局 `AsyncDispatcher`，首次使用前初始化一次 */
+    private static func ensureAsyncDispatcher(): Unit {
+        synchronized(asyncInitMutex){
+            if(!asyncReady){
+                AsyncFlow.initDispatcher()
+                asyncReady = true
             }
         }
-        match(record.value){
-            case Some(event) => event
-            case None => DummyEvent.instance
+    }
+
+    private func runAsync(plan: FlowPlan, order: ArrayList<String>,
+                          bodies: HashMap<String, (Event) -> Event>,
+                          producing: HashMap<String, Array<String>>,
+                          tag: String, input: Event): Unit {
+        ensureAsyncDispatcher()
+        let flow = AsyncFlow(category: 'loom', tag: tag)
+        flow.registerStart(order[0])
+        for(id in order){
+            flow.registerTask(QueuedClosureTask(id, [id], producing[id],
+                                                flow.getDispatcher(), bodies[id]))
+        }
+        flow.registerEnd()
+        try{
+            let waiter = match(input as DataEvent){
+                case Some(event) => flow.start(event.data)
+                case None => flow.start(input)
+            }
+            // 异步派发需要显式等待结束（EndExecutor 由 sink 步骤的 End 事件触发）
+            waiter.get()
+        }finally{
+            release(flow)
+        }
+    }
+
+    private static func release(flow: Flow<EndExecutorGetter>): Unit {
+        ()
+    }
+
+    private static func release(flow: AsyncFlow): Unit {
+        try{
+            flow.remove()
+        }catch(error: Exception){
+            ()
+        }
+    }
+
+    private static func release(flow: ImmediateFlow): Unit {
+        try{
+            flow.remove()
+        }catch(error: Exception){
+            ()
+        }
+    }
+
+    /** 单步骤的任务体：屏障 → 执行 → 按边改写事件名 */
+    private static func bodyOf(id: String, next: ArrayList<String>, sink: Bool,
+                               compiled: (Event) -> Event, barrier: JoinBarrier,
+                               record: LastEventBox): (Event) -> Event {
+        { e: Event =>
+            // 汇聚节点：前驱没到齐就吞掉本次事件（Dummy 会被派发循环跳过）
+            if(!barrier.release(id)){
+                return DummyEvent.instance
+            }
+            let produced = compiled(e)
+            record.set(produced)
+            let data = match(produced as DataEvent){
+                case Some(event) => event.data
+                case None => ''
+            }
+            if(sink){
+                DataEvent(eventType: EventType.End, category: e.category, tag: e.tag,
+                          name: EventType.End.toString(), data: data)
+            }else if(next.size == 1){
+                DataEvent(eventType: EventType.Task, category: e.category, tag: e.tag,
+                          name: next[0], data: data)
+            }else{
+                // 分叉：交给 registerMultiEventTask 注册的 Multi 执行器逐条 emit
+                let events = ArrayList<Event>()
+                for(target in next){
+                    events.add(DataEvent(eventType: EventType.Task, category: e.category,
+                                         tag: e.tag, name: target, data: data))
+                }
+                MultiEvent(category: e.category, tag: e.tag,
+                           name: EventType.Multi.toString(), events: events)
+            }
         }
     }
 

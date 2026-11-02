@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_llm.loom
 
 import std.collection.*
+import std.sync.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -135,23 +136,74 @@ class LoomRunner_test {
         // a + b + c + d（屏障保证 d 只跑一次）
         @Expect(host.toolCalls, 4)
     }
+
+    /** 同一菱形 DAG 走 AsyncFlow 并发执行：语义不变 */
+    @TestCase
+    func testParallelRunsForkBranches(): Unit {
+        let plan = FlowPlan('diamond-async')
+        for(id in ['a', 'b', 'c', 'd']){
+            let step = StepPlan(id, 'tool')
+            step.tool = 'echo'
+            step.args = '{}'
+            plan.steps.add(step)
+        }
+        plan.edges.add(EdgePlan('a', 'b'))
+        plan.edges.add(EdgePlan('a', 'c'))
+        plan.edges.add(EdgePlan('b', 'd'))
+        plan.edges.add(EdgePlan('c', 'd'))
+
+        let host = RunnerHost()
+        let out = LoomRunner().run(plan, host, start(), parallel: true)
+        @Expect(out.name, 'd')
+        @Expect(host.toolCalls, 4)
+    }
 }
 
 class RunnerHost <: LoomHost {
-    public var toolCalls: Int64 = 0
-    public var llmCalls: Int64 = 0
+    private let mutex = Mutex()
+    private var tools: Int64 = 0
+    private var llms: Int64 = 0
+
+    public prop toolCalls: Int64 {
+        get() {
+            let box = CounterBox()
+            synchronized(mutex){
+                box.value = tools
+            }
+            box.value
+        }
+    }
+
+    public prop llmCalls: Int64 {
+        get() {
+            let box = CounterBox()
+            synchronized(mutex){
+                box.value = llms
+            }
+            box.value
+        }
+    }
 
     public func render(template: String, e: Event): String {
         template
     }
 
     public func callTool(name: String, argsJson: String): String {
-        toolCalls++
+        synchronized(mutex){
+            tools++
+        }
         argsJson
     }
 
     public func callLlm(model: String, system: String, input: String): String {
-        llmCalls++
+        synchronized(mutex){
+            llms++
+        }
         input
     }
+}
+
+/** 计数返回值带出（`synchronized` 块是 Unit 语义） */
+class CounterBox {
+    public var value: Int64 = 0
 }
