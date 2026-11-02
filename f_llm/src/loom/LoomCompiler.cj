@@ -39,6 +39,8 @@ public class LoomCompiler {
         let instance = Compiler(CompileOptions(DummyDiagnosticsSink()))
         // 事件谱系：编译产物需要构造 Event 的参数类型
         JitHostRegistry.configure(instance)
+        // 宿主能力（LLM / 工具 / Store）：注册后 JIT 步骤可按名字直接调用
+        LoomJitBridge.install(instance)
         this.compiler = instance
     }
 

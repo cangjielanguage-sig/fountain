@@ -75,6 +75,23 @@ class LoomCompiler_test {
         @Expect(compiled['a'](input()).name, 'a')
         @Expect(compiled['b'](input()).name, 'b')
     }
+    /** JIT 步骤直接调用注册进 f_jit 的宿主函数（LLM 桥） */
+    @TestCase
+    func testJitStepCallsRegisteredHostLlm(): Unit {
+        LoomHostApi.bind(FakeHost())
+        try{
+            let step = StepPlan('s1', 'jit')
+            step.input = 'let s1_result = loomCallLlm("m", "sys", "HELLO")'
+            let fn = LoomCompiler().compileStep(step)
+            let out = fn(StartEvent(category: 'loom', tag: 't', name: 'start', data: 'go'))
+            match(out as DataEvent){
+                case Some(event) => @Expect(event.tryGet<String>().getOrThrow(), 'HELLO')
+                case None => @Expect(false, true)
+            }
+        }finally{
+            LoomHostApi.unbind()
+        }
+    }
 }
 
 /** 最简宿主：render 原样返回，callTool 回显参数 */

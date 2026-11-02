@@ -34,6 +34,10 @@ class TextBox {
     public var value: String = ''
 }
 
+class GatewayBox {
+    public var value: ?(String, String, String) -> String = None
+}
+
 public class LoomHostApi {
     private static let mutex = Mutex()
     private static var current: ?LoomHost = None
@@ -78,6 +82,27 @@ public class LoomHostApi {
         match(current){
             case Some(host) => host.callTool(name, argsJson)
             case None => throw LoomException('loom host is not bound, cannot call tool: ${name}')
+        }
+    }
+
+    /** 存储网关：由装配方注入（记忆/知识/经验的读写都走它） */
+    private static var storeGateway: ?(String, String, String) -> String = None
+
+    public static func installStore(gateway: (String, String, String) -> String): Unit {
+        synchronized(mutex){
+            storeGateway = Some(gateway)
+        }
+    }
+
+    /** `kind` ∈ memory|knowledge|skill|experience，`op` 由网关解释，`payload` 为 JSON */
+    public static func callStore(kind: String, op: String, payload: String): String {
+        let box = GatewayBox()
+        synchronized(mutex){
+            box.value = storeGateway
+        }
+        match(box.value){
+            case Some(fn) => fn(kind, op, payload)
+            case None => throw LoomException('loom store gateway is not installed: ${kind}.${op}')
         }
     }
 
