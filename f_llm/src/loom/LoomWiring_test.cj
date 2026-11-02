@@ -40,7 +40,7 @@ class LoomWiring_test {
             recorder.model = model
             recorder.calls++
             plannedJson()
-        }, plannerModel: 'chat-pro')
+        }, plannerModel: 'chat-pro', store: MemoryLoomStore())
 
         @Expect(LoomServices.current().isSome(), true)
         let outcome = service.execute(LoomRequest('daily', '抓取并汇总'))
@@ -53,7 +53,7 @@ class LoomWiring_test {
     @TestCase
     func testWireFallsBackToMemoryStoreForNonSqlContentFamily(): Unit {
         // 默认 llm_memoryStore 是 f_hydra → 内存存储，不碰数据库
-        let service = LoomWiring.wire({ _, _, _ => plannedJson() })
+        let service = LoomWiring.wire({ _, _, _ => plannedJson() }, store: MemoryLoomStore())
         @Expect(service.status('not-exist'), '')
         LoomServices.reset()
     }

@@ -38,13 +38,26 @@ public class LoomBootstrap {
     private init() {
     }
 
-    /** 按内容族选存储：`postgres` / `mysql` 走库，其余（如 `f_hydra`、`inMemory`）走内存 */
-    public static func storeFor(driver: String): LoomStore {
-        match(driver){
-            case 'postgres' => PostgresLoomStore()
-            case 'mysql' => MySqlLoomStore()
-            case _ => MemoryLoomStore()
+    /**
+     * 按**元数据族**配置（`llm_metaStore`）选存储，与 `MetaStore` 用同一个配置项：
+     * `f_store`（默认，不指定也是它）/ `memory` / `postgres` / `mysql`。
+     */
+    public static func storeFor(metaStore: String): LoomStore {
+        let name = metaStore.trimAscii().toAsciiLower()
+        if(name.isEmpty() || name == 'f_store'){
+            return FStoreLoomStore()
         }
+        if(name == 'postgres'){
+            return PostgresLoomStore()
+        }
+        if(name == 'mysql'){
+            return MySqlLoomStore()
+        }
+        if(name == 'memory' || name == 'inmemory'){
+            return MemoryLoomStore()
+        }
+        throw IllegalStateException(
+            'unknown loom store: "${metaStore}"; expected f_store|memory|postgres|mysql')
     }
 
     /**

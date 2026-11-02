@@ -44,9 +44,15 @@ public class LoomWiring {
     }
 
     public static func wire(chat: (String, String, String) -> String,
-                            plannerModel!: String = ''): LoomService {
+                            plannerModel!: String = '',
+                            store!: ?LoomStore = None): LoomService {
         let settings = StoreSettings.load()
-        let registry = LoomRegistry(store: LoomBootstrap.storeFor(settings.memoryStore))
+        // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
+        let chosen = match(store){
+            case Some(value) => value
+            case None => LoomBootstrap.storeFor(settings.metaStore)
+        }
+        let registry = LoomRegistry(store: chosen)
         LoomBootstrap.startup(registry)
         let planner = Planner({ system, user => chat(plannerModel, system, user) })
         let service = LoomService(planner, registry)

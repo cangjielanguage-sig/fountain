@@ -74,6 +74,78 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 - 模板 `{stepId.output}` 由 `LoomHostApi` 的跨步骤输出表替换，未命中的占位符原样保留；
 - 每次执行用 `loom/{name}#{seq}` 作为流程 tag，执行完 `flow.remove()` 释放派发器——否则重复执行同一计划会撞上 `StartExecutor has already been registered`。
 
+## 存储
+
+流程定义存**源码与状态**，不存编译产物（`JitFunction` 不可序列化），启动时重新编译。
+
+### 四种实现，与 MetaStore 共用 `llm_metaStore`
+
+| 取值 | 实现 | 位置 |
+|---|---|---|
+| `f_store`（默认，不指定也是它） | `FStoreLoomStore` | `llm_metaStorePath`（相对部署目录） |
+| `memory` / `inMemory` | `MemoryLoomStore` | 进程内，重启即失 |
+| `postgres` | `PostgresLoomStore` | `llm_loom_flow` 表 |
+| `mysql` | `MySqlLoomStore` | `llm_loom_flow` 表 |
+
+选哪个由 `LoomBootstrap.storeFor(llm_metaStore)` 决定；未知取值直接抛错并列出可用值，不静默兜底。
+
+### 内存层 + 持久化层
+
+`LoomRegistry` 内存里有一份 `HashMap<String, LoomFlow>`（`Mutex` 保护），`put`/`remove` **双写** store；`restore()` 启动时按 100 条分页把库里的流程拉回内存。
+
+### SQL 版（`llm_loom_flow`）
+
+| 列 | 说明 |
+|---|---|
+| `name` PK | 流程标识 |
+| `plan_json` / `flow_source` / `step_sources` | 计划与源码 |
+| `status` / `round` / `questions_json` | 状态机与澄清 |
+| `tools` / `mcps` | 白名单（逗号分隔） |
+| `created_time` / `update_time` | upsert 时刷新 |
+
+- 写：PG `ON CONFLICT (name) DO UPDATE`，MySQL `ON DUPLICATE KEY UPDATE`；
+- 读：`WHERE name = ?`；`list` 按 `name` 排序分页（PG `LIMIT ? OFFSET ?`，MySQL `LIMIT ?, ?`）；
+- 删：先查存在再 `DELETE`，返回真实 `Bool`。
+
+`step_sources` **不用 JSON**：`id\u0001source` 以 `\u0002` 分隔。源码里全是引号与换行，用 JSON 要完整转义/反转义（历史上被转义 bug 咬过），控制字符在仓颉源码里不会出现，比 JSON 更省事且无损。
+
+### f_store 版（键布局）
+
+按字段拆键，进一步绕开拼接与转义：
+
+```
+f_llm:loom:index:{name}      → 空值，仅用于列举
+f_llm:loom:data:{name}:h     → status \u0003 round \u0003 tools \u0003 mcps
+f_llm:loom:data:{name}:d     → description
+f_llm:loom:data:{name}:p     → planJson
+f_llm:loom:data:{name}:f     → flowSource
+f_llm:loom:data:{name}:q     → questionsJson
+f_llm:loom:data:{name}:s     → stepSources（同上编码）
+```
+
+`remove` 扫描 `f_llm:loom:data:{name}:` 前缀清空全部字段，再删索引键。
+
+### 状态与恢复
+
+| 状态 | 含义 |
+|---|---|
+| `clarifying` | Planner 判定有歧义，存问题、无源码 |
+| `pending` | 已生成源码，未编译 |
+| `compiled` | 编译通过，可执行 |
+| `failed` | 启动重编译失败，需人工修 |
+
+`LoomBootstrap.startup` 只重编译 `compiled` 的流程；单条失败标 `failed`，不影响其它。
+
+### 已知边界
+
+| 项 | 说明 |
+|---|---|
+| 无并发控制 | 后写覆盖先写，没有版本号/乐观锁（loom 写入频率极低） |
+| 无历史版本 | 只保留最新源码，改坏了靠重新规划 |
+| `remove` 非原子 | 先查后删；库侧删除本身幂等 |
+| 名称即主键 | 没有租户/命名空间，多租户需在 `name` 里加前缀 |
+| DDL 注释有 `blocked` | 注释列 5 个状态，代码只用 4 个 |
+
 ## 已知边界
 
 | 项 | 说明 |

@@ -21,6 +21,8 @@ import std.unittest.testmacro.*
 
 import fountain::f_egraph.base.*
 
+import fountain::f_llm.store.*
+
 @Test
 class LoomBootstrap_test {
     private static func jitPlan(name: String): String {
@@ -78,7 +80,18 @@ class LoomBootstrap_test {
     func testStoreForDriver(): Unit {
         @Expect(LoomBootstrap.storeFor('postgres') is PostgresLoomStore, true)
         @Expect(LoomBootstrap.storeFor('mysql') is MySqlLoomStore, true)
-        @Expect(LoomBootstrap.storeFor('f_hydra') is MemoryLoomStore, true)
+        @Expect(LoomBootstrap.storeFor('memory') is MemoryLoomStore, true)
+        @Expect(LoomBootstrap.storeFor('inMemory') is MemoryLoomStore, true)
+        // 不指定时的默认值就是 f_store（不实例化，避免测试期占用默认数据目录）
+        @Expect(StoreSettings.DEFAULT_META, 'f_store')
+
+        var message = ''
+        try{
+            LoomBootstrap.storeFor('sqlite')
+        }catch(e: Exception){
+            message = e.message
+        }
+        @Expect(message.contains('unknown loom store'), true)
     }
 
     @TestCase
