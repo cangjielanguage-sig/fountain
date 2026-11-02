@@ -68,22 +68,24 @@ public class CodeGen {
 
     /** 单个步骤的语句序列（形参 `e: Event`，返回 `Event`） */
     public static func stepSource(step: StepPlan): String {
-        var text = '// step ${step.id} (${step.kind})\n'
+        // 与 `LoomCompiler` 实际编译的源码保持同形：
+        // tool/llm 只负责「调用」，模板渲染与事件包装留在原生侧。
         if(step.kind == 'tool' || step.kind == 'mcp'){
-            text += 'let ${step.id}_args = LoomHostApi.render(${jsonQuote(step.args)}, e)\n'
-            text += 'let ${step.id}_out = LoomHostApi.callTool(${jsonQuote(step.tool)}, ${step.id}_args)\n'
-        }else if(step.kind == 'llm'){
-            text += 'let ${step.id}_in = LoomHostApi.render(${jsonQuote(step.input)}, e)\n'
-            text += 'let ${step.id}_out = LoomHostApi.callLlm(${jsonQuote(step.model)}, '
-            text += '${jsonQuote(step.system)}, ${step.id}_in)\n'
-        }else{
-            // jit / http：素材由计划里的 input 语句片段给出，原样内联
-            text += '${step.input}\n'
-            text += 'let ${step.id}_out = ${step.id}_result\n'
+            return '{ args: String =>\n'
+                + '  let ${step.id}_out = loomCallTool(${jsonQuote(step.tool)}, args)\n'
+                + '  ${step.id}_out\n}'
         }
-        text += 'LoomHostApi.taskEvent(e, ${jsonQuote(step.id)}, '
-        text += '${step.id}_out)'
-        text
+        if(step.kind == 'llm'){
+            return '{ input: String =>\n'
+                + '  let ${step.id}_out = loomCallLlm(${jsonQuote(step.model)}, '
+                + '${jsonQuote(step.system)}, input)\n'
+                + '  ${step.id}_out\n}'
+        }
+        // jit / http：素材由计划里的 input 语句片段给出，原样内联
+        '{ e: Event =>\n'
+            + '  // step ${step.id} (${step.kind})\n'
+            + '  ${step.input}\n'
+            + '  ${step.id}_result\n}'
     }
 
     /**
@@ -96,6 +98,10 @@ public class CodeGen {
         let flowType = if(async){ 'AsyncFlow' }else{ 'ImmediateFlow' }
         let first = firstStep(plan)
         var text = '// loom flow: ${plan.name}\n'
+        // 步骤 lambda 与 `LoomCompiler` 编译出的源码一致，供预览与落库审计
+        for(item in plan.steps){
+            text += 'let step_${item.id} = ${stepSource(item)}\n'
+        }
         text += '{ =>\n'
         text += '    let flow = ${flowType}(category: ${jsonQuote(category)}, tag: ${jsonQuote(plan.name)})\n'
         if(!first.isEmpty()){
@@ -104,8 +110,17 @@ public class CodeGen {
         }
         for(item in plan.steps){
             text += '    flow.registerTask(${jsonQuote(item.id)}, { e =>\n'
-            for(line in stepSource(item).split('\n')){
-                text += '        ${line}\n'
+            if(item.kind == 'tool' || item.kind == 'mcp'){
+                text += '        let ${item.id}_args = LoomHostApi.render(${jsonQuote(item.args)}, e)\n'
+                text += '        LoomHostApi.taskEvent(e, ${jsonQuote(item.id)}, '
+                text += 'step_${item.id}(${item.id}_args))\n'
+            }else if(item.kind == 'llm'){
+                text += '        let ${item.id}_in = LoomHostApi.render(${jsonQuote(item.input)}, e)\n'
+                text += '        LoomHostApi.taskEvent(e, ${jsonQuote(item.id)}, '
+                text += 'step_${item.id}(${item.id}_in))\n'
+            }else{
+                text += '        LoomHostApi.taskEvent(e, ${jsonQuote(item.id)}, '
+                text += 'step_${item.id}(e))\n'
             }
             text += '    })\n'
         }
