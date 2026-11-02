@@ -129,11 +129,13 @@ public class Planner {
     }
 
     public func plan(request: LoomRequest): PlannerResult {
-        let system = if(systemPrompt.trimAscii().isEmpty()){
+        let base = if(systemPrompt.trimAscii().isEmpty()){
             Prompts.PLANNER_SYSTEM
         }else{
             systemPrompt
         }
+        // 能力清单始终追加：自定义提示词也一样，否则模型不知道宿主有什么
+        let system = base + '\n\n' + PromptCapabilities.render()
         let raw = llm(system, Planner.userPrompt(request))
         Planner.parse(raw, request)
     }

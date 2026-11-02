@@ -142,6 +142,9 @@ class Planner_test {
         @Expect(recorder.system.contains('结果优先'), true)
         @Expect(recorder.system.contains('尊重边界'), true)
         @Expect(recorder.system.contains('先自查'), true)
+        // 能力清单始终追加
+        @Expect(recorder.system.contains('loomCallTool'), true)
+        @Expect(recorder.system.contains('loomStore'), true)
     }
 
     @TestCase
@@ -153,7 +156,9 @@ class Planner_test {
             PLANNED_JSON
         }, systemPrompt: 'CUSTOM-ORCHESTRATION-RULES')
         planner.plan(request())
-        @Expect(recorder.system, 'CUSTOM-ORCHESTRATION-RULES')
+        // 自定义提示词原样保留，但能力清单仍追加在后面
+        @Expect(recorder.system.startsWith('CUSTOM-ORCHESTRATION-RULES'), true)
+        @Expect(recorder.system.contains('loomCallTool'), true)
     }
 
     @TestCase
