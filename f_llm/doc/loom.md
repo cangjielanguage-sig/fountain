@@ -46,16 +46,30 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 
 ## 执行语义
 
-- 步骤按**拓扑序串行**执行，依赖顺序严格正确；
+`LoomRunner` 用 `ImmediateFlow` 组装：每个步骤是一个 `QueuedClosureTask`，结果按计划的边改写事件名并回灌派发器。
+
+| 场景 | 行为 |
+|---|---|
+| 单后继 | 结果事件名改写为后继步骤 id |
+| 分叉（出度 > 1） | 返回 `MultiEvent`（name 必须是 `EventType.Multi.toString()`），由 `registerMultiEventTask` 注册的 Multi 执行器逐条 emit |
+| 汇聚（入度 > 1） | `JoinBarrier` 计数，所有前驱事件到齐才执行一次；未到齐的事件返回 `DummyEvent` 被派发循环跳过 |
+| 汇合数据 | 取**最后到达**的那条事件的数据（不做多路合并） |
+| 收尾 | 出度为 0 的步骤返回 `End` 事件（name = `EventType.End.toString()`） |
+
+其它约定：
+
 - 流程级没有走 JIT：`CodeGen.flowSource` 只作预览/落库原文；
 - `jit` 步骤由 f_jit 编译；`tool` / `mcp` / `llm` 步骤走宿主原生闭包（f_jit 当前不支持命名实参与静态类）；
-- 模板 `{stepId.output}` 由 `LoomHostApi` 的跨步骤输出表替换，未命中的占位符原样保留。
+- 模板 `{stepId.output}` 由 `LoomHostApi` 的跨步骤输出表替换，未命中的占位符原样保留；
+- 每次执行用 `loom/{name}#{seq}` 作为流程 tag，执行完 `flow.remove()` 释放派发器——否则重复执行同一计划会撞上 `StartExecutor has already been registered`。
 
 ## 已知边界
 
 | 项 | 说明 |
 |---|---|
-| 并行执行 | 未接 `f_egraph` 的 `ImmediateFlow`/`AsyncFlow`：`Dispatcher` 私有，`QueuedClosureTask` 拿不到所属实例；多后继还需拆 `MultiEvent` |
+| 并行执行 | 目前用 `ImmediateFlow` 同步派发（分叉按顺序 emit，不并行）；要真并行需换 `AsyncFlow` |
+| 汇聚数据 | 汇合步骤只拿最后到达的那条数据，不做多路合并 |
+| 汇聚计数 | `JoinBarrier` 计数在单次执行内有效；执行结束不复位（流程不重入） |
 | `confirm` 后自动执行 | 需要显式调用 `LoomService.executeNow`，`loomExecute` 不自动执行 |
 | 真实宿主 | `DefaultLoomHost` 的工具通道接 `FunctionMediator`，模型通道由装配方注入；没有内置 LLM 客户端 |
 | `step_sources` 编码 | 存 `id\u0001source`、`\u0002` 分隔（不是 JSON）：避免源码引号/换行的转义问题 |
