@@ -133,7 +133,6 @@ out.close()
 ```cangjie
 public let EXCEL_MAX_ROW: Int64 = 1_048_576
 public let EXCEL_MAX_COL: Int64 = 16_384
-public let F_EXCEL_VERSION: String
 
 public func columnIndex(letters: String): ?Int64
 public func columnLetters(col: Int64): String
