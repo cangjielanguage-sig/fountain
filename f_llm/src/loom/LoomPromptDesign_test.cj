@@ -19,10 +19,12 @@ import std.collection.*
 import std.env.getVariables
 import std.fs.{File, OpenMode, exists}
 import std.io.StringReader
+import std.time.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_egraph.base.*
+import fountain::f_httpclient.*
 import fountain::f_llm.llm.*
 import fountain::f_llm.model.po.*
 
@@ -38,6 +40,8 @@ import fountain::f_llm.model.po.*
 class LoomPromptDesign_test {
     static let MODEL = 'deepseek-flash'
     static let KEY_ENV = 'DS_KEY'
+    /** 全局超时只设一次（HttpClient 的配置是进程级静态） */
+    static var timeoutsReady = false
 
     static func envOf(name: String): String {
         for(item in getVariables()){
@@ -72,6 +76,12 @@ class LoomPromptDesign_test {
         let key = apiKey()
         if(key.isEmpty()){
             throw LoomException('${KEY_ENV} is missing, skip real model calls')
+        }
+        // 长提示词生成可能超过 stdx 默认读超时：先放宽到 5 分钟（只影响本进程）
+        if(!timeoutsReady){
+            HttpClient.globalReadTimeout(Duration.second * 300)
+            HttpClient.globalWriteTimeout(Duration.second * 300)
+            timeoutsReady = true
         }
         let conf = LLMConf()
         conf.provider = 'deepseek'
@@ -171,12 +181,14 @@ class LoomPromptDesign_test {
             case None => ''
         }
         @Expect(text.size > 0, true)
-        println('LOOM_FLOW_SOURCE_BEGIN')
-        println(program.flowSource)
-        println('LOOM_FLOW_SOURCE_END')
-        println('LOOM_PROMPT_BEGIN')
-        println(text)
-        println('LOOM_PROMPT_END')
+        // 测试框架会捕获 stdout，写到仓库外便于取用
+        let promptFile = File('/tmp/loom_prompt.md', OpenMode.Write)
+        promptFile.write(text.toArray())
+        promptFile.close()
+        let sourceFile = File('/tmp/loom_flow.cj', OpenMode.Write)
+        sourceFile.write(program.flowSource.toArray())
+        sourceFile.close()
+        println('LOOM_PROMPT_SAVED=/tmp/loom_prompt.md')
     }
 }
 
