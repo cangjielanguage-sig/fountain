@@ -131,6 +131,23 @@ class Planner_test {
     }
 
     @TestCase
+    func testParsesParallelFlagFromModel(): Unit {
+        let raw = '{"status":"planned","name":"p","parallel":true,'
+            + '"steps":[{"id":"s","kind":"jit","input":"let s_result = 1"}],"edges":[]}'
+        let plan = Planner.parse(raw, request()).plan.getOrThrow()
+        @Expect(plan.parallel, true)
+    }
+
+    @TestCase
+    func testRequestParallelIsMergedIntoPlan(): Unit {
+        let raw = '{"status":"planned","name":"p",'
+            + '"steps":[{"id":"s","kind":"jit","input":"let s_result = 1"}],"edges":[]}'
+        let asker = LoomRequest('p', 'd', parallel: true)
+        let plan = Planner.parse(raw, asker).plan.getOrThrow()
+        @Expect(plan.parallel, true)
+    }
+
+    @TestCase
     func testLlmCallbackReceivesPrompt(): Unit {
         let recorder = PromptRecorder()
         let planner = Planner({ system, user =>

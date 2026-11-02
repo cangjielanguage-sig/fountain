@@ -56,6 +56,16 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 | 汇合数据 | 取**最后到达**的那条事件的数据（不做多路合并） |
 | 收尾 | 出度为 0 的步骤返回 `End` 事件（name = `EventType.End.toString()`） |
 
+**并发开关（三级可控）**
+
+| 层级 | 入口 | 说明 |
+|---|---|---|
+| 开发者（代码） | `LoomRunner.run(..., parallel: true)` | 直接指定本轮执行是否并发 |
+| 开发者（装配） | `LoomService.executeNow(..., parallel: true)` | 单次执行覆盖计划里的值 |
+| 模型（计划） | 计划 JSON 的 `"parallel": true`，或 `loomExecute` 的 `parallel:"true"` | 请求级开关会并入计划，模型也可自行决定 |
+
+生效规则：`计划.parallel || 调用方 parallel`。并发走 `AsyncFlow`（分叉分支并行），同步走 `ImmediateFlow`。
+
 其它约定：
 
 - 流程级没有走 JIT：`CodeGen.flowSource` 只作预览/落库原文；

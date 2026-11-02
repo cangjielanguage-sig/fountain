@@ -70,6 +70,8 @@ public class FlowPlan {
     public var steps: ArrayList<StepPlan> = ArrayList<StepPlan>()
     public var edges: ArrayList<EdgePlan> = ArrayList<EdgePlan>()
     public var notes: String = ''
+    /** 是否允许并发执行分叉（由开发者或模型决定） */
+    public var parallel: Bool = false
     /** 澄清轮次（§9.11），完整计划为 0 */
     public var round: Int64 = 0
 
@@ -142,6 +144,9 @@ public class FlowPlan {
             text += '[${jsonQuote(edges[index].from)}, ${jsonQuote(edges[index].to)}]'
         }
         text += ']'
+        if(parallel){
+            text += ',\n  "parallel": true'
+        }
         if(!notes.isEmpty()){
             text += ',\n  "notes": ${jsonQuote(notes)}'
         }

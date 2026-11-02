@@ -74,6 +74,8 @@ public class LoomExecuteParam {
     private var confirm: String = ''
     @JsonStringSchema[description:'"true" 且 confirm=true 时，编译后立即执行一次；默认 false']
     private var execute: String = ''
+    @JsonStringSchema[description:'"true" 允许分叉步骤并发执行；默认 false（串行）']
+    private var parallel: String = ''
 }
 
 /**
@@ -104,6 +106,7 @@ public class LoomExecuteFunction <: FunctionCalling<LoomExecuteParam> {
                 result: '[loomExecute] loom service is not installed; call LoomServices.install first')
         }
         let confirm = params.confirm.trimAscii().toAsciiLower() == 'true'
+        let isParallel = params.parallel.trimAscii().toAsciiLower() == 'true'
         let result = if(confirm){
             service.confirmFlow(params.name)
         }else{
@@ -114,7 +117,7 @@ public class LoomExecuteFunction <: FunctionCalling<LoomExecuteParam> {
             }
             service.execute(LoomRequest(params.name, params.description,
                 tools: params.tools.toArray(), mcps: params.mcps.toArray(),
-                persona: params.persona), confirm: false)
+                persona: params.persona, parallel: isParallel), confirm: false)
         }
         var text = summary(result)
         if(confirm && params.execute.trimAscii().toAsciiLower() == 'true'){
@@ -122,7 +125,7 @@ public class LoomExecuteFunction <: FunctionCalling<LoomExecuteParam> {
                 case Some(host) =>
                     let event = service.executeNow(params.name, host,
                         StartEvent(category: 'loom', tag: params.name, name: 'start',
-                                   data: params.description))
+                                   data: params.description), parallel: isParallel)
                     text += '\nexecuted: ${event.name}'
                 case None =>
                     text += '\nexecute skipped: no loom host installed'

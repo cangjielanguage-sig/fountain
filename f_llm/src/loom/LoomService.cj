@@ -117,7 +117,8 @@ public class LoomService {
     }
 
     /** 编译成功后可立即执行一次（§9.6 的「可选立即执行」） */
-    public func executeNow(name: String, host: LoomHost, input: Event): Event {
+    public func executeNow(name: String, host: LoomHost, input: Event,
+                           parallel!: Bool = false): Event {
         let flow = match(registry.get(name)){
             case Some(value) => value
             case None => throw LoomException('loom flow not found: ${name}')
@@ -126,7 +127,9 @@ public class LoomService {
             throw LoomException('loom flow is not compiled: ${name} (status=${flow.status})')
         }
         let planned = Planner.parse(flow.planJson, LoomBootstrap.requestOf(flow))
-        LoomRunner(compiler: compiler).run(planned.plan.getOrThrow(), host, input)
+        let plan = planned.plan.getOrThrow()
+        // 计划声明或调用方显式要求，任一为真就并发；默认同步
+        LoomRunner(compiler: compiler).run(plan, host, input, parallel: plan.parallel || parallel)
     }
 
     public func delete(name: String): Bool {

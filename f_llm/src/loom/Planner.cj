@@ -36,6 +36,8 @@ public class LoomRequest {
     public let dryRun: Bool
     /** 规划用模型；空串表示由 chat 回调使用默认模型 */
     public let model: String
+    /** 是否允许并发执行分叉；模型可在计划里覆盖 */
+    public let parallel: Bool
 
     public init(name: String, description: String,
                 tools!: Array<String> = Array<String>(),
@@ -44,7 +46,8 @@ public class LoomRequest {
                 answers!: HashMap<String, String> = HashMap<String, String>(),
                 onUnresolved!: String = 'ask',
                 dryRun!: Bool = true,
-                model!: String = '') {
+                model!: String = '',
+                parallel!: Bool = false) {
         if(name.trimAscii().isEmpty()){
             throw LoomException('loom name must not be blank')
         }
@@ -60,6 +63,7 @@ public class LoomRequest {
         this.onUnresolved = onUnresolved
         this.dryRun = dryRun
         this.model = model
+        this.parallel = parallel
     }
 }
 
@@ -149,6 +153,8 @@ public class Planner {
         plan.persona = if(dto.persona.isEmpty()){ request.persona }else{ dto.persona }
         plan.notes = dto.notes
         plan.round = dto.round
+        // 开发者（请求）或模型（计划）任一认为可并发，就允许并发
+        plan.parallel = dto.parallel || request.parallel
         for(item in dto.steps){
             let step = StepPlan(item.id, item.kind)
             step.tool = item.tool
@@ -224,6 +230,9 @@ public class Planner {
         if(request.mcps.size > 0){
             text += '可用 MCP：${request.mcps.toString()}\n'
         }
+        if(request.parallel){
+            text += '并发：允许分叉的步骤并行执行（输出 "parallel": true）\n'
+        }
         if(!request.answers.isEmpty()){
             text += '上一轮澄清回答：\n'
             for((key, value) in request.answers){
@@ -291,6 +300,8 @@ public class PlanDto {
     public var name: String = ''
     public var persona: String = ''
     public var notes: String = ''
+    /** 模型判断可以并发时置 true */
+    public var parallel: Bool = false
     public var round: Int64 = 0
     public var steps: ArrayList<StepDto> = ArrayList<StepDto>()
     /** 边：`[["fetch","sum"]]` */
