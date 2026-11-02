@@ -19,18 +19,21 @@ import std.collection.*
 
 import fountain::f_egraph.base.*
 
+/** 记录最后一个步骤的输出（闭包不能捕获可变局部变量） */
+class LastEventBox {
+    public var value: ?Event = None
+}
+
 /**
  * 流程执行器（§9.6 的执行段）。
  *
- * 当前按**拓扑序串行**执行：`LoomCompiler` 产出的步骤闭包逐个调用，前一步的输出事件
- * 作为后一步的输入。没有直接组装 `f_egraph` 的 `ImmediateFlow`，原因有二：
+ * 用 `ImmediateFlow` 组装：每个步骤是一个 `QueuedClosureTask`，步骤闭包的结果按计划的边
+ * 改写成**下一个步骤 id** 的事件并回灌派发器；出度为 0 的步骤改写成 `End` 事件收尾。
  *
- * 1. `ImmediateFlow` 的 `Dispatcher` 是私有的，`QueuedClosureTask` 拿不到所属 Dispatcher，
- *    装不进流程（见 f_egraph 的构造约束）；
- * 2. 计划的边是 DAG，而 `Flow` 的注册模型是「事件名 → 下一个任务」的链；
- *    多后继需要拆成 `MultiEvent`，属于后续增强。
- *
- * 串行执行保证语义正确（依赖顺序），并行化留给接入 Flow 之后。
+ * 约束（当前实现）：
+ * - 只支持单后继（出度 ≤ 1）；分叉需要 `MultiEvent`，尚未实现，遇到直接报错；
+ * - 事件名必须等于下一步的 id——返回自己的名字会「自己喂自己」，派发循环停不下来；
+ * - 结束事件名固定为 `EventType.End.toString()`，由 `registerEnd()` 的 EndExecutor 匹配。
  */
 public class LoomRunner {
     private let compiler: LoomCompiler
@@ -40,30 +43,75 @@ public class LoomRunner {
     }
 
     /**
-     * 按拓扑序执行整条计划。
+     * 按计划的边执行整条流程。
      *
      * @param plan 通过校验的计划（内部会再校验一次）
      * @param host 工具/模型宿主；执行期间由 `LoomHostApi` 持有
      * @param input 起始事件（通常是 StartEvent）
-     * @return 最后一个步骤产出的事件
+     * @return 最后一个步骤产出的事件（名字为步骤 id）
      */
     public func run(plan: FlowPlan, host: LoomHost, input: Event): Event {
         plan.validate()
-        let steps = compiler.compileSteps(plan)
         let order = topologicalOrder(plan)
-        LoomHostApi.bind(host)
-        var current = input
-        try{
-            for(id in order){
-                match(steps.get(id)){
-                    case Some(task) => current = task(current)
-                    case None => throw LoomException('loom step is not compiled: ${id}')
+        if(order.isEmpty()){
+            throw LoomException('loom plan has no steps to run')
+        }
+        let steps = compiler.compileSteps(plan)
+        let successors = successorsOf(plan)
+        let flow = ImmediateFlow(category: 'loom', tag: plan.name)
+        flow.registerStart(order[0])
+        let record = LastEventBox()
+
+        for(id in order){
+            let compiled = match(steps.get(id)){
+                case Some(value) => value
+                case None => throw LoomException('loom step is not compiled: ${id}')
+            }
+            let next = successors.get(id) ?? ArrayList<String>()
+            if(next.size > 1){
+                throw LoomException('loom runner does not support fork yet: ${id} -> ${next.size} successors')
+            }
+            let sink = next.isEmpty()
+            let target = if(sink){ EventType.End.toString() }else{ next[0] }
+            let body = { e: Event =>
+                let produced = compiled(e)
+                record.value = produced
+                let data = match(produced as DataEvent){
+                    case Some(event) => event.data
+                    case None => ''
                 }
+                DataEvent(eventType: if(sink){ EventType.End }else{ EventType.Task },
+                          category: e.category, tag: e.tag, name: target, data: data)
+            }
+            let queued = QueuedClosureTask(id, [id], [target], flow.getDispatcher(), body)
+            flow.registerTask(queued)
+        }
+        flow.registerEnd()
+
+        LoomHostApi.bind(host)
+        try{
+            match(input as DataEvent){
+                case Some(event) => flow.start(event.data)
+                case None => flow.start(input)
             }
         }finally{
             LoomHostApi.unbind()
         }
-        current
+        match(record.value){
+            case Some(event) => event
+            case None => DummyEvent.instance
+        }
+    }
+
+    /** 每个步骤的后继列表（保持计划中的顺序） */
+    private static func successorsOf(plan: FlowPlan): HashMap<String, ArrayList<String>> {
+        let result = HashMap<String, ArrayList<String>>()
+        for(edge in plan.edges){
+            let list = result.get(edge.from) ?? ArrayList<String>()
+            list.add(edge.to)
+            result[edge.from] = list
+        }
+        result
     }
 
     /** Kahn 拓扑排序；有环时抛错（`validate` 只查自环与缺失端点） */
@@ -90,8 +138,8 @@ public class LoomRunner {
             let current = ready.remove(at: 0)
             order.add(current)
             match(next.get(current)){
-                case Some(successors) =>
-                    for(item in successors){
+                case Some(items) =>
+                    for(item in items){
                         let left = (indegree.get(item) ?? 0) - 1
                         indegree[item] = left
                         if(left == 0){
