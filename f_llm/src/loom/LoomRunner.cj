@@ -117,6 +117,14 @@ public class LoomRunner {
             throw LoomException('loom plan has no steps to run')
         }
         let steps = compiler.compileSteps(plan)
+        runCompiled(plan, steps, host, input, parallel: parallel)
+    }
+
+    /** 用已编译好的步骤闭包执行（`LoomProgram` 复用，避免重复编译） */
+    public func runCompiled(plan: FlowPlan, steps: HashMap<String, (Event) -> Event>,
+                            host: LoomHost, input: Event,
+                            parallel!: Bool = false): Event {
+        let order = topologicalOrder(plan)
         let successors = successorsOf(plan)
         let barrier = JoinBarrier(indegreesOf(plan))
         let record = LastEventBox()

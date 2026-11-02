@@ -130,8 +130,8 @@ public class Planner {
     }
 
     public static func parse(raw: String, request: LoomRequest): PlannerResult {
-        // 模型偶尔输出解释性文字：先确认外层是 JSON 对象，避免静默得到空计划
-        let trimmed = raw.trimAscii()
+        // 模型偶尔用 ```json 包裹，或加解释性文字：先剥围栏再确认外层是 JSON 对象
+        let trimmed = stripFence(raw)
         if(!trimmed.startsWith('{') || !trimmed.endsWith('}')){
             throw LoomException('planner returned invalid JSON: expect a JSON object')
         }
@@ -180,6 +180,31 @@ public class Planner {
         }
         plan.validate()
         plan
+    }
+
+    /**
+     * 去掉 Markdown 代码围栏（` ```json ... ``` `）。
+     *
+     * 模型经常把 JSON 包在围栏里；不剥掉就会被判成非法 JSON。
+     */
+    internal static func stripFence(raw: String): String {
+        var text = raw.trimAscii()
+        if(!text.startsWith('```')){
+            return text
+        }
+        let lines = text.split('\n')
+        var body = ''
+        for(index in 1..lines.size){
+            let line = lines[index].trimAscii()
+            if(line.startsWith('```')){
+                break
+            }
+            if(!body.isEmpty()){
+                body += '\n'
+            }
+            body += lines[index]
+        }
+        body.trimAscii()
     }
 
     /** 参数模板 → JSON 文本（step.args 保存原始 JSON，供 CodeGen 替换变量） */
