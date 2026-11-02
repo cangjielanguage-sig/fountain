@@ -31,7 +31,9 @@ class LastEventBox {
  * 改写成**下一个步骤 id** 的事件并回灌派发器；出度为 0 的步骤改写成 `End` 事件收尾。
  *
  * 约束（当前实现）：
- * - 只支持单后继（出度 ≤ 1）；分叉需要 `MultiEvent`，尚未实现，遇到直接报错；
+ * - 单后继：结果事件名改写成该后继的 id；
+ * - 多后继（分叉）：返回 `MultiEvent`，由 `registerMultiEventTask` 注册的 Multi 执行器逐条 emit；
+ * - **汇聚节点按入边逐次执行**（没有屏障），菱形 DAG 中汇合步骤会跑两次；
  * - 事件名必须等于下一步的 id——返回自己的名字会「自己喂自己」，派发循环停不下来；
  * - 结束事件名固定为 `EventType.End.toString()`，由 `registerEnd()` 的 EndExecutor 匹配。
  */
@@ -68,11 +70,8 @@ public class LoomRunner {
                 case None => throw LoomException('loom step is not compiled: ${id}')
             }
             let next = successors.get(id) ?? ArrayList<String>()
-            if(next.size > 1){
-                throw LoomException('loom runner does not support fork yet: ${id} -> ${next.size} successors')
-            }
             let sink = next.isEmpty()
-            let target = if(sink){ EventType.End.toString() }else{ next[0] }
+            let producing = if(sink){ [EventType.End.toString()] }else{ next.toArray() }
             let body = { e: Event =>
                 let produced = compiled(e)
                 record.value = produced
@@ -80,10 +79,24 @@ public class LoomRunner {
                     case Some(event) => event.data
                     case None => ''
                 }
-                DataEvent(eventType: if(sink){ EventType.End }else{ EventType.Task },
-                          category: e.category, tag: e.tag, name: target, data: data)
+                if(sink){
+                    DataEvent(eventType: EventType.End, category: e.category, tag: e.tag,
+                              name: EventType.End.toString(), data: data)
+                }else if(next.size == 1){
+                    DataEvent(eventType: EventType.Task, category: e.category, tag: e.tag,
+                              name: next[0], data: data)
+                }else{
+                    // 分叉：交给 registerMultiEventTask 注册的 Multi 执行器逐条 emit
+                    let events = ArrayList<Event>()
+                    for(target in next){
+                        events.add(DataEvent(eventType: EventType.Task, category: e.category,
+                                             tag: e.tag, name: target, data: data))
+                    }
+                    MultiEvent(category: e.category, tag: e.tag,
+                               name: EventType.Multi.toString(), events: events)
+                }
             }
-            let queued = QueuedClosureTask(id, [id], [target], flow.getDispatcher(), body)
+            let queued = QueuedClosureTask(id, [id], producing, flow.getDispatcher(), body)
             flow.registerTask(queued)
         }
         flow.registerEnd()

@@ -113,6 +113,28 @@ class LoomRunner_test {
         }
         @Expect(message.contains('not bound'), true)
     }
+
+    /** 菱形 DAG：a 分叉到 b/c，b、c 汇聚到 d；汇聚节点按入边执行两次 */
+    @TestCase
+    func testForkRunsBothBranches(): Unit {
+        let plan = FlowPlan('diamond')
+        for(id in ['a', 'b', 'c', 'd']){
+            let step = StepPlan(id, 'tool')
+            step.tool = 'echo'
+            step.args = '{}'
+            plan.steps.add(step)
+        }
+        plan.edges.add(EdgePlan('a', 'b'))
+        plan.edges.add(EdgePlan('a', 'c'))
+        plan.edges.add(EdgePlan('b', 'd'))
+        plan.edges.add(EdgePlan('c', 'd'))
+
+        let host = RunnerHost()
+        let out = LoomRunner().run(plan, host, start())
+        @Expect(out.name, 'd')
+        // a + b + c + d(两条入边各一次)
+        @Expect(host.toolCalls, 5)
+    }
 }
 
 class RunnerHost <: LoomHost {
