@@ -68,6 +68,49 @@ public class LoomStoreGateway {
                     strOf(args, 'title'), strOf(args, 'content')))
                 return 'ok'
             }
+            if(action == 'search'){
+                let limit = intOf(args, 'limit')
+                let hits = content.knowledge.search(
+                    KnowledgeQuery(strOf(args, 'text'), limit: if(limit > 0){ limit }else{ 5 }))
+                var text = '['
+                var first = true
+                for(hit in hits){
+                    if(!first){
+                        text += ','
+                    }
+                    first = false
+                    text += '{"docId":${FlowPlan.jsonQuote(hit.docId)},"seq":${hit.seq}'
+                    text += ',"score":${hit.score},"content":${FlowPlan.jsonQuote(hit.content)}}'
+                }
+                return text + ']'
+            }
+        }
+        if(name == 'memory' && action == 'search'){
+            let namespaces = ArrayList<String>()
+            let namespace = strOf(args, 'namespace')
+            if(!namespace.isEmpty()){
+                namespaces.add(namespace)
+            }
+            let kinds = ArrayList<String>()
+            let kind = strOf(args, 'kind')
+            if(!kind.isEmpty()){
+                kinds.add(kind)
+            }
+            let topK = intOf(args, 'topK')
+            let hits = content.memory.search(MemoryQuery(intOf(args, 'userId'),
+                namespaces.toArray(), kinds.toArray(), strOf(args, 'text'),
+                topK: if(topK > 0){ topK }else{ 5 }))
+            var text = '['
+            var first = true
+            for(hit in hits){
+                if(!first){
+                    text += ','
+                }
+                first = false
+                text += '{"id":${hit.record.id},"title":${FlowPlan.jsonQuote(hit.record.title)}'
+                text += ',"score":${hit.score}}'
+            }
+            return text + ']'
         }
         if(name == 'memory' && action == 'remove'){
             return content.memory.remove(intOf(args, 'userId'), intOf(args, 'id')).toString()

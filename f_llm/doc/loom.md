@@ -119,6 +119,8 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 | `knowledge` | `docIds` | `{"offset":0,"limit":50}` | JSON 字符串数组 |
 | `knowledge` | `upsert` | `{"docId":"d1","title":"t","content":"…"}` | `ok` |
 | `knowledge` | `remove` | `{"docId":"d1"}` | `true/false` |
+| `knowledge` | `search` | `{"text":"cangjie","limit":5}` | `[{docId,seq,score,content}]` |
+| `memory` | `search` | `{"userId":1,"namespace":"n","text":"…","topK":5}` | `[{id,title,score}]` |
 | `memory` | `add` | `{"userId":1,"namespace":"n","title":"t","content":"c","kind":"fact"}` | 记录 id |
 | `memory` | `remove` | `{"userId":1,"id":2}` | `true/false` |
 | `skill` | `count` | `{}` | 整数 |

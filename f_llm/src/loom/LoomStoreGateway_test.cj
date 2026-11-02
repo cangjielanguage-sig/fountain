@@ -60,10 +60,29 @@ class LoomStoreGateway_test {
     }
 
     @TestCase
+    func testKnowledgeSearchFindsUpsertedDoc(): Unit {
+        let gateway = gateway()
+        gateway.call('knowledge', 'upsert',
+            '{"docId":"d1","title":"t","content":"cangjie language guide"}')
+        let hits = gateway.call('knowledge', 'search', '{"text":"cangjie","limit":5}')
+        @Expect(hits.contains('"docId":"d1"'), true)
+    }
+
+    @TestCase
+    func testMemorySearchFindsAddedRecord(): Unit {
+        let gateway = gateway()
+        let id = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"note","content":"cangjie","kind":"fact"}')
+        let hits = gateway.call('memory', 'search',
+            '{"userId":7,"namespace":"n","text":"cangjie","topK":5}')
+        @Expect(hits.contains('"id":${id}'), true)
+    }
+
+    @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''
         try{
-            gateway().call('memory', 'search', '{}')
+            gateway().call('prompt', 'put', '{}')
         }catch(e: Exception){
             message = e.message
         }
