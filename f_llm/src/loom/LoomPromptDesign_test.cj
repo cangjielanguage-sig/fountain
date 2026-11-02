@@ -17,6 +17,8 @@ package fountain::f_llm.loom
 
 import std.collection.*
 import std.env.getVariables
+import std.fs.{File, OpenMode, exists}
+import std.io.StringReader
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -46,9 +48,28 @@ class LoomPromptDesign_test {
         ''
     }
 
+    /**
+     * 密钥解析顺序：环境变量 `DS_KEY` → 仓库外的 `/tmp/dskey`。
+     *
+     * 两条路径都不会把密钥写进项目；测试进程拿不到父进程环境时用文件兜底。
+     */
+    static func apiKey(): String {
+        let fromEnv = envOf(KEY_ENV)
+        if(!fromEnv.isEmpty()){
+            return fromEnv
+        }
+        if(!exists('/tmp/dskey')){
+            return ''
+        }
+        let file = File('/tmp/dskey', OpenMode.Read)
+        let text = StringReader(file).readToEnd()
+        file.close()
+        text.trimAscii()
+    }
+
     /** DeepSeek 通道：模型固定 deepseek-flash，不依赖 f_llm 的元数据配置 */
     static func deepseekChat(model: String, system: String, input: String): String {
-        let key = envOf(KEY_ENV)
+        let key = apiKey()
         if(key.isEmpty()){
             throw LoomException('${KEY_ENV} is missing, skip real model calls')
         }
@@ -133,7 +154,7 @@ class LoomPromptDesign_test {
 
     @TestCase
     func testRealDeepseekGeneratesPrompt(): Unit {
-        if(envOf(KEY_ENV).isEmpty()){
+        if(apiKey().isEmpty()){
             return    // 没有密钥：不发起真实请求
         }
         let agent = LoomAgent(LoomPromptDesign_test.deepseekChat, plannerModel: MODEL)
