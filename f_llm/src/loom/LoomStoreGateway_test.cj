@@ -40,20 +40,23 @@ class LoomStoreGateway_test {
     }
 
     @TestCase
-    func testKnowledgeUpsertAccepted(): Unit {
+    func testKnowledgeUpsertThenDocIds(): Unit {
         let gateway = gateway()
         @Expect(gateway.call('knowledge', 'upsert',
             '{"docId":"d1","title":"t","content":"hello"}'), 'ok')
-        // docIds 的可见性依赖各实现的索引策略，这里只断言返回合法 JSON 数组
-        @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":10}').startsWith('['), true)
+        // 往返：写入后必须能列出，且 limit 生效（此前 JSON 数字解析失败会得到 []）
+        @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":10}'), '["d1"]')
+        @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":0}'), '[]')
     }
 
     @TestCase
-    func testMemoryAddReturnsId(): Unit {
+    func testMemoryAddThenRemove(): Unit {
         let gateway = gateway()
         let id = gateway.call('memory', 'add',
             '{"userId":7,"namespace":"n","title":"t","content":"c","kind":"fact"}')
         @Expect(id.isEmpty(), false)
+        @Expect(gateway.call('memory', 'remove', '{"userId":7,"id":${id}}'), 'true')
+        @Expect(gateway.call('memory', 'remove', '{"userId":7,"id":${id}}'), 'false')
     }
 
     @TestCase

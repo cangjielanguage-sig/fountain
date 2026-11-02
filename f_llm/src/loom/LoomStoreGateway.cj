@@ -108,9 +108,15 @@ public class LoomStoreGateway {
     private static func intOf(args: JsonObject, key: String): Int64 {
         match(args.get(key)){
             case Some(value) =>
-                match(value as JsonInt){
-                    case Some(number) => Int64.tryParse(number.value.toString()) ?? 0
-                    case None => Int64.tryParse(strOf(args, key)) ?? 0
+                // JSON 数字可能是 JsonInt 或浮点类，统一按文本回退解析
+                let text = value.toString()
+                match(Int64.tryParse(text)){
+                    case Some(number) => number
+                    case None =>
+                        match(Float64.tryParse(text)){
+                            case Some(number) => Int64(number)
+                            case None => 0
+                        }
                 }
             case None => 0
         }
