@@ -94,6 +94,12 @@ public class LoomHostApi {
         }
     }
 
+    public static func resetStore(): Unit {
+        synchronized(mutex){
+            storeGateway = None
+        }
+    }
+
     /** `kind` ∈ memory|knowledge|skill|experience，`op` 由网关解释，`payload` 为 JSON */
     public static func callStore(kind: String, op: String, payload: String): String {
         let box = GatewayBox()

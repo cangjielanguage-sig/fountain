@@ -57,6 +57,10 @@ public class LoomWiring {
         let planner = Planner({ system, user => chat(plannerModel, system, user) })
         let service = LoomService(planner, registry)
         LoomServices.install(service)
+        // 默认存储网关：loomStore(kind, op, payload) 直接落到知识/记忆/技能 Store（惰性取容器）
+        LoomHostApi.installStore({ kind, op, payload =>
+            LoomStoreGateway().call(kind, op, payload)
+        })
         // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
         LoomServices.installHost(DefaultLoomHost(chat))
         service
