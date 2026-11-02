@@ -31,6 +31,8 @@ public class ScheduleCreateParam {
     private var name: String = ''
     @JsonStringSchema[description:'cron 七段式：秒 分 时 天 月 星期 年，通配符只支持 *']
     private var cron: String = ''
+    @JsonStringSchema[description:'触发时的初始数据，写入 StartEvent.data，供第一步的 {start.output} 使用']
+    private var payload: String = ''
 }
 
 @Bean
@@ -60,9 +62,10 @@ public class ScheduleCreateFunction <: FunctionCalling<ScheduleCreateParam> {
         match(LoomSchedules.current()){
             case Some(scheduler) =>
                 let taskName = params.name
+                let payload = params.payload
                 let body = { =>
                     match(LoomServices.current()){
-                        case Some(service) => runFlow(service, taskName)
+                        case Some(service) => runFlow(service, taskName, payload)
                         case None => ()
                     }
                 }
@@ -76,12 +79,12 @@ public class ScheduleCreateFunction <: FunctionCalling<ScheduleCreateParam> {
     }
 
     /** 触发时按名执行一次流程；宿主缺失时静默跳过（不打断调度线程） */
-    private static func runFlow(service: LoomService, name: String): Unit {
+    private static func runFlow(service: LoomService, name: String, payload: String): Unit {
         match(LoomServices.currentHost()){
             case Some(host) =>
                 try{
                     service.executeNow(name, host,
-                        StartEvent(category: 'loom', tag: name, name: 'start', data: ''))
+                        StartEvent(category: 'loom', tag: name, name: 'start', data: payload))
                 }catch(error: Exception){
                     ()
                 }

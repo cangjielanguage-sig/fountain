@@ -62,16 +62,24 @@ public class LoomHostApi {
     }
 
     /**
-     * 模板替换：把 `{stepId.output}` 换成该步骤已产出的数据。
+     * 模板替换：`{stepId.output}` 换成该步骤已产出的数据，`{start.output}` 换成进入本步骤的事件数据。
      *
      * 未命中的占位符原样保留——让模型/开发者看到「这里没取到值」，比静默替换成空串好排错。
      */
     public static func render(template: String, e: Event): String {
+        // 事件本身的数据：定时任务/外部触发时由 `StartEvent.data` 携带
+        let fromEvent = match(e as DataEvent){
+            case Some(event) => textOf(event.data)
+            case None => ''
+        }
         let box = TextBox()
         synchronized(mutex){
             var text = template
             for((name, value) in values){
                 text = text.replace('{${name}.output}', value)
+            }
+            if(!fromEvent.isEmpty()){
+                text = text.replace('{start.output}', fromEvent)
             }
             box.value = text
         }

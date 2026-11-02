@@ -47,6 +47,7 @@ class ManualScheduler <: LoomScheduler {
 /** 记录调用的宿主 */
 class CountingHost <: LoomHost {
     public var calls: Int64 = 0
+    public var args: ArrayList<String> = ArrayList<String>()
 
     public func render(template: String, e: Event): String {
         template
@@ -54,6 +55,7 @@ class CountingHost <: LoomHost {
 
     public func callTool(name: String, argsJson: String): String {
         calls++
+        args.add(argsJson)
         argsJson
     }
 
@@ -86,6 +88,26 @@ class JitTicktockTask_test {
             @Expect(host.calls, 1)
             scheduler.fire('sync-job')
             @Expect(host.calls, 2)
+        }finally{
+            LoomHostApi.unbind()
+        }
+    }
+
+    /** payload 透传：进入事件的 data，并由 `{start.output}` 替换进步骤参数 */
+    @TestCase
+    func testPayloadReachesStartTemplate(): Unit {
+        let scheduler = ManualScheduler()
+        let host = CountingHost()
+        let step = StepPlan('sync', 'tool')
+        step.tool = 'echo'
+        step.args = '{"q":"{start.output}"}'
+        JitTicktockTask.create('payload-job', '0 0 9 * * * *', step, scheduler, payload: 'hello')
+
+        LoomHostApi.bind(host)
+        try{
+            scheduler.fire('payload-job')
+            @Expect(host.args.size, 1)
+            @Expect(host.args[0].contains('hello'), true)
         }finally{
             LoomHostApi.unbind()
         }
