@@ -108,6 +108,17 @@ class LoomFunctions_test {
         LoomServices.reset()
     }
 
+    /** 模型显式传 parallel=true：即使计划里没写，也要落进 planJson */
+    @TestCase
+    func testParallelFlagPersistedIntoPlan(): Unit {
+        let registry = install()
+        LoomExecuteFunction().call(
+            param('{"nextEvent":"next","name":"daily","description":"d","parallel":"true"}'))
+        let stored = registry.get('daily').getOrThrow()
+        @Expect(stored.planJson.contains('"parallel": true'), true)
+        LoomServices.reset()
+    }
+
     @TestCase
     func testExecuteAfterConfirmRunsFlow(): Unit {
         let registry = install()
