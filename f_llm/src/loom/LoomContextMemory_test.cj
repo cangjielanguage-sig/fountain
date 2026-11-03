@@ -103,6 +103,26 @@ class LoomContextMemory_test {
         }
     }
 
+    /** 打开 writeKnowledge：提炼结果同时写一份知识文档 */
+    @TestCase
+    func testWritesKnowledgeWhenEnabled(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 3, namespace: 'k',
+            writeKnowledge: true))
+        try{
+            LoomRunner().run(plan(), MemoryHost(), start())
+            let ids = gateway.call('knowledge', 'docIds', '{"offset":0,"limit":10}')
+            @Expect(ids.contains('loom:memory-flow'), true)
+            let doc = gateway.call('knowledge', 'get', '{"docId":"loom:memory-flow:1"}')
+            @Expect(doc.contains('上下文摘要'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
     /** 模型总结模式：解析 JSON 后按返回内容写入 */
     @TestCase
     func testSummarizeModeUsesModelOutput(): Unit {

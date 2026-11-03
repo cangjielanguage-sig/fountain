@@ -93,6 +93,47 @@ class LoomPersona_test {
         }
     }
 
+    /** 技能按标题加载后自动拼进 system，模型不必自己想起来去查 */
+    @TestCase
+    func testSkillsInjectedIntoSystem(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.skills.upsert(Skill(1, '日报助手', '先列三段式，再给数据', '{}', version: 1))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan(''), host, start(), skills: ['日报助手'])
+            @Expect(host.lastSystem.contains('可用技能'), true)
+            @Expect(host.lastSystem.contains('先列三段式，再给数据'), true)
+            @Expect(LoomHostApi.currentSkillsText(), '')
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearSkills()
+        }
+    }
+
+    /** persona 为空时回落到该用户 character 记录的 key */
+    @TestCase
+    func testPersonaFallsBackToCharacterKey(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.characters.set(Character(9, 'strict', '{}'))
+        meta.prompts.put(PromptEntry('strict', 1, '严格模式正文'))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: 9))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan(''), host, start())
+            @Expect(host.lastSystem.contains('严格模式正文'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
     /** 技能按标题加载，流程不需要知道 id */
     @TestCase
     func testSkillLoadByTitle(): Unit {

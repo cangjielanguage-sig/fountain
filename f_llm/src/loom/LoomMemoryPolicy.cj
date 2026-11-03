@@ -16,8 +16,14 @@ limitations under the License.
 package fountain::f_llm.loom
 
 import std.collection.*
+import std.sync.*
 
 import fountain::f_data.*
+
+/** `synchronized` 块是 Unit 语义，序号用持有者带出 */
+class DocSeqBox {
+    public var value: Int64 = 0
+}
 
 /**
  * 流程结束后从临时上下文提炼记忆与经验的策略。
@@ -34,15 +40,19 @@ public class LoomMemoryPolicy {
     public let maxTurns: Int64
     public let summarize: Bool
     public let model: String
+    /** 是否把提炼结果同时写进知识库（默认只写记忆与经验） */
+    public let writeKnowledge: Bool
 
     public init(enabled!: Bool = true, userId!: Int64 = 0, namespace!: String = 'loom',
-                maxTurns!: Int64 = 20, summarize!: Bool = false, model!: String = '') {
+                maxTurns!: Int64 = 20, summarize!: Bool = false, model!: String = '',
+                writeKnowledge!: Bool = false) {
         this.enabled = enabled
         this.userId = userId
         this.namespace = namespace
         this.maxTurns = maxTurns
         this.summarize = summarize
         this.model = model
+        this.writeKnowledge = writeKnowledge
     }
 
     private static var current = LoomMemoryPolicy()
@@ -98,7 +108,32 @@ public class LoomMemoryExtractor {
         if(LoomMemoryExtractor.write(policy, experience, '流程 ${flowName} 经验', 'experience')){
             written++
         }
+        if(policy.writeKnowledge && !memory.trimAscii().isEmpty()){
+            let docId = 'loom:${flowName}:${nextDocSeq()}'
+            let payload = '{"docId":${FlowPlan.jsonQuote(docId)},'
+                + '"title":${FlowPlan.jsonQuote('流程 ${flowName} 记忆')},'
+                + '"content":${FlowPlan.jsonQuote(memory)}}'
+            try{
+                LoomHostApi.callStore('knowledge', 'upsert', payload)
+                written++
+            }catch(error: Exception){
+                ()
+            }
+        }
         written
+    }
+
+    private static let seqMutex = Mutex()
+    private static var seq: Int64 = 0
+
+    /** 知识文档 id 后缀：流程可重复执行，用递增序号避免互相覆盖 */
+    private static func nextDocSeq(): Int64 {
+        let box = DocSeqBox()
+        synchronized(seqMutex){
+            seq++
+            box.value = seq
+        }
+        box.value
     }
 
     private static func write(policy: LoomMemoryPolicy, content: String,

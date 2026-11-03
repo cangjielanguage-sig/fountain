@@ -112,20 +112,22 @@ public class LoomRunner {
      * @return 最后一个步骤产出的事件（名字为步骤 id）
      */
     public func run(plan: FlowPlan, host: LoomHost, input: Event,
-                    parallel!: Bool = false): Event {
+                    parallel!: Bool = false,
+                    skills!: Array<String> = Array<String>()): Event {
         plan.validate()
         let order = topologicalOrder(plan)
         if(order.isEmpty()){
             throw LoomException('loom plan has no steps to run')
         }
         let steps = compiler.compileSteps(plan)
-        runCompiled(plan, steps, host, input, parallel: parallel)
+        runCompiled(plan, steps, host, input, parallel: parallel, skills: skills)
     }
 
     /** 用已编译好的步骤闭包执行（`LoomProgram` 复用，避免重复编译） */
     public func runCompiled(plan: FlowPlan, steps: HashMap<String, (Event) -> Event>,
                             host: LoomHost, input: Event,
-                            parallel!: Bool = false): Event {
+                            parallel!: Bool = false,
+                            skills!: Array<String> = Array<String>()): Event {
         let order = topologicalOrder(plan)
         let successors = successorsOf(plan)
         let barrier = JoinBarrier(indegreesOf(plan))
@@ -145,10 +147,21 @@ public class LoomRunner {
             bodies[id] = bodyOf(id, next, sink, compiled, barrier, record)
         }
 
-        // 计划指定的「人格/提示词」：先按提示词名查库，查不到就当字面文本
-        let persona = resolvePersona(plan.persona)
+        // 计划指定的「人格/提示词」：先按提示词名查库，查不到就当字面文本；
+        // persona 为空时回落到该用户 character 里记录的 key
+        let userId = LoomMemoryPolicy.effective().userId
+        var personaKey = plan.persona
+        if(personaKey.trimAscii().isEmpty()){
+            personaKey = characterKeyOf(userId)
+        }
+        let persona = resolvePersona(personaKey)
         if(!persona.isEmpty()){
             LoomHostApi.setPersona(persona)
+        }
+        // 技能：按标题加载正文，执行期拼进 system（模型不必自己“想起来”去查）
+        let skillBlock = resolveSkills(skills)
+        if(!skillBlock.isEmpty()){
+            LoomHostApi.setSkills(skillBlock)
         }
         let policy = LoomMemoryPolicy.effective()
         if(policy.enabled){
@@ -167,6 +180,7 @@ public class LoomRunner {
             LoomContextLog.clear()
             LoomHostApi.unbind()
             LoomHostApi.clearPersona()
+            LoomHostApi.clearSkills()
             if(policy.enabled && !turns.isEmpty()){
                 try{
                     LoomMemoryExtractor.extract(plan.name, turns, host, policy)
@@ -336,6 +350,61 @@ public class LoomRunner {
             ()
         }
         value
+    }
+
+    /** 用户当前配置的人格 key（character 库为空时返回空串） */
+    private static func characterKeyOf(userId: Int64): String {
+        if(userId <= 0){
+            return ''
+        }
+        try{
+            let raw = LoomHostApi.callStore('character', 'get', '{"userId":${userId}}')
+            if(!raw.trimAscii().isEmpty()){
+                match(JsonValue.fromStr(raw) as JsonObject){
+                    case Some(json) => return fieldOf(json, 'characterKey')
+                    case None => ()
+                }
+            }
+        }catch(error: Exception){
+            ()
+        }
+        ''
+    }
+
+    /** 按标题把技能正文拼成注入块；未命中的技能直接跳过 */
+    private static func resolveSkills(titles: Array<String>): String {
+        var text = ''
+        for(title in titles){
+            try{
+                let raw = LoomHostApi.callStore('skill', 'load',
+                    '{"title":${FlowPlan.jsonQuote(title)}}')
+                if(raw.trimAscii().isEmpty()){
+                    continue
+                }
+                match(JsonValue.fromStr(raw) as JsonObject){
+                    case Some(json) =>
+                        let details = fieldOf(json, 'details')
+                        if(!details.isEmpty()){
+                            text += '- ${title}：${details}\n'
+                        }
+                    case None => ()
+                }
+            }catch(error: Exception){
+                ()
+            }
+        }
+        text
+    }
+
+    private static func fieldOf(json: JsonObject, key: String): String {
+        match(json.get(key)){
+            case Some(value) =>
+                match(value as JsonString){
+                    case Some(text) => text.value
+                    case None => ''
+                }
+            case None => ''
+        }
     }
 
     /** 每个步骤的后继列表（保持计划中的顺序） */

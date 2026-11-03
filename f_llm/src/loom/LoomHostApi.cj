@@ -121,8 +121,14 @@ public class LoomHostApi {
     }
 
     public static func callLlm(model: String, system: String, input: String): String {
-        // 计划指定的人格/提示词：拼在 system 前面，空则不影响
-        let prefix = currentPersonaText()
+        // 计划指定的人格/提示词与技能：拼在 system 前面，空则不影响
+        let persona = currentPersonaText()
+        let skills = currentSkillsText()
+        var prefix = persona
+        if(!skills.isEmpty()){
+            prefix = if(prefix.isEmpty()){ '可用技能：\n${skills}' }
+                     else{ '${prefix}\n\n可用技能：\n${skills}' }
+        }
         let fullSystem = if(prefix.isEmpty()){ system }else if(system.isEmpty()){ prefix }
                          else{ '${prefix}\n${system}' }
         match(current){
@@ -154,6 +160,29 @@ public class LoomHostApi {
         let box = TextBox()
         synchronized(mutex){
             box.value = personaText
+        }
+        box.value
+    }
+
+    /** 本次流程加载的技能正文（`标题：正文` 逐行拼接） */
+    private static var skillText: String = ''
+
+    public static func setSkills(text: String): Unit {
+        synchronized(mutex){
+            skillText = text
+        }
+    }
+
+    public static func clearSkills(): Unit {
+        synchronized(mutex){
+            skillText = ''
+        }
+    }
+
+    public static func currentSkillsText(): String {
+        let box = TextBox()
+        synchronized(mutex){
+            box.value = skillText
         }
         box.value
     }

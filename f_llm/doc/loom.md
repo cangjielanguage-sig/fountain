@@ -142,6 +142,7 @@ LoomRunner.runCompiled
 | `maxTurns` | `20` | 摘要只取最近 N 轮，防止长流程把记忆撑爆 |
 | `summarize` | `false` | `true` 时让模型读摘要并返回 `{"memory":"…","experience":"…"}` |
 | `model` | `''` | `summarize=true` 时必填，走 `host.callLlm` |
+| `writeKnowledge` | `false` | `true` 时把记忆摘要再写一份知识文档，docId 为 `loom:<流程>:<序号>`（序号递增，避免重复执行互相覆盖） |
 
 装配：
 
@@ -161,6 +162,7 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 |---|---|
 | 提示词名（如 `reviewer`） | 先查 `prompt.latest`，命中则取 `content` 作为人格文本 |
 | 字面文本（如 `只挑错，不夸奖`） | 查不到就按原文使用 |
+| 空 | 回落到该用户 `character.get(userId)` 的 `characterKey`，再按提示词名解析 |
 
 解析结果通过 `LoomHostApi.setPersona` 挂到本次执行上，`callLlm` 时拼在 system 前面：
 
@@ -169,7 +171,23 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 <步骤自己的 system>
 ```
 
-执行结束 `clearPersona()` 复位；`character` 库的 `characterKey` 可以存这个 key，形成「按用户选人格 → 按 key 取提示词」的链路。
+执行结束 `clearPersona()` 复位。
+
+## 技能注入
+
+`LoomRunner.run(..., skills: ['日报助手'])` 会按标题 `skill.load` 取正文，拼成注入块：
+
+```
+<人格/提示词正文>
+
+可用技能：
+- 日报助手：先列三段式，再给数据
+<步骤自己的 system>
+```
+
+未命中的技能标题直接跳过（不报错），执行结束 `clearSkills()` 复位。
+
+这样「技能」不必再靠模型自己想起来去查——编排时把要用的技能列出来即可。
 
 ## 执行语义
 
