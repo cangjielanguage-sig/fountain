@@ -153,7 +153,8 @@ public class InMemoryMemoryStore <: MemoryStore {
     }
 }
 
-class InMemoryKnowledgeStore <: KnowledgeStore {
+/** 词面检索版知识库；公开是为了让测试能绕开全局 `Embedder` bean 做确定性断言 */
+public class InMemoryKnowledgeStore <: KnowledgeStore {
     private let docs = HashMap<String, KnowledgeDoc>()
     private let chunks = HashMap<String, ArrayList<KnowledgeChunk>>()
     private let vectors = HashMap<String, Array<Float64>>()

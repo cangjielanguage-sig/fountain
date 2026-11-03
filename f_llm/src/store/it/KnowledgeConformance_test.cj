@@ -125,7 +125,9 @@ public class KnowledgeConformanceTest {
 
     @TestCase
     func testInMemoryUpsertAndSearch(): Unit {
-        let store = InMemoryContentStore().knowledge
+        // 直接建词面版知识库：`InMemoryContentStore().knowledge` 会看全局 Embedder bean，
+        // 并行跑测试时可能被别的类切成语义检索，导致命中条数不确定
+        let store = InMemoryKnowledgeStore()
         store.upsert(KnowledgeDoc('m-1', 't1', '正文1'))
         @Expect(store.get('m-1').getOrThrow().content, '正文1')
         assertSearch(store)

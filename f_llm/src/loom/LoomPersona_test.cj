@@ -134,6 +134,32 @@ class LoomPersona_test {
         }
     }
 
+    /** 没显式给技能时，按任务描述自动挑（SkillCatalog） */
+    @TestCase
+    func testAutoSelectsSkillByTaskText(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.skills.upsert(Skill(1, '日报助手', '先列三段式，再给数据', '{}', version: 1))
+        meta.skills.upsert(Skill(2, '代码评审', '只挑错，不夸奖', '{}', version: 1))
+        SkillCatalog.install({ => meta.skills })
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            let start = StartEvent(category: 'loom', tag: 'persona-flow',
+                                   name: 'start', data: '帮我写一份日报')
+            LoomRunner().run(plan(''), host, start)
+            @Expect(host.lastSystem.contains('可用技能'), true)
+            @Expect(host.lastSystem.contains('先列三段式'), true)
+            @Expect(host.lastSystem.contains('只挑错'), false)
+        }finally{
+            LoomHostApi.resetStore()
+            SkillCatalog.reset()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearSkills()
+        }
+    }
+
     /** 技能按标题加载，流程不需要知道 id */
     @TestCase
     func testSkillLoadByTitle(): Unit {

@@ -158,12 +158,23 @@ public class LoomRunner {
         if(!persona.isEmpty()){
             LoomHostApi.setPersona(persona)
         }
-        // 技能：按标题加载正文，执行期拼进 system（模型不必自己“想起来”去查）
-        let skillBlock = resolveSkills(skills)
+        // 技能：显式给了标题就按标题加载；没给就按任务描述自动挑（SkillCatalog）
+        let policy = LoomMemoryPolicy.effective()
+        let taskText = taskTextOf(plan, input)
+        let selected = ArrayList<String>()
+        for(title in skills){
+            selected.add(title)
+        }
+        if(selected.isEmpty() && policy.autoSkills){
+            for(hit in SkillCatalog.search(taskText, topK: policy.skillTopK,
+                                           minScore: policy.skillMinScore)){
+                selected.add(hit.title)
+            }
+        }
+        let skillBlock = resolveSkills(selected)
         if(!skillBlock.isEmpty()){
             LoomHostApi.setSkills(skillBlock)
         }
-        let policy = LoomMemoryPolicy.effective()
         if(policy.enabled){
             LoomContextLog.begin()
         }
@@ -371,8 +382,30 @@ public class LoomRunner {
         ''
     }
 
+    /** 自动挑技能用的任务文本：计划备注 + 起始输入 */
+    private static func taskTextOf(plan: FlowPlan, input: Event): String {
+        var text = plan.notes
+        match(input as DataEvent){
+            case Some(event) =>
+                let value = dataText(event.data)
+                if(!value.isEmpty()){
+                    text = if(text.isEmpty()){ value }else{ '${text}\n${value}' }
+                }
+            case None => ()
+        }
+        text
+    }
+
+    private static func dataText(data: Any): String {
+        // 只有字符串才是可检索的任务描述；其它类型（结构化数据）不参与技能匹配
+        match(data as String){
+            case Some(value) => value
+            case None => ''
+        }
+    }
+
     /** 按标题把技能正文拼成注入块；未命中的技能直接跳过 */
-    private static func resolveSkills(titles: Array<String>): String {
+    private static func resolveSkills(titles: ArrayList<String>): String {
         var text = ''
         for(title in titles){
             try{

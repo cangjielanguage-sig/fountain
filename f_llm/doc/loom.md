@@ -175,7 +175,23 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 
 ## 技能注入
 
-`LoomRunner.run(..., skills: ['日报助手'])` 会按标题 `skill.load` 取正文，拼成注入块：
+技能有两种加载方式：
+
+| 方式 | 用法 | 说明 |
+|---|---|---|
+| 显式 | `LoomRunner.run(..., skills: ['日报助手'])` | 按标题加载，顺序固定 |
+| 自动 | 不传 `skills`，`LoomMemoryPolicy.autoSkills = true`（默认） | 用「计划备注 + 起始输入」去 `SkillCatalog` 检索，取 `skillTopK`（默认 3）条 |
+
+`SkillCatalog` 的检索方式：
+
+| 模式 | 条件 | 打分 |
+|---|---|---|
+| 向量 | `LoomWiring.wire(skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))` 传入编码器 | 余弦相似度，向量按 `标题#版本` 缓存 |
+| 关键词 | 没传编码器，或编码失败 | 词面包含 / 字符命中比例 / 标题被任务描述覆盖的比例 |
+
+编码失败会**整体退回关键词**，不会因为一次 embedding 服务抖动就让技能不可用。
+
+加载后按标题 `skill.load` 取正文，拼成注入块：
 
 ```
 <人格/提示词正文>

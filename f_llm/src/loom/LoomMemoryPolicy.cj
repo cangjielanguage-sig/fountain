@@ -42,10 +42,17 @@ public class LoomMemoryPolicy {
     public let model: String
     /** 是否把提炼结果同时写进知识库（默认只写记忆与经验） */
     public let writeKnowledge: Bool
+    /** 未显式指定技能时，是否按任务描述自动挑选（走 [SkillCatalog]） */
+    public let autoSkills: Bool
+    /** 自动挑选的条数上限 */
+    public let skillTopK: Int64
+    /** 自动挑选的最低相关度 */
+    public let skillMinScore: Float64
 
     public init(enabled!: Bool = true, userId!: Int64 = 0, namespace!: String = 'loom',
                 maxTurns!: Int64 = 20, summarize!: Bool = false, model!: String = '',
-                writeKnowledge!: Bool = false) {
+                writeKnowledge!: Bool = false, autoSkills!: Bool = true,
+                skillTopK!: Int64 = 3, skillMinScore!: Float64 = 0.2) {
         this.enabled = enabled
         this.userId = userId
         this.namespace = namespace
@@ -53,6 +60,9 @@ public class LoomMemoryPolicy {
         this.summarize = summarize
         this.model = model
         this.writeKnowledge = writeKnowledge
+        this.autoSkills = autoSkills
+        this.skillTopK = skillTopK
+        this.skillMinScore = skillMinScore
     }
 
     private static var current = LoomMemoryPolicy()
