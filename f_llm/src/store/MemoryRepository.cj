@@ -62,4 +62,22 @@ public interface MemoryRepository {
     func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord>
 
     func remove(userId: Int64, id: Int64): Bool
+
+    /**
+     * 按 `kind` 分页。
+     *
+     * 默认实现是近似的（取一页再过滤）：仓储实现应覆盖成 SQL 条件或全量扫描，
+     * 否则 `limit` 很小时会漏掉目标记录。
+     */
+    func listByKind(userId: Int64, namespace: String, kind: String,
+                    offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let page = list(userId, namespace, offset, limit)
+        let matched = ArrayList<MemoryRecord>()
+        for(record in page){
+            if(record.kind == kind){
+                matched.add(record)
+            }
+        }
+        matched
+    }
 }

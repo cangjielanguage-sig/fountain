@@ -109,6 +109,16 @@ public class PostgresMemoryRepository <: MemoryRepository & RootService {
         records
     }
 
+    /** kind 条件下推到 SQL：先过滤再分页 */
+    public func listByKind(userId: Int64, namespace: String, kind: String,
+                           offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let records = ArrayList<MemoryRecord>()
+        for(row in memoryDao().listByKind(userId, namespace, kind, offset, limit)){
+            records.add(recordOf(row))
+        }
+        records
+    }
+
     public func remove(userId: Int64, id: Int64): Bool {
         memoryDao().deleteVectors(id)
         memoryDao().removeMemory(userId, id) > 0

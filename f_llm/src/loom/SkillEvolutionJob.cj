@@ -110,6 +110,7 @@ public class SkillEvolutionJob {
                            embedder!: ?(String) -> Array<Float64> = None,
                            matcherThreshold!: Float64 = 0.75,
                            nameCandidates!: Bool = false,
+                           ledger!: ?LoomStoreGateway = None,
                            now!: Int64 = 0): SkillEvolutionReport {
         let evolved = ArrayList<String>()
         let rejected = ArrayList<String>()
@@ -179,7 +180,9 @@ public class SkillEvolutionJob {
             for(candidate in matched.candidates){
                 match(SkillNamer.propose(chat, candidate.experiences)){
                     case Some(draft) =>
-                        emit(Skill(nextId, draft.title, draft.details, '{}', version: 1))
+                        // 把样例写进 functions，下一轮它才有 A/B 基线可用
+                        emit(Skill(nextId, draft.title, draft.details,
+                                   samplesJson(draft.samples), version: 1))
                         created.add('${draft.title} (id=${nextId})')
                         nextId++
                     case None =>
@@ -188,8 +191,17 @@ public class SkillEvolutionJob {
             }
         }
 
-        SkillEvolutionReport(evolved, rejected, skipped, created,
+        let report = SkillEvolutionReport(evolved, rejected, skipped, created,
             Int64(matched.candidates.size))
+        // 报告留档：传了 gateway 才写，写失败不影响本轮结果
+        if(let Some(gateway) <- ledger){
+            try{
+                SkillEvolutionLedger.write(gateway, report, now)
+            }catch(error: Exception){
+                ()
+            }
+        }
+        report
     }
 
     /**
@@ -302,6 +314,21 @@ public class SkillEvolutionJob {
             case Some(fn) => fn(skill)
             case None => ()
         }
+    }
+
+    /** 新技能的 functions 里塞样例，供下一轮 A/B 用 */
+    private static func samplesJson(samples: ArrayList<SkillSample>): String {
+        var text = '{"samples":['
+        var first = true
+        for(sample in samples){
+            if(!first){
+                text += ','
+            }
+            first = false
+            text += '{"input":${FlowPlan.jsonQuote(sample.input)},'
+            text += '"expect":${FlowPlan.jsonQuote(sample.expect)}}'
+        }
+        text + ']}'
     }
 
     private static func usageOf(items: ArrayList<ExperienceItem>): String {

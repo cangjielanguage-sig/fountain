@@ -30,7 +30,8 @@ class EvolutionFixture {
     public func chat(system: String, user: String): String {
         calls++
         if(system.contains('技能标题')){
-            return '{"title":"爬虫助手","details":"限速、重试、记录失败"}'
+            return '{"title":"爬虫助手","details":"限速、重试、记录失败",'
+                + '"samples":[{"input":"爬虫怎么防封","expect":"限速"}]}'
         }
         if(system.contains('新版')){
             return '三段式'
@@ -222,6 +223,28 @@ class SkillEvolutionJob_test {
             @Expect(fixture.saved[0].title, '爬虫助手')
             @Expect(fixture.saved[0].version, 1)
             @Expect(fixture.saved[0].details.contains('限速'), true)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 新建技能必须自带样例，否则下一轮无法自我演进 */
+    @TestCase
+    func testCreatedSkillCarriesSamples(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        try{
+            let items = ArrayList<ExperienceItem>([
+                ExperienceItem(1, '爬虫要限速'),
+                ExperienceItem(2, '爬虫要重试'),
+                ExperienceItem(3, '爬虫要记失败')
+            ].toArray())
+            SkillEvolutionJob.run(skills(true), items, ArrayList<ExperienceItem>(),
+                fixture.chat, SkillEvolutionState(),
+                embedder: encoder(), nameCandidates: true, now: 1000)
+            @Expect(fixture.saved.size, 1)
+            @Expect(fixture.saved[0].functions.contains('samples'), true)
+            @Expect(SkillSamples.of(fixture.saved[0]).size, 1)
         }finally{
             SkillEvolutionJob.resetSink()
         }

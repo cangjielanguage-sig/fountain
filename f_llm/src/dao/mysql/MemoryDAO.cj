@@ -144,6 +144,18 @@ public interface MySqlMemoryDAO <: RootDAO {
         executor.setSql(sql).mapList()
     }
 
+    /** 按 kind 分页：过滤在 SQL 里做，不会出现「本页没有就判空」 */
+    func myListByKind(userId: Int64, namespace: String, kind: String, offset: Int64,
+                      limit: Int64): ArrayList<HashMap<String, Any>> {
+        let sql = '''
+            SELECT id, user_id, namespace, title, content, kind FROM llm_memory
+            WHERE user_id = ${arg(userId)} AND namespace = ${arg(namespace)} AND kind = ${arg(kind)}
+            ORDER BY save_time DESC
+            LIMIT ${arg(offset)}, ${arg(limit)}
+        '''
+        executor.setSql(sql).mapList()
+    }
+
     func myRemoveMemory(userId: Int64, id: Int64): Int64 {
         let sql = 'DELETE FROM llm_memory WHERE user_id = ${arg(userId)} AND id = ${arg(id)}'
         let deleted = executor.setSql(sql).update

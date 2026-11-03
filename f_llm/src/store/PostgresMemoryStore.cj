@@ -82,6 +82,11 @@ public class SqlMemoryStore <: MemoryStore {
         repo.list(userId, namespace, offset, limit)
     }
 
+    public func listByKind(userId: Int64, namespace: String, kind: String,
+                           offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        repo.listByKind(userId, namespace, kind, offset, limit)
+    }
+
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
         let vector = embedder.embed(query.text)
         // 两路各取 topK 的 2 倍，融合后乘权重再截断

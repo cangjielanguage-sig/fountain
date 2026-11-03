@@ -19,14 +19,17 @@ import std.collection.*
 
 import fountain::f_data.*
 
-/** 模型提议的新技能：标题 + 正文 */
+/** 模型提议的新技能：标题 + 正文 + 自验样例 */
 public class SkillDraft {
     public let title: String
     public let details: String
+    /** 没有样例的技能无法通过 A/B 门禁，也就永远无法自我演进，所以要求至少一条 */
+    public let samples: ArrayList<SkillSample>
 
-    public init(title: String, details: String) {
+    public init(title: String, details: String, samples: ArrayList<SkillSample>) {
         this.title = title
         this.details = details
+        this.samples = samples
     }
 }
 
@@ -54,7 +57,9 @@ public class SkillNamer {
         }
         let system = '根据同一主题的一组经验，归纳出一个可复用的技能。'
             + '只输出 JSON，不要解释：{"title":"技能标题（不超过 24 字）",'
-            + '"details":"可直接复用的做法，分条列出"}'
+            + '"details":"可直接复用的做法，分条列出",'
+            + '"samples":[{"input":"典型输入","expect":"正确答案里必须出现的关键信息"}]}'
+            + '；samples 至少给 1 条，用于以后做回归对比'
         let raw = try{
             chat(system, usage)
         }catch(error: Exception){
@@ -85,7 +90,36 @@ public class SkillNamer {
         if(Int64(title.size) > MAX_TITLE){
             return None
         }
-        SkillDraft(title, details)
+        let samples = samplesOf(json)
+        if(samples.isEmpty()){
+            // 没样例的新技能不能自我演进：宁可不建，也不建一个「只能用手写样例救活」的空壳
+            return None
+        }
+        SkillDraft(title, details, samples)
+    }
+
+    private static func samplesOf(json: JsonObject): ArrayList<SkillSample> {
+        let result = ArrayList<SkillSample>()
+        let raw = match(json.get('samples')){
+            case Some(value) => value
+            case None => return result
+        }
+        match(raw as JsonArray){
+            case Some(items) =>
+                for(item in items){
+                    match(item as JsonObject){
+                        case Some(entry) =>
+                            let input = fieldOf(entry, 'input').trimAscii()
+                            let expect = fieldOf(entry, 'expect').trimAscii()
+                            if(!input.isEmpty() && !expect.isEmpty()){
+                                result.add(SkillSample(input, expect))
+                            }
+                        case None => ()
+                    }
+                }
+            case None => ()
+        }
+        result
     }
 
     private static func fieldOf(json: JsonObject, key: String): String {
