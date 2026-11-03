@@ -121,14 +121,41 @@ public class LoomHostApi {
     }
 
     public static func callLlm(model: String, system: String, input: String): String {
+        // 计划指定的人格/提示词：拼在 system 前面，空则不影响
+        let prefix = currentPersonaText()
+        let fullSystem = if(prefix.isEmpty()){ system }else if(system.isEmpty()){ prefix }
+                         else{ '${prefix}\n${system}' }
         match(current){
             case Some(host) =>
-                let output = host.callLlm(model, system, input)
+                let output = host.callLlm(model, fullSystem, input)
                 // 临时上下文：流程执行期记下每一次交互，结束时统一提炼记忆/经验
-                LoomContextLog.record(LlmTurn(model, system, input, output))
+                LoomContextLog.record(LlmTurn(model, fullSystem, input, output))
                 output
             case None => throw LoomException('loom host is not bound, cannot call llm: ${model}')
         }
+    }
+
+    /** 本次流程生效的人格/提示词文本（已解析） */
+    private static var personaText: String = ''
+
+    public static func setPersona(text: String): Unit {
+        synchronized(mutex){
+            personaText = text
+        }
+    }
+
+    public static func clearPersona(): Unit {
+        synchronized(mutex){
+            personaText = ''
+        }
+    }
+
+    public static func currentPersonaText(): String {
+        let box = TextBox()
+        synchronized(mutex){
+            box.value = personaText
+        }
+        box.value
     }
 
     /**

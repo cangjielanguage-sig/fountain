@@ -192,6 +192,16 @@ public class LoomStoreGateway {
                 }
                 return text + ']'
             }
+            if(action == 'load'){
+                // 按标题加载：流程里不需要知道 id
+                let title = strOf(args, 'title')
+                for(skill in meta.skills.list()){
+                    if(skill.title == title){
+                        return skillJson(skill)
+                    }
+                }
+                return ''
+            }
             if(action == 'upsert'){
                 // id<=0 视为新建：取当前最大 id + 1
                 var targetId = intOf(args, 'id')

@@ -153,6 +153,24 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 
 两条兜底：**模型返回的 JSON 解析失败**时回落到规则提炼；**存储未装配或写失败**时不影响流程结果（提炼失败被吞掉，流程照常返回）。
 
+## 人格与提示词
+
+`FlowPlan.persona` 有两种写法，执行期由 `LoomRunner.resolvePersona` 解析：
+
+| 写法 | 行为 |
+|---|---|
+| 提示词名（如 `reviewer`） | 先查 `prompt.latest`，命中则取 `content` 作为人格文本 |
+| 字面文本（如 `只挑错，不夸奖`） | 查不到就按原文使用 |
+
+解析结果通过 `LoomHostApi.setPersona` 挂到本次执行上，`callLlm` 时拼在 system 前面：
+
+```
+<人格/提示词正文>
+<步骤自己的 system>
+```
+
+执行结束 `clearPersona()` 复位；`character` 库的 `characterKey` 可以存这个 key，形成「按用户选人格 → 按 key 取提示词」的链路。
+
 ## 执行语义
 
 `LoomRunner` 用 `ImmediateFlow` 组装：每个步骤是一个 `QueuedClosureTask`，结果按计划的边改写事件名并回灌派发器。
@@ -234,6 +252,7 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 | `memory` | `remove` | `{"userId":1,"id":2}` | `true/false` |
 | `skill` | `count` | `{}` | 整数 |
 | `skill` | `get` / `list` | `{"id":3}` / `{}` | 技能 JSON / 数组 |
+| `skill` | `load` | `{"title":"日报助手"}` | 按标题加载技能（技能 JSON，未命中 `''`） |
 | `skill` | `upsert` | `{"id"?, "title","details","functions","version"?}` | 技能 id |
 | `skill` | `remove` | `{"id":3}` | `true/false` |
 | `memory` | `get` / `list` | `{"userId","id"}` / `{"userId","namespace","offset","limit"}` | 记录 / 数组 |

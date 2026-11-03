@@ -18,6 +18,8 @@ package fountain::f_llm.loom
 import std.collection.*
 import std.sync.*
 
+import fountain::f_data.*
+
 import fountain::f_egraph.base.*
 
 /** 记录最后一个步骤的输出（多线程下用锁保护） */
@@ -143,6 +145,11 @@ public class LoomRunner {
             bodies[id] = bodyOf(id, next, sink, compiled, barrier, record)
         }
 
+        // 计划指定的「人格/提示词」：先按提示词名查库，查不到就当字面文本
+        let persona = resolvePersona(plan.persona)
+        if(!persona.isEmpty()){
+            LoomHostApi.setPersona(persona)
+        }
         let policy = LoomMemoryPolicy.effective()
         if(policy.enabled){
             LoomContextLog.begin()
@@ -159,6 +166,7 @@ public class LoomRunner {
             let turns = LoomContextLog.snapshot()
             LoomContextLog.clear()
             LoomHostApi.unbind()
+            LoomHostApi.clearPersona()
             if(policy.enabled && !turns.isEmpty()){
                 try{
                     LoomMemoryExtractor.extract(plan.name, turns, host, policy)
@@ -297,6 +305,37 @@ public class LoomRunner {
             box.value = tagSeq
         }
         '${name}#${box.value}'
+    }
+
+    /**
+     * 解析计划里的 `persona`：先按「提示词名」查 `prompt.latest`，命中的取 content；
+     * 查不到（或存储未装配）就当字面人格文本用。
+     */
+    private static func resolvePersona(value: String): String {
+        if(value.trimAscii().isEmpty()){
+            return ''
+        }
+        try{
+            let text = LoomHostApi.callStore('prompt', 'latest',
+                '{"name":${FlowPlan.jsonQuote(value)}}')
+            if(!text.trimAscii().isEmpty()){
+                match(JsonValue.fromStr(text) as JsonObject){
+                    case Some(json) =>
+                        match(json.get('content')){
+                            case Some(field) =>
+                                match(field as JsonString){
+                                    case Some(item) => return item.value
+                                    case None => ()
+                                }
+                            case None => ()
+                        }
+                    case None => ()
+                }
+            }
+        }catch(error: Exception){
+            ()
+        }
+        value
     }
 
     /** 每个步骤的后继列表（保持计划中的顺序） */
