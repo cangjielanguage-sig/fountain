@@ -143,6 +143,10 @@ public class LoomRunner {
             bodies[id] = bodyOf(id, next, sink, compiled, barrier, record)
         }
 
+        let policy = LoomMemoryPolicy.effective()
+        if(policy.enabled){
+            LoomContextLog.begin()
+        }
         LoomHostApi.bind(host)
         try{
             if(parallel){
@@ -151,7 +155,18 @@ public class LoomRunner {
                 runSync(plan, order, bodies, producing, tag, input)
             }
         }finally{
+            // 先取快照并关闭记录，再解绑——提炼阶段自己发的模型请求不会被记进来
+            let turns = LoomContextLog.snapshot()
+            LoomContextLog.clear()
             LoomHostApi.unbind()
+            if(policy.enabled && !turns.isEmpty()){
+                try{
+                    LoomMemoryExtractor.extract(plan.name, turns, host, policy)
+                }catch(error: Exception){
+                    // 记忆提炼失败不影响流程结果
+                    ()
+                }
+            }
         }
         match(record.get()){
             case Some(event) => event

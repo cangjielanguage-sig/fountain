@@ -45,7 +45,8 @@ public class LoomWiring {
 
     public static func wire(chat: (String, String, String) -> String,
                             plannerModel!: String = '',
-                            store!: ?LoomStore = None): LoomService {
+                            store!: ?LoomStore = None,
+                            memoryPolicy!: ?LoomMemoryPolicy = None): LoomService {
         let settings = StoreSettings.load()
         // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
         let chosen = match(store){
@@ -63,6 +64,11 @@ public class LoomWiring {
         })
         // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
         LoomServices.installHost(DefaultLoomHost(chat))
+        // 记忆策略：默认开启（规则提炼），需要模型总结时由调用方传入 summarize=true
+        match(memoryPolicy){
+            case Some(policy) => LoomMemoryPolicy.install(policy)
+            case None => ()
+        }
         service
     }
 }

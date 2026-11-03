@@ -122,7 +122,11 @@ public class LoomHostApi {
 
     public static func callLlm(model: String, system: String, input: String): String {
         match(current){
-            case Some(host) => host.callLlm(model, system, input)
+            case Some(host) =>
+                let output = host.callLlm(model, system, input)
+                // 临时上下文：流程执行期记下每一次交互，结束时统一提炼记忆/经验
+                LoomContextLog.record(LlmTurn(model, system, input, output))
+                output
             case None => throw LoomException('loom host is not bound, cannot call llm: ${model}')
         }
     }

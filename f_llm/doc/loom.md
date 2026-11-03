@@ -105,6 +105,54 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 - 测试可传 `store:` 注入内存实现，避免占用默认数据目录；
 - 工具调用通过 `LoomServices.current()` 取服务实例。
 
+## 临时上下文与记忆提炼
+
+流程执行期每次通过 `loomCallLlm` 与大模型交互，都会往 `LoomContextLog` 记一条：
+
+```cangjie
+LlmTurn(model, system, input, output)
+```
+
+记录的生命周期严格绑在一次执行上：
+
+```
+LoomRunner.runCompiled
+  ├─ begin()                 清空并激活
+  ├─ … 步骤执行，每次 callLlm 追加一条 …
+  └─ finally
+       ├─ snapshot()         取快照
+       ├─ clear()            关闭记录（提炼阶段的模型请求不会被记进来）
+       ├─ unbind()
+       └─ LoomMemoryExtractor.extract(plan.name, turns, host, policy)
+```
+
+提炼结果写两条记忆，都走 `memory.add`：
+
+| 标题 | kind | 内容 |
+|---|---|---|
+| `流程 <name> 记忆` | `note` | 各轮 system/input/output 的摘要（默认取最近 `maxTurns` 轮） |
+| `流程 <name> 经验` | `experience` | 交互次数 + 最后一次输出摘要 |
+
+策略由 `LoomMemoryPolicy` 控制：
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `enabled` | `true` | 关闭后连临时上下文都不记 |
+| `userId` / `namespace` | `0` / `loom` | 记忆归属 |
+| `maxTurns` | `20` | 摘要只取最近 N 轮，防止长流程把记忆撑爆 |
+| `summarize` | `false` | `true` 时让模型读摘要并返回 `{"memory":"…","experience":"…"}` |
+| `model` | `''` | `summarize=true` 时必填，走 `host.callLlm` |
+
+装配：
+
+```cangjie
+LoomWiring.wire(chat, plannerModel: 'chat-pro',
+                memoryPolicy: LoomMemoryPolicy(userId: 7, namespace: 'work',
+                                               summarize: true, model: 'deepseek-flash'))
+```
+
+两条兜底：**模型返回的 JSON 解析失败**时回落到规则提炼；**存储未装配或写失败**时不影响流程结果（提炼失败被吞掉，流程照常返回）。
+
 ## 执行语义
 
 `LoomRunner` 用 `ImmediateFlow` 组装：每个步骤是一个 `QueuedClosureTask`，结果按计划的边改写事件名并回灌派发器。
