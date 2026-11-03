@@ -135,10 +135,35 @@ class LoomStoreGateway_test {
     }
 
     @TestCase
+    func testPromptPutAutoVersionAndLatest(): Unit {
+        let gateway = gateway()
+        @Expect(gateway.call('prompt', 'put', '{"name":"score","content":"v1 正文"}'), '1')
+        @Expect(gateway.call('prompt', 'put', '{"name":"score","content":"v2 正文"}'), '2')
+        let latest = gateway.call('prompt', 'latest', '{"name":"score"}')
+        @Expect(latest.contains('"version":2'), true)
+        @Expect(latest.contains('v2 正文'), true)
+        @Expect(gateway.call('prompt', 'get', '{"name":"score","version":1}').contains('v1 正文'), true)
+        @Expect(gateway.call('prompt', 'remove', '{"name":"score","version":1}'), 'true')
+        @Expect(gateway.call('prompt', 'latest', '{"name":"missing"}'), '')
+    }
+
+    @TestCase
+    func testCharacterSetGetReset(): Unit {
+        let gateway = gateway()
+        @Expect(gateway.call('character', 'set',
+            '{"userId":7,"characterKey":"reviewer","prompts":"严格"}'), 'ok')
+        let loaded = gateway.call('character', 'get', '{"userId":7}')
+        @Expect(loaded.contains('"characterKey":"reviewer"'), true)
+        @Expect(gateway.call('character', 'reset', '{"userId":7}'), 'ok')
+        @Expect(gateway.call('character', 'get', '{"userId":7}'), '')
+    }
+
+    @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''
         try{
-            gateway().call('prompt', 'put', '{}')
+            // prompt.put 已实现，用真正不存在的 op 触发错误分支
+            gateway().call('character', 'purge', '{}')
         }catch(e: Exception){
             message = e.message
         }

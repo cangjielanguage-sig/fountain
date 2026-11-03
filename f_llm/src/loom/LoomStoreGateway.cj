@@ -212,6 +212,59 @@ public class LoomStoreGateway {
             }
         }
 
+        if(name == 'prompt'){
+            if(action == 'get'){
+                match(meta.prompts.get(strOf(args, 'name'), intOf(args, 'version'))){
+                    case Some(entry) => return promptJson(entry)
+                    case None => return ''
+                }
+            }
+            if(action == 'latest'){
+                match(meta.prompts.latest(strOf(args, 'name'))){
+                    case Some(entry) => return promptJson(entry)
+                    case None => return ''
+                }
+            }
+            if(action == 'put'){
+                let name_ = strOf(args, 'name')
+                if(name_.isEmpty()){
+                    throw LoomException('loom store gateway: prompt.put requires name')
+                }
+                // version<=0：接在最新版本之后
+                var version = intOf(args, 'version')
+                if(version <= 0){
+                    version = match(meta.prompts.latest(name_)){
+                        case Some(entry) => entry.version + 1
+                        case None => 1
+                    }
+                }
+                meta.prompts.put(PromptEntry(name_, version, strOf(args, 'content')))
+                return version.toString()
+            }
+            if(action == 'remove'){
+                return meta.prompts.remove(strOf(args, 'name'), intOf(args, 'version')).toString()
+            }
+        }
+
+        if(name == 'character'){
+            let userId = intOf(args, 'userId')
+            if(action == 'get'){
+                match(meta.characters.get(userId)){
+                    case Some(character) => return characterJson(character)
+                    case None => return ''
+                }
+            }
+            if(action == 'set'){
+                meta.characters.set(Character(userId, strOf(args, 'characterKey'),
+                    strOf(args, 'prompts')))
+                return 'ok'
+            }
+            if(action == 'reset'){
+                meta.characters.reset(userId)
+                return 'ok'
+            }
+        }
+
         throw LoomException('loom store gateway: unsupported ${kind}.${op}')
     }
 
@@ -271,6 +324,17 @@ public class LoomStoreGateway {
         '{"id":${skill.id},"title":${FlowPlan.jsonQuote(skill.title)},'
             + '"details":${FlowPlan.jsonQuote(skill.details)},'
             + '"version":${skill.version}}'
+    }
+
+    private static func promptJson(entry: PromptEntry): String {
+        '{"name":${FlowPlan.jsonQuote(entry.name)},"version":${entry.version},'
+            + '"content":${FlowPlan.jsonQuote(entry.content)}}'
+    }
+
+    private static func characterJson(character: Character): String {
+        '{"userId":${character.userId},'
+            + '"characterKey":${FlowPlan.jsonQuote(character.characterKey)},'
+            + '"prompts":${FlowPlan.jsonQuote(character.prompts)}}'
     }
 
     private static func quotes(values: ArrayList<String>): String {

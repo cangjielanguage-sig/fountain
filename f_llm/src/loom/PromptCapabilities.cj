@@ -51,8 +51,9 @@ public class PromptCapabilities {
         var text = '可用能力（运行期按需调用，禁止虚构不存在的工具名）：\n'
         text += '- loomCallTool(name, argsJson)：调用已注册的 tool_call 或 MCP 工具\n'
         text += '- loomCallLlm(model, system, input)：调用大模型\n'
-        text += '- loomStore(kind, op, payload)：kind = memory | knowledge | skill | experience；'
-        text += 'op = search | get | list | add | upsert | remove | docIds | count\n'
+        text += '- loomStore(kind, op, payload)：'
+        text += 'kind = memory | knowledge | skill | experience | prompt | character；'
+        text += 'op = search | get | list | add | upsert | remove | docIds | count | latest | put | set | reset\n'
         if(tools.isEmpty()){
             text += '已注册工具：（当前没有）\n'
         }else{

@@ -185,7 +185,16 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 | `memory` | `add` | `{"userId":1,"namespace":"n","title":"t","content":"c","kind":"fact"}` | 记录 id |
 | `memory` | `remove` | `{"userId":1,"id":2}` | `true/false` |
 | `skill` | `count` | `{}` | 整数 |
+| `skill` | `get` / `list` | `{"id":3}` / `{}` | 技能 JSON / 数组 |
+| `skill` | `upsert` | `{"id"?, "title","details","functions","version"?}` | 技能 id |
 | `skill` | `remove` | `{"id":3}` | `true/false` |
+| `memory` | `get` / `list` | `{"userId","id"}` / `{"userId","namespace","offset","limit"}` | 记录 / 数组 |
+| `experience` | 同 `memory` | 同上，`kind` 缺省 `experience` | 同上 |
+| `prompt` | `latest` / `get` | `{"name"}` / `{"name","version"}` | `{name,version,content}`，未命中 `''` |
+| `prompt` | `put` | `{"name","content","version"?}` | 版本号（缺省自动 +1） |
+| `prompt` | `remove` | `{"name","version"}` | `true/false` |
+| `character` | `get` | `{"userId":1}` | `{userId,characterKey,prompts}`，未命中 `''` |
+| `character` | `set` / `reset` | `{"userId","characterKey","prompts"}` / `{"userId"}` | `ok` |
 
 未列出的 op 一律抛错，不静默返回空值。
 
