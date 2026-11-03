@@ -123,9 +123,14 @@ public class LoomStoreGateway {
             if(action == 'list'){
                 let records = content.memory.list(userId, strOf(args, 'namespace'),
                     intOf(args, 'offset'), intOf(args, 'limit'))
+                // kind 过滤发生在分页之后：调用方要按 kind 取全量时，把 limit 放宽
+                let kindFilter = strOf(args, 'kind')
                 var text = '['
                 var first = true
                 for(record in records){
+                    if(!kindFilter.isEmpty() && record.kind != kindFilter){
+                        continue
+                    }
                     if(!first){
                         text += ','
                     }

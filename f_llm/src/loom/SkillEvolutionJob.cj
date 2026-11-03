@@ -18,7 +18,20 @@ package fountain::f_llm.loom
 import std.collection.*
 import std.sync.*
 
+import fountain::f_data.*
+
 import fountain::f_llm.store.*
+
+/** 一轮演进需要的两批经验 */
+public class EvolutionInput {
+    public let successes: ArrayList<ExperienceItem>
+    public let failures: ArrayList<ExperienceItem>
+
+    public init(successes: ArrayList<ExperienceItem>, failures: ArrayList<ExperienceItem>) {
+        this.successes = successes
+        this.failures = failures
+    }
+}
 
 /** 每个技能的演进状态：上次尝试时间、上次是否过门禁 */
 public class SkillEvolutionState {
@@ -86,7 +99,7 @@ public class SkillEvolutionJob {
 
     public static func run(skills: ArrayList<Skill>,
                            successes: ArrayList<ExperienceItem>,
-                           failures: HashMap<String, Int64>,
+                           failures: ArrayList<ExperienceItem>,
                            chat: (String, String) -> String,
                            state: SkillEvolutionState,
                            policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
@@ -104,9 +117,18 @@ public class SkillEvolutionJob {
             owner[item.skillTitle] = item.experiences
         }
 
+        // 失败经验同样按技能归属后计数：成功率要按「这个技能的历史表现」算，
+        // 不能拿全局成败冒充——不同技能的难度差很多
+        let failed = SkillMatcher.assign(failures, skills, embedder: embedder,
+                                         threshold: matcherThreshold)
+        let failureCounts = HashMap<String, Int64>()
+        for(item in failed.assignments){
+            failureCounts[item.skillTitle] = Int64(item.experiences.size)
+        }
+
         for(skill in skills){
             let items = owner.get(skill.title) ?? ArrayList<ExperienceItem>()
-            let failureCount = failures.get(skill.title) ?? 0
+            let failureCount = failureCounts.get(skill.title) ?? 0
             let decision = policy.decide(Int64(items.size), failureCount,
                 state.lastEvolvedAt(skill.title), state.lastGatePassed(skill.title), now)
             if(!decision.shouldEvolve){
@@ -145,6 +167,58 @@ public class SkillEvolutionJob {
     }
 
     /**
+     * 从存储里取本轮输入：成功经验、失败经验各一批。
+     *
+     * 经验写入时不绑定技能，所以这里只能按 `kind` 取；归属由 [run] 内部的匹配完成。
+     */
+    public static func load(gateway: LoomStoreGateway, userId: Int64, namespace: String,
+                            limit!: Int64 = 500): EvolutionInput {
+        EvolutionInput(experiencesOf(gateway, userId, namespace, 'experience', limit),
+                       experiencesOf(gateway, userId, namespace, 'experience_failed', limit))
+    }
+
+    private static func experiencesOf(gateway: LoomStoreGateway, userId: Int64,
+                                      namespace: String, kind: String,
+                                      limit: Int64): ArrayList<ExperienceItem> {
+        let result = ArrayList<ExperienceItem>()
+        let payload = '{"userId":${userId},'
+            + '"namespace":${FlowPlan.jsonQuote(namespace)},'
+            + '"kind":${FlowPlan.jsonQuote(kind)},'
+            + '"offset":0,"limit":${limit}}'
+        let text = try{
+            gateway.call('memory', 'list', payload)
+        }catch(error: Exception){
+            '[]'
+        }
+        let json = match(JsonValue.fromStr(text) as JsonArray){
+            case Some(value) => value
+            case None => return result
+        }
+        for(item in json){
+            match(item as JsonObject){
+                case Some(record) =>
+                    let id = match(record.get('id')){
+                        case Some(value) => Int64.tryParse(value.toString()) ?? 0
+                        case None => 0
+                    }
+                    let content = match(record.get('content')){
+                        case Some(value) =>
+                            match(value as JsonString){
+                                case Some(field) => field.value
+                                case None => ''
+                            }
+                        case None => ''
+                    }
+                    if(!content.isEmpty()){
+                        result.add(ExperienceItem(id, content))
+                    }
+                case None => ()
+            }
+        }
+        result
+    }
+
+    /**
      * 注册成定时任务：到点跑一轮（判定 → 提炼 → 门禁 → 落库）。
      *
      * 依赖的输入都用闭包传入，因为技能库、经验库、当前时间是运行期才确定的。
@@ -152,7 +226,7 @@ public class SkillEvolutionJob {
     public static func schedule(name: String, cron: String, scheduler: LoomScheduler,
                                 skills: () -> ArrayList<Skill>,
                                 successes: () -> ArrayList<ExperienceItem>,
-                                failures: () -> HashMap<String, Int64>,
+                                failures: () -> ArrayList<ExperienceItem>,
                                 chat: (String, String) -> String,
                                 state: SkillEvolutionState,
                                 policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),

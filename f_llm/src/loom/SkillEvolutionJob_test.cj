@@ -73,7 +73,7 @@ class SkillEvolutionJob_test {
         SkillEvolutionJob.installSink(fixture.sink)
         try{
             let report = SkillEvolutionJob.run(skills(true), experiences(3),
-                HashMap<String, Int64>(), fixture.chat, SkillEvolutionState(),
+                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
                 embedder: encoder(), now: 1000)
             @Expect(report.evolved.size, 1)
             @Expect(report.rejected.size, 0)
@@ -92,7 +92,7 @@ class SkillEvolutionJob_test {
         SkillEvolutionJob.installSink(fixture.sink)
         try{
             let report = SkillEvolutionJob.run(skills(false), experiences(3),
-                HashMap<String, Int64>(), fixture.chat, SkillEvolutionState(),
+                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
                 embedder: encoder(), now: 1000)
             @Expect(report.evolved.size, 0)
             @Expect(report.rejected.size, 1)
@@ -110,7 +110,7 @@ class SkillEvolutionJob_test {
         SkillEvolutionJob.installSink(fixture.sink)
         try{
             let report = SkillEvolutionJob.run(skills(true), experiences(1),
-                HashMap<String, Int64>(), fixture.chat, SkillEvolutionState(),
+                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
                 embedder: encoder(), now: 1000)
             @Expect(report.skipped.size, 1)
             @Expect(report.skipped[0].contains('not enough successful samples'), true)
@@ -128,10 +128,10 @@ class SkillEvolutionJob_test {
         try{
             let state = SkillEvolutionState()
             SkillEvolutionJob.run(skills(true), experiences(3),
-                HashMap<String, Int64>(), fixture.chat, state,
+                ArrayList<ExperienceItem>(), fixture.chat, state,
                 embedder: encoder(), now: 1000)
             let second = SkillEvolutionJob.run(skills(true), experiences(3),
-                HashMap<String, Int64>(), fixture.chat, state,
+                ArrayList<ExperienceItem>(), fixture.chat, state,
                 embedder: encoder(), now: 2000)
             @Expect(second.evolved.size, 0)
             @Expect(second.skipped.size, 1)
@@ -153,13 +153,50 @@ class SkillEvolutionJob_test {
                 ExperienceItem(3, '爬虫要记失败')
             ].toArray())
             let report = SkillEvolutionJob.run(skills(true), items,
-                HashMap<String, Int64>(), fixture.chat, SkillEvolutionState(),
+                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
                 embedder: encoder(), now: 1000)
             @Expect(report.candidateClusters, 1)
             @Expect(fixture.saved.size, 0)
         }finally{
             SkillEvolutionJob.resetSink()
         }
+    }
+
+    /** 失败经验按技能归属后计入成功率：3 成功 2 失败 → 0.6 未达标，跳过 */
+    @TestCase
+    func testFailuresAreAttributedPerSkill(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        try{
+            let failed = ArrayList<ExperienceItem>([
+                ExperienceItem(1, '日报助手 三段式 出错'),
+                ExperienceItem(2, '日报助手 结论 出错')
+            ].toArray())
+            let report = SkillEvolutionJob.run(skills(true), experiences(3), failed,
+                fixture.chat, SkillEvolutionState(), embedder: encoder(), now: 1000)
+            @Expect(report.evolved.size, 0)
+            @Expect(report.skipped.size, 1)
+            @Expect(report.skipped[0].contains('success rate too low'), true)
+            @Expect(fixture.calls, 0)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 从存储按 kind 取两批经验 */
+    @TestCase
+    func testLoadReadsExperiencesByKind(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        gateway.call('memory', 'add',
+            '{"userId":1,"namespace":"n","title":"a","content":"日报 成功一","kind":"experience"}')
+        gateway.call('memory', 'add',
+            '{"userId":1,"namespace":"n","title":"b","content":"日报 成功二","kind":"experience"}')
+        gateway.call('memory', 'add',
+            '{"userId":1,"namespace":"n","title":"c","content":"日报 失败一","kind":"experience_failed"}')
+
+        let input = SkillEvolutionJob.load(gateway, 1, 'n')
+        @Expect(input.successes.size, 2)
+        @Expect(input.failures.size, 1)
     }
 
     /** 注册成定时任务后，触发一次即跑一轮演进 */
@@ -170,7 +207,7 @@ class SkillEvolutionJob_test {
         let scheduler = ManualScheduler()
         try{
             SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', scheduler,
-                { => skills(true) }, { => experiences(3) }, { => HashMap<String, Int64>() },
+                { => skills(true) }, { => experiences(3) }, { => ArrayList<ExperienceItem>() },
                 fixture.chat, SkillEvolutionState(), embedder: encoder())
             @Expect(scheduler.crons.get('nightly-skill').getOrThrow(), '0 0 3 * * * *')
 

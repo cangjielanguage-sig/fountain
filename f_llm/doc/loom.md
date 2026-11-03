@@ -176,6 +176,15 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 
 **没有样例时不落库**——无据可依的演进会污染技能库，宁可人工确认。
 
+取数入口：经验写入时不绑定技能，所以只按 `kind` 取，归属交给匹配阶段：
+
+```cangjie
+let input = SkillEvolutionJob.load(gateway, userId: 7, namespace: 'work')
+// input.successes = kind=experience，input.failures = kind=experience_failed
+```
+
+失败经验也会被 `SkillMatcher` 归属到技能，用来算**该技能**的成功率——不同技能难度差很多，拿全局成败冒充会误判。
+
 注册成定时任务：
 
 ```cangjie
@@ -322,7 +331,7 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `skill` | `load` | `{"title":"日报助手"}` | 按标题加载技能（技能 JSON，未命中 `''`） |
 | `skill` | `upsert` | `{"id"?, "title","details","functions","version"?}` | 技能 id |
 | `skill` | `remove` | `{"id":3}` | `true/false` |
-| `memory` | `get` / `list` | `{"userId","id"}` / `{"userId","namespace","offset","limit"}` | 记录 / 数组 |
+| `memory` | `get` / `list` | `{"userId","id"}` / `{"userId","namespace","offset","limit","kind"?}` | 记录 / 数组（`kind` 在分页后过滤） |
 | `experience` | 同 `memory` | 同上，`kind` 缺省 `experience` | 同上 |
 | `prompt` | `latest` / `get` | `{"name"}` / `{"name","version"}` | `{name,version,content}`，未命中 `''` |
 | `prompt` | `put` | `{"name","content","version"?}` | 版本号（缺省自动 +1） |
