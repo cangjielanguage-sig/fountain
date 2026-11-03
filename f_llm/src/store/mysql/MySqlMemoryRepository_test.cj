@@ -78,8 +78,26 @@ public class MySqlMemoryRepositoryTest {
         values
     }
 
+    /** 库不可达时打印 SKIP 并跳过；断言失败仍会正常暴露 */
+    private func available(): Bool {
+        try{
+            executor()
+            true
+        }catch(e: Exception){
+            println("SKIP MySqlMemoryRepositoryTest: ${e.message}")
+            false
+        }
+    }
+
     @TestCase
     func testUpsertAndAnnSearch(): Unit {
+        if(!available()){
+            return
+        }
+        runUpsertAndAnnSearch()
+    }
+
+    private func runUpsertAndAnnSearch(): Unit {
         let executor = executor()
         prepare(executor)
         let repo = MySqlMemoryRepository(database: 'fllm_test')
@@ -99,6 +117,13 @@ public class MySqlMemoryRepositoryTest {
 
     @TestCase
     func testUpsertOverwritesSameTitle(): Unit {
+        if(!available()){
+            return
+        }
+        runUpsertOverwritesSameTitle()
+    }
+
+    private func runUpsertOverwritesSameTitle(): Unit {
         let executor = executor()
         prepare(executor)
         let repo = MySqlMemoryRepository(database: 'fllm_test')

@@ -105,3 +105,19 @@ cd f_llm && cjpm clean && cjpm test
 | `OutOfMemoryError @ SSTable.openFromFile` | `/tmp/fllm-*` 残留坏文件 | `rm -rf /tmp/fllm-*` |
 | `Table ... doesn't exist` / 结果条数翻倍 | 多个测试类共用 `fllm_test` 库、互相 DROP/CREATE | 清库 `DROP DATABASE fllm_test; CREATE DATABASE fllm_test;` |
 | `Connection refused 127.0.0.1:3306` | MySQL 没起 | 按上面的启动命令拉起 |
+
+## 集成用例的跳过约定
+
+`store/it`、`store/mysql` 下依赖真实库的用例都遵循同一条约定：
+
+```cangjie
+@TestCase
+func testX(): Unit {
+    if(!mySqlReady()){     // 只探测连接；失败时打印 SKIP 并 return
+        return
+    }
+    runX()                 // 断言在这里，失败照常报错
+}
+```
+
+**不要用整段 `try { run() } catch { println("SKIP") }` 包住用例**——那会把 `@Expect` 失败也一起吞掉，用例永远显示通过，等于造假绿。判断"环境缺失"和判断"功能错误"必须分开。

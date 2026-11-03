@@ -66,8 +66,40 @@ public class CrossBackendConformanceTest {
         text
     }
 
+    /** 库不可达时打印 SKIP 并跳过；断言失败仍会正常暴露（不能连断言一起吞） */
+    private func mySqlReady(): Bool {
+        try{
+            registerMysqlDriver()
+            ORM.register(DriverManager.getDriver('mysql').getOrThrow(), MY_URL, default: true)
+            ORM.executor('mysql')
+            true
+        }catch(e: Exception){
+            println("SKIP CrossBackendTest(MySQL): ${e.message}")
+            false
+        }
+    }
+
+    private func postgresReady(): Bool {
+        try{
+            registerPostgresDriver()
+            ORM.register(DriverManager.getDriver('postgres').getOrThrow(), PG_URL, default: true)
+            ORM.executor('postgres')
+            true
+        }catch(e: Exception){
+            println("SKIP CrossBackendTest(PG): ${e.message}")
+            false
+        }
+    }
+
     @TestCase
     func testMySqlDdlIsIdempotent(): Unit {
+        if(!mySqlReady()){
+            return
+        }
+        runMySqlDdlIsIdempotent()
+    }
+
+    private func runMySqlDdlIsIdempotent(): Unit {
         registerMysqlDriver()
         ORM.register(DriverManager.getDriver('mysql').getOrThrow(), MY_URL, default: true)
         let executor = ORM.executor('mysql')
@@ -85,6 +117,13 @@ public class CrossBackendConformanceTest {
 
     @TestCase
     func testTopKParityBetweenPgAndMySql(): Unit {
+        if(!postgresReady() || !mySqlReady()){
+            return
+        }
+        runTopKParityBetweenPgAndMySql()
+    }
+
+    private func runTopKParityBetweenPgAndMySql(): Unit {
         // PG
         registerPostgresDriver()
         ORM.register(DriverManager.getDriver('postgres').getOrThrow(), PG_URL, default: true)

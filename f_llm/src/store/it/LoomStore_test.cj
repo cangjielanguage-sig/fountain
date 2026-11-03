@@ -46,14 +46,40 @@ public class LoomStoreTest {
         value
     }
 
-    @TestCase
-    func testPostgresLoomStoreRoundtrip(): Unit {
-        // 与其他集成用例一致：库不可达时打印 SKIP，而不是把环境缺失算成失败
+    /**
+     * 只把「连不上」当 SKIP；断言失败必须照常暴露。
+     * 用整段 try/catch 包住用例会把 @Expect 的失败也吞掉，变成假的绿。
+     */
+    private func postgresReady(): Bool {
         try{
-            runPostgresRoundtrip()
+            registerPostgresDriver()
+            ORM.register(DriverManager.getDriver('postgres').getOrThrow(), PG_URL, default: true)
+            ORM.executor('postgres')
+            true
         }catch(e: Exception){
             println("SKIP LoomStoreTest(PG): ${e.message}")
+            false
         }
+    }
+
+    private func mySqlReady(): Bool {
+        try{
+            registerMysqlDriver()
+            ORM.register(DriverManager.getDriver('mysql').getOrThrow(), MY_URL, default: true)
+            ORM.executor('mysql')
+            true
+        }catch(e: Exception){
+            println("SKIP LoomStoreTest(MySQL): ${e.message}")
+            false
+        }
+    }
+
+    @TestCase
+    func testPostgresLoomStoreRoundtrip(): Unit {
+        if(!postgresReady()){
+            return
+        }
+        runPostgresRoundtrip()
     }
 
     private func runPostgresRoundtrip(): Unit {
@@ -95,11 +121,10 @@ public class LoomStoreTest {
 
     @TestCase
     func testMySqlLoomStoreRoundtrip(): Unit {
-        try{
-            runMySqlRoundtrip()
-        }catch(e: Exception){
-            println("SKIP LoomStoreTest(MySQL): ${e.message}")
+        if(!mySqlReady()){
+            return
         }
+        runMySqlRoundtrip()
     }
 
     private func runMySqlRoundtrip(): Unit {
