@@ -57,6 +57,11 @@ public class MemoryStoreAdapter <: MemoryStore {
         delegate.list(userId, namespace, offset, limit)
     }
 
+    public func listByKind(userId: Int64, namespace: String, kind: String,
+                           offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        delegate.listByKind(userId, namespace, kind, offset, limit)
+    }
+
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
         delegate.search(query)
     }

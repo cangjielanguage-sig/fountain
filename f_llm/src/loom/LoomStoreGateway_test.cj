@@ -158,6 +158,20 @@ class LoomStoreGateway_test {
         @Expect(gateway.call('character', 'get', '{"userId":7}'), '')
     }
 
+    /** kind 过滤必须先于分页：limit=1 时也要能取到目标 kind 的记录 */
+    @TestCase
+    func testListFiltersByKindBeforePaging(): Unit {
+        let gateway = gateway()
+        gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"a","content":"普通","kind":"note"}')
+        gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"b","content":"经验","kind":"experience"}')
+        let hits = gateway.call('memory', 'list',
+            '{"userId":7,"namespace":"n","kind":"experience","offset":0,"limit":1}')
+        @Expect(hits.contains('"kind":"experience"'), true)
+        @Expect(hits.contains('"kind":"note"'), false)
+    }
+
     @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''

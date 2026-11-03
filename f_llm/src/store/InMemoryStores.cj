@@ -115,6 +115,18 @@ public class InMemoryMemoryStore <: MemoryStore {
         slice(matched, offset, limit)
     }
 
+    /** 先过滤再分页：内存实现可以做到精确 */
+    public func listByKind(userId: Int64, namespace: String, kind: String,
+                           offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let matched = ArrayList<MemoryRecord>()
+        for((_, record) in records){
+            if(record.userId == userId && record.namespace == namespace && record.kind == kind){
+                matched.add(record)
+            }
+        }
+        slice(matched, offset, limit)
+    }
+
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
         let hits = ArrayList<MemoryHit>()
         for((_, record) in records){

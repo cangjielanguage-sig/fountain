@@ -70,13 +70,17 @@ public class SkillEvolutionReport {
     public let evolved: ArrayList<String>
     public let rejected: ArrayList<String>
     public let skipped: ArrayList<String>
+    /** 本轮新建的技能标题（`nameCandidates: true` 时才会出现） */
+    public let created: ArrayList<String>
     public let candidateClusters: Int64
 
     public init(evolved: ArrayList<String>, rejected: ArrayList<String>,
-                skipped: ArrayList<String>, candidateClusters: Int64) {
+                skipped: ArrayList<String>, created: ArrayList<String>,
+                candidateClusters: Int64) {
         this.evolved = evolved
         this.rejected = rejected
         this.skipped = skipped
+        this.created = created
         this.candidateClusters = candidateClusters
     }
 }
@@ -105,6 +109,7 @@ public class SkillEvolutionJob {
                            policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
                            embedder!: ?(String) -> Array<Float64> = None,
                            matcherThreshold!: Float64 = 0.75,
+                           nameCandidates!: Bool = false,
                            now!: Int64 = 0): SkillEvolutionReport {
         let evolved = ArrayList<String>()
         let rejected = ArrayList<String>()
@@ -162,7 +167,28 @@ public class SkillEvolutionJob {
             state.mark(skill.title, now, true)
         }
 
-        SkillEvolutionReport(evolved, rejected, skipped,
+        // 新技能候选：只有显式开启 nameCandidates 才让模型起名并落库
+        let created = ArrayList<String>()
+        if(nameCandidates && !matched.candidates.isEmpty()){
+            var nextId: Int64 = 1
+            for(skill in skills){
+                if(skill.id >= nextId){
+                    nextId = skill.id + 1
+                }
+            }
+            for(candidate in matched.candidates){
+                match(SkillNamer.propose(chat, candidate.experiences)){
+                    case Some(draft) =>
+                        emit(Skill(nextId, draft.title, draft.details, '{}', version: 1))
+                        created.add('${draft.title} (id=${nextId})')
+                        nextId++
+                    case None =>
+                        rejected.add('candidate cluster: model did not return a valid name')
+                }
+            }
+        }
+
+        SkillEvolutionReport(evolved, rejected, skipped, created,
             Int64(matched.candidates.size))
     }
 
@@ -231,11 +257,13 @@ public class SkillEvolutionJob {
                                 state: SkillEvolutionState,
                                 policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
                                 embedder!: ?(String) -> Array<Float64> = None,
+                                nameCandidates!: Bool = false,
                                 clock!: () -> Int64 = { => 0 }): Unit {
         scheduler.schedule(name, cron, { =>
             try{
                 run(skills(), successes(), failures(), chat, state,
-                    policy: policy, embedder: embedder, now: clock())
+                    policy: policy, embedder: embedder,
+                    nameCandidates: nameCandidates, now: clock())
             }catch(error: Exception){
                 // 定时线程不能把异常抛出去，否则会中断后续调度
                 ()
@@ -261,14 +289,17 @@ public class SkillEvolutionJob {
     private static let sinkMutex = Mutex()
 
     private static func skillStoreUpsert(skill: Skill, newDetails: String): Unit {
-        let next = Skill(skill.id, skill.title, newDetails, skill.functions,
-                         version: skill.version + 1)
+        emit(Skill(skill.id, skill.title, newDetails, skill.functions,
+                   version: skill.version + 1))
+    }
+
+    private static func emit(skill: Skill): Unit {
         let box = SinkBox()
         synchronized(sinkMutex){
             box.value = sink
         }
         match(box.value){
-            case Some(fn) => fn(next)
+            case Some(fn) => fn(skill)
             case None => ()
         }
     }

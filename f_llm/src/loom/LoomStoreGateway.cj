@@ -121,16 +121,18 @@ public class LoomStoreGateway {
                 }
             }
             if(action == 'list'){
-                let records = content.memory.list(userId, strOf(args, 'namespace'),
-                    intOf(args, 'offset'), intOf(args, 'limit'))
-                // kind 过滤发生在分页之后：调用方要按 kind 取全量时，把 limit 放宽
                 let kindFilter = strOf(args, 'kind')
+                let records = if(kindFilter.isEmpty()){
+                    content.memory.list(userId, strOf(args, 'namespace'),
+                        intOf(args, 'offset'), intOf(args, 'limit'))
+                }else{
+                    // 交给 Store 过滤：先过滤再分页，不会出现「本页没有就判空」
+                    content.memory.listByKind(userId, strOf(args, 'namespace'), kindFilter,
+                        intOf(args, 'offset'), intOf(args, 'limit'))
+                }
                 var text = '['
                 var first = true
                 for(record in records){
-                    if(!kindFilter.isEmpty() && record.kind != kindFilter){
-                        continue
-                    }
                     if(!first){
                         text += ','
                     }

@@ -29,6 +29,9 @@ class EvolutionFixture {
 
     public func chat(system: String, user: String): String {
         calls++
+        if(system.contains('技能标题')){
+            return '{"title":"爬虫助手","details":"限速、重试、记录失败"}'
+        }
         if(system.contains('新版')){
             return '三段式'
         }
@@ -197,6 +200,60 @@ class SkillEvolutionJob_test {
         let input = SkillEvolutionJob.load(gateway, 1, 'n')
         @Expect(input.successes.size, 2)
         @Expect(input.failures.size, 1)
+    }
+
+    /** 打开 nameCandidates：模型起名后真的建出技能 */
+    @TestCase
+    func testCreatesNamedSkillFromCandidateCluster(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        try{
+            let items = ArrayList<ExperienceItem>([
+                ExperienceItem(1, '爬虫要限速'),
+                ExperienceItem(2, '爬虫要重试'),
+                ExperienceItem(3, '爬虫要记失败')
+            ].toArray())
+            let report = SkillEvolutionJob.run(skills(true), items,
+                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
+                embedder: encoder(), nameCandidates: true, now: 1000)
+            @Expect(report.candidateClusters, 1)
+            @Expect(report.created.size, 1)
+            @Expect(fixture.saved.size, 1)
+            @Expect(fixture.saved[0].title, '爬虫助手')
+            @Expect(fixture.saved[0].version, 1)
+            @Expect(fixture.saved[0].details.contains('限速'), true)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 模型给的名字不合法：宁可不建 */
+    @TestCase
+    func testInvalidNameSkipsCreation(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        let badChat = { system: String, user: String =>
+            if(system.contains('技能标题')){
+                '不是 JSON'
+            }else{
+                ''
+            }
+        }
+        try{
+            let items = ArrayList<ExperienceItem>([
+                ExperienceItem(1, '爬虫要限速'),
+                ExperienceItem(2, '爬虫要重试'),
+                ExperienceItem(3, '爬虫要记失败')
+            ].toArray())
+            let report = SkillEvolutionJob.run(skills(true), items,
+                ArrayList<ExperienceItem>(), badChat, SkillEvolutionState(),
+                embedder: encoder(), nameCandidates: true, now: 1000)
+            @Expect(report.created.size, 0)
+            @Expect(fixture.saved.size, 0)
+            @Expect(report.rejected[0].contains('valid name'), true)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
     }
 
     /** 注册成定时任务后，触发一次即跑一轮演进 */

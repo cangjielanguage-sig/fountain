@@ -44,6 +44,24 @@ public interface MemoryStore {
     func remove(userId: Int64, id: Int64): Bool
     func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord>
     func search(query: MemoryQuery): ArrayList<MemoryHit>
+
+    /**
+     * 按 `kind` 列记录，语义与 [list] 一致但先过滤再分页。
+     *
+     * 默认实现是近似的（取一页再过滤）——纯内存实现与适配器会覆盖成精确版本；
+     * SQL 实现要等仓储层补上 `kind` 条件，在此之前按需放大 `limit` 兜住。
+     */
+    func listByKind(userId: Int64, namespace: String, kind: String,
+                    offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let page = list(userId, namespace, offset, limit)
+        let matched = ArrayList<MemoryRecord>()
+        for(record in page){
+            if(record.kind == kind){
+                matched.add(record)
+            }
+        }
+        matched
+    }
 }
 
 /** 知识与文档（按文档/块组织） */

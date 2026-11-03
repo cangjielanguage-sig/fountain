@@ -166,7 +166,8 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 | 归属发现 | `SkillMatcher.assign` | 经验 → 已有技能（向量/关键词最近邻）；剩下的彼此聚类 → 新技能候选 |
 | 触发判定 | `SkillEvolutionPolicy.decide` | 样本数、成功率、冷却期（**门禁失败后冷却期翻倍**） |
 | A/B 门禁 | `SkillGate.evaluate` | 用技能自带样例分别跑旧版/新版，`新版 ≥ 旧版` 且达 `minScore` 才放行 |
-| 落库 | `SkillEvolutionJob.run` | 版本 +1；聚成簇的经验只上报候选，不自动建技能 |
+| 落库 | `SkillEvolutionJob.run` | 版本 +1 |
+| 新建技能 | `SkillNamer.propose` | 簇够大且 `nameCandidates: true` 时让模型起名 + 写正文，`version=1` 落库；名字不合法就不建 |
 
 技能样例来自技能包 `skill.json` 的 `samples`（导入时存进 `functions`）：
 
@@ -331,7 +332,7 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `skill` | `load` | `{"title":"日报助手"}` | 按标题加载技能（技能 JSON，未命中 `''`） |
 | `skill` | `upsert` | `{"id"?, "title","details","functions","version"?}` | 技能 id |
 | `skill` | `remove` | `{"id":3}` | `true/false` |
-| `memory` | `get` / `list` | `{"userId","id"}` / `{"userId","namespace","offset","limit","kind"?}` | 记录 / 数组（`kind` 在分页后过滤） |
+| `memory` | `get` / `list` | `{"userId","id"}` / `{"userId","namespace","offset","limit","kind"?}` | 记录 / 数组；带 `kind` 时走 `MemoryStore.listByKind`，**先过滤再分页** |
 | `experience` | 同 `memory` | 同上，`kind` 缺省 `experience` | 同上 |
 | `prompt` | `latest` / `get` | `{"name"}` / `{"name","version"}` | `{name,version,content}`，未命中 `''` |
 | `prompt` | `put` | `{"name","content","version"?}` | 版本号（缺省自动 +1） |
