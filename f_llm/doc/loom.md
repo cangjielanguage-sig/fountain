@@ -156,6 +156,37 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 
 两条兜底：**模型返回的 JSON 解析失败**时回落到规则提炼；**存储未装配或写失败**时不影响流程结果（提炼失败被吞掉，流程照常返回）。
 
+## 经验 → 技能演进
+
+经验在写下来时**不绑定技能**：写入时往往还不知道它属于谁，而且技能可能尚不存在。绑定留到演进阶段做。
+
+| 阶段 | 组件 | 作用 |
+|---|---|---|
+| 落经验 | `LoomMemoryExtractor` | 成功写 `kind=experience`，失败写 `kind=experience_failed` |
+| 归属发现 | `SkillMatcher.assign` | 经验 → 已有技能（向量/关键词最近邻）；剩下的彼此聚类 → 新技能候选 |
+| 触发判定 | `SkillEvolutionPolicy.decide` | 样本数、成功率、冷却期（**门禁失败后冷却期翻倍**） |
+| A/B 门禁 | `SkillGate.evaluate` | 用技能自带样例分别跑旧版/新版，`新版 ≥ 旧版` 且达 `minScore` 才放行 |
+| 落库 | `SkillEvolutionJob.run` | 版本 +1；聚成簇的经验只上报候选，不自动建技能 |
+
+技能样例来自技能包 `skill.json` 的 `samples`（导入时存进 `functions`）：
+
+```json
+{"samples":[{"input":"写日报","expect":"三段式"}]}
+```
+
+**没有样例时不落库**——无据可依的演进会污染技能库，宁可人工确认。
+
+注册成定时任务：
+
+```cangjie
+SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler(),
+    { => Stores.meta().skills.list() },
+    { => loadSuccessExperiences() },
+    { => loadFailureCounts() },
+    host.callLlm, SkillEvolutionState(),
+    embedder: SkillCatalog.embeddingEncoder('bge-m3'))
+```
+
 ## 人格与提示词
 
 `FlowPlan.persona` 有两种写法，执行期由 `LoomRunner.resolvePersona` 解析：
