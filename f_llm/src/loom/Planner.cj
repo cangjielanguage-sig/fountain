@@ -134,8 +134,10 @@ public class Planner {
         }else{
             systemPrompt
         }
-        // 能力清单始终追加：自定义提示词也一样，否则模型不知道宿主有什么
-        let system = base + '\n\n' + PromptCapabilities.render()
+        // 能力清单始终追加：自定义提示词也一样，否则模型不知道宿主有什么。
+        // 任务描述里给了 tools 白名单时只列这些（按需收窄）。
+        let allowed: ?Array<String> = if(request.tools.size > 0){ Some(request.tools) }else{ None }
+        let system = base + '\n\n' + PromptCapabilities.render(allowed: allowed)
         let raw = llm(system, Planner.userPrompt(request))
         Planner.parse(raw, request)
     }

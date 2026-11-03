@@ -30,9 +30,24 @@ public class PromptCapabilities {
     private init() {
     }
 
-    /** 当前可用的能力清单（工具名取自已注册的 tool_call 与 MCP 工具） */
-    public static func render(): String {
-        let tools = FunctionMediator.names()
+    /**
+     * 当前可用的能力清单。
+     *
+     * @param allowed 非空时只列这些工具（任务描述里 `tools` 收窄）；为空则列全部
+     */
+    public static func render(allowed!: ?Array<String> = None): String {
+        let registered = FunctionMediator.names()
+        let tools = match(allowed){
+            case Some(whitelist) =>
+                let picked = ArrayList<String>()
+                for(name in registered){
+                    if(whitelist.contains(name)){
+                        picked.add(name)
+                    }
+                }
+                picked
+            case None => registered
+        }
         var text = '可用能力（运行期按需调用，禁止虚构不存在的工具名）：\n'
         text += '- loomCallTool(name, argsJson)：调用已注册的 tool_call 或 MCP 工具\n'
         text += '- loomCallLlm(model, system, input)：调用大模型\n'

@@ -148,6 +148,12 @@ class Planner_test {
     }
 
     @TestCase
+    func testCapabilitiesCanBeNarrowed(): Unit {
+        let text = PromptCapabilities.render(allowed: ['definitely-not-registered'])
+        @Expect(text.contains('当前没有'), true)
+    }
+
+    @TestCase
     func testCustomSystemPromptReplacesDefault(): Unit {
         let recorder = PromptRecorder()
         let planner = Planner({ system, user =>
