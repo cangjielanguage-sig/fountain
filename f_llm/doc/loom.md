@@ -24,12 +24,72 @@
 | `compiled` | 步骤闭包编译成功，可执行 |
 | `failed` | 启动重编译失败，需人工修 |
 
-## 两个工具
+## 工具
 
 | 工具 | 关键参数 | 行为 |
 |---|---|---|
-| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?` | `confirm=false` 返回计划与闭包原文；`confirm=true` 按 name 编译并标 compiled |
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, execute?, parallel?` | `confirm=false` 返回计划与闭包原文；`confirm=true` 编译标 compiled；`execute=true` 顺带跑一次 |
 | `loomDelete` | `name` | 从注册表与库中移除 |
+| `memoryCall` | `op`(search/add/remove) + `payload` JSON | 读写长期记忆，与 `loomStore("memory", …)` 同一条网关 |
+| `knowledgeIngest` | `docId, title, content` | 写入知识库，可用 `knowledge.search` 检索 |
+| `listTools` | `offset, limit` | 列出已注册工具（名称 + 描述） |
+| `searchTools` | `query, topK` | 关键词检索工具：名称命中 3 分、描述命中 1 分 |
+| `skillImport` | `path` | 导入技能包目录（`skill.json` + `details.md`），同名 title 幂等 |
+| `scheduleCreate` | `name, cron, payload?` | 注册（或替换同名）定时任务，到点执行同名 loom 流程 |
+| `scheduleDelete` | `name` | 取消定时任务 |
+
+工具元数据直接取自 `FunctionMediator.definition(name)`，不另建索引——「注册了什么」与「能检索到什么」永远一致。
+
+## 能力清单（编排提示词自动附带）
+
+模型不知道宿主有什么，就会虚构工具名，或把本该自动查的事写成澄清问题。因此 `Planner` 在拼 system prompt 时**无条件追加** `PromptCapabilities.render()`：
+
+```
+可用能力（运行期按需调用，禁止虚构不存在的工具名）：
+- loomCallTool(name, argsJson)：调用已注册的 tool_call 或 MCP 工具
+- loomCallLlm(model, system, input)：调用大模型
+- loomStore(kind, op, payload)：kind = memory | knowledge | skill；op = search | add | upsert | remove | docIds | count
+已注册工具：[memoryCall, listTools, …]
+步骤需要事实时，优先排一个调用上述能力的步骤去查，不要先问用户。
+```
+
+| 规则 | 说明 |
+|---|---|
+| 自定义提示词也追加 | 开发者传的 system 原样保留，清单接在末尾 |
+| 默认全量 | 取 `FunctionMediator.names()`（含 MCP 注册进来的工具） |
+| 可收窄 | 任务描述给 `tools` 白名单时只列这些 |
+| 动态 | 运行时新注册的工具，下一次规划即可见 |
+
+## 定时任务
+
+`f_ticktock` 的 cron 是**七段式**：`秒 分 时 天 月 星期 年`，通配符只支持 `*`。
+
+```cangjie
+// 方式一：到点执行一整条流程（payload 写进 StartEvent.data）
+ScheduleCreateFunction().call(createParam(
+    '{"name":"daily","cron":"0 0 9 * * * *","payload":"{\\"range\\":\\"today\\"}"}'))
+// 到点 → LoomService.executeNow(name, host, StartEvent(..., data: payload))
+
+// 方式二：只跑某一步（JIT 闭包包成 () -> Unit）
+JitTicktockTask.create('sync-job', '0 0 9 * * * *', step, scheduler, payload: 'hello')
+```
+
+| 约定 | 原因 |
+|---|---|
+| 定时任务执行**完整流程**，不是单步 | `Ticktock` 任务体是 `() -> Unit`，无事件进出；单步调度要么假事件、要么套迷你 Flow，等于一步流程 |
+| `JitTicktockTask` 丢弃返回值 | 成果由**副作用**（写库、发消息、落产物）体现，没人消费返回值 |
+| 异常全吞 | 抛到调度线程会中断后续 tick |
+| `{start.output}` | 取**进入当前步骤的事件**的 `data`；第一步即 payload，后续步骤等价于上一步输出 |
+
+## 后台任务与超时
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 记忆记录 | `MemoryRecorderTask.record(gateway, userId, ns, title, text)` | 写一条记忆，返回 id；`recordWithTimeout` 加超时保护 |
+| 技能演进 | `SkillEvolutionTask.evolve(chat, store, title, usage)` | 现有正文 + 近期使用 → 模型合并 → 版本 +1 |
+| 超时包装 | `LoomTimeout.call({ => … }, 3000)` | 正常返回结果、超时返回 `timeout after Nms`、异常返回 `error: …` |
+
+`LoomTimeout` 的语义是「**调用方按时返回**」：Cangjie 无法强杀线程，被调用方会在后台自行结束；对流程来说足够——这一步记为失败，不会挂死整条流程。
 
 ## 装配
 
@@ -40,8 +100,9 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
                 plannerModel: 'chat-pro')
 ```
 
-- 存储按 `llm_memoryStore` 选：`postgres` / `mysql` 走 SQL，其余（如默认的 `f_hydra`）走内存；
-- `LoomWiring.wire` 内部会 `restore()` 并重编译 `compiled` 流程；
+- 存储按 `llm_metaStore` 选（与 `MetaStore` 共用）：`f_store`（默认）/ `memory` / `postgres` / `mysql`，未知取值直接抛错；
+- `LoomWiring.wire` 内部会 `restore()` 并重编译 `compiled` 流程，并安装 `DefaultLoomHost` 与存储网关；
+- 测试可传 `store:` 注入内存实现，避免占用默认数据目录；
 - 工具调用通过 `LoomServices.current()` 取服务实例。
 
 ## 执行语义
