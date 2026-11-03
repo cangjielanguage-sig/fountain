@@ -120,4 +120,16 @@ func testX(): Unit {
 }
 ```
 
-**不要用整段 `try { run() } catch { println("SKIP") }` 包住用例**——那会把 `@Expect` 失败也一起吞掉，用例永远显示通过，等于造假绿。判断"环境缺失"和判断"功能错误"必须分开。
+**不要用整段 `try { run() } catch { println("SKIP") }` 包住用例**——那会把 `@Expect` 失败也一起吞掉，用例永远显示通过，等于假绿。判断“环境缺失”和判断“功能错误”必须分开。
+
+已有用例拆不掉整段 try 时，退一步的写法是**先接住断言异常再重抛**：
+
+```cangjie
+}catch(e: AssertException){     // std.unittest 的断言失败
+    throw e                     // 必须冒泡，否则断言失败被当 SKIP
+}catch(e: Exception){
+    println("SKIP ...")
+}
+```
+
+Cangjie 支持多个 `catch` 块，按顺序匹配、命中即停。

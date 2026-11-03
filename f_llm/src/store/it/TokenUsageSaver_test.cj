@@ -93,6 +93,9 @@ public class TokenUsageSaverTest {
             @Expect(intOf(row.get('prompt_tokens')), 100)
             @Expect(intOf(row.get('total_tokens')), 140)
             @Expect(intOf(row.get('usage_time')), 2026103112)
+        }catch(e: AssertException){
+            // 断言失败必须冒泡，不能被下面的 SKIP 分支吞掉
+            throw e
         }catch(e: Exception){
             println("SKIP TokenUsageSaverTest(PG): ${e.message}")
         }
@@ -129,6 +132,9 @@ public class TokenUsageSaverTest {
             @Expect(intOf(row.get('llm_id')), 612)
             @Expect(intOf(row.get('prompt_tokens')), 100)
             @Expect(intOf(row.get('total_tokens')), 140)
+        }catch(e: AssertException){
+            // 断言失败必须冒泡，不能被下面的 SKIP 分支吞掉
+            throw e
         }catch(e: Exception){
             println("SKIP TokenUsageSaverTest(MySQL): ${e.message}")
         }

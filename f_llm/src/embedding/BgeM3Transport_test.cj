@@ -31,6 +31,9 @@ public class BgeM3TransportTest {
             @Expect(response.sparse.isEmpty(), false)
             @Expect(response.colbert.size > 0, true)
             @Expect(response.colbert[0].size, 1024)
+        }catch(e: AssertException){
+            // 断言失败必须冒泡，不能被下面的 SKIP 分支吞掉
+            throw e
         }catch(e: Exception){
             println("SKIP BgeM3TransportTest: ${e.message}")
         }
