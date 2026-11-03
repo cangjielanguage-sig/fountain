@@ -130,8 +130,10 @@ LoomRunner.runCompiled
 
 | 标题 | kind | 内容 |
 |---|---|---|
-| `流程 <name> 记忆` | `note` | 各轮 system/input/output 的摘要（默认取最近 `maxTurns` 轮） |
-| `流程 <name> 经验` | `experience` | 交互次数 + 最后一次输出摘要 |
+| `流程 <name> 记忆` | `note` | 首行 `结果：success/failed`，其后各轮 system/input/output 摘要 |
+| `流程 <name> 经验` | 成功 `experience` / 失败 `experience_failed` | 首行结果标记 + 交互次数 + 最后一次输出摘要 |
+
+**为什么用 kind 区分成败**：记忆记录没有 `outcome` 字段，而 `kind` 本来就可查——统计成功率、筛「只拿成功经验做演进样本」时，直接按 kind 过滤即可，不用解析内容文本。失败流程同样会写经验（`LoomRunner` 在 `catch` 里记下 `failed` 再原样抛出），否则最该学的失败案例反而丢了。
 
 策略由 `LoomMemoryPolicy` 控制：
 

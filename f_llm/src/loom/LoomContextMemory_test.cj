@@ -85,6 +85,66 @@ class LoomContextMemory_test {
         }
     }
 
+    /** 成功跑完：经验记为 experience，内容带结果标记 */
+    @TestCase
+    func testSuccessWritesSuccessExperience(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 5, namespace: 'ok'))
+        try{
+            LoomRunner().run(plan(), MemoryHost(), start())
+            let records = gateway.call('memory', 'list',
+                '{"userId":5,"namespace":"ok","offset":0,"limit":10}')
+            @Expect(records.contains('"kind":"experience"'), true)
+            @Expect(records.contains('结果：success'), true)
+            @Expect(records.contains('experience_failed'), false)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
+    /** 步骤抛异常：仍要留下经验，并标记成 failed */
+    @TestCase
+    func testFailureWritesFailedExperience(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 6, namespace: 'bad'))
+        try{
+            let failing = FlowPlan('failing-flow')
+            // 先有一次模型交互，再让工具步骤炸掉：确保提炼时有上下文可写
+            let thinking = StepPlan('think', 'llm')
+            thinking.model = 'deepseek-flash'
+            thinking.system = 'sys'
+            thinking.input = 'go'
+            failing.steps.add(thinking)
+            let step = StepPlan('boom', 'tool')
+            step.tool = 'explode'
+            step.args = '{}'
+            failing.steps.add(step)
+            failing.edges.add(EdgePlan('think', 'boom'))
+
+            var message = ''
+            try{
+                LoomRunner().run(failing, ThrowingToolHost(),
+                    StartEvent(category: 'loom', tag: 'failing-flow', name: 'start', data: 'go'))
+            }catch(e: Exception){
+                message = e.message
+            }
+            @Expect(message.isEmpty(), false)
+
+            let records = gateway.call('memory', 'list',
+                '{"userId":6,"namespace":"bad","offset":0,"limit":10}')
+            @Expect(records.contains('"kind":"experience_failed"'), true)
+            @Expect(records.contains('结果：failed'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
     /** 关闭策略后不记录、不写入 */
     @TestCase
     func testDisabledPolicyWritesNothing(): Unit {
@@ -142,6 +202,21 @@ class LoomContextMemory_test {
             LoomMemoryPolicy.reset()
             LoomContextLog.clear()
         }
+    }
+}
+
+/** 工具调用直接抛错的宿主：验证失败流程也会写经验 */
+class ThrowingToolHost <: LoomHost {
+    public func render(template: String, e: Event): String {
+        template
+    }
+
+    public func callTool(name: String, argsJson: String): String {
+        throw IllegalStateException('tool exploded')
+    }
+
+    public func callLlm(model: String, system: String, input: String): String {
+        input
     }
 }
 

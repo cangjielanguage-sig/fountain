@@ -54,6 +54,11 @@ class SeqBox {
     public var value: Int64 = 0
 }
 
+/** 本次执行的结果：正常走完为 success，抛异常为 failed */
+class OutcomeBox {
+    public var value: String = 'success'
+}
+
 /**
  * 汇聚屏障：入度 > 1 的步骤要等所有前驱事件到齐才执行。
  *
@@ -179,12 +184,17 @@ public class LoomRunner {
             LoomContextLog.begin()
         }
         LoomHostApi.bind(host)
+        let outcome = OutcomeBox()
         try{
             if(parallel){
                 runAsync(plan, order, bodies, producing, tag, input)
             }else{
                 runSync(plan, order, bodies, producing, tag, input)
             }
+        }catch(error: Exception){
+            // 失败的流程也要留下经验：先记结果，再原样抛回调用方
+            outcome.value = 'failed'
+            throw error
         }finally{
             // 先取快照并关闭记录，再解绑——提炼阶段自己发的模型请求不会被记进来
             let turns = LoomContextLog.snapshot()
@@ -194,7 +204,8 @@ public class LoomRunner {
             LoomHostApi.clearSkills()
             if(policy.enabled && !turns.isEmpty()){
                 try{
-                    LoomMemoryExtractor.extract(plan.name, turns, host, policy)
+                    LoomMemoryExtractor.extract(plan.name, turns, host, policy,
+                                                outcome: outcome.value)
                 }catch(error: Exception){
                     // 记忆提炼失败不影响流程结果
                     ()

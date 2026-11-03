@@ -92,13 +92,15 @@ public class LoomMemoryExtractor {
      * @return 写入条数（0~2）
      */
     public static func extract(flowName: String, turns: ArrayList<LlmTurn>,
-                               host: LoomHost, policy: LoomMemoryPolicy): Int64 {
+                               host: LoomHost, policy: LoomMemoryPolicy,
+                               outcome!: String = 'success'): Int64 {
         if(turns.isEmpty()){
             return 0
         }
         let digest = digestOf(turns, policy.maxTurns)
-        var memory = '流程 ${flowName} 的上下文摘要：\n${digest}'
-        var experience = '流程 ${flowName} 执行了 ${turns.size} 次模型交互，'
+        let verdict = if(outcome == 'success'){ 'success' }else{ outcome }
+        var memory = '结果：${verdict}\n流程 ${flowName} 的上下文摘要：\n${digest}'
+        var experience = '结果：${verdict}\n流程 ${flowName} 执行了 ${turns.size} 次模型交互，'
             + '最后一次输出：\n${truncate(turns[turns.size - 1].output, 600)}'
 
         if(policy.summarize && !policy.model.isEmpty()){
@@ -115,7 +117,9 @@ public class LoomMemoryExtractor {
         if(LoomMemoryExtractor.write(policy, memory, '流程 ${flowName} 记忆', 'note')){
             written++
         }
-        if(LoomMemoryExtractor.write(policy, experience, '流程 ${flowName} 经验', 'experience')){
+        // 失败经验单独用一个 kind：后续统计成功率、筛演进样本时可以直接按 kind 查
+        let experienceKind = if(verdict == 'success'){ 'experience' }else{ 'experience_failed' }
+        if(LoomMemoryExtractor.write(policy, experience, '流程 ${flowName} 经验', experienceKind)){
             written++
         }
         if(policy.writeKnowledge && !memory.trimAscii().isEmpty()){
