@@ -79,6 +79,62 @@ class LoomStoreGateway_test {
     }
 
     @TestCase
+    func testKnowledgeGetReturnsContent(): Unit {
+        let gateway = gateway()
+        gateway.call('knowledge', 'upsert', '{"docId":"d2","title":"t","content":"正文"}')
+        let doc = gateway.call('knowledge', 'get', '{"docId":"d2"}')
+        @Expect(doc.contains('"content":"正文"'), true)
+        @Expect(gateway.call('knowledge', 'get', '{"docId":"none"}'), '')
+    }
+
+    @TestCase
+    func testMemoryGetAndList(): Unit {
+        let gateway = gateway()
+        let id = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"t","content":"c","kind":"fact"}')
+        let record = gateway.call('memory', 'get', '{"userId":7,"id":${id}}')
+        @Expect(record.contains('"content":"c"'), true)
+        let records = gateway.call('memory', 'list',
+            '{"userId":7,"namespace":"n","offset":0,"limit":10}')
+        @Expect(records.startsWith('['), true)
+        @Expect(records.contains('"id":${id}'), true)
+    }
+
+    @TestCase
+    func testSkillListAndGet(): Unit {
+        let meta = InMemoryMetaStore()
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        meta.skills.upsert(Skill(3, '日报助手', '正文', '{}', version: 2))
+        @Expect(gateway.call('skill', 'list', '{}').contains('"title":"日报助手"'), true)
+        @Expect(gateway.call('skill', 'get', '{"id":3}').contains('"version":2'), true)
+        @Expect(gateway.call('skill', 'get', '{"id":99}'), '')
+    }
+
+    @TestCase
+    func testSkillUpsertAllocatesId(): Unit {
+        let meta = InMemoryMetaStore()
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        @Expect(gateway.call('skill', 'upsert',
+            '{"title":"新技能","details":"正文","functions":"{}"}'), '1')
+        @Expect(gateway.call('skill', 'upsert',
+            '{"id":1,"title":"新技能","details":"改过","functions":"{}","version":3}'), '1')
+        let loaded = gateway.call('skill', 'get', '{"id":1}')
+        @Expect(loaded.contains('"details":"改过"'), true)
+        @Expect(loaded.contains('"version":3'), true)
+    }
+
+    @TestCase
+    func testExperienceAliasesMemoryWithKind(): Unit {
+        let gateway = gateway()
+        let id = gateway.call('experience', 'add',
+            '{"userId":7,"namespace":"n","title":"e","content":"踩过的坑"}')
+        @Expect(id.isEmpty(), false)
+        let hits = gateway.call('experience', 'search',
+            '{"userId":7,"namespace":"n","text":"踩过","topK":5}')
+        @Expect(hits.contains('"id":${id}'), true)
+    }
+
+    @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''
         try{

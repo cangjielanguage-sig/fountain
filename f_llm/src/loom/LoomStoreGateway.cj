@@ -18,21 +18,28 @@ package fountain::f_llm.loom
 import std.collection.*
 
 import fountain::f_data.*
-
 import fountain::f_llm.store.*
 
 /**
  * `loomStore(kind, op, payload)` 的默认实现：把字符串请求映射到 f_llm 的 Store。
  *
- * 目前开放的只读/删除类操作（不改写模型字段，避免 DTO 与 JSON 互相绑死）：
- *
  * | kind | op | payload | 返回 |
  * |---|---|---|---|
+ * | `knowledge` | `get` | `{"docId":"d1"}` | 文档 JSON，未命中 `''` |
  * | `knowledge` | `docIds` | `{"offset":0,"limit":50}` | JSON 字符串数组 |
- * | `knowledge` | `remove` | `{"docId":"x"}` | `true` / `false` |
- * | `memory` | `remove` | `{"userId":1,"id":2}` | `true` / `false` |
- * | `skill` | `remove` | `{"id":3}` | `true` / `false` |
+ * | `knowledge` | `search` | `{"text":"…","limit":5}` | `[{docId,seq,score,content}]` |
+ * | `knowledge` | `upsert` | `{"docId","title","content"}` | `ok` |
+ * | `knowledge` | `remove` | `{"docId":"d1"}` | `true/false` |
+ * | `memory` | `add` | `{"userId","namespace","title","content","kind"}` | 记录 id |
+ * | `memory` | `get` | `{"userId":1,"id":2}` | 记录 JSON，未命中 `''` |
+ * | `memory` | `list` | `{"userId","namespace","offset","limit"}` | 记录数组 |
+ * | `memory` | `search` | `{"userId","namespace","text","topK"}` | `[{id,title,score}]` |
+ * | `memory` | `remove` | `{"userId":1,"id":2}` | `true/false` |
+ * | `skill` | `get` | `{"id":1}` | 技能 JSON，未命中 `''` |
+ * | `skill` | `list` | `{}` | 技能数组 |
  * | `skill` | `count` | `{}` | 整数 |
+ * | `skill` | `remove` | `{"id":1}` | `true/false` |
+ * | `experience` | 同 `memory` | 同上，`kind` 缺省为 `experience` | 同上 |
  *
  * 未列出的 op 一律抛 [LoomException]，避免「静默返回空」被流程当成真实结果。
  */
@@ -53,9 +60,22 @@ public class LoomStoreGateway {
 
     public func call(kind: String, op: String, payload: String): String {
         let args = parse(payload)
-        let name = kind.trimAscii().toAsciiLower()
+        let rawName = kind.trimAscii().toAsciiLower()
         let action = op.trimAscii().toAsciiLower()
+        // 经验 = 带 kind 的记忆：同一条链路，不另造存储
+        let name = if(rawName == 'experience'){ 'memory' }else{ rawName }
+        let defaultKind = if(rawName == 'experience'){ 'experience' }else{ '' }
+
         if(name == 'knowledge'){
+            if(action == 'get'){
+                match(content.knowledge.get(strOf(args, 'docId'))){
+                    case Some(doc) =>
+                        return '{"docId":${FlowPlan.jsonQuote(doc.docId)},'
+                            + '"title":${FlowPlan.jsonQuote(doc.title)},'
+                            + '"content":${FlowPlan.jsonQuote(doc.content)}}'
+                    case None => return ''
+                }
+            }
             if(action == 'docids'){
                 let ids = content.knowledge.docIds(intOf(args, 'offset'), intOf(args, 'limit'))
                 return quotes(ids)
@@ -85,47 +105,113 @@ public class LoomStoreGateway {
                 return text + ']'
             }
         }
-        if(name == 'memory' && action == 'search'){
-            let namespaces = ArrayList<String>()
-            let namespace = strOf(args, 'namespace')
-            if(!namespace.isEmpty()){
-                namespaces.add(namespace)
+
+        if(name == 'memory'){
+            let userId = intOf(args, 'userId')
+            if(action == 'add'){
+                let kindValue = kindOf(args, defaultKind)
+                let write = MemoryWrite(userId, strOf(args, 'namespace'),
+                    strOf(args, 'title'), strOf(args, 'content'), kindValue)
+                return content.memory.add(write).id.toString()
             }
-            let kinds = ArrayList<String>()
-            let kind = strOf(args, 'kind')
-            if(!kind.isEmpty()){
-                kinds.add(kind)
-            }
-            let topK = intOf(args, 'topK')
-            let hits = content.memory.search(MemoryQuery(intOf(args, 'userId'),
-                namespaces.toArray(), kinds.toArray(), strOf(args, 'text'),
-                topK: if(topK > 0){ topK }else{ 5 }))
-            var text = '['
-            var first = true
-            for(hit in hits){
-                if(!first){
-                    text += ','
+            if(action == 'get'){
+                match(content.memory.get(userId, intOf(args, 'id'))){
+                    case Some(record) => return recordJson(record)
+                    case None => return ''
                 }
-                first = false
-                text += '{"id":${hit.record.id},"title":${FlowPlan.jsonQuote(hit.record.title)}'
-                text += ',"score":${hit.score}}'
             }
-            return text + ']'
+            if(action == 'list'){
+                let records = content.memory.list(userId, strOf(args, 'namespace'),
+                    intOf(args, 'offset'), intOf(args, 'limit'))
+                var text = '['
+                var first = true
+                for(record in records){
+                    if(!first){
+                        text += ','
+                    }
+                    first = false
+                    text += recordJson(record)
+                }
+                return text + ']'
+            }
+            if(action == 'search'){
+                let namespaces = ArrayList<String>()
+                let namespace = strOf(args, 'namespace')
+                if(!namespace.isEmpty()){
+                    namespaces.add(namespace)
+                }
+                let kinds = ArrayList<String>()
+                let kindValue = kindOf(args, defaultKind)
+                if(!kindValue.isEmpty()){
+                    kinds.add(kindValue)
+                }
+                let topK = intOf(args, 'topK')
+                let hits = content.memory.search(MemoryQuery(userId,
+                    namespaces.toArray(), kinds.toArray(), strOf(args, 'text'),
+                    topK: if(topK > 0){ topK }else{ 5 }))
+                var text = '['
+                var first = true
+                for(hit in hits){
+                    if(!first){
+                        text += ','
+                    }
+                    first = false
+                    text += '{"id":${hit.record.id},'
+                    text += '"title":${FlowPlan.jsonQuote(hit.record.title)},'
+                    text += '"score":${hit.score}}'
+                }
+                return text + ']'
+            }
+            if(action == 'remove'){
+                return content.memory.remove(userId, intOf(args, 'id')).toString()
+            }
         }
-        if(name == 'memory' && action == 'remove'){
-            return content.memory.remove(intOf(args, 'userId'), intOf(args, 'id')).toString()
+
+        if(name == 'skill'){
+            if(action == 'remove'){
+                return meta.skills.remove(intOf(args, 'id')).toString()
+            }
+            if(action == 'count'){
+                return Int64(meta.skills.list().size).toString()
+            }
+            if(action == 'get'){
+                match(meta.skills.get(intOf(args, 'id'))){
+                    case Some(skill) => return skillJson(skill)
+                    case None => return ''
+                }
+            }
+            if(action == 'list'){
+                var text = '['
+                var first = true
+                for(skill in meta.skills.list()){
+                    if(!first){
+                        text += ','
+                    }
+                    first = false
+                    text += skillJson(skill)
+                }
+                return text + ']'
+            }
+            if(action == 'upsert'){
+                // id<=0 视为新建：取当前最大 id + 1
+                var targetId = intOf(args, 'id')
+                if(targetId <= 0){
+                    var maxId: Int64 = 0
+                    for(item in meta.skills.list()){
+                        if(item.id > maxId){
+                            maxId = item.id
+                        }
+                    }
+                    targetId = maxId + 1
+                }
+                let version = intOf(args, 'version')
+                meta.skills.upsert(Skill(targetId, strOf(args, 'title'),
+                    strOf(args, 'details'), strOf(args, 'functions'),
+                    version: if(version > 0){ version }else{ 1 }))
+                return targetId.toString()
+            }
         }
-        if(name == 'memory' && action == 'add'){
-            let write = MemoryWrite(intOf(args, 'userId'), strOf(args, 'namespace'),
-                strOf(args, 'title'), strOf(args, 'content'), strOf(args, 'kind'))
-            return content.memory.add(write).id.toString()
-        }
-        if(name == 'skill' && action == 'remove'){
-            return meta.skills.remove(intOf(args, 'id')).toString()
-        }
-        if(name == 'skill' && action == 'count'){
-            return Int64(meta.skills.list().size).toString()
-        }
+
         throw LoomException('loom store gateway: unsupported ${kind}.${op}')
     }
 
@@ -148,6 +234,14 @@ public class LoomStoreGateway {
         }
     }
 
+    private static func kindOf(args: JsonObject, defaultKind: String): String {
+        let explicit = strOf(args, 'kind')
+        if(!explicit.isEmpty()){
+            return explicit
+        }
+        defaultKind
+    }
+
     private static func intOf(args: JsonObject, key: String): Int64 {
         match(args.get(key)){
             case Some(value) =>
@@ -163,6 +257,20 @@ public class LoomStoreGateway {
                 }
             case None => 0
         }
+    }
+
+    private static func recordJson(record: MemoryRecord): String {
+        '{"id":${record.id},"userId":${record.userId},'
+            + '"namespace":${FlowPlan.jsonQuote(record.namespace)},'
+            + '"title":${FlowPlan.jsonQuote(record.title)},'
+            + '"content":${FlowPlan.jsonQuote(record.content)},'
+            + '"kind":${FlowPlan.jsonQuote(record.kind)}}'
+    }
+
+    private static func skillJson(skill: Skill): String {
+        '{"id":${skill.id},"title":${FlowPlan.jsonQuote(skill.title)},'
+            + '"details":${FlowPlan.jsonQuote(skill.details)},'
+            + '"version":${skill.version}}'
     }
 
     private static func quotes(values: ArrayList<String>): String {
