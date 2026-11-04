@@ -366,6 +366,8 @@ hydra 部署下，记忆按 kind 查询是**服务端过滤**：`kind` 写进记
 
 倒排字段白名单默认 `kind` / `save_day` / `tags`，由 `hydra_filterFields`（逗号分隔）配置。改完重启即可：`HydraRpc.configure()` → `applyFilterFields` 会与持久化的上一份白名单比对，不同就枚举已登记集合自动重建倒排，配置没变则不做扫描。
 
+三条限制（详见 `f_hydra/README.md`「已知限制」）：重建是**全量扫描**、**非原子**（崩溃留中间态，下次启动会重扫自愈）、过滤值里的 `,` 表示**多值 OR** 而不是单个值。
+
 **建表与索引在启动时完成**：`LoomWiring.wire` 调 `EvolutionStores.bootstrap()` → `ensureSchema()`。PG 建表后加 `idx_evo_skill (skill_title, at_time DESC)`，MySQL 的索引随 DDL 一起建。失败不阻断启动（库可能比应用晚就绪，首次读写还会再试）。
 
 **`f_store` 没有二级索引，用「条件键 → 数据键」自己造一个**：
