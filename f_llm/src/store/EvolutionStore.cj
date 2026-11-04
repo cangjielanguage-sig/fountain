@@ -150,7 +150,6 @@ public class InMemoryEvolutionStore <: EvolutionStore {
  * 单进程写入足够（演进是低频批处理）。
  */
 public class FStoreEvolutionStore <: EvolutionStore {
-    private static const INDEX = 'f_llm:evolution:index:'
     private static const DATA = 'f_llm:evolution:data:'
     /**
      * 索引键：`idx:{标题长度}:{标题}:{补零 at}:{补零 id}` → 数据键。
@@ -192,7 +191,6 @@ public class FStoreEvolutionStore <: EvolutionStore {
             }
             let payload = '${entry.skillTitle}${SEP}${entry.action}${SEP}${entry.at}${SEP}${entry.detail}'
             store.add('${DATA}${id}'.toArray(), payload.toArray())
-            store.add('${INDEX}${id}'.toArray(), '1'.toArray())
             let dataKey = '${DATA}${id}'
             // 条件键 → 数据键：bySkill 直接按前缀扫，不需要全表遍历
             store.add(indexKey(entry.skillTitle, entry.at, id).toArray(), dataKey.toArray())
@@ -209,10 +207,6 @@ public class FStoreEvolutionStore <: EvolutionStore {
         for((key, _) in store.prefix(TIME.toArray())){
             keys.add(String.fromUtf8(key))
         }
-        if(keys.isEmpty()){
-            // 索引上线前写入的旧记录：退化成按 id 倒序
-            return legacyList(offset, limit)
-        }
         let result = ArrayList<EvolutionEntry>()
         var index = keys.size - 1 - offset
         while(index >= 0 && Int64(result.size) < limit){
@@ -225,40 +219,12 @@ public class FStoreEvolutionStore <: EvolutionStore {
         result
     }
 
-    private func legacyList(offset: Int64, limit: Int64): ArrayList<EvolutionEntry> {
-        let ids = ArrayList<Int64>()
-        for((key, _) in store.prefix(INDEX.toArray())){
-            let text = String.fromUtf8(key)
-            if(text.size > INDEX.size){
-                match(Int64.tryParse(text[INDEX.size..])){
-                    case Some(value) => ids.add(value)
-                    case None => ()
-                }
-            }
-        }
-        sortDesc(ids)
-        let result = ArrayList<EvolutionEntry>()
-        var index = offset
-        while(index < Int64(ids.size) && Int64(result.size) < limit){
-            match(read(ids[index])){
-                case Some(entry) => result.add(entry)
-                case None => ()
-            }
-            index++
-        }
-        result
-    }
-
     /** 按条件键前缀扫：键里补零，字典序即时间序，倒着取就是最近的在前 */
     public func bySkill(skillTitle: String, limit: Int64): ArrayList<EvolutionEntry> {
         let result = ArrayList<EvolutionEntry>()
         let keys = ArrayList<String>()
         for((key, _) in store.prefix(indexPrefix(skillTitle).toArray())){
             keys.add(String.fromUtf8(key))
-        }
-        if(keys.isEmpty()){
-            // 兼容索引上线前写入的旧记录：退化成全表扫描
-            return legacyBySkill(skillTitle, limit)
         }
         var index = keys.size - 1
         while(index >= 0 && Int64(result.size) < limit){
@@ -267,19 +233,6 @@ public class FStoreEvolutionStore <: EvolutionStore {
                 case None => ()
             }
             index--
-        }
-        result
-    }
-
-    private func legacyBySkill(skillTitle: String, limit: Int64): ArrayList<EvolutionEntry> {
-        let result = ArrayList<EvolutionEntry>()
-        for(entry in list(0, 1000)){
-            if(Int64(result.size) >= limit){
-                break
-            }
-            if(entry.skillTitle == skillTitle){
-                result.add(entry)
-            }
         }
         result
     }
@@ -332,29 +285,13 @@ public class FStoreEvolutionStore <: EvolutionStore {
         }
     }
 
-    /** 倒序（选择排序，id 数量在千级以内） */
-    private static func sortDesc(items: ArrayList<Int64>): Unit {
-        for(left in 0..items.size){
-            var largest = left
-            for(right in left + 1..items.size){
-                if(items[right] > items[largest]){
-                    largest = right
-                }
-            }
-            if(largest != left){
-                let temp = items[left]
-                items[left] = items[largest]
-                items[largest] = temp
-            }
-        }
-    }
-
+    /** 最大 id：直接扫数据键（不再维护单独的 id 索引） */
     private func maxId(): Int64 {
         var max: Int64 = 0
-        for((key, _) in store.prefix(INDEX.toArray())){
+        for((key, _) in store.prefix(DATA.toArray())){
             let text = String.fromUtf8(key)
-            if(text.size > INDEX.size){
-                match(Int64.tryParse(text[INDEX.size..])){
+            if(text.size > DATA.size){
+                match(Int64.tryParse(text[DATA.size..])){
                     case Some(value) =>
                         if(value > max){
                             max = value
