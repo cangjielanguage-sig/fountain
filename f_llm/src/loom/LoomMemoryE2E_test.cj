@@ -22,11 +22,13 @@ import std.unittest.testmacro.*
 import fountain::f_egraph.base.*
 import fountain::f_llm.store.*
 
-/** 记录模型实际收到的 system 与 input */
+/** 记录模型实际收到的 system 与每轮 input */
 class E2eHost <: LoomHost {
     public var lastSystem: String = ''
     public var lastInput: String = ''
     public var calls: Int64 = 0
+    /** 逐轮输入：多轮场景要按轮次断言 */
+    public var inputs: ArrayList<String> = ArrayList<String>()
 
     public func render(template: String, e: Event): String {
         template
@@ -40,6 +42,7 @@ class E2eHost <: LoomHost {
         calls++
         lastSystem = system
         lastInput = input
+        inputs.add(input)
         '模型回答'
     }
 }
@@ -187,6 +190,157 @@ class LoomMemoryE2E_test {
             LoomMemoryPolicy.reset()
             LoomHostApi.clearPersona()
             LoomHostApi.clearSkills()
+        }
+    }
+
+    /** 经验检索（search）结果进入模型 input */
+    @TestCase
+    func testExperienceSearchReachesModel(): Unit {
+        let target = gateway()
+        target.call('memory', 'add',
+            '{"userId":5,"namespace":"e2e","title":"经验样本",'
+            + '"content":"cangjie 经验样本","kind":"experience"}')
+        LoomHostApi.installStore(target.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: USER))
+        try{
+            let value = FlowPlan('exp-search-e2e')
+            let es = StepPlan('es', 'jit')
+            es.input = "let es_result = loomStore('experience', 'search', "
+                + "'{\"userId\":5,\"namespace\":\"e2e\",\"text\":\"cangjie\",\"topK\":5}')"
+            let ask = StepPlan('ask', 'llm')
+            ask.model = 'deepseek-flash'
+            ask.system = 'BASE'
+            ask.input = '经验：{es.output}'
+            value.steps.add(es)
+            value.steps.add(ask)
+            value.edges.add(EdgePlan('es', 'ask'))
+
+            let host = E2eHost()
+            LoomRunner().run(value, host,
+                StartEvent(category: 'loom', tag: 'exp-search-e2e', name: 'start', data: '找经验'))
+            @Expect(host.lastInput.contains('cangjie 经验样本'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+        }
+    }
+
+    /** 技能列表与按 id 取详情：两条路径的结果都能进模型 */
+    @TestCase
+    func testSkillListAndGetReachModel(): Unit {
+        let target = gateway()
+        target.call('skill', 'upsert',
+            '{"title":"日报助手","details":"三段式：结论-数据-建议",'
+            + '"functions":"{}","version":1}')
+        LoomHostApi.installStore(target.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: USER))
+        try{
+            let value = FlowPlan('skill-e2e')
+            let list = StepPlan('sl', 'jit')
+            list.input = "let sl_result = loomStore('skill', 'list', '{}')"
+            let one = StepPlan('sg', 'jit')
+            one.input = "let sg_result = loomStore('skill', 'get', '{\"id\":1}')"
+            let ask = StepPlan('ask', 'llm')
+            ask.model = 'deepseek-flash'
+            ask.system = 'BASE'
+            ask.input = '列表：{sl.output}\n详情：{sg.output}'
+            value.steps.add(list)
+            value.steps.add(one)
+            value.steps.add(ask)
+            value.edges.add(EdgePlan('sl', 'sg'))
+            value.edges.add(EdgePlan('sg', 'ask'))
+
+            let host = E2eHost()
+            LoomRunner().run(value, host,
+                StartEvent(category: 'loom', tag: 'skill-e2e', name: 'start', data: '用技能'))
+            // 列表与详情各出现一次
+            @Expect(host.lastInput.contains('"title":"日报助手"'), true)
+            @Expect(host.lastInput.contains('三段式：结论-数据-建议'), true)
+            @Expect(host.lastInput.contains('"version":1'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+        }
+    }
+
+    /** 提示词按版本取：拿到的是 v1，不是最新版 */
+    @TestCase
+    func testPromptByVersionReachesModel(): Unit {
+        let target = gateway()
+        target.call('prompt', 'put', '{"name":"reviewer2","version":1,"content":"第一版正文"}')
+        target.call('prompt', 'put', '{"name":"reviewer2","version":2,"content":"第二版正文"}')
+        LoomHostApi.installStore(target.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: USER))
+        try{
+            let value = FlowPlan('prompt-e2e')
+            let step = StepPlan('p1', 'jit')
+            step.input = "let p1_result = loomStore('prompt', 'get', "
+                + "'{\"name\":\"reviewer2\",\"version\":1}')"
+            let ask = StepPlan('ask', 'llm')
+            ask.model = 'deepseek-flash'
+            ask.system = 'BASE'
+            ask.input = '提示词：{p1.output}'
+            value.steps.add(step)
+            value.steps.add(ask)
+            value.edges.add(EdgePlan('p1', 'ask'))
+
+            let host = E2eHost()
+            LoomRunner().run(value, host,
+                StartEvent(category: 'loom', tag: 'prompt-e2e', name: 'start', data: '取提示词'))
+            @Expect(host.lastInput.contains('第一版正文'), true)
+            @Expect(host.lastInput.contains('第二版正文'), false)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+        }
+    }
+
+    /**
+     * 多轮：第二步既拿到第一步的输出，也拿到**本轮新检索**的记忆。
+     *
+     * 光断言「第二轮包含记忆」不够——第一轮的 input 也含记忆就说明检索被提前了，
+     * 所以同时断言第一轮不含、第二轮包含。
+     */
+    @TestCase
+    func testSecondTurnSeesPreviousOutputAndFreshMemory(): Unit {
+        let target = gateway()
+        target.call('memory', 'add',
+            '{"userId":5,"namespace":"e2e","title":"第二轮素材",'
+            + '"content":"第二轮才用到的记忆","kind":"note"}')
+        LoomHostApi.installStore(target.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: USER))
+        try{
+            let value = FlowPlan('multi-turn-e2e')
+            let first = StepPlan('ask1', 'llm')
+            first.model = 'deepseek-flash'
+            first.system = 'BASE'
+            first.input = '第一轮提问'
+            let mem = StepPlan('mem', 'jit')
+            mem.input = "let mem_result = loomStore('memory', 'list', "
+                + "'{\"userId\":5,\"namespace\":\"e2e\",\"kind\":\"note\",\"offset\":0,\"limit\":10}')"
+            let second = StepPlan('ask2', 'llm')
+            second.model = 'deepseek-flash'
+            second.system = 'BASE'
+            second.input = '上一轮：{ask1.output}\n新素材：{mem.output}'
+            value.steps.add(first)
+            value.steps.add(mem)
+            value.steps.add(second)
+            value.edges.add(EdgePlan('ask1', 'mem'))
+            value.edges.add(EdgePlan('mem', 'ask2'))
+
+            let host = E2eHost()
+            LoomRunner().run(value, host,
+                StartEvent(category: 'loom', tag: 'multi-turn-e2e', name: 'start', data: '两轮'))
+            @Expect(host.calls, 2)
+            @Expect(host.inputs.size, 2)
+            // 第一轮：只是原始问题，不含记忆
+            @Expect(host.inputs[0].contains('第二轮才用到的记忆'), false)
+            // 第二轮：既有上一轮输出，也有本轮检索到的记忆
+            @Expect(host.inputs[1].contains('模型回答'), true)
+            @Expect(host.inputs[1].contains('第二轮才用到的记忆'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
         }
     }
 
