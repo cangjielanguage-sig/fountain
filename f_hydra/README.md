@@ -56,7 +56,9 @@ public interface VectorStore {
 | `v:c:{id}:{part}` | colbert 分片（每片 ≤64KB） |
 | `i:t:{token}:{id}` | 稀疏倒排 posting |
 | `f:{field}:{value}:{id}` | 过滤索引（白名单字段，默认 kind / save_day / tags） |
-| `fl:{id}` | 该记录的过滤字段名单 |
+| `fl:{id}` | 该记录的**全部** filters（`字段\u0001值` 用 `\u0002` 连接） |
+| `hc:{collection}` | 集合登记（批量重建倒排时枚举用） |
+| `h:__sys:filterFields` | 上次生效的过滤字段白名单（启动时比对，变了就重建） |
 | `m:ivf` / `m:cent:{i}` / `i:c:{i}:{id}` / `i:r:{id}` | IVF 配置 / 簇心 / 桶成员 / 反向指针 |
 | `m:ttl` | 集合 TTL（epoch 秒） |
 | `r:{id}` | 就绪标记（两阶段写的最后一步） |
@@ -81,8 +83,11 @@ store.rebuildFilterEntries('u1:global')                  // 给已有记录补�
 ```
 
 - 名称会去空白、转小写、去重；传空数组直接抛错（空白名单会让所有过滤查询静默返回空）；
-- `filterMetaKey` 保存**全部** filters，倒排只覆盖白名单字段，所以换白名单后能靠 `rebuildFilterEntries` 重建；
-- fhydra 侧读环境变量 `hydra_filterFields`（逗号分隔），启动时调用 `HydraRpc.configure()` 装配。
+- `filterMetaKey` 保存**全部** filters，倒排只覆盖白名单字段，所以换白名单后能重建；
+- 分隔符统一用控制字符：`\u0001` 分隔字段与值、`\u0002` 分隔条目——值里带 `;` `=` 也不会被拆坏；
+- fhydra 侧读环境变量 `hydra_filterFields`（逗号分隔），启动时调用 `HydraRpc.configure()` → `applyFilterFields`。
+
+**启动自动重建**：`applyFilterFields` 会把白名单与 `h:__sys:filterFields` 里记录的上一份比对，不同就枚举 `hc:` 登记的全部集合逐个 `rebuildFilterEntries`，然后写回新配置。因此改完环境变量重启即可，不需要人工跑重建；配置没变时不做任何扫描。
 
 ## 版本
 
@@ -97,3 +102,4 @@ store.rebuildFilterEntries('u1:global')                  // 给已有记录补�
 | v0.5.1 | 过滤索引（kind / save_day / tags） |
 | v0.6 | 方案 C：一条记录多命名 dense + saveTime 排序 |
 | v0.6.1 | 过滤字段白名单可配置（`setFilterFields` / `rebuildFilterEntries`），meta 保存全部 filters |
+| v0.6.2 | 白名单变更启动自动重建（`applyFilterFields`）、meta 分隔符统一为控制字符、集合登记 `hc:` |

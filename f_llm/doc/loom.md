@@ -364,7 +364,7 @@ let s1_result = loomStore("evolution", "by_skill", "{\"skill\":\"日报助手\",
 
 hydra 部署下，记忆按 kind 查询是**服务端过滤**：`kind` 写进记录的 `filters`，f_hydra 用 `h:{collection}:f:kind:{value}:{id}` 倒排保存，`ids` RPC 带 `filters` 时直接走倒排返回命中 id，客户端不再翻页自己过滤。
 
-倒排字段白名单默认 `kind` / `save_day` / `tags`，由 `hydra_filterFields`（逗号分隔）配置；换白名单后需 `rebuildFilterEntries(collection)` 给旧记录补索引，否则新字段查不到。
+倒排字段白名单默认 `kind` / `save_day` / `tags`，由 `hydra_filterFields`（逗号分隔）配置。改完重启即可：`HydraRpc.configure()` → `applyFilterFields` 会与持久化的上一份白名单比对，不同就枚举已登记集合自动重建倒排，配置没变则不做扫描。
 
 **建表与索引在启动时完成**：`LoomWiring.wire` 调 `EvolutionStores.bootstrap()` → `ensureSchema()`。PG 建表后加 `idx_evo_skill (skill_title, at_time DESC)`，MySQL 的索引随 DDL 一起建。失败不阻断启动（库可能比应用晚就绪，首次读写还会再试）。
 

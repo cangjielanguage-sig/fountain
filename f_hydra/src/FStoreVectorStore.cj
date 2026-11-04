@@ -55,6 +55,8 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func upsert(collection: String, record: VectorRecord): Unit {
+        // 登记集合：批量重建倒排时要能枚举出所有集合
+        store.add(collectionKey(collection).toArray(), [1u8])
         // 覆盖写：先清掉旧稀疏倒排、旧 colbert 分片与旧过滤索引，否则残留
         deletePostings(collection, record.id)
         deleteColbertParts(collection, record.id)
@@ -482,6 +484,19 @@ public class FStoreVectorStore <: VectorStore {
     /** 默认参与倒排的字段；可用 `setFilterFields` 覆盖（hydration 侧按部署配置注入） */
     public static let DEFAULT_FILTER_FIELDS = ['kind', 'save_day', 'tags']
 
+    /** 持久化「上次生效的白名单」，用于启动时发现变更并自动重建 */
+    private static let CONFIG_KEY = 'h:__sys:filterFields'
+    /** 集合登记表：`hc:{collection}` = 1，用于枚举集合（集合名本身含 `:`，不能靠 key 前缀切） */
+    private static let COLLECTION_PREFIX = 'hc:'
+    /**
+     * `filterMetaKey` 内的分隔符：`\u0001` 分隔字段与值、`\u0002` 分隔条目。
+     *
+     * 用控制字符而不是 `;` / `=`：值里出现这些符号时旧格式会把记录拆坏，
+     * 而且和 `f_store` 其它键的编码习惯保持一致。
+     */
+    private static let META_PAIR = String.fromUtf8([1u8])
+    private static let META_ENTRY = String.fromUtf8([2u8])
+
     /** 当前白名单（小写、去重、保持配置顺序） */
     private var indexedFields = ArrayList<String>(DEFAULT_FILTER_FIELDS)
 
@@ -521,6 +536,92 @@ public class FStoreVectorStore <: VectorStore {
      *
      * 白名单增删字段后必须调用，否则旧记录在新字段上没有倒排项，查询会「查不到但也不报错」。
      */
+    /**
+     * 应用白名单：写入生效 + 与持久化的上次配置比对，变了就重建全部集合的倒排。
+     *
+     * @return 重建的记录条数（配置未变时为 0）
+     */
+    public func applyFilterFields(fields: Array<String>, rebuild!: Bool = true): Int64 {
+        setFilterFields(fields)
+        if(!rebuild){
+            persistFilterFields(filterFields())
+            return 0
+        }
+        if(sameFields(storedFilterFields(), filterFields())){
+            return 0
+        }
+        let rebuilt = rebuildAllFilterEntries()
+        persistFilterFields(filterFields())
+        rebuilt
+    }
+
+    /** 上次持久化的白名单（空数组表示还没记录过） */
+    public func storedFilterFields(): Array<String> {
+        let result = ArrayList<String>()
+        match(store.get(CONFIG_KEY.toArray())){
+            case Some(bytes) =>
+                for(item in String.fromUtf8(bytes).split(',')){
+                    let field = item.trimAscii()
+                    if(!field.isEmpty()){
+                        result.add(field)
+                    }
+                }
+            case None => ()
+        }
+        result.toArray()
+    }
+
+    /** 所有出现过的集合名（写入时登记，供批量重建倒排） */
+    public func collections(): Array<String> {
+        let result = ArrayList<String>()
+        for((key, _) in store.prefix(COLLECTION_PREFIX.toArray())){
+            let name = String.fromUtf8(key)
+            if(name.size > COLLECTION_PREFIX.size){
+                result.add(name[COLLECTION_PREFIX.size..])
+            }
+        }
+        result.toArray()
+    }
+
+    /** 按当前白名单重建所有集合的倒排，返回重建条数 */
+    public func rebuildAllFilterEntries(): Int64 {
+        var rebuilt: Int64 = 0
+        for(collection in collections()){
+            rebuilt += rebuildFilterEntries(collection)
+        }
+        rebuilt
+    }
+
+    private func persistFilterFields(fields: Array<String>): Unit {
+        var text = ''
+        for(field in fields){
+            if(!text.isEmpty()){
+                text += ','
+            }
+            text += field
+        }
+        store.add(CONFIG_KEY.toArray(), text.toArray())
+        ()
+    }
+
+    private static func sameFields(left: Array<String>, right: Array<String>): Bool {
+        if(left.size != right.size){
+            return false
+        }
+        for(field in left){
+            var found = false
+            for(other in right){
+                if(field == other){
+                    found = true
+                }
+            }
+            if(!found){
+                return false
+            }
+        }
+        true
+    }
+
     public func rebuildFilterEntries(collection: String): Int64 {
         var rebuilt: Int64 = 0
         var offset: Int64 = 0
@@ -556,11 +657,11 @@ public class FStoreVectorStore <: VectorStore {
         let filters = HashMap<String, String>()
         match(store.get(filterMetaKey(collection, id).toArray())){
             case Some(bytes) =>
-                for(pair in String.fromUtf8(bytes).split(';')){
+                for(pair in String.fromUtf8(bytes).split(META_ENTRY)){
                     if(pair.isEmpty()){
                         continue
                     }
-                    let parts = pair.split('=')
+                    let parts = pair.split(META_PAIR)
                     if(parts.size >= 2){
                         filters[parts[0]] = parts[1]
                     }
@@ -581,9 +682,9 @@ public class FStoreVectorStore <: VectorStore {
         var meta = ''
         for((field, value) in record.filters){
             if(!meta.isEmpty()){
-                meta += ';'
+                meta += META_ENTRY
             }
-            meta += '${field}=${value}'
+            meta += '${field}${META_PAIR}${value}'
             if(!filterable(field)){
                 continue
             }
@@ -604,11 +705,11 @@ public class FStoreVectorStore <: VectorStore {
     private func deleteFilterEntries(collection: String, id: String): Unit {
         match(store.get(filterMetaKey(collection, id).toArray())){
             case Some(bytes) =>
-                for(pair in String.fromUtf8(bytes).split(';')){
+                for(pair in String.fromUtf8(bytes).split(META_ENTRY)){
                     if(pair.isEmpty()){
                         continue
                     }
-                    let parts = pair.split('=')
+                    let parts = pair.split(META_PAIR)
                     if(parts.size != 2){
                         continue
                     }
@@ -687,6 +788,10 @@ public class FStoreVectorStore <: VectorStore {
 
     private static func filterKey(collection: String, field: String, value: String, id: String): String {
         'h:${collection}:f:${field}:${value}:${id}'
+    }
+
+    private static func collectionKey(collection: String): String {
+        '${COLLECTION_PREFIX}${collection}'
     }
 
     private static func filterMetaKey(collection: String, id: String): String {

@@ -32,7 +32,7 @@ class PathSeqBox {
     public var value: Int64 = 0
 }
 
-private func newStore(): FStoreVectorStore {
+private func newPath(): String {
     let box = PathSeqBox()
     synchronized(pathSeqMutex){
         pathSeq++
@@ -40,7 +40,11 @@ private func newStore(): FStoreVectorStore {
     }
     // 带时间戳：跨进程重跑也不会撞到上次留下的目录
     let stamp = DateTime.now().toUnixTimeStamp().toSeconds()
-    FStoreVectorStore('/tmp/fhydra-test-${stamp}-${box.value}')
+    '/tmp/fhydra-test-${stamp}-${box.value}'
+}
+
+private func newStore(): FStoreVectorStore {
+    FStoreVectorStore(newPath())
 }
 
 private func kindFilters(kind: String): HashMap<String, String> {
@@ -79,6 +83,53 @@ public class FStoreVectorStoreTest {
         store.setFilterFields([' Namespace ', 'namespace', ''])
         @Expect(store.filterFields().size, 1)
         @Expect(store.filterFields()[0], 'namespace')
+        store.close()
+    }
+
+    /** 启动装配：白名单变了自动重建，没变则不动 */
+    @TestCase
+    func testApplyFilterFieldsRebuildsOnChange(): Unit {
+        let store = newStore()
+        let collection = 'u1:global'
+        store.upsert(collection, VectorRecord('r1', '{}', [1.0f64, 0.0f64],
+            filters: fieldFilter('namespace', 'work'), saveTime: 1))
+        @Expect(store.idsFiltered(collection, fieldFilter('namespace', 'work'), 0, 10).size, 0)
+
+        // 变更 → 重建 1 条
+        @Expect(store.applyFilterFields(['kind', 'namespace']), 1)
+        @Expect(store.idsFiltered(collection, fieldFilter('namespace', 'work'), 0, 10).size, 1)
+        // 再调一次：配置没变，不重建
+        @Expect(store.applyFilterFields(['kind', 'namespace']), 0)
+        store.close()
+    }
+
+    /** 配置持久化：换个实例再装配同样白名单，不应重复重建 */
+    @TestCase
+    func testApplyFilterFieldsPersistsAcrossInstances(): Unit {
+        let path = newPath()
+        let collection = 'u1:global'
+        let first = FStoreVectorStore(path)
+        first.upsert(collection, VectorRecord('r1', '{}', [1.0f64, 0.0f64],
+            filters: fieldFilter('namespace', 'work'), saveTime: 1))
+        @Expect(first.applyFilterFields(['kind', 'namespace']), 1)
+        first.close()
+
+        let second = FStoreVectorStore(path)
+        @Expect(second.storedFilterFields().size, 2)
+        @Expect(second.applyFilterFields(['kind', 'namespace']), 0)
+        @Expect(second.idsFiltered(collection, fieldFilter('namespace', 'work'), 0, 10).size, 1)
+        second.close()
+    }
+
+    /** 过滤值里带 `;` `=`：统一分隔符后必须原样读回 */
+    @TestCase
+    func testFilterValueWithSeparatorsRoundTrips(): Unit {
+        let store = newStore()
+        let collection = 'u1:global'
+        store.setFilterFields(['note'])
+        store.upsert(collection, VectorRecord('r1', '{}', [1.0f64, 0.0f64],
+            filters: fieldFilter('note', 'a;b=c'), saveTime: 1))
+        @Expect(store.get(collection, 'r1').getOrThrow().filters.get('note').getOrThrow(), 'a;b=c')
         store.close()
     }
 

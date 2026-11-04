@@ -44,7 +44,9 @@ public class HydraRpc {
      * `FStoreVectorStore.rebuildFilterEntries(collection)` 重建倒排。
      */
     public static func configure(): Unit {
-        store.setFilterFields(HydraConfig.filterFields())
+        // 与上次持久化的白名单比对：变了就重建全部集合的倒排（返回重建条数，这里不关心）
+        let rebuilt = store.applyFilterFields(HydraConfig.filterFields())
+        let _ = rebuilt
     }
 
     @JsonRpcMeta['健康检查', '1s']
