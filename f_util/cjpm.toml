@@ -20,7 +20,7 @@
   target-dir = ""
   version = "1.3.17"
   package-configuration = {}
-  category = ["Utility", "Developer Tools"]
+  category = ["Utility", "Developer Tools", "Algorithm"]
   license = ["Apache-2.0"]
   include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
