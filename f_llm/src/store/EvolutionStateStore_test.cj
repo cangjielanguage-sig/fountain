@@ -73,6 +73,13 @@ class EvolutionStateStore_test {
         let memory = InMemoryEvolutionStateStore()
         memory.markKnowledge(['a'])
         @Expect(memory.processedKnowledge().size, 1)
+
+        // 成员判定：只回答「这几个候选里哪些消费过」，与累积量无关
+        let verdict = reopened.processedAmong(['k1', 'k-unknown'])
+        @Expect(verdict.get('k1').getOrThrow(), true)
+        @Expect(verdict.get('k-unknown').isNone(), true)
+        // 空候选不报错
+        @Expect(reopened.processedAmong(Array<String>()).size, 0)
     }
 
     /** f_store：重开实例仍能读到技能状态与水位线 */

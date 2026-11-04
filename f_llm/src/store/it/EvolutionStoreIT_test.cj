@@ -148,6 +148,10 @@ class EvolutionStoreIT_test {
         @Expect(hasB, true)
         // 重复标记不报错（幂等）
         store.markKnowledge([docA])
+        // 候选判定走 SQL 的 IN：已标记的为 true，未标记的不出现
+        let verdict = store.processedAmong([docA, 'it-doc-never-seen'])
+        @Expect(verdict.get(docA).getOrThrow(), true)
+        @Expect(verdict.get('it-doc-never-seen').isNone(), true)
 
         let title = 'it-state-${tag}'
         store.save(EvolutionSkillState(title, 1000, true))

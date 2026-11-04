@@ -231,7 +231,16 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `memory` | 进程内集合（重启丢失，测试用） |
 | `postgres` / `mysql` | 表 `llm_skill_evolution_knowledge(doc_id, processed_at)` |
 
-`SkillEvolutionJob.run` 跑完把本轮用到的 `source`（知识 docId）写进去，下一轮 `load` 出来的知识先与它求差集再进素材池。四种后端行为一致，有 IT 用例守着。
+`SkillEvolutionJob.run` 跑完把本轮用到的 `source`（知识 docId）写进去；下一轮先对这**批候选**调用 `processedAmong(docIds)`，把已消费的剔掉。
+
+注意这里用的是**成员判定**而不是「取全部已消费集合再求差」：
+
+| 做法 | 查询规模 | 记录累积后的后果 |
+|---|---|---|
+| 全量读取 | O(已消费总数) | 超过实现上限会被截断，老记录被误判成「没消费过」，重新聚类 |
+| `processedAmong`（现行） | O(本次候选数) | 与历史累积量无关，不会截断 |
+
+`processedAmong` 在各后端的实现：SQL 用 `WHERE doc_id IN (...)`（`meet(...).IN(...)` 绑定参数），`f_store` 按 `kn:{docId}` 点查，内存实现查集合。四种后端行为一致，有 IT 用例守着；`processedKnowledge()`（全量）保留给运维查看，注释里标明不要用于去重。
 
 ### 多进程：每日租约
 

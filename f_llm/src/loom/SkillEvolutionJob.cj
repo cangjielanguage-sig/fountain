@@ -99,12 +99,16 @@ public class SkillEvolutionJob {
         // 只处理水位线之后的素材；`at == 0` 表示时间未知（知识文档没有写入时间），始终参与
         let freshSuccess = fresh(successes, since)
         let freshFailure = fresh(failures, since)
-        // 知识再按「已消费 docId」过滤：否则同一批知识会被每轮重复聚类、重复提案新技能
-        let consumed = HashMap<String, Bool>()
-        for(docId in state.processedKnowledge()){
-            consumed[docId] = true
-        }
+        // 知识再按「已消费 docId」过滤：否则同一批知识会被每轮重复聚类、重复提案新技能。
+        // 只对本轮候选做成员判定——查询规模与历史累积量无关，不存在「读不到更早记录」的截断
         let candidates = fresh(knowledge, since)
+        let docIds = ArrayList<String>()
+        for(item in candidates){
+            if(!item.source.isEmpty()){
+                docIds.add(item.source)
+            }
+        }
+        let consumed = state.processedAmong(docIds.toArray())
         let freshKnowledge = ArrayList<ExperienceItem>()
         for(item in candidates){
             if(item.source.isEmpty() || !consumed.contains(item.source)){

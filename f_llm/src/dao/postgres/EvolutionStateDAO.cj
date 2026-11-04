@@ -89,4 +89,21 @@ public interface PostgresEvolutionStateDAO <: RootDAO {
         '''
         executor.setSql(sql).update
     }
+
+    /**
+     * 候选 docId 的成员判定：只查这几个，不拉全量。
+     *
+     * 规模由「本次候选数」决定（受 `load` 的 limit 约束），与历史累积量无关，
+     * 所以不存在「读不到更早记录」的截断问题。
+     */
+    func knowledgeAmong(docIds: Array<String>): ArrayList<HashMap<String, Any>> {
+        if(docIds.size == 0){
+            return ArrayList<HashMap<String, Any>>()
+        }
+        let clause = meet(true, 'doc_id').IN(docIds)
+        let sql = '''
+            SELECT doc_id FROM llm_skill_evolution_knowledge WHERE ${clause}
+        '''
+        executor.setSql(sql).mapList()
+    }
 }

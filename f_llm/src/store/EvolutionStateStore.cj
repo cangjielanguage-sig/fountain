@@ -59,10 +59,10 @@ public interface EvolutionStateStore {
     func markRun(at: Int64): Unit
 
     /**
-     * 已参与过聚类的知识 docId。
+     * 已参与过聚类的知识 docId（**全量**）。
      *
-     * 知识没有写入时间，若每轮都全量参与聚类，同一批知识会被反复提案成新技能；
-     * 因此用「处理过的 docId」把它们挡在素材池外。
+     * 只用于运维/调试查看。判断某个候选是否消费过请用 [processedAmong]：
+     * 全量读取在记录数超过实现内部上限时会截断，导致老记录被误判成「没消费过」。
      */
     func processedKnowledge(): Array<String> {
         Array<String>()
@@ -71,6 +71,26 @@ public interface EvolutionStateStore {
     /** 标记这些知识已被消费 */
     func markKnowledge(docIds: Array<String>): Unit {
         ()
+    }
+
+    /**
+     * 这些 docId 里哪些已被消费过。
+     *
+     * 语义是**成员判定**而不是「取全部已消费集合」：判定的规模只与本次候选数量有关，
+     * 与历史累积量无关。默认实现退化成拉全量再比对，实现方应覆盖成按主键点查 / `IN` 查询。
+     */
+    func processedAmong(docIds: Array<String>): HashMap<String, Bool> {
+        let known = HashMap<String, Bool>()
+        for(docId in processedKnowledge()){
+            known[docId] = true
+        }
+        let consumed = HashMap<String, Bool>()
+        for(docId in docIds){
+            if(known.contains(docId)){
+                consumed[docId] = true
+            }
+        }
+        consumed
     }
 }
 
@@ -104,6 +124,20 @@ public class InMemoryEvolutionStateStore <: EvolutionStateStore {
                 }
             }
         }
+    }
+
+    public func processedAmong(docIds: Array<String>): HashMap<String, Bool> {
+        let box = KnowledgeSetBox()
+        synchronized(mutex){
+            let consumed = HashMap<String, Bool>()
+            for(docId in docIds){
+                if(knowledge.contains(docId)){
+                    consumed[docId] = true
+                }
+            }
+            box.value = consumed
+        }
+        box.value
     }
 
     public func get(skillTitle: String): ?EvolutionSkillState {
@@ -219,6 +253,25 @@ public class FStoreEvolutionStateStore <: EvolutionStateStore {
         }
     }
 
+    /** 按主键点查：每个候选一次 `get`，与历史累积量无关 */
+    public func processedAmong(docIds: Array<String>): HashMap<String, Bool> {
+        let box = KnowledgeSetBox()
+        synchronized(mutex){
+            let consumed = HashMap<String, Bool>()
+            for(docId in docIds){
+                if(docId.isEmpty()){
+                    continue
+                }
+                match(store.get('${KNOWLEDGE_PREFIX}${docId}'.toArray())){
+                    case Some(_) => consumed[docId] = true
+                    case None => ()
+                }
+            }
+            box.value = consumed
+        }
+        box.value
+    }
+
     private func readState(skillTitle: String): ?EvolutionSkillState {
         match(store.get('${SKILL_PREFIX}${skillTitle}'.toArray())){
             case Some(bytes) =>
@@ -250,4 +303,8 @@ class StampBox {
 
 class KnowledgeBox {
     public var value: Array<String> = Array<String>()
+}
+
+class KnowledgeSetBox {
+    public var value: HashMap<String, Bool> = HashMap<String, Bool>()
 }

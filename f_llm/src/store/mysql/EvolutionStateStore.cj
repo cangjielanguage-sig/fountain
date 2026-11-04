@@ -104,6 +104,20 @@ public class MySqlEvolutionStateStore <: EvolutionStateStore & RootService {
         }
     }
 
+    /** 候选判定下推到 SQL 的 `IN`：与历史累积量无关 */
+    public func processedAmong(docIds: Array<String>): HashMap<String, Bool> {
+        let box = MyKnowledgeSetBox()
+        synchronized(mutex){
+            ensureReady()
+            let consumed = HashMap<String, Bool>()
+            for(row in daoOf().knowledgeAmong(docIds)){
+                consumed[myStateTextOf(row.get('doc_id') ?? '')] = true
+            }
+            box.value = consumed
+        }
+        box.value
+    }
+
     private func ensureReady(): Unit {
         if(tableReady){
             return
@@ -137,6 +151,10 @@ private func myStateTextOf(value: Any): String {
 
 class MyKnowledgeBox {
     public var value: Array<String> = Array<String>()
+}
+
+class MyKnowledgeSetBox {
+    public var value: HashMap<String, Bool> = HashMap<String, Bool>()
 }
 
 class MyStateBox {

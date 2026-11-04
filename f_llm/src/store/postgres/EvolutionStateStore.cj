@@ -109,6 +109,20 @@ public class PostgresEvolutionStateStore <: EvolutionStateStore & RootService {
         }
     }
 
+    /** 候选判定下推到 SQL 的 `IN`：与历史累积量无关 */
+    public func processedAmong(docIds: Array<String>): HashMap<String, Bool> {
+        let box = PgKnowledgeSetBox()
+        synchronized(mutex){
+            ensureReady()
+            let consumed = HashMap<String, Bool>()
+            for(row in daoOf().knowledgeAmong(docIds)){
+                consumed[pgTextOf(row.get('doc_id') ?? '')] = true
+            }
+            box.value = consumed
+        }
+        box.value
+    }
+
     private func ensureReady(): Unit {
         if(tableReady){
             return
@@ -142,6 +156,10 @@ private func pgTextOf(value: Any): String {
 
 class PgKnowledgeBox {
     public var value: Array<String> = Array<String>()
+}
+
+class PgKnowledgeSetBox {
+    public var value: HashMap<String, Bool> = HashMap<String, Bool>()
 }
 
 class PgStateBox {

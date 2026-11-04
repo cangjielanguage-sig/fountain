@@ -79,4 +79,16 @@ public interface MySqlEvolutionStateDAO <: RootDAO {
         '''
         executor.setSql(sql).update
     }
+
+    /** 候选 docId 的成员判定：只查这几个，不拉全量 */
+    func knowledgeAmong(docIds: Array<String>): ArrayList<HashMap<String, Any>> {
+        if(docIds.size == 0){
+            return ArrayList<HashMap<String, Any>>()
+        }
+        let clause = meet(true, 'doc_id').IN(docIds)
+        let sql = '''
+            SELECT doc_id FROM llm_skill_evolution_knowledge WHERE ${clause}
+        '''
+        executor.setSql(sql).mapList()
+    }
 }
