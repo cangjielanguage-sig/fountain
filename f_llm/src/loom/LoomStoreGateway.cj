@@ -169,8 +169,12 @@ public class LoomStoreGateway {
                         text += ','
                     }
                     first = false
+                    // 带 content / kind：流程里检索到就能直接喂给模型，
+                    // 不必再按 id 逐条 get 一次（知识检索也是这么返回的）
                     text += '{"id":${hit.record.id},'
                     text += '"title":${FlowPlan.jsonQuote(hit.record.title)},'
+                    text += '"content":${FlowPlan.jsonQuote(hit.record.content)},'
+                    text += '"kind":${FlowPlan.jsonQuote(hit.record.kind)},'
                     text += '"score":${hit.score}}'
                 }
                 return text + ']'
