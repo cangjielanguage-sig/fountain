@@ -51,6 +51,31 @@ public class HydraMemoryRepositoryTest {
         @Expect(records[0].id, id)
     }
 
+    /** listByKind：先过滤再分页，交错写入时也不会漏 */
+    @TestCase
+    func testListByKindFiltersBeforePaging(): Unit {
+        let repo = newRepo()
+        let dense = [1.0f64, 0.0f64]
+        repo.upsert(item('note', 'n1'), dense, dense)
+        repo.upsert(item('fact', 'f1'), dense, dense)
+        repo.upsert(item('note', 'n2'), dense, dense)
+        repo.upsert(item('fact', 'f2'), dense, dense)
+
+        let facts = repo.listByKind(7, 'global', 'fact', 0, 10)
+        @Expect(facts.size, 2)
+        for(record in facts){
+            @Expect(record.kind, 'fact')
+        }
+
+        // 分页在过滤之后：limit=1 也必须拿到 fact（而不是本页刚好没有就返回空）
+        let page = repo.listByKind(7, 'global', 'fact', 0, 1)
+        @Expect(page.size, 1)
+        @Expect(page[0].kind, 'fact')
+
+        // 没有该 kind 时返回空
+        @Expect(repo.listByKind(7, 'global', 'missing', 0, 10).size, 0)
+    }
+
     @TestCase
     func testSearchDenseByContentField(): Unit {
         let repo = newRepo()

@@ -199,6 +199,35 @@ class LoomStoreGateway_test {
         @Expect(message.contains('unsupported'), true)
     }
 
+    /** 流程内查演进报告：JIT 步骤直接调 loomStore("evolution","by_skill",…) */
+    @TestCase
+    func testJitStepQueriesEvolutionReport(): Unit {
+        let store = InMemoryEvolutionStore()
+        store.save(EvolutionEntry(0, '日报助手', 'evolved', 'v1 -> v2', 10))
+        store.save(EvolutionEntry(0, '代码评审', 'rejected', 'no samples', 20))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore(),
+                                       evolution: store)
+        LoomHostApi.installStore(gateway.call)
+        try{
+            let step = StepPlan('s1', 'jit')
+            step.input = 'let s1_result = loomStore("evolution", "by_skill", '
+                + '"{\\"skill\\":\\"日报助手\\",\\"limit\\":5}")'
+            let fn = LoomCompiler().compileStep(step)
+            let out = fn(StartEvent(category: 'loom', tag: 't', name: 'start', data: 'go'))
+            match(out as DataEvent){
+                case Some(event) =>
+                    let text = event.tryGet<String>().getOrThrow()
+                    @Expect(text.contains('"action":"evolved"'), true)
+                    @Expect(text.contains('v1 -> v2'), true)
+                    // 其它技能的记录不能混进来
+                    @Expect(text.contains('代码评审'), false)
+                case None => @Expect(false, true)
+            }
+        }finally{
+            LoomHostApi.resetStore()
+        }
+    }
+
     /** JIT 步骤通过注册的 loomStore 调网关 */
     @TestCase
     func testJitStepCallsStoreGateway(): Unit {

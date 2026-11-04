@@ -354,6 +354,13 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 审计只按「技能 + 时间」查，不做向量检索，因此不依赖 `f_hydra`。SQL 版的 `id` 由应用层用 `MAX(id)+1` 分配（表里无自增列），PG/MySQL 写入口径一致，也不依赖各驱动对 `RETURNING` / `LAST_INSERT_ID()` 的支持差异。
 
+流程内也能查报告（JIT 步骤直接调用，与其它 store 同一个入口）：
+
+```cangjie
+let s1_result = loomStore("evolution", "by_skill", "{\"skill\":\"日报助手\",\"limit\":5}")
+// → [{"id":1,"skill":"日报助手","action":"evolved","detail":"v1 -> v2","at":10}]
+```
+
 **建表与索引在启动时完成**：`LoomWiring.wire` 调 `EvolutionStores.bootstrap()` → `ensureSchema()`。PG 建表后加 `idx_evo_skill (skill_title, at_time DESC)`，MySQL 的索引随 DDL 一起建。失败不阻断启动（库可能比应用晚就绪，首次读写还会再试）。
 
 **`f_store` 没有二级索引，用「条件键 → 数据键」自己造一个**：
