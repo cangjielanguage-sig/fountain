@@ -99,7 +99,18 @@ public class SkillEvolutionJob {
         // 只处理水位线之后的素材；`at == 0` 表示时间未知（知识文档没有写入时间），始终参与
         let freshSuccess = fresh(successes, since)
         let freshFailure = fresh(failures, since)
-        let freshKnowledge = fresh(knowledge, since)
+        // 知识再按「已消费 docId」过滤：否则同一批知识会被每轮重复聚类、重复提案新技能
+        let consumed = HashMap<String, Bool>()
+        for(docId in state.processedKnowledge()){
+            consumed[docId] = true
+        }
+        let candidates = fresh(knowledge, since)
+        let freshKnowledge = ArrayList<ExperienceItem>()
+        for(item in candidates){
+            if(item.source.isEmpty() || !consumed.contains(item.source)){
+                freshKnowledge.add(item)
+            }
+        }
 
         // 素材池 = 成功经验 + 知识：知识不参与成功率，但可以成为演进依据与新技能来源
         let materials = ArrayList<ExperienceItem>()
@@ -194,6 +205,15 @@ public class SkillEvolutionJob {
             }
         }
 
+        // 标记本轮消费过的知识：下一轮它们不再进入素材池
+        let usedKnowledge = ArrayList<String>()
+        for(item in freshKnowledge){
+            if(!item.source.isEmpty()){
+                usedKnowledge.add(item.source)
+            }
+        }
+        state.markKnowledge(usedKnowledge.toArray())
+
         let report = SkillEvolutionReport(evolved, rejected, skipped, created,
             Int64(matched.candidates.size), materials: Int64(materials.size))
         // 报告留档：传了报告表才写，写失败不影响本轮结果
@@ -261,8 +281,10 @@ public class SkillEvolutionJob {
                     let id = intField(record, 'id')
                     let content = strField(record, 'content')
                     if(!content.isEmpty()){
-                        // 记忆记录没有暴露 saveTime，用 id 近似时间序（水位线判定靠 id）
-                        result.add(ExperienceItem(id, content, at: id))
+                        // 网关已暴露 saveTime；缺失（旧数据/别的网关实现）时退化为 id
+                        let saveTime = intField(record, 'saveTime')
+                        result.add(ExperienceItem(id, content,
+                            at: if(saveTime > 0){ saveTime }else{ id }))
                     }
                 case None => ()
             }
@@ -297,7 +319,9 @@ public class SkillEvolutionJob {
                                 let content = strField(doc, 'content')
                                 if(!content.isEmpty()){
                                     index++
-                                    result.add(ExperienceItem(index, content, at: 0))
+                                    // source = docId：用于「已消费就不重复聚类」
+                                    result.add(ExperienceItem(index, content, at: 0,
+                                        source: docId.value))
                                 }
                             case None => ()
                         }
@@ -340,15 +364,23 @@ public class SkillEvolutionJob {
                                 embedder!: ?(String) -> Array<Float64> = None,
                                 nameCandidates!: Bool = false,
                                 ledger!: ?EvolutionStore = None,
+                                lease!: ?EvolutionLease = None,
                                 clock!: () -> Int64 = { => 0 }): Unit {
         scheduler.schedule(name, cron, { =>
             try{
                 let now = clock()
-                let materials = input()
-                run(skills(), materials.successes, materials.failures, materials.knowledge,
-                    chat, state, policy: policy, embedder: embedder,
-                    nameCandidates: nameCandidates, ledger: ledger,
-                    since: state.lastRunAt(), now: now)
+                // 每日租约：只有抢到今天的进程才执行，其余进程直接放弃
+                let allowed = match(lease){
+                    case Some(value) => !value.acquire(now).isEmpty()
+                    case None => true
+                }
+                if(allowed){
+                    let materials = input()
+                    let _ = run(skills(), materials.successes, materials.failures,
+                        materials.knowledge, chat, state, policy: policy, embedder: embedder,
+                        nameCandidates: nameCandidates, ledger: ledger,
+                        since: state.lastRunAt(), now: now)
+                }
             }catch(error: Exception){
                 // 定时线程不能把异常抛出去，否则会中断后续调度
                 ()

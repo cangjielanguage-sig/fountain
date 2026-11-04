@@ -357,6 +357,62 @@ class SkillEvolutionJob_test {
         @Expect(input.knowledge[0].content.contains('知识正文'), true)
     }
 
+    /** 每日租约：同一天触发两次，只有第一次真正执行 */
+    @TestCase
+    func testLeaseAllowsOnlyOneRunPerDay(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        let scheduler = ManualScheduler()
+        let lease = InMemoryEvolutionLease()
+        let stamp = 1_700_000_000
+        try{
+            SkillEvolutionJob.schedule('lease-skill', '0 0 3 * * * *', scheduler,
+                { => skills(true) },
+                { => EvolutionInput(experiences(3), NONE) },
+                fixture.chat, InMemoryEvolutionStateStore(),
+                embedder: encoder(), lease: lease, clock: { => stamp })
+            scheduler.fire('lease-skill')
+            @Expect(fixture.saved.size, 1)
+
+            // 同一天第二次触发：租约不放行
+            scheduler.fire('lease-skill')
+            @Expect(fixture.saved.size, 1)
+
+            // 第二天：租约放行，但冷却期还在，所以仍然只演进了 1 次
+            @Expect(lease.acquire(stamp + 86400).isEmpty(), false)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 知识消费一次后不再重复参与聚类 */
+    @TestCase
+    func testConsumedKnowledgeIsNotReclustered(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        let state = InMemoryEvolutionStateStore()
+        let knowledge = ArrayList<ExperienceItem>([
+            ExperienceItem(1, '爬虫要限速', source: 'k1'),
+            ExperienceItem(2, '爬虫要重试', source: 'k2'),
+            ExperienceItem(3, '爬虫要记失败', source: 'k3')
+        ].toArray())
+        try{
+            let first = SkillEvolutionJob.run(skills(true), NONE, NONE, knowledge,
+                fixture.chat, state, embedder: encoder(), nameCandidates: true, now: 1000)
+            @Expect(first.materials, 3)
+            @Expect(first.created.size, 1)
+
+            // 第二轮：这批知识已被消费，素材池为空
+            let second = SkillEvolutionJob.run(skills(true), NONE, NONE, knowledge,
+                fixture.chat, state, embedder: encoder(), nameCandidates: true, now: 2000)
+            @Expect(second.materials, 0)
+            @Expect(second.created.size, 0)
+            @Expect(state.processedKnowledge().size, 3)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
     /** 注册成定时任务后，触发一次即跑一轮演进 */
     @TestCase
     func testScheduleRunsOneRoundOnFire(): Unit {

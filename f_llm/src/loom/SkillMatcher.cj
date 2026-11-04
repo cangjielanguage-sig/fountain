@@ -25,11 +25,14 @@ public class ExperienceItem {
     public let id: Int64
     public let content: String
     public let at: Int64
+    /** 来源标识：知识用 docId，经验留空；用于「已处理过就不重复聚类」 */
+    public let source: String
 
-    public init(id: Int64, content: String, at!: Int64 = 0) {
+    public init(id: Int64, content: String, at!: Int64 = 0, source!: String = '') {
         this.id = id
         this.content = content
         this.at = at
+        this.source = source
     }
 }
 

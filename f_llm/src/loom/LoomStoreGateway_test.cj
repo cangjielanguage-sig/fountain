@@ -186,6 +186,18 @@ class LoomStoreGateway_test {
         @Expect(gateway.call('evolution', 'by_skill', '{"skill":"不存在","limit":5}'), '[]')
     }
 
+    /** 记忆记录带 saveTime：技能演进的水位线按真实时间判定 */
+    @TestCase
+    func testMemoryListExposesSaveTime(): Unit {
+        let gateway = gateway()
+        gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"t","content":"c","kind":"fact"}')
+        let records = gateway.call('memory', 'list',
+            '{"userId":7,"namespace":"n","offset":0,"limit":10}')
+        @Expect(records.contains('"saveTime":'), true)
+        @Expect(records.contains('"saveTime":0'), false)
+    }
+
     @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''

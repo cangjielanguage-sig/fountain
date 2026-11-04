@@ -89,6 +89,8 @@ public class LoomWiring {
         EvolutionStores.bootstrap()
         // 演进状态：默认落 f_store；mysql/postgres 建表
         EvolutionStateStores.bootstrap()
+        // 每日租约：跟着向量存储走（SQL 建单行表 / hydra 全 0 向量 / 本地 f_store）
+        let _ = EvolutionLeases.bootstrap()
         // 技能演进统一由 SkillEvolutionJob 执行：配了 cron 就注册成周期任务
         registerEvolution(chat, evolutionCron, evolutionUserId, evolutionNamespace,
             evolutionModel, evolutionNameCandidates, evolutionPolicy, skillEmbedder)
@@ -110,6 +112,12 @@ public class LoomWiring {
         }
         let state = EvolutionStateStores.current()
         let ledger = EvolutionStores.current()
+        // 租约构造可能打开本地存储；失败就不做互斥（单进程也安全）
+        let lease: ?EvolutionLease = try{
+            Some(EvolutionLeases.current())
+        }catch(error: Exception){
+            None
+        }
         // chat 是 (model, system, user)；演进侧只需要 (system, user)
         let evolveChat = { system: String, user: String => chat(model, system, user) }
         SkillEvolutionJob.schedule('loom-skill-evolution', cron, scheduler,
@@ -118,7 +126,7 @@ public class LoomWiring {
             { => SkillEvolutionJob.load(LoomStoreGateway(), userId, namespace) },
             evolveChat, state,
             policy: policy, embedder: embedder,
-            nameCandidates: nameCandidates, ledger: ledger,
+            nameCandidates: nameCandidates, ledger: ledger, lease: lease,
             clock: { => DateTime.now().toUnixTimeStamp().toSeconds() })
     }
 }

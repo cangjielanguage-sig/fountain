@@ -17,6 +17,7 @@ package fountain::f_llm.store.it
 
 import std.collection.*
 import std.database.sql.*
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -73,6 +74,37 @@ class EvolutionStoreIT_test {
             return
         }
         check(MySqlEvolutionStore(), 'my')
+    }
+
+    /** 每日租约：单行表 + CAS，同一天只放行一次 */
+    @TestCase
+    func testPostgresLease(): Unit {
+        if(!postgresReady()){
+            return
+        }
+        checkLease(PostgresEvolutionLease())
+    }
+
+    @TestCase
+    func testMySqlLease(): Unit {
+        if(!mySqlReady()){
+            return
+        }
+        checkLease(MySqlEvolutionLease())
+    }
+
+    private func checkLease(lease: EvolutionLease): Unit {
+        lease.ensureSchema()
+        let now = DateTime.now().toUnixTimeStamp().toSeconds()
+        let created = lease.ensure(now)
+        @Expect(created.isEmpty(), false)
+        @Expect(lease.ensure(now), created)     // 已存在不再改
+        // 若既有值是今天：再领取必须失败
+        if(TimeUuid.dayOf(created) == now / 86400){
+            @Expect(lease.acquire(now), '')
+        }
+        // 隔天可领取
+        @Expect(lease.acquire(now + 86400).isEmpty(), false)
     }
 
     /** 演进状态表：更新、读回、水位线 */

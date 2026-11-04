@@ -223,6 +223,34 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 状态存储跟随 `llm_metaStore`：`f_store`（默认）/ `memory` / `postgres` / `mysql`（表 `llm_skill_evolution_state`，水位线用保留行 `__run__`）。
 
+### 多进程：每日租约
+
+任务一天只跑一次，但要保证**只有一个进程真正执行**。做法是存一个「时间型 UUID」，用日期级乐观锁：
+
+| 向量存储（`llm_memoryStore`） | 租约存放 | 互斥强度 |
+|---|---|---|
+| `mysql` / `postgres` | 单行表 `llm_evolution_lease` | `UPDATE ... WHERE lease_value = 旧值` 的条件写，真正 CAS |
+| `f_hydra` | 本地向量记录（全 0 向量，payload 存 UUID） | 本地存储，单进程无需跨进程 |
+| `fhydra` | 远程向量记录（全 0 向量） | 先写后读校验 |
+| 其它（`memory`） | f_store / 内存 | 单进程 |
+
+用全 0 向量存租约，是因为租约不该被任何语义检索命中：全 0 向量与任何查询的余弦相似度都是 0。
+
+流程：
+
+```
+启动 → EvolutionLeases.bootstrap()：租约不存在就写一次时间型 UUID
+每天定时触发 → acquire(now)
+   ├─ 租约的日期 == 今天 → 返回空串 → 本进程放弃
+   └─ 租约的日期 < 今天 → 生成新 UUID，按旧值 CAS 覆盖
+        ├─ CAS 成功 → 抢到本次执行权
+        └─ CAS 失败（别人先改）→ 放弃
+```
+
+因为记忆/经验/知识所有进程都能读到，谁执行这一轮结果都一样。
+
+`saveTime` 在记忆记录里已暴露，水位线按真实时间比较（旧网关缺这个字段时退化为按 id）。
+
 ## 人格与提示词
 
 `FlowPlan.persona` 有两种写法，执行期由 `LoomRunner.resolvePersona` 解析：

@@ -57,6 +57,21 @@ public interface EvolutionStateStore {
 
     /** 记录本轮执行时间，下一轮据此筛新增素材 */
     func markRun(at: Int64): Unit
+
+    /**
+     * 已参与过聚类的知识 docId。
+     *
+     * 知识没有写入时间，若每轮都全量参与聚类，同一批知识会被反复提案成新技能；
+     * 因此用「处理过的 docId」把它们挡在素材池外。
+     */
+    func processedKnowledge(): Array<String> {
+        Array<String>()
+    }
+
+    /** 标记这些知识已被消费 */
+    func markKnowledge(docIds: Array<String>): Unit {
+        ()
+    }
 }
 
 /** 内存实现：测试与零配置启动 */
@@ -64,8 +79,31 @@ public class InMemoryEvolutionStateStore <: EvolutionStateStore {
     private let mutex = Mutex()
     private var states = HashMap<String, EvolutionSkillState>()
     private var runAt: Int64 = 0
+    private var knowledge = HashSet<String>()
 
     public init() {
+    }
+
+    public func processedKnowledge(): Array<String> {
+        let box = KnowledgeBox()
+        synchronized(mutex){
+            let list = ArrayList<String>()
+            for(docId in knowledge){
+                list.add(docId)
+            }
+            box.value = list.toArray()
+        }
+        box.value
+    }
+
+    public func markKnowledge(docIds: Array<String>): Unit {
+        synchronized(mutex){
+            for(docId in docIds){
+                if(!docId.isEmpty()){
+                    knowledge.add(docId)
+                }
+            }
+        }
     }
 
     public func get(skillTitle: String): ?EvolutionSkillState {
@@ -110,6 +148,8 @@ public class InMemoryEvolutionStateStore <: EvolutionStateStore {
 public class FStoreEvolutionStateStore <: EvolutionStateStore {
     private static const RUN_KEY = 'f_llm:evo-state:run'
     private static const SKILL_PREFIX = 'f_llm:evo-state:skill:'
+    /** 已消费的知识 docId：`f_llm:evo-state:kn:{docId}` = 1 */
+    private static const KNOWLEDGE_PREFIX = 'f_llm:evo-state:kn:'
     private static let SEP = String.fromUtf8([1u8])
 
     private let store: Store
@@ -154,6 +194,31 @@ public class FStoreEvolutionStateStore <: EvolutionStateStore {
         }
     }
 
+    public func processedKnowledge(): Array<String> {
+        let box = KnowledgeBox()
+        synchronized(mutex){
+            let list = ArrayList<String>()
+            for((key, _) in store.prefix(KNOWLEDGE_PREFIX.toArray())){
+                let text = String.fromUtf8(key)
+                if(text.size > KNOWLEDGE_PREFIX.size){
+                    list.add(text[KNOWLEDGE_PREFIX.size..])
+                }
+            }
+            box.value = list.toArray()
+        }
+        box.value
+    }
+
+    public func markKnowledge(docIds: Array<String>): Unit {
+        synchronized(mutex){
+            for(docId in docIds){
+                if(!docId.isEmpty()){
+                    store.add('${KNOWLEDGE_PREFIX}${docId}'.toArray(), [1u8])
+                }
+            }
+        }
+    }
+
     private func readState(skillTitle: String): ?EvolutionSkillState {
         match(store.get('${SKILL_PREFIX}${skillTitle}'.toArray())){
             case Some(bytes) =>
@@ -181,4 +246,8 @@ class StateBox {
 
 class StampBox {
     public var value: Int64 = 0
+}
+
+class KnowledgeBox {
+    public var value: Array<String> = Array<String>()
 }

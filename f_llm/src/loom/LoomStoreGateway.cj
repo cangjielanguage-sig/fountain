@@ -356,7 +356,8 @@ public class LoomStoreGateway {
             + '"namespace":${FlowPlan.jsonQuote(record.namespace)},'
             + '"title":${FlowPlan.jsonQuote(record.title)},'
             + '"content":${FlowPlan.jsonQuote(record.content)},'
-            + '"kind":${FlowPlan.jsonQuote(record.kind)}}'
+            + '"kind":${FlowPlan.jsonQuote(record.kind)},'
+            + '"saveTime":${record.saveTime.toUnixTimeStamp().toSeconds()}}'
     }
 
     private static func skillJson(skill: Skill): String {
