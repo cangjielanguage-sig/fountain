@@ -22,47 +22,17 @@ import fountain::f_data.*
 
 import fountain::f_llm.store.*
 
-/** 一轮演进需要的两批经验 */
+/** 一轮演进需要的素材：成功经验、失败经验、知识摘要 */
 public class EvolutionInput {
     public let successes: ArrayList<ExperienceItem>
     public let failures: ArrayList<ExperienceItem>
+    public let knowledge: ArrayList<ExperienceItem>
 
-    public init(successes: ArrayList<ExperienceItem>, failures: ArrayList<ExperienceItem>) {
+    public init(successes: ArrayList<ExperienceItem>, failures: ArrayList<ExperienceItem>,
+                knowledge!: ArrayList<ExperienceItem> = ArrayList<ExperienceItem>()) {
         this.successes = successes
         this.failures = failures
-    }
-}
-
-/** 每个技能的演进状态：上次尝试时间、上次是否过门禁 */
-public class SkillEvolutionState {
-    private let mutex = Mutex()
-    private var lastAt = HashMap<String, Int64>()
-    private var lastPassed = HashMap<String, Bool>()
-
-    public init() {
-    }
-
-    public func lastEvolvedAt(skillTitle: String): Int64 {
-        let box = TimeBox()
-        synchronized(mutex){
-            box.value = lastAt.get(skillTitle) ?? 0
-        }
-        box.value
-    }
-
-    public func lastGatePassed(skillTitle: String): Bool {
-        let box = FlagBox()
-        synchronized(mutex){
-            box.value = lastPassed.get(skillTitle) ?? true
-        }
-        box.value
-    }
-
-    public func mark(skillTitle: String, at: Int64, passed: Bool): Unit {
-        synchronized(mutex){
-            lastAt[skillTitle] = at
-            lastPassed[skillTitle] = passed
-        }
+        this.knowledge = knowledge
     }
 }
 
@@ -73,50 +43,74 @@ public class SkillEvolutionReport {
     /** 本轮新建的技能标题（`nameCandidates: true` 时才会出现） */
     public let created: ArrayList<String>
     public let candidateClusters: Int64
+    /** 本次进入归组的素材条数（水位线之后的新增） */
+    public let materials: Int64
 
     public init(evolved: ArrayList<String>, rejected: ArrayList<String>,
                 skipped: ArrayList<String>, created: ArrayList<String>,
-                candidateClusters: Int64) {
+                candidateClusters: Int64, materials!: Int64 = 0) {
         this.evolved = evolved
         this.rejected = rejected
         this.skipped = skipped
         this.created = created
         this.candidateClusters = candidateClusters
+        this.materials = materials
     }
 }
 
 /**
- * 演进流水线：判定 → 提炼 → A/B 门禁 → 落库。
+ * 技能演进流水线：**只由这里统一执行**，流程结束的提炼只写记忆/经验/知识，不碰技能。
  *
- * 四步的顺序是刻意的：
- * 1. **判定**（[SkillEvolutionPolicy]）不通过就直接跳过，连模型都不调；
- * 2. **提炼**让模型基于该技能的成功经验产出新版正文；
- * 3. **门禁**（[SkillGate]）用技能自带样例跑 A/B，不达标不落库；
- * 4. **落库**成功才把版本 +1，并记录状态供下一轮冷却期使用。
+ * 每轮做两件事，顺序不能反：
+ * 1. **先演进已有技能**：把「上次执行之后新增」的成功经验与知识归到现有技能，够样本就改正文；
+ * 2. **再提炼新技能**：归不上的素材聚成簇，够大就起名建档。
  *
- * 聚成簇但还归不到任何技能的经验只作为「新技能候选」上报，不自动建库——
- * 起名字、定边界需要人确认。
+ * 先演进再新建，是为了让「本可以并入现有技能」的素材优先被吸收，避免同一主题
+ * 既改旧技能又建新技能，形成两份近似内容。
  */
 public class SkillEvolutionJob {
     private init() {
     }
 
+    /**
+     * @param successes 成功经验（`kind=experience`）
+     * @param failures 失败经验（`kind=experience_failed`），只用于成功率判定
+     * @param knowledge 知识摘要，与成功经验一起参与归组/聚类
+     * @param state 每技能冷却期状态 + 整轮水位线
+     * @param since 水位线：只处理 `at > since` 的素材；0 表示全量
+     */
     public static func run(skills: ArrayList<Skill>,
                            successes: ArrayList<ExperienceItem>,
                            failures: ArrayList<ExperienceItem>,
+                           knowledge: ArrayList<ExperienceItem>,
                            chat: (String, String) -> String,
-                           state: SkillEvolutionState,
+                           state: EvolutionStateStore,
                            policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
                            embedder!: ?(String) -> Array<Float64> = None,
                            matcherThreshold!: Float64 = 0.75,
                            nameCandidates!: Bool = false,
                            ledger!: ?EvolutionStore = None,
+                           since!: Int64 = 0,
                            now!: Int64 = 0): SkillEvolutionReport {
         let evolved = ArrayList<String>()
         let rejected = ArrayList<String>()
         let skipped = ArrayList<String>()
 
-        let matched = SkillMatcher.assign(successes, skills, embedder: embedder,
+        // 只处理水位线之后的素材；`at == 0` 表示时间未知（知识文档没有写入时间），始终参与
+        let freshSuccess = fresh(successes, since)
+        let freshFailure = fresh(failures, since)
+        let freshKnowledge = fresh(knowledge, since)
+
+        // 素材池 = 成功经验 + 知识：知识不参与成功率，但可以成为演进依据与新技能来源
+        let materials = ArrayList<ExperienceItem>()
+        for(item in freshSuccess){
+            materials.add(item)
+        }
+        for(item in freshKnowledge){
+            materials.add(item)
+        }
+
+        let matched = SkillMatcher.assign(materials, skills, embedder: embedder,
                                           threshold: matcherThreshold)
         let owner = HashMap<String, ArrayList<ExperienceItem>>()
         for(item in matched.assignments){
@@ -125,7 +119,7 @@ public class SkillEvolutionJob {
 
         // 失败经验同样按技能归属后计数：成功率要按「这个技能的历史表现」算，
         // 不能拿全局成败冒充——不同技能的难度差很多
-        let failed = SkillMatcher.assign(failures, skills, embedder: embedder,
+        let failed = SkillMatcher.assign(freshFailure, skills, embedder: embedder,
                                          threshold: matcherThreshold)
         let failureCounts = HashMap<String, Int64>()
         for(item in failed.assignments){
@@ -135,8 +129,17 @@ public class SkillEvolutionJob {
         for(skill in skills){
             let items = owner.get(skill.title) ?? ArrayList<ExperienceItem>()
             let failureCount = failureCounts.get(skill.title) ?? 0
+            let previous = state.get(skill.title)
+            let lastAt = match(previous){
+                case Some(record) => record.lastEvolvedAt
+                case None => 0
+            }
+            let lastPassed = match(previous){
+                case Some(record) => record.lastGatePassed
+                case None => true
+            }
             let decision = policy.decide(Int64(items.size), failureCount,
-                state.lastEvolvedAt(skill.title), state.lastGatePassed(skill.title), now)
+                lastAt, lastPassed, now)
             if(!decision.shouldEvolve){
                 skipped.add('${skill.title}: ${decision.reason}')
                 continue
@@ -152,7 +155,7 @@ public class SkillEvolutionJob {
             }
             if(newDetails.trimAscii().isEmpty()){
                 rejected.add('${skill.title}: evolution returned empty content')
-                state.mark(skill.title, now, false)
+                state.save(EvolutionSkillState(skill.title, now, false))
                 continue
             }
 
@@ -160,12 +163,12 @@ public class SkillEvolutionJob {
             let gate = SkillGate.evaluate(chat, skill.details, newDetails, samples)
             if(!gate.passed){
                 rejected.add('${skill.title}: ${gate.reason}')
-                state.mark(skill.title, now, false)
+                state.save(EvolutionSkillState(skill.title, now, false))
                 continue
             }
             skillStoreUpsert(skill, newDetails.trimAscii())
             evolved.add('${skill.title}: v${skill.version} -> v${skill.version + 1} (${gate.reason})')
-            state.mark(skill.title, now, true)
+            state.save(EvolutionSkillState(skill.title, now, true))
         }
 
         // 新技能候选：只有显式开启 nameCandidates 才让模型起名并落库
@@ -192,8 +195,8 @@ public class SkillEvolutionJob {
         }
 
         let report = SkillEvolutionReport(evolved, rejected, skipped, created,
-            Int64(matched.candidates.size))
-        // 报告留档：传了 gateway 才写，写失败不影响本轮结果
+            Int64(matched.candidates.size), materials: Int64(materials.size))
+        // 报告留档：传了报告表才写，写失败不影响本轮结果
         if(let Some(target) <- ledger){
             try{
                 SkillEvolutionLedger.write(target, report, now)
@@ -201,18 +204,38 @@ public class SkillEvolutionJob {
                 ()
             }
         }
+        // 推进水位线：下一轮只看之后再新增的素材
+        if(now > 0){
+            state.markRun(now)
+        }
         report
     }
 
+    /** `since <= 0` 表示全量；`at == 0` 视为时间未知，始终保留 */
+    private static func fresh(items: ArrayList<ExperienceItem>, since: Int64): ArrayList<ExperienceItem> {
+        if(since <= 0){
+            return items
+        }
+        let result = ArrayList<ExperienceItem>()
+        for(item in items){
+            if(item.at == 0 || item.at > since){
+                result.add(item)
+            }
+        }
+        result
+    }
+
     /**
-     * 从存储里取本轮输入：成功经验、失败经验各一批。
+     * 从存储里取本轮素材：成功经验、失败经验、知识摘要。
      *
-     * 经验写入时不绑定技能，所以这里只能按 `kind` 取；归属由 [run] 内部的匹配完成。
+     * 经验写入时不绑定技能，所以按 `kind` 取；知识没有写入时间（`at = 0`），
+     * 因此每轮都会参与归组——这也是新技能的主要来源。
      */
     public static func load(gateway: LoomStoreGateway, userId: Int64, namespace: String,
                             limit!: Int64 = 500): EvolutionInput {
         EvolutionInput(experiencesOf(gateway, userId, namespace, 'experience', limit),
-                       experiencesOf(gateway, userId, namespace, 'experience_failed', limit))
+                       experiencesOf(gateway, userId, namespace, 'experience_failed', limit),
+                       knowledge: knowledgeOf(gateway, limit))
     }
 
     private static func experiencesOf(gateway: LoomStoreGateway, userId: Int64,
@@ -235,20 +258,11 @@ public class SkillEvolutionJob {
         for(item in json){
             match(item as JsonObject){
                 case Some(record) =>
-                    let id = match(record.get('id')){
-                        case Some(value) => Int64.tryParse(value.toString()) ?? 0
-                        case None => 0
-                    }
-                    let content = match(record.get('content')){
-                        case Some(value) =>
-                            match(value as JsonString){
-                                case Some(field) => field.value
-                                case None => ''
-                            }
-                        case None => ''
-                    }
+                    let id = intField(record, 'id')
+                    let content = strField(record, 'content')
                     if(!content.isEmpty()){
-                        result.add(ExperienceItem(id, content))
+                        // 记忆记录没有暴露 saveTime，用 id 近似时间序（水位线判定靠 id）
+                        result.add(ExperienceItem(id, content, at: id))
                     }
                 case None => ()
             }
@@ -256,26 +270,85 @@ public class SkillEvolutionJob {
         result
     }
 
+    private static func knowledgeOf(gateway: LoomStoreGateway, limit: Int64): ArrayList<ExperienceItem> {
+        let result = ArrayList<ExperienceItem>()
+        let ids = try{
+            gateway.call('knowledge', 'docIds', '{"offset":0,"limit":${limit}}')
+        }catch(error: Exception){
+            '[]'
+        }
+        let list = match(JsonValue.fromStr(ids) as JsonArray){
+            case Some(value) => value
+            case None => return result
+        }
+        var index: Int64 = 0
+        for(item in list){
+            match(item as JsonString){
+                case Some(docId) =>
+                    let text = try{
+                        gateway.call('knowledge', 'get',
+                            '{"docId":${FlowPlan.jsonQuote(docId.value)}}')
+                    }catch(error: Exception){
+                        ''
+                    }
+                    if(!text.trimAscii().isEmpty()){
+                        match(JsonValue.fromStr(text) as JsonObject){
+                            case Some(doc) =>
+                                let content = strField(doc, 'content')
+                                if(!content.isEmpty()){
+                                    index++
+                                    result.add(ExperienceItem(index, content, at: 0))
+                                }
+                            case None => ()
+                        }
+                    }
+                case None => ()
+            }
+        }
+        result
+    }
+
+    private static func intField(json: JsonObject, key: String): Int64 {
+        match(json.get(key)){
+            case Some(value) => Int64.tryParse(value.toString()) ?? 0
+            case None => 0
+        }
+    }
+
+    private static func strField(json: JsonObject, key: String): String {
+        match(json.get(key)){
+            case Some(value) =>
+                match(value as JsonString){
+                    case Some(text) => text.value
+                    case None => ''
+                }
+            case None => ''
+        }
+    }
+
     /**
-     * 注册成定时任务：到点跑一轮（判定 → 提炼 → 门禁 → 落库）。
+     * 注册成定时任务：到点跑一轮（演进已有技能 → 提炼新技能）。
      *
-     * 依赖的输入都用闭包传入，因为技能库、经验库、当前时间是运行期才确定的。
+     * 水位线从 `state.lastRunAt()` 取，因此重启后不会把历史素材重跑一遍。
      */
     public static func schedule(name: String, cron: String, scheduler: LoomScheduler,
                                 skills: () -> ArrayList<Skill>,
-                                successes: () -> ArrayList<ExperienceItem>,
-                                failures: () -> ArrayList<ExperienceItem>,
+                                input: () -> EvolutionInput,
                                 chat: (String, String) -> String,
-                                state: SkillEvolutionState,
+                                state: EvolutionStateStore,
                                 policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
                                 embedder!: ?(String) -> Array<Float64> = None,
                                 nameCandidates!: Bool = false,
+                                ledger!: ?EvolutionStore = None,
                                 clock!: () -> Int64 = { => 0 }): Unit {
         scheduler.schedule(name, cron, { =>
             try{
-                run(skills(), successes(), failures(), chat, state,
-                    policy: policy, embedder: embedder,
-                    nameCandidates: nameCandidates, now: clock())
+                let now = clock()
+                let materials = input()
+                run(skills(), materials.successes, materials.failures, materials.knowledge,
+                    chat, state, policy: policy, embedder: embedder,
+                    nameCandidates: nameCandidates, ledger: ledger,
+                    since: state.lastRunAt(), now: now)
             }catch(error: Exception){
                 // 定时线程不能把异常抛出去，否则会中断后续调度
                 ()
@@ -338,14 +411,6 @@ public class SkillEvolutionJob {
         }
         text
     }
-}
-
-class TimeBox {
-    public var value: Int64 = 0
-}
-
-class FlagBox {
-    public var value: Bool = true
 }
 
 class SinkBox {

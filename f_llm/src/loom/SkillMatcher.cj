@@ -20,14 +20,16 @@ import std.math.*
 
 import fountain::f_llm.store.*
 
-/** 一条待归属的经验 */
+/** 一条待归属的素材（经验 / 知识摘要）；`at` 用于按水位线筛「上次执行之后的新增」 */
 public class ExperienceItem {
     public let id: Int64
     public let content: String
+    public let at: Int64
 
-    public init(id: Int64, content: String) {
+    public init(id: Int64, content: String, at!: Int64 = 0) {
         this.id = id
         this.content = content
+        this.at = at
     }
 }
 

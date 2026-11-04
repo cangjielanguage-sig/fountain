@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_llm.loom
 
+import std.time.DateTime
+
 import fountain::f_llm.store.*
 
 /**
@@ -43,11 +45,22 @@ public class LoomWiring {
         wire(LoomDefaults.chat(plannerModel), plannerModel: plannerModel)
     }
 
+    /**
+     * @param evolutionCron 非空时把技能演进注册成周期任务（cron 七段式）
+     * @param evolutionUserId / evolutionNamespace 取经验与知识用的归属
+     * @param evolutionModel 演进用的模型名；空串则交给 chat 回调取默认
+     */
     public static func wire(chat: (String, String, String) -> String,
                             plannerModel!: String = '',
                             store!: ?LoomStore = None,
                             memoryPolicy!: ?LoomMemoryPolicy = None,
-                            skillEmbedder!: ?(String) -> Array<Float64> = None): LoomService {
+                            skillEmbedder!: ?(String) -> Array<Float64> = None,
+                            evolutionCron!: String = '',
+                            evolutionUserId!: Int64 = 0,
+                            evolutionNamespace!: String = 'loom',
+                            evolutionModel!: String = '',
+                            evolutionNameCandidates!: Bool = true,
+                            evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy()): LoomService {
         let settings = StoreSettings.load()
         // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
         let chosen = match(store){
@@ -74,6 +87,38 @@ public class LoomWiring {
         SkillCatalog.install({ => Stores.meta().skills }, embedder: skillEmbedder)
         // 演进报告表：mysql/postgres 部署在启动时建表建索引（失败不阻断启动）
         EvolutionStores.bootstrap()
+        // 演进状态：默认落 f_store；mysql/postgres 建表
+        EvolutionStateStores.bootstrap()
+        // 技能演进统一由 SkillEvolutionJob 执行：配了 cron 就注册成周期任务
+        registerEvolution(chat, evolutionCron, evolutionUserId, evolutionNamespace,
+            evolutionModel, evolutionNameCandidates, evolutionPolicy, skillEmbedder)
         service
+    }
+
+    /** 注册周期演进任务；未配 cron 或未装调度器时什么都不做 */
+    private static func registerEvolution(chat: (String, String, String) -> String,
+                                          cron: String, userId: Int64, namespace: String,
+                                          model: String, nameCandidates: Bool,
+                                          policy: SkillEvolutionPolicy,
+                                          embedder: ?(String) -> Array<Float64>): Unit {
+        if(cron.trimAscii().isEmpty()){
+            return
+        }
+        let scheduler = match(LoomSchedules.current()){
+            case Some(value) => value
+            case None => return
+        }
+        let state = EvolutionStateStores.current()
+        let ledger = EvolutionStores.current()
+        // chat 是 (model, system, user)；演进侧只需要 (system, user)
+        let evolveChat = { system: String, user: String => chat(model, system, user) }
+        SkillEvolutionJob.schedule('loom-skill-evolution', cron, scheduler,
+            { => Stores.meta().skills.list() },
+            // 网关与存储都在任务触发时才构造：注册阶段不碰内容存储，避免启动即建连接
+            { => SkillEvolutionJob.load(LoomStoreGateway(), userId, namespace) },
+            evolveChat, state,
+            policy: policy, embedder: embedder,
+            nameCandidates: nameCandidates, ledger: ledger,
+            clock: { => DateTime.now().toUnixTimeStamp().toSeconds() })
     }
 }

@@ -50,9 +50,11 @@ class EvolutionFixture {
     }
 }
 
-/** 演进流水线：判定 → 提炼 → 门禁 → 落库 */
+/** 演进流水线：水位线 → 演进已有技能 → 提炼新技能 */
 @Test
 class SkillEvolutionJob_test {
+    private static let NONE = ArrayList<ExperienceItem>()
+
     private static func skills(samples: Bool): ArrayList<Skill> {
         let functions = if(samples){
             '{"samples":[{"input":"写日报","expect":"三段式"}]}'
@@ -62,12 +64,25 @@ class SkillEvolutionJob_test {
         ArrayList<Skill>([Skill(1, '日报助手', '旧版', functions, version: 1)])
     }
 
-    private static func experiences(count: Int64): ArrayList<ExperienceItem> {
+    private static func experiences(count: Int64, at!: Int64 = 0): ArrayList<ExperienceItem> {
         let result = ArrayList<ExperienceItem>()
         for(index in 0..count){
-            result.add(ExperienceItem(index + 1, '日报助手 三段式 经验 ${index}'))
+            result.add(ExperienceItem(index + 1, '日报助手 三段式 经验 ${index}', at: at))
         }
         result
+    }
+
+    private static func encoder(): ?(String) -> Array<Float64> {
+        { text =>
+            if(text.contains('日报') || text.contains('三段式') || text.contains('旧版')
+               || text.contains('新版')){
+                [1.0f64, 0.0f64]
+            }else if(text.contains('爬虫')){
+                [0.0f64, 1.0f64]
+            }else{
+                [0.5f64, 0.5f64]
+            }
+        }
     }
 
     /** 门禁通过：版本 +1 并落库 */
@@ -76,8 +91,8 @@ class SkillEvolutionJob_test {
         let fixture = EvolutionFixture()
         SkillEvolutionJob.installSink(fixture.sink)
         try{
-            let report = SkillEvolutionJob.run(skills(true), experiences(3),
-                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
+            let report = SkillEvolutionJob.run(skills(true), experiences(3), NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), now: 1000)
             @Expect(report.evolved.size, 1)
             @Expect(report.rejected.size, 0)
@@ -95,8 +110,8 @@ class SkillEvolutionJob_test {
         let fixture = EvolutionFixture()
         SkillEvolutionJob.installSink(fixture.sink)
         try{
-            let report = SkillEvolutionJob.run(skills(false), experiences(3),
-                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
+            let report = SkillEvolutionJob.run(skills(false), experiences(3), NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), now: 1000)
             @Expect(report.evolved.size, 0)
             @Expect(report.rejected.size, 1)
@@ -113,8 +128,8 @@ class SkillEvolutionJob_test {
         let fixture = EvolutionFixture()
         SkillEvolutionJob.installSink(fixture.sink)
         try{
-            let report = SkillEvolutionJob.run(skills(true), experiences(1),
-                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
+            let report = SkillEvolutionJob.run(skills(true), experiences(1), NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), now: 1000)
             @Expect(report.skipped.size, 1)
             @Expect(report.skipped[0].contains('not enough successful samples'), true)
@@ -130,16 +145,52 @@ class SkillEvolutionJob_test {
         let fixture = EvolutionFixture()
         SkillEvolutionJob.installSink(fixture.sink)
         try{
-            let state = SkillEvolutionState()
-            SkillEvolutionJob.run(skills(true), experiences(3),
-                ArrayList<ExperienceItem>(), fixture.chat, state,
-                embedder: encoder(), now: 1000)
-            let second = SkillEvolutionJob.run(skills(true), experiences(3),
-                ArrayList<ExperienceItem>(), fixture.chat, state,
-                embedder: encoder(), now: 2000)
+            let state = InMemoryEvolutionStateStore()
+            SkillEvolutionJob.run(skills(true), experiences(3), NONE, NONE,
+                fixture.chat, state, embedder: encoder(), now: 1000)
+            let second = SkillEvolutionJob.run(skills(true), experiences(3), NONE, NONE,
+                fixture.chat, state, embedder: encoder(), now: 2000)
             @Expect(second.evolved.size, 0)
             @Expect(second.skipped.size, 1)
             @Expect(second.skipped[0].contains('cooldown'), true)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 跑完推进水位线：下一轮据此只取新增素材 */
+    @TestCase
+    func testMarksRunWatermark(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        let state = InMemoryEvolutionStateStore()
+        try{
+            @Expect(state.lastRunAt(), 0)
+            SkillEvolutionJob.run(skills(true), experiences(3), NONE, NONE,
+                fixture.chat, state, embedder: encoder(), now: 5000)
+            @Expect(state.lastRunAt(), 5000)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 水位线之前的老素材不参与：没有新素材就什么都不做 */
+    @TestCase
+    func testWatermarkSkipsOldMaterials(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        try{
+            let old = SkillEvolutionJob.run(skills(true), experiences(3, at: 100), NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
+                embedder: encoder(), since: 500, now: 1000)
+            @Expect(old.materials, 0)
+            @Expect(old.evolved.size, 0)
+
+            let fresh = SkillEvolutionJob.run(skills(true), experiences(3, at: 900), NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
+                embedder: encoder(), since: 500, now: 1000)
+            @Expect(fresh.materials, 3)
+            @Expect(fresh.evolved.size, 1)
         }finally{
             SkillEvolutionJob.resetSink()
         }
@@ -156,8 +207,8 @@ class SkillEvolutionJob_test {
                 ExperienceItem(2, '爬虫要重试'),
                 ExperienceItem(3, '爬虫要记失败')
             ].toArray())
-            let report = SkillEvolutionJob.run(skills(true), items,
-                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
+            let report = SkillEvolutionJob.run(skills(true), items, NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), now: 1000)
             @Expect(report.candidateClusters, 1)
             @Expect(fixture.saved.size, 0)
@@ -166,41 +217,26 @@ class SkillEvolutionJob_test {
         }
     }
 
-    /** 失败经验按技能归属后计入成功率：3 成功 2 失败 → 0.6 未达标，跳过 */
+    /** 知识也能成为新技能来源（知识 `at=0`，每轮都参与） */
     @TestCase
-    func testFailuresAreAttributedPerSkill(): Unit {
+    func testKnowledgeFeedsNewSkill(): Unit {
         let fixture = EvolutionFixture()
         SkillEvolutionJob.installSink(fixture.sink)
         try{
-            let failed = ArrayList<ExperienceItem>([
-                ExperienceItem(1, '日报助手 三段式 出错'),
-                ExperienceItem(2, '日报助手 结论 出错')
+            let knowledge = ArrayList<ExperienceItem>([
+                ExperienceItem(1, '爬虫要限速'),
+                ExperienceItem(2, '爬虫要重试'),
+                ExperienceItem(3, '爬虫要记失败')
             ].toArray())
-            let report = SkillEvolutionJob.run(skills(true), experiences(3), failed,
-                fixture.chat, SkillEvolutionState(), embedder: encoder(), now: 1000)
-            @Expect(report.evolved.size, 0)
-            @Expect(report.skipped.size, 1)
-            @Expect(report.skipped[0].contains('success rate too low'), true)
-            @Expect(fixture.calls, 0)
+            let report = SkillEvolutionJob.run(skills(true), NONE, NONE, knowledge,
+                fixture.chat, InMemoryEvolutionStateStore(),
+                embedder: encoder(), nameCandidates: true, now: 1000)
+            @Expect(report.materials, 3)
+            @Expect(report.created.size, 1)
+            @Expect(fixture.saved[0].title, '爬虫助手')
         }finally{
             SkillEvolutionJob.resetSink()
         }
-    }
-
-    /** 从存储按 kind 取两批经验 */
-    @TestCase
-    func testLoadReadsExperiencesByKind(): Unit {
-        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
-        gateway.call('memory', 'add',
-            '{"userId":1,"namespace":"n","title":"a","content":"日报 成功一","kind":"experience"}')
-        gateway.call('memory', 'add',
-            '{"userId":1,"namespace":"n","title":"b","content":"日报 成功二","kind":"experience"}')
-        gateway.call('memory', 'add',
-            '{"userId":1,"namespace":"n","title":"c","content":"日报 失败一","kind":"experience_failed"}')
-
-        let input = SkillEvolutionJob.load(gateway, 1, 'n')
-        @Expect(input.successes.size, 2)
-        @Expect(input.failures.size, 1)
     }
 
     /** 打开 nameCandidates：模型起名后真的建出技能 */
@@ -214,8 +250,8 @@ class SkillEvolutionJob_test {
                 ExperienceItem(2, '爬虫要重试'),
                 ExperienceItem(3, '爬虫要记失败')
             ].toArray())
-            let report = SkillEvolutionJob.run(skills(true), items,
-                ArrayList<ExperienceItem>(), fixture.chat, SkillEvolutionState(),
+            let report = SkillEvolutionJob.run(skills(true), items, NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), nameCandidates: true, now: 1000)
             @Expect(report.candidateClusters, 1)
             @Expect(report.created.size, 1)
@@ -239,8 +275,8 @@ class SkillEvolutionJob_test {
                 ExperienceItem(2, '爬虫要重试'),
                 ExperienceItem(3, '爬虫要记失败')
             ].toArray())
-            SkillEvolutionJob.run(skills(true), items, ArrayList<ExperienceItem>(),
-                fixture.chat, SkillEvolutionState(),
+            SkillEvolutionJob.run(skills(true), items, NONE, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), nameCandidates: true, now: 1000)
             @Expect(fixture.saved.size, 1)
             @Expect(fixture.saved[0].functions.contains('samples'), true)
@@ -268,8 +304,8 @@ class SkillEvolutionJob_test {
                 ExperienceItem(2, '爬虫要重试'),
                 ExperienceItem(3, '爬虫要记失败')
             ].toArray())
-            let report = SkillEvolutionJob.run(skills(true), items,
-                ArrayList<ExperienceItem>(), badChat, SkillEvolutionState(),
+            let report = SkillEvolutionJob.run(skills(true), items, NONE, NONE,
+                badChat, InMemoryEvolutionStateStore(),
                 embedder: encoder(), nameCandidates: true, now: 1000)
             @Expect(report.created.size, 0)
             @Expect(fixture.saved.size, 0)
@@ -279,37 +315,68 @@ class SkillEvolutionJob_test {
         }
     }
 
+    /** 失败经验按技能归属后计入成功率：3 成功 2 失败 → 0.6 未达标，跳过 */
+    @TestCase
+    func testFailuresAreAttributedPerSkill(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        try{
+            let failed = ArrayList<ExperienceItem>([
+                ExperienceItem(1, '日报助手 三段式 出错'),
+                ExperienceItem(2, '日报助手 结论 出错')
+            ].toArray())
+            let report = SkillEvolutionJob.run(skills(true), experiences(3), failed, NONE,
+                fixture.chat, InMemoryEvolutionStateStore(),
+                embedder: encoder(), now: 1000)
+            @Expect(report.evolved.size, 0)
+            @Expect(report.skipped.size, 1)
+            @Expect(report.skipped[0].contains('success rate too low'), true)
+            @Expect(fixture.calls, 0)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
+    /** 从存储按 kind 取两批经验 + 知识 */
+    @TestCase
+    func testLoadReadsExperiencesByKind(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        gateway.call('memory', 'add',
+            '{"userId":1,"namespace":"n","title":"a","content":"日报 成功一","kind":"experience"}')
+        gateway.call('memory', 'add',
+            '{"userId":1,"namespace":"n","title":"b","content":"日报 成功二","kind":"experience"}')
+        gateway.call('memory', 'add',
+            '{"userId":1,"namespace":"n","title":"c","content":"日报 失败一","kind":"experience_failed"}')
+        gateway.call('knowledge', 'upsert',
+            '{"docId":"k1","title":"t","content":"知识正文"}')
+
+        let input = SkillEvolutionJob.load(gateway, 1, 'n')
+        @Expect(input.successes.size, 2)
+        @Expect(input.failures.size, 1)
+        @Expect(input.knowledge.size, 1)
+        @Expect(input.knowledge[0].content.contains('知识正文'), true)
+    }
+
     /** 注册成定时任务后，触发一次即跑一轮演进 */
     @TestCase
     func testScheduleRunsOneRoundOnFire(): Unit {
         let fixture = EvolutionFixture()
         SkillEvolutionJob.installSink(fixture.sink)
         let scheduler = ManualScheduler()
+        let state = InMemoryEvolutionStateStore()
         try{
             SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', scheduler,
-                { => skills(true) }, { => experiences(3) }, { => ArrayList<ExperienceItem>() },
-                fixture.chat, SkillEvolutionState(), embedder: encoder())
+                { => skills(true) },
+                { => EvolutionInput(experiences(3), NONE) },
+                fixture.chat, state, embedder: encoder(), clock: { => 7000 })
             @Expect(scheduler.crons.get('nightly-skill').getOrThrow(), '0 0 3 * * * *')
 
             scheduler.fire('nightly-skill')
             @Expect(fixture.saved.size, 1)
             @Expect(fixture.saved[0].version, 2)
+            @Expect(state.lastRunAt(), 7000)
         }finally{
             SkillEvolutionJob.resetSink()
-        }
-    }
-
-    /** 二维假编码器：日报与爬虫各占一维，保证归属可预期 */
-    private static func encoder(): ?(String) -> Array<Float64> {
-        { text =>
-            if(text.contains('日报') || text.contains('三段式') || text.contains('旧版')
-               || text.contains('新版')){
-                [1.0f64, 0.0f64]
-            }else if(text.contains('爬虫')){
-                [0.0f64, 1.0f64]
-            }else{
-                [0.5f64, 0.5f64]
-            }
         }
     }
 }

@@ -25,6 +25,7 @@ import mysql_driver.registerMysqlDriver
 import postgres_driver.registerPostgresDriver
 
 import fountain::f_llm.store.*
+import fountain::f_util.UUID
 import fountain::f_llm.store.mysql.*
 import fountain::f_llm.store.postgres.*
 
@@ -74,13 +75,49 @@ class EvolutionStoreIT_test {
         check(MySqlEvolutionStore(), 'my')
     }
 
+    /** 演进状态表：更新、读回、水位线 */
+    @TestCase
+    func testPostgresStateStore(): Unit {
+        if(!postgresReady()){
+            return
+        }
+        checkState(PostgresEvolutionStateStore(), 'pg')
+    }
+
+    @TestCase
+    func testMySqlStateStore(): Unit {
+        if(!mySqlReady()){
+            return
+        }
+        checkState(MySqlEvolutionStateStore(), 'my')
+    }
+
+    private func checkState(store: EvolutionStateStore, tag: String): Unit {
+        // 建表幂等：连续两次不报错
+        store.ensureSchema()
+        store.ensureSchema()
+
+        let title = 'it-state-${tag}'
+        store.save(EvolutionSkillState(title, 1000, true))
+        @Expect(store.get(title).getOrThrow().lastEvolvedAt, 1000)
+        @Expect(store.get(title).getOrThrow().lastGatePassed, true)
+
+        // 覆盖写：门禁失败要能翻转
+        store.save(EvolutionSkillState(title, 2000, false))
+        @Expect(store.get(title).getOrThrow().lastGatePassed, false)
+
+        store.markRun(3000)
+        @Expect(store.lastRunAt(), 3000)
+    }
+
     /** 同一套断言跑两种实现：写入可读、按技能过滤、id 递增 */
     private func check(store: EvolutionStore, tag: String): Unit {
         // 模拟启动阶段：建表 + 建索引（幂等，重复执行不报错）
         store.ensureSchema()
         store.ensureSchema()
 
-        let skill = 'it-evolution-${tag}'
+        // 技能名带随机后缀：库里是累积数据，固定名字会被历次运行的行挤满
+        let skill = 'it-evolution-${tag}-${UUID.random().toHexString()}'
         let first = store.save(EvolutionEntry(0, skill, 'evolved', 'v1 -> v2', 1_700_000_001))
         let second = store.save(EvolutionEntry(0, skill, 'rejected', 'no samples', 1_700_000_002))
         @Expect(first > 0, true)

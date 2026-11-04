@@ -145,7 +145,27 @@ class LoomContextMemory_test {
         }
     }
 
-    /** 关闭策略后不记录、不写入 */
+    /** 流程结束只提炼记忆/经验，不碰技能（技能演进统一交给 SkillEvolutionJob） */
+    @TestCase
+    func testFlowEndDoesNotEvolveSkills(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.skills.upsert(Skill(1, '日报助手', '正文', '{}', version: 1))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 4, namespace: 's'))
+        try{
+            LoomRunner().run(plan(), MemoryHost(), start())
+            let skills = meta.skills.list()
+            @Expect(skills.size, 1)
+            @Expect(skills[0].version, 1)
+            @Expect(skills[0].details, '正文')
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
     @TestCase
     func testDisabledPolicyWritesNothing(): Unit {
         let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())

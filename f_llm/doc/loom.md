@@ -160,15 +160,25 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 
 经验在写下来时**不绑定技能**：写入时往往还不知道它属于谁，而且技能可能尚不存在。绑定留到演进阶段做。
 
+**流程结束只写记忆/经验/知识，不碰技能**——技能的一切改动都由 `SkillEvolutionJob` 统一执行（有专门用例守这条）。
+
+每轮任务按固定顺序做两件事：
+
+1. **先演进已有技能**：把「上次执行之后新增」的成功经验与知识归到现有技能，够样本就改正文；
+2. **再提炼新技能**：归不上的素材聚成簇，够大就起名建档。
+
+先演进再新建，是为了让「本可并入现有技能」的素材优先被吸收，避免同一主题既改旧技能又建新技能。
+
 | 阶段 | 组件 | 作用 |
 |---|---|---|
 | 落经验 | `LoomMemoryExtractor` | 成功写 `kind=experience`，失败写 `kind=experience_failed` |
-| 归属发现 | `SkillMatcher.assign` | 经验 → 已有技能（向量/关键词最近邻）；剩下的彼此聚类 → 新技能候选 |
+| 水位线 | `EvolutionStateStore.lastRunAt / markRun` | 只处理 `at > 上次执行时间` 的素材；知识文档没有写入时间（`at=0`），始终参与 |
+| 归属发现 | `SkillMatcher.assign` | 素材池 = 成功经验 + 知识 → 已有技能（向量/关键词最近邻）；剩下的彼此聚类 → 新技能候选 |
 | 触发判定 | `SkillEvolutionPolicy.decide` | 样本数、成功率、冷却期（**门禁失败后冷却期翻倍**） |
 | A/B 门禁 | `SkillGate.evaluate` | 用技能自带样例分别跑旧版/新版，`新版 ≥ 旧版` 且达 `minScore` 才放行 |
-| 落库 | `SkillEvolutionJob.run` | 版本 +1 |
-| 新建技能 | `SkillNamer.propose` | 簇够大且 `nameCandidates: true` 时让模型起名 + 写正文 + **至少一条样例**，`version=1` 落库；缺样例或名字不合法都不建（没样例的新技能无法自我演进） |
-| 报告留档 | `SkillEvolutionLedger` | 每轮 evolved / created / rejected / skipped 落成 `loom:evolution:*` 知识文档，可回读 |
+| 落库 | `SkillEvolutionJob.run` | 版本 +1；同时把该技能冷却期状态写回 `EvolutionStateStore` |
+| 新建技能 | `SkillNamer.propose` | 簇够大且 `nameCandidates: true` 时让模型起名 + 写正文 + **至少一条样例**，`version=1` 落库；缺样例或名字不合法都不建 |
+| 报告留档 | `SkillEvolutionLedger` | 每轮 evolved / created / rejected / skipped 落独立表，可回读 |
 
 技能样例来自技能包 `skill.json` 的 `samples`（导入时存进 `functions`）：
 
@@ -189,14 +199,29 @@ let input = SkillEvolutionJob.load(gateway, userId: 7, namespace: 'work')
 
 注册成定时任务：
 
+不必手写注册——装配时给个 cron 即可（`LoomSchedules` 未安装则跳过，不影响启动）：
+
+```cangjie
+LoomWiring.wire(chat, plannerModel: 'chat-pro',
+                evolutionCron: '0 0 3 * * * *',      // 空串 = 不启用
+                evolutionUserId: 7,
+                evolutionNamespace: 'work',
+                evolutionNameCandidates: true,
+                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))
+```
+
+也可以手工注册：
+
 ```cangjie
 SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler(),
     { => Stores.meta().skills.list() },
-    { => loadSuccessExperiences() },
-    { => loadFailureCounts() },
-    host.callLlm, SkillEvolutionState(),
+    { => SkillEvolutionJob.load(LoomStoreGateway(), 7, 'work') },
+    host.callLlm, EvolutionStateStores.current(),
+    nameCandidates: true, ledger: EvolutionStores.current(),
     embedder: SkillCatalog.embeddingEncoder('bge-m3'))
 ```
+
+状态存储跟随 `llm_metaStore`：`f_store`（默认）/ `memory` / `postgres` / `mysql`（表 `llm_skill_evolution_state`，水位线用保留行 `__run__`）。
 
 ## 人格与提示词
 

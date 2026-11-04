@@ -58,6 +58,36 @@ class LoomWiring_test {
         LoomServices.reset()
     }
 
+    /** 配了 cron：启动时把技能演进注册成周期任务 */
+    @TestCase
+    func testWireRegistersEvolutionTaskWhenCronProvided(): Unit {
+        let scheduler = ManualScheduler()
+        LoomSchedules.install(scheduler)
+        try{
+            LoomWiring.wire({ _, _, _ => plannedJson() }, store: MemoryLoomStore(),
+                evolutionCron: '0 0 3 * * * *', evolutionUserId: 7)
+            @Expect(scheduler.crons.get('loom-skill-evolution').getOrThrow(), '0 0 3 * * * *')
+            @Expect(scheduler.jobs.contains('loom-skill-evolution'), true)
+        }finally{
+            LoomSchedules.reset()
+            LoomServices.reset()
+        }
+    }
+
+    /** 没配 cron：不注册任何演进任务 */
+    @TestCase
+    func testWireSkipsEvolutionWithoutCron(): Unit {
+        let scheduler = ManualScheduler()
+        LoomSchedules.install(scheduler)
+        try{
+            LoomWiring.wire({ _, _, _ => plannedJson() }, store: MemoryLoomStore())
+            @Expect(scheduler.crons.size, 0)
+        }finally{
+            LoomSchedules.reset()
+            LoomServices.reset()
+        }
+    }
+
     @TestCase
     func testDefaultChatRejectsEmptyModel(): Unit {
         let chat = LoomDefaults.chat('')
