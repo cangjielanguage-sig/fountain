@@ -157,6 +157,28 @@ class HttpTransport <: HydraTransport {
         result
     }
 
+    public func idsFiltered(collection: String, filters: HashMap<String, String>,
+                            offset: Int64, limit: Int64): ArrayList<String> {
+        var body = '{'
+        var first = true
+        for((field, value) in filters){
+            if(!first){
+                body += ','
+            }
+            first = false
+            body += '"${esc(field)}":"${esc(value)}"'
+        }
+        body += '}'
+        let param = '{"collection":"${esc(collection)}","offset":${offset},'
+            + '"limit":${limit},"filters":${body}}'
+        let response = parse<IdsEnvelope>(call('hydra.ids', '{"param":${param}}'))
+        let result = ArrayList<String>()
+        for(id in response.result.ids){
+            result.add(id)
+        }
+        result
+    }
+
     // ---- internal ----
 
     private func hits(body: String): ArrayList<VectorHit> {

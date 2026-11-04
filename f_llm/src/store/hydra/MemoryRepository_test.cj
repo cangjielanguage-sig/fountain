@@ -16,18 +16,32 @@ limitations under the License.
 package fountain::f_llm.store.hydra
 
 import std.collection.*
+import std.sync.*
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_llm.store.*
 
+/** 目录序号持有者（`synchronized` 块是 Unit 语义，值用持有者带出） */
+class SeqBox {
+    public var value: Int64 = 0
+}
+
 @Test
 public class HydraMemoryRepositoryTest {
     private static var dirSeq: Int64 = 0
+    /** 用例并行：计数加锁 + 时间戳，避免同一目录被两个用例或上次残留复用 */
+    private static let seqMutex = Mutex()
 
     private func newRepo(): HydraMemoryRepository {
-        dirSeq++
-        HydraMemoryRepository(path: '/tmp/fllm-hydra-mem-${dirSeq}')
+        let box = SeqBox()
+        synchronized(seqMutex){
+            dirSeq++
+            box.value = dirSeq
+        }
+        let stamp = DateTime.now().toUnixTimeStamp().toSeconds()
+        HydraMemoryRepository(path: '/tmp/fllm-hydra-mem-${stamp}-${box.value}')
     }
 
     private func item(kind: String, content: String): MemoryWrite {

@@ -293,11 +293,7 @@ public class LoomStoreGateway {
                 case Some(store) => store
                 case None => throw LoomException('loom store gateway: evolution store is not installed')
             }
-            if(action == 'save'){
-                let id = target.save(EvolutionEntry(0, strOf(args, 'skill'),
-                    strOf(args, 'action'), strOf(args, 'detail'), intOf(args, 'at')))
-                return id.toString()
-            }
+            // 流程内只读：报告由后台演进任务写入，模型不该改审计记录
             if(action == 'list'){
                 return entriesJson(target.list(intOf(args, 'offset'), intOf(args, 'limit')))
             }

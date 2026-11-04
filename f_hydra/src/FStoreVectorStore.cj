@@ -125,7 +125,8 @@ public class FStoreVectorStore <: VectorStore {
                 }
                 Some(VectorRecord(id, String.fromUtf8(bytes), dense,
                                   sparse: sparse, colbert: readColbert(collection, id),
-                                  vectors: vectors, saveTime: saveTime))
+                                  vectors: vectors, filters: readFilters(collection, id),
+                                  saveTime: saveTime))
             case None => None
         }
     }
@@ -376,6 +377,62 @@ public class FStoreVectorStore <: VectorStore {
         result
     }
 
+    /**
+     * 按元数据过滤分页：走 `filterKey` 倒排索引，代价与命中数成正比，
+     * 不做「翻页取全量再过滤」。多字段之间是 AND，单字段多值（`a,b`）是 OR。
+     */
+    public func idsFiltered(collection: String, filters: HashMap<String, String>,
+                            offset: Int64, limit: Int64): ArrayList<String> {
+        let result = ArrayList<String>()
+        if(limit <= 0 || expired(collection)){
+            return result
+        }
+        if(filters.isEmpty()){
+            return ids(collection, offset, limit)
+        }
+        var intersection: ?HashMap<String, Bool> = None
+        for((field, value) in filters){
+            let hits = idsWith(collection, field, value)
+            intersection = match(intersection){
+                case Some(current) =>
+                    let narrowed = HashMap<String, Bool>()
+                    for((id, _) in current){
+                        if(hits.contains(id)){
+                            narrowed[id] = true
+                        }
+                    }
+                    Some(narrowed)
+                case None => Some(hits)
+            }
+        }
+        let allowed = match(intersection){
+            case Some(value) => value
+            case None => HashMap<String, Bool>()
+        }
+        let all = ArrayList<String>()
+        for((id, _) in allowed){
+            if(isReady(collection, id)){
+                all.add(id)
+            }
+        }
+        // 与 ids 一致：按 (saveTime, id) 升序，分页稳定
+        for(index in 1..all.size){
+            let current = all[index]
+            var position = index - 1
+            while(position >= 0 && earlier(collection, current, all[position])){
+                all[position + 1] = all[position]
+                position--
+            }
+            all[position + 1] = current
+        }
+        var index = offset
+        while(index < Int64(all.size) && Int64(result.size) < limit){
+            result.add(all[index])
+            index++
+        }
+        result
+    }
+
     public func exportTo(collection: String, target: VectorStore, targetCollection: String): Int64 {
         var exported: Int64 = 0
         var offset: Int64 = 0
@@ -431,6 +488,25 @@ public class FStoreVectorStore <: VectorStore {
             }
         }
         false
+    }
+
+    /** 读回元数据：`get` 必须把 `filters` 还原，否则读到记录就丢了过滤条件 */
+    private func readFilters(collection: String, id: String): HashMap<String, String> {
+        let filters = HashMap<String, String>()
+        match(store.get(filterMetaKey(collection, id).toArray())){
+            case Some(bytes) =>
+                for(pair in String.fromUtf8(bytes).split(';')){
+                    if(pair.isEmpty()){
+                        continue
+                    }
+                    let parts = pair.split('=')
+                    if(parts.size >= 2){
+                        filters[parts[0]] = parts[1]
+                    }
+                }
+            case None => ()
+        }
+        filters
     }
 
     private func writeFilterEntries(collection: String, record: VectorRecord): Unit {

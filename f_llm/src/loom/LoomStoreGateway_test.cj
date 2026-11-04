@@ -172,13 +172,12 @@ class LoomStoreGateway_test {
         @Expect(hits.contains('"kind":"note"'), false)
     }
 
-    /** 演进报告表：写一条、按技能查一条 */
+    /** 演进报告表：流程内只读——直接写库后能查到 */
     @TestCase
-    func testEvolutionSaveAndQuery(): Unit {
+    func testEvolutionReadOnlyQuery(): Unit {
         let store = InMemoryEvolutionStore()
+        store.save(EvolutionEntry(0, '日报助手', 'evolved', 'v1 -> v2', 10))
         let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore(), evolution: store)
-        @Expect(gateway.call('evolution', 'save',
-            '{"skill":"日报助手","action":"evolved","detail":"v1 -> v2","at":10}'), '1')
         let listed = gateway.call('evolution', 'list', '{"offset":0,"limit":10}')
         @Expect(listed.contains('"skill":"日报助手"'), true)
         @Expect(listed.contains('"action":"evolved"'), true)

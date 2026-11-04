@@ -108,6 +108,8 @@ public class IdsParam {
     public var collection: String = ''
     public var offset: Int64 = 0
     public var limit: Int64 = 100
+    /** 元数据过滤：多字段 AND、单字段多值 OR；为空表示不过滤 */
+    public var filters: HashMap<String, String> = HashMap<String, String>()
 
     public init() {
     }

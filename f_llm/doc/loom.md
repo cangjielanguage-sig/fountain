@@ -340,8 +340,9 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `prompt` | `remove` | `{"name","version"}` | `true/false` |
 | `character` | `get` | `{"userId":1}` | `{userId,characterKey,prompts}`，未命中 `''` |
 | `character` | `set` / `reset` | `{"userId","characterKey","prompts"}` / `{"userId"}` | `ok` |
-| `evolution` | `save` | `{"skill","action","detail","at"}` | 记录 id |
 | `evolution` | `list` / `by_skill` | `{"offset","limit"}` / `{"skill","limit"}` | `[{id,skill,action,detail,at}]` |
+
+`evolution` **流程内只读**：报告由后台演进任务写入，模型不该改审计记录，所以网关不提供 `save`（能力清单里也只列查询 op）。
 
 `evolution` 是**独立表**（`EvolutionStore`），实现跟随 `llm_metaStore`：
 
@@ -354,12 +355,14 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 审计只按「技能 + 时间」查，不做向量检索，因此不依赖 `f_hydra`。SQL 版的 `id` 由应用层用 `MAX(id)+1` 分配（表里无自增列），PG/MySQL 写入口径一致，也不依赖各驱动对 `RETURNING` / `LAST_INSERT_ID()` 的支持差异。
 
-流程内也能查报告（JIT 步骤直接调用，与其它 store 同一个入口）：
+流程内也能查报告（JIT 步骤直接调用，与其它 store 同一个入口，只读）：
 
 ```cangjie
 let s1_result = loomStore("evolution", "by_skill", "{\"skill\":\"日报助手\",\"limit\":5}")
 // → [{"id":1,"skill":"日报助手","action":"evolved","detail":"v1 -> v2","at":10}]
 ```
+
+hydra 部署下，记忆按 kind 查询是**服务端过滤**：`kind` 写进记录的 `filters`，f_hydra 用 `h:{collection}:f:kind:{value}:{id}` 倒排保存，`ids` RPC 带 `filters` 时直接走倒排返回命中 id，客户端不再翻页自己过滤。
 
 **建表与索引在启动时完成**：`LoomWiring.wire` 调 `EvolutionStores.bootstrap()` → `ensureSchema()`。PG 建表后加 `idx_evo_skill (skill_title, at_time DESC)`，MySQL 的索引随 DDL 一起建。失败不阻断启动（库可能比应用晚就绪，首次读写还会再试）。
 

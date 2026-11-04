@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::f_hydra
 
 import std.collection.*
+import std.sync.*
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -23,14 +25,62 @@ import fountain::f_store.Store
 
 /** 每个用例独立目录，避免 f_store 的单实例可见性把用例串起来 */
 private var pathSeq: Int64 = 0
+/** 用例并行执行：计数器必须加锁，否则两个用例会拿到同一个目录 */
+private let pathSeqMutex = Mutex()
+
+class PathSeqBox {
+    public var value: Int64 = 0
+}
 
 private func newStore(): FStoreVectorStore {
-    pathSeq++
-    FStoreVectorStore('/tmp/fhydra-test-${pathSeq}')
+    let box = PathSeqBox()
+    synchronized(pathSeqMutex){
+        pathSeq++
+        box.value = pathSeq
+    }
+    // 带时间戳：跨进程重跑也不会撞到上次留下的目录
+    let stamp = DateTime.now().toUnixTimeStamp().toSeconds()
+    FStoreVectorStore('/tmp/fhydra-test-${stamp}-${box.value}')
+}
+
+private func kindFilters(kind: String): HashMap<String, String> {
+    let filters = HashMap<String, String>()
+    filters['kind'] = kind
+    return filters
 }
 
 @Test
 public class FStoreVectorStoreTest {
+
+    /** 元数据过滤走倒排：只返回命中的 kind，且分页在过滤之后 */
+    @TestCase
+    func testIdsFilteredUsesMetadataIndex(): Unit {
+        let store = newStore()
+        let collection = 'u1:global'
+        // 交错写入：fact / note 各三条，saveTime 递增
+        let kinds = ['fact', 'note', 'fact', 'note', 'fact']
+        var seq: Int64 = 0
+        for(kind in kinds){
+            seq++
+            store.upsert(collection, VectorRecord('r${seq}', '{}', [1.0f64, 0.0f64],
+                filters: kindFilters(kind), saveTime: seq))
+        }
+
+        let facts = store.idsFiltered(collection, kindFilters('fact'), 0, 10)
+        @Expect(facts.size, 3)
+        for(id in facts){
+            @Expect(store.get(collection, id).getOrThrow().filters.get('kind').getOrThrow(), 'fact')
+        }
+
+        // 分页在过滤之后：limit=1 也必须拿到 fact
+        let page = store.idsFiltered(collection, kindFilters('fact'), 0, 1)
+        @Expect(page.size, 1)
+        @Expect(store.get(collection, page[0]).getOrThrow().filters.get('kind').getOrThrow(), 'fact')
+
+        // 没有命中时返回空
+        @Expect(store.idsFiltered(collection, kindFilters('missing'), 0, 10).size, 0)
+        store.close()
+    }
 
     @TestCase
     func testUpsertAndGet(): Unit {

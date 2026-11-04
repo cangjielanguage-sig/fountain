@@ -66,6 +66,57 @@ public interface VectorStore {
     /** 按 id 字典序分页（只返回就绪记录），供导出/运维遍历 */
     func ids(collection: String, offset: Int64, limit: Int64): ArrayList<String>
 
+    /**
+     * 按元数据过滤分页：`filters` 里每个键值都要匹配（AND）。
+     *
+     * 默认实现在客户端侧过滤（逐页取 id 再读记录比对），有索引的实现应覆盖成 O(命中数)。
+     */
+    func idsFiltered(collection: String, filters: HashMap<String, String>,
+                     offset: Int64, limit: Int64): ArrayList<String> {
+        let matched = ArrayList<String>()
+        if(filters.isEmpty()){
+            return ids(collection, offset, limit)
+        }
+        let pageSize: Int64 = 256
+        var cursor: Int64 = 0
+        while(true){
+            let page = ids(collection, cursor, pageSize)
+            if(page.isEmpty()){
+                break
+            }
+            for(id in page){
+                match(get(collection, id)){
+                    case Some(record) =>
+                        var hit = true
+                        for((field, value) in filters){
+                            match(record.filters.get(field)){
+                                case Some(actual) =>
+                                    if(actual != value){
+                                        hit = false
+                                    }
+                                case None => hit = false
+                            }
+                        }
+                        if(hit){
+                            matched.add(id)
+                        }
+                    case None => ()
+                }
+            }
+            if(Int64(page.size) < pageSize){
+                break
+            }
+            cursor += pageSize
+        }
+        let result = ArrayList<String>()
+        var index = offset
+        while(index < Int64(matched.size) && Int64(result.size) < limit){
+            result.add(matched[index])
+            index++
+        }
+        result
+    }
+
     /** 把本集合的就绪记录写到另一个实现（跨进程/跨实现迁移），返回条数 */
     func exportTo(collection: String, target: VectorStore, targetCollection: String): Int64
 }

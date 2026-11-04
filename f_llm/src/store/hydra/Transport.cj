@@ -37,6 +37,9 @@ interface HydraTransport {
     func searchSparse(collection: String, tokens: HashMap<Int64, Float64>,
                       limit: Int64): ArrayList<VectorHit>
     func ids(collection: String, offset: Int64, limit: Int64): ArrayList<String>
+    /** 按元数据过滤分页：服务端走倒排索引，调用方不需要翻页自己过滤 */
+    func idsFiltered(collection: String, filters: HashMap<String, String>,
+                     offset: Int64, limit: Int64): ArrayList<String>
 }
 
 /** 进程内实现：直接操作 f_hydra */
@@ -71,5 +74,10 @@ class InProcessTransport <: HydraTransport {
 
     public func ids(collection: String, offset: Int64, limit: Int64): ArrayList<String> {
         store.ids(collection, offset, limit)
+    }
+
+    public func idsFiltered(collection: String, filters: HashMap<String, String>,
+                            offset: Int64, limit: Int64): ArrayList<String> {
+        store.idsFiltered(collection, filters, offset, limit)
     }
 }

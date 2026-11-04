@@ -127,11 +127,17 @@ public class HydraRpc {
         store.count(param.collection)
     }
 
-    @JsonRpcMeta['id 分页', '2s']
+    @JsonRpcMeta['id 分页（可按元数据过滤）', '2s']
     public func ids(param: IdsParam): IdsDto {
         HydraAuth.require()
         let dto = IdsDto()
-        for(id in store.ids(param.collection, param.offset, param.limit)){
+        // 带 filters 时走元数据倒排，不要求调用方翻页自己过滤
+        let ids = if(param.filters.isEmpty()){
+            store.ids(param.collection, param.offset, param.limit)
+        }else{
+            store.idsFiltered(param.collection, param.filters, param.offset, param.limit)
+        }
+        for(id in ids){
             dto.ids.add(id)
         }
         dto

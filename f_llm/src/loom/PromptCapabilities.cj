@@ -53,7 +53,7 @@ public class PromptCapabilities {
         text += '- loomCallLlm(model, system, input)：调用大模型\n'
         text += '- loomStore(kind, op, payload)：'
         text += 'kind = memory | knowledge | skill | experience | prompt | character | evolution；'
-        text += 'op = search | get | list | load | add | upsert | remove | docIds | count | latest | put | set | reset | save | by_skill\n'
+        text += 'op = search | get | list | load | add | upsert | remove | docIds | count | latest | put | set | reset | by_skill\n'
         text += '- 计划的 persona 可写提示词名（取 prompt.latest 正文）或字面文本，执行时会拼在每次模型调用的 system 前\n'
         if(tools.isEmpty()){
             text += '已注册工具：（当前没有）\n'

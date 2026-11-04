@@ -168,44 +168,22 @@ public class HydraMemoryRepository <: MemoryRepository {
     }
 
     /**
-     * 按 kind 分页：hydra 的 RPC 只提供 `ids(collection, offset, limit)`，没有 kind 条件，
-     * 所以这里**翻页取全量再过滤**，保证结果精确（不会因为翻页边界漏记录）。
-     * 单页 64 条；条数小（经验/记忆按用户分集合），多翻几页的代价可接受。
+     * 按 kind 分页：kind 已经作为 `filters` 写进 hydra 的元数据倒排，
+     * 这里直接把条件下推给服务端（`idsFiltered`），不做翻页自己过滤。
      */
     public func listByKind(userId: Int64, namespace: String, kind: String,
                            offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
-        let matched = ArrayList<MemoryRecord>()
+        let records = ArrayList<MemoryRecord>()
         let collection = collectionOf(userId, namespace)
-        let pageSize: Int64 = 64
-        var pageOffset: Int64 = 0
-        while(true){
-            let ids = transport.ids(collection, pageOffset, pageSize)
-            if(ids.isEmpty()){
-                break
+        let filters = HashMap<String, String>()
+        filters['kind'] = kind
+        for(id in transport.idsFiltered(collection, filters, offset, limit)){
+            match(transport.get(collection, id)){
+                case Some(record) => records.add(decode(userId, record))
+                case None => ()
             }
-            for(id in ids){
-                match(transport.get(collection, id)){
-                    case Some(record) =>
-                        let decoded = decode(userId, record)
-                        if(decoded.kind == kind){
-                            matched.add(decoded)
-                        }
-                    case None => ()
-                }
-            }
-            if(Int64(ids.size) < pageSize){
-                break
-            }
-            pageOffset += pageSize
         }
-        // 再按 offset/limit 截取：过滤后的分页
-        let result = ArrayList<MemoryRecord>()
-        var index = offset
-        while(index < Int64(matched.size) && Int64(result.size) < limit){
-            result.add(matched[index])
-            index++
-        }
-        result
+        records
     }
 
     public func remove(userId: Int64, id: Int64): Bool {
