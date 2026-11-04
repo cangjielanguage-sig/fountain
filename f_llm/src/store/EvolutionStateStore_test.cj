@@ -48,6 +48,33 @@ class EvolutionStateStore_test {
         @Expect(store.lastRunAt(), 3000)
     }
 
+    /** 知识消费记录：标记幂等，重开实例仍能读到 */
+    @TestCase
+    func testKnowledgeDedupePersists(): Unit {
+        let path = newPath()
+        try{
+            Directory.create(path)
+        }catch(error: Exception){
+            ()
+        }
+        let first = FStoreEvolutionStateStore(path)
+        first.markKnowledge(['k1', 'k2'])
+        @Expect(first.processedKnowledge().size, 2)
+        // 重复标记幂等
+        first.markKnowledge(['k1'])
+        @Expect(first.processedKnowledge().size, 2)
+
+        let reopened = FStoreEvolutionStateStore(path)
+        @Expect(reopened.processedKnowledge().size, 2)
+        // 空串不落库
+        reopened.markKnowledge([''])
+        @Expect(reopened.processedKnowledge().size, 2)
+
+        let memory = InMemoryEvolutionStateStore()
+        memory.markKnowledge(['a'])
+        @Expect(memory.processedKnowledge().size, 1)
+    }
+
     /** f_store：重开实例仍能读到技能状态与水位线 */
     @TestCase
     func testFStorePersists(): Unit {

@@ -57,4 +57,36 @@ public interface PostgresEvolutionStateDAO <: RootDAO {
         '''
         executor.setSql(sql).mapList()
     }
+
+    /**
+     * 已消费的知识 docId 表：避免同一批知识每轮重复参与聚类。
+     *
+     * 与状态表分开建，是因为它的生命周期更长（状态会被覆盖，消费记录只增不减）。
+     */
+    func ensureKnowledgeTable(): Unit {
+        let sql = '''
+            CREATE TABLE IF NOT EXISTS llm_skill_evolution_knowledge (
+              doc_id VARCHAR(255) PRIMARY KEY,
+              processed_at BIGINT NOT NULL DEFAULT 0
+            )
+        '''
+        executor.setSql(sql).update
+    }
+
+    func knowledgeList(limit: Int64): ArrayList<HashMap<String, Any>> {
+        let sql = '''
+            SELECT doc_id FROM llm_skill_evolution_knowledge
+            ORDER BY processed_at DESC LIMIT ${arg(limit)}
+        '''
+        executor.setSql(sql).mapList()
+    }
+
+    func knowledgeInsert(docId: String, processedAt: Int64): Int64 {
+        let sql = '''
+            INSERT INTO llm_skill_evolution_knowledge (doc_id, processed_at)
+            VALUES (${arg(docId)}, ${arg(processedAt)})
+            ON CONFLICT (doc_id) DO NOTHING
+        '''
+        executor.setSql(sql).update
+    }
 }

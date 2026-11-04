@@ -17,6 +17,7 @@ package fountain::f_llm.store.postgres
 
 import std.collection.*
 import std.sync.*
+import std.time.DateTime
 
 import fountain::f_orm.*
 
@@ -33,6 +34,8 @@ public class PostgresEvolutionStateStore <: EvolutionStateStore & RootService {
     private static let DRIVER = 'postgres'
     /** 保留技能名：只存整轮水位线，不会与真实技能冲突 */
     private static let RUN_ROW = '__run__'
+    /** 单次最多读回的已消费记录数：只用于去重，不必取全量 */
+    private static let KNOWLEDGE_LIMIT: Int64 = 5000
 
     private let mutex = Mutex()
     private var tableReady = false
@@ -43,6 +46,7 @@ public class PostgresEvolutionStateStore <: EvolutionStateStore & RootService {
     public func ensureSchema(): Unit {
         synchronized(mutex){
             daoOf().ensureStateTable()
+            daoOf().ensureKnowledgeTable()
             tableReady = true
         }
     }
@@ -79,11 +83,38 @@ public class PostgresEvolutionStateStore <: EvolutionStateStore & RootService {
         save(EvolutionSkillState(RUN_ROW, at, true))
     }
 
+    /** 已消费的知识 docId：落在 `llm_skill_evolution_knowledge` */
+    public func processedKnowledge(): Array<String> {
+        let box = PgKnowledgeBox()
+        synchronized(mutex){
+            ensureReady()
+            let list = ArrayList<String>()
+            for(row in daoOf().knowledgeList(KNOWLEDGE_LIMIT)){
+                list.add(pgTextOf(row.get('doc_id') ?? ''))
+            }
+            box.value = list.toArray()
+        }
+        box.value
+    }
+
+    public func markKnowledge(docIds: Array<String>): Unit {
+        synchronized(mutex){
+            ensureReady()
+            let at = DateTime.now().toUnixTimeStamp().toSeconds()
+            for(docId in docIds){
+                if(!docId.isEmpty()){
+                    let _ = daoOf().knowledgeInsert(docId, at)
+                }
+            }
+        }
+    }
+
     private func ensureReady(): Unit {
         if(tableReady){
             return
         }
         daoOf().ensureStateTable()
+        daoOf().ensureKnowledgeTable()
         tableReady = true
     }
 
@@ -100,6 +131,17 @@ private func pgIntOf(value: Any): Int64 {
         case text: String => Int64.tryParse(text) ?? 0
         case _ => 0
     }
+}
+
+private func pgTextOf(value: Any): String {
+    match(value){
+        case text: String => text
+        case _ => ''
+    }
+}
+
+class PgKnowledgeBox {
+    public var value: Array<String> = Array<String>()
 }
 
 class PgStateBox {

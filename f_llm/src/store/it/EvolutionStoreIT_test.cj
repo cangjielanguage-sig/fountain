@@ -129,6 +129,26 @@ class EvolutionStoreIT_test {
         store.ensureSchema()
         store.ensureSchema()
 
+        // 知识消费去重：标记后能读回（库是累积的，用随机 docId 只断言包含）
+        let docA = 'it-doc-${tag}-${UUID.random().toHexString()}'
+        let docB = 'it-doc-${tag}-${UUID.random().toHexString()}'
+        store.markKnowledge([docA, docB])
+        let processed = store.processedKnowledge()
+        var hasA = false
+        var hasB = false
+        for(docId in processed){
+            if(docId == docA){
+                hasA = true
+            }
+            if(docId == docB){
+                hasB = true
+            }
+        }
+        @Expect(hasA, true)
+        @Expect(hasB, true)
+        // 重复标记不报错（幂等）
+        store.markKnowledge([docA])
+
         let title = 'it-state-${tag}'
         store.save(EvolutionSkillState(title, 1000, true))
         @Expect(store.get(title).getOrThrow().lastEvolvedAt, 1000)

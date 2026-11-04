@@ -223,6 +223,16 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 状态存储跟随 `llm_metaStore`：`f_store`（默认）/ `memory` / `postgres` / `mysql`（表 `llm_skill_evolution_state`，水位线用保留行 `__run__`）。
 
+状态里还存一份**已消费的知识 docId**，防止同一批知识每轮重复参与聚类：
+
+| 后端 | 存放位置 |
+|---|---|
+| `f_store` | 键 `f_llm:evo-state:kn:{docId}` |
+| `memory` | 进程内集合（重启丢失，测试用） |
+| `postgres` / `mysql` | 表 `llm_skill_evolution_knowledge(doc_id, processed_at)` |
+
+`SkillEvolutionJob.run` 跑完把本轮用到的 `source`（知识 docId）写进去，下一轮 `load` 出来的知识先与它求差集再进素材池。四种后端行为一致，有 IT 用例守着。
+
 ### 多进程：每日租约
 
 任务一天只跑一次，但要保证**只有一个进程真正执行**。做法是存一个「时间型 UUID」，用日期级乐观锁：
