@@ -42,11 +42,40 @@ class EvolutionStore_test {
         @Expect(store.list(0, 2).size, 2)
     }
 
+    /** f_store 的条件索引：同技能多条第，返回按时间倒序（键里补零，字典序即时间序） */
+    @TestCase
+    func testFStoreBySkillUsesConditionIndex(): Unit {
+        let path = '/tmp/fllm-evolution-idx-${seed()}'
+        try{
+            Directory.create(path)
+        }catch(error: Exception){
+            ()
+        }
+        let store = FStoreEvolutionStore(path)
+        let skill = 'idx-${Int64(seed())}'
+        store.save(EvolutionEntry(0, skill, 'skipped', '早期', 10))
+        store.save(EvolutionEntry(0, skill, 'evolved', '中期', 20))
+        store.save(EvolutionEntry(0, skill, 'rejected', '最近', 30))
+
+        let hits = store.bySkill(skill, 3)
+        @Expect(hits.size, 3)
+        @Expect(hits[0].at, 30)
+        @Expect(hits[1].at, 20)
+        @Expect(hits[2].at, 10)
+    }
+
+    private static var seedValue: Int64 = 0
+
+    private static func seed(): Int64 {
+        seedValue++
+        seedValue
+    }
+
     /** f_store 实现：写入后可读、按技能筛选、重开实例仍能读到 */
     @TestCase
     func testFStoreStorePersists(): Unit {
         // 固定目录便于复现；断言用「至少包含」避免历史数据干扰
-        let path = '/tmp/fllm-evolution-test'
+        let path = '/tmp/fllm-evolution-persist-${seed()}'
         try{
             Directory.create(path)
         }catch(error: Exception){

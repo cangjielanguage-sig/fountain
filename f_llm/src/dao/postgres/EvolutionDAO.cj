@@ -36,6 +36,15 @@ public interface PostgresEvolutionDAO <: RootDAO {
         executor.setSql(sql).update
     }
 
+    /** `bySkill` 的支撑索引：技能内按时间倒序取最近记录 */
+    func ensureSkillIndex(): Unit {
+        let sql = '''
+            CREATE INDEX IF NOT EXISTS idx_evo_skill
+            ON llm_skill_evolution (skill_title, at_time DESC)
+        '''
+        executor.setSql(sql).update
+    }
+
     func insertEntry(id: Int64, skillTitle: String, action: String,
                      detail: String, atTime: Int64): Unit {
         let sql = '''

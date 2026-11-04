@@ -85,11 +85,22 @@ public class PostgresEvolutionStore <: EvolutionStore & RootService {
         dao<PostgresEvolutionDAO>(DRIVER)
     }
 
+    /** 启动时调用：建表 + 建 `bySkill` 索引（幂等） */
+    public func ensureSchema(): Unit {
+        synchronized(mutex){
+            let dao = daoOf()
+            dao.ensureTable()
+            dao.ensureSkillIndex()
+            tableReady = true
+        }
+    }
+
     private func ensure(dao: PostgresEvolutionDAO): Unit {
         if(tableReady){
             return
         }
         dao.ensureTable()
+        dao.ensureSkillIndex()
         tableReady = true
     }
 

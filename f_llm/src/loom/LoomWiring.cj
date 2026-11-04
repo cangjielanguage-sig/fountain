@@ -72,6 +72,8 @@ public class LoomWiring {
         }
         // 技能目录：惰性取技能库；传了 embedder 就是向量检索，否则退回关键词
         SkillCatalog.install({ => Stores.meta().skills }, embedder: skillEmbedder)
+        // 演进报告表：mysql/postgres 部署在启动时建表建索引（失败不阻断启动）
+        EvolutionStores.bootstrap()
         service
     }
 }

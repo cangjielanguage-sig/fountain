@@ -41,4 +41,18 @@ public class EvolutionStores {
     public static func current(): EvolutionStore {
         byName(StoreSettings.load().metaStore)
     }
+
+    /**
+     * 启动时准备：选用 mysql/postgres 时先检查表与索引，没有就建。
+     *
+     * 失败不阻断启动——数据库可能比应用晚就绪，首次写入还会再试一次；
+     * 把「建表失败」变成启动失败，会让一次数据库抖动拖垮整个进程。
+     */
+    public static func bootstrap(): Unit {
+        try{
+            current().ensureSchema()
+        }catch(error: Exception){
+            ()
+        }
+    }
 }

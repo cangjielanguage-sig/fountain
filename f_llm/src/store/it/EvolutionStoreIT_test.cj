@@ -76,6 +76,10 @@ class EvolutionStoreIT_test {
 
     /** 同一套断言跑两种实现：写入可读、按技能过滤、id 递增 */
     private func check(store: EvolutionStore, tag: String): Unit {
+        // 模拟启动阶段：建表 + 建索引（幂等，重复执行不报错）
+        store.ensureSchema()
+        store.ensureSchema()
+
         let skill = 'it-evolution-${tag}'
         let first = store.save(EvolutionEntry(0, skill, 'evolved', 'v1 -> v2', 1_700_000_001))
         let second = store.save(EvolutionEntry(0, skill, 'rejected', 'no samples', 1_700_000_002))

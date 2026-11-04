@@ -46,6 +46,16 @@ public class EvolutionEntry {
  * 因此默认实现走 f_store（KV + 前缀扫描），不依赖 `f_hydra` 的向量能力。
  */
 public interface EvolutionStore {
+    /**
+     * 建表/建索引等一次性准备。
+     *
+     * 启动时调用（[EvolutionStores.bootstrap]）；默认空实现——`f_store` 与内存无需建表。
+     * 实现方仍应在读写前兜底调用，避免绕过启动流程直接使用时报错。
+     */
+    func ensureSchema(): Unit {
+        ()
+    }
+
     /** @return 记录 id（`entry.id <= 0` 时自动分配） */
     func save(entry: EvolutionEntry): Int64
     func list(offset: Int64, limit: Int64): ArrayList<EvolutionEntry>
@@ -142,6 +152,14 @@ public class InMemoryEvolutionStore <: EvolutionStore {
 public class FStoreEvolutionStore <: EvolutionStore {
     private static const INDEX = 'f_llm:evolution:index:'
     private static const DATA = 'f_llm:evolution:data:'
+    /**
+     * 索引键：`idx:{标题长度}:{标题}:{补零 at}:{补零 id}` → 数据键。
+     *
+     * `f_store` 只有前缀扫描，没有二级索引；把「查询条件」编码进键，值指向数据键，
+     * 就等价于给表建了索引。补零让字典序等于时间序，倒着扫即「最近的在前」；
+     * 标题长度放在前面，避免 `a:b` 与 `a` 这类标题互相污染前缀。
+     */
+    private static const IDX = 'f_llm:evolution:idx:'
     private static let SEP = String.fromUtf8([3u8])
 
     private let store: Store
@@ -173,6 +191,9 @@ public class FStoreEvolutionStore <: EvolutionStore {
             let payload = '${entry.skillTitle}${SEP}${entry.action}${SEP}${entry.at}${SEP}${entry.detail}'
             store.add('${DATA}${id}'.toArray(), payload.toArray())
             store.add('${INDEX}${id}'.toArray(), '1'.toArray())
+            // 条件键 → 数据键：bySkill 直接按前缀扫，不需要全表遍历
+            store.add(indexKey(entry.skillTitle, entry.at, id).toArray(),
+                      '${DATA}${id}'.toArray())
             box.value = id
         }
         box.value
@@ -203,7 +224,29 @@ public class FStoreEvolutionStore <: EvolutionStore {
         result
     }
 
+    /** 按条件键前缀扫：键里补零，字典序即时间序，倒着取就是最近的在前 */
     public func bySkill(skillTitle: String, limit: Int64): ArrayList<EvolutionEntry> {
+        let result = ArrayList<EvolutionEntry>()
+        let keys = ArrayList<String>()
+        for((key, _) in store.prefix(indexPrefix(skillTitle).toArray())){
+            keys.add(String.fromUtf8(key))
+        }
+        if(keys.isEmpty()){
+            // 兼容索引上线前写入的旧记录：退化成全表扫描
+            return legacyBySkill(skillTitle, limit)
+        }
+        var index = keys.size - 1
+        while(index >= 0 && Int64(result.size) < limit){
+            match(readByKey(keys[index])){
+                case Some(entry) => result.add(entry)
+                case None => ()
+            }
+            index--
+        }
+        result
+    }
+
+    private func legacyBySkill(skillTitle: String, limit: Int64): ArrayList<EvolutionEntry> {
         let result = ArrayList<EvolutionEntry>()
         for(entry in list(0, 1000)){
             if(Int64(result.size) >= limit){
@@ -214,6 +257,36 @@ public class FStoreEvolutionStore <: EvolutionStore {
             }
         }
         result
+    }
+
+    /** 索引键 → 数据键 → 记录 */
+    private func readByKey(indexKeyValue: String): ?EvolutionEntry {
+        match(store.get(indexKeyValue.toArray())){
+            case Some(bytes) =>
+                let dataKey = String.fromUtf8(bytes)
+                if(!dataKey.startsWith(DATA)){
+                    return None
+                }
+                let id = Int64.tryParse(dataKey[DATA.size..]) ?? 0
+                read(id)
+            case None => None
+        }
+    }
+
+    private static func indexPrefix(skillTitle: String): String {
+        '${IDX}${skillTitle.size}:${skillTitle}:'
+    }
+
+    private static func indexKey(skillTitle: String, at: Int64, id: Int64): String {
+        '${indexPrefix(skillTitle)}${pad(at, 20)}:${pad(id, 20)}'
+    }
+
+    private static func pad(value: Int64, width: Int64): String {
+        var text = value.toString()
+        while(Int64(text.size) < width){
+            text = '0' + text
+        }
+        text
     }
 
     private func read(id: Int64): ?EvolutionEntry {

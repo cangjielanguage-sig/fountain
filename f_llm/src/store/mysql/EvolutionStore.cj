@@ -83,6 +83,15 @@ public class MySqlEvolutionStore <: EvolutionStore & RootService {
         dao<MySqlEvolutionDAO>(DRIVER)
     }
 
+    /** 启动时调用：建表（索引随 DDL 一起建，幂等） */
+    public func ensureSchema(): Unit {
+        synchronized(mutex){
+            let dao = daoOf()
+            dao.ensureTable()
+            tableReady = true
+        }
+    }
+
     private func ensure(dao: MySqlEvolutionDAO): Unit {
         if(tableReady){
             return
