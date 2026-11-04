@@ -479,15 +479,76 @@ public class FStoreVectorStore <: VectorStore {
 
     // ---- v0.5.1 过滤索引（白名单：kind / save_day / tags） ----
 
-    private static let FILTER_FIELDS = ['kind', 'save_day', 'tags']
+    /** 默认参与倒排的字段；可用 `setFilterFields` 覆盖（hydration 侧按部署配置注入） */
+    public static let DEFAULT_FILTER_FIELDS = ['kind', 'save_day', 'tags']
 
-    private static func filterable(field: String): Bool {
-        for(item in FILTER_FIELDS){
-            if(item == field){
-                return true
+    /** 当前白名单（小写、去重、保持配置顺序） */
+    private var indexedFields = ArrayList<String>(DEFAULT_FILTER_FIELDS)
+
+    public func filterFields(): Array<String> {
+        let result = ArrayList<String>()
+        for(field in indexedFields){
+            result.add(field)
+        }
+        result.toArray()
+    }
+
+    /**
+     * 覆盖过滤字段白名单。
+     *
+     * 只影响**之后写入**的记录；已存在的记录需要 `rebuildFilterEntries` 重建索引。
+     * 传空数组直接拒绝——白名单为空意味着所有过滤查询都会静默返回空，比报错更难排查。
+     */
+    public func setFilterFields(fields: Array<String>): Unit {
+        let normalized = ArrayList<String>()
+        for(item in fields){
+            let field = item.trimAscii().toAsciiLower()
+            if(field.isEmpty()){
+                continue
+            }
+            if(!normalized.contains(field)){
+                normalized.add(field)
             }
         }
-        false
+        if(normalized.isEmpty()){
+            throw IllegalArgumentException('filter fields must not be empty')
+        }
+        indexedFields = normalized
+    }
+
+    /**
+     * 按当前白名单重建某集合已有记录的过滤索引，返回重建条数。
+     *
+     * 白名单增删字段后必须调用，否则旧记录在新字段上没有倒排项，查询会「查不到但也不报错」。
+     */
+    public func rebuildFilterEntries(collection: String): Int64 {
+        var rebuilt: Int64 = 0
+        var offset: Int64 = 0
+        let batch: Int64 = 100
+        while(true){
+            let page = ids(collection, offset, batch)
+            if(page.isEmpty()){
+                break
+            }
+            for(id in page){
+                match(get(collection, id)){
+                    case Some(record) =>
+                        deleteFilterEntries(collection, id)
+                        writeFilterEntries(collection, record)
+                        rebuilt++
+                    case None => ()
+                }
+            }
+            if(Int64(page.size) < batch){
+                break
+            }
+            offset += batch
+        }
+        rebuilt
+    }
+
+    private func filterable(field: String): Bool {
+        indexedFields.contains(field)
     }
 
     /** 读回元数据：`get` 必须把 `filters` 还原，否则读到记录就丢了过滤条件 */
@@ -509,9 +570,20 @@ public class FStoreVectorStore <: VectorStore {
         filters
     }
 
+    /**
+     * 元数据落两处：
+     * - `filterMetaKey` 保存**全部** filters（原样，供 `get` 读回、供白名单变更后重建索引）；
+     * - `filterKey` 只给白名单内的字段建倒排（查询用）。
+     *
+     * 早期版本只把白名单字段写进 meta，导致换了白名单后旧记录无从重建——这是必须修掉的。
+     */
     private func writeFilterEntries(collection: String, record: VectorRecord): Unit {
         var meta = ''
         for((field, value) in record.filters){
+            if(!meta.isEmpty()){
+                meta += ';'
+            }
+            meta += '${field}=${value}'
             if(!filterable(field)){
                 continue
             }
@@ -522,10 +594,6 @@ public class FStoreVectorStore <: VectorStore {
                 }
                 store.add(filterKey(collection, field, item, record.id).toArray(), [0u8])
             }
-            if(!meta.isEmpty()){
-                meta += ';'
-            }
-            meta += '${field}=${value}'
         }
         if(!meta.isEmpty()){
             store.add(filterMetaKey(collection, record.id).toArray(), meta.toArray())

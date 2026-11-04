@@ -49,8 +49,52 @@ private func kindFilters(kind: String): HashMap<String, String> {
     return filters
 }
 
+private func fieldFilter(field: String, value: String): HashMap<String, String> {
+    let filters = HashMap<String, String>()
+    filters[field] = value
+    return filters
+}
+
 @Test
 public class FStoreVectorStoreTest {
+
+    /** 白名单可配置：新增字段要重建索引后才对旧记录生效 */
+    @TestCase
+    func testFilterFieldsConfigurable(): Unit {
+        let store = newStore()
+        let collection = 'u1:global'
+        store.upsert(collection, VectorRecord('r1', '{}', [1.0f64, 0.0f64],
+            filters: fieldFilter('namespace', 'work'), saveTime: 1))
+
+        // 默认白名单里没有 namespace：查不到（不是报错）
+        @Expect(store.idsFiltered(collection, fieldFilter('namespace', 'work'), 0, 10).size, 0)
+
+        store.setFilterFields(['kind', 'namespace'])
+        @Expect(store.filterFields().size, 2)
+        // 白名单变更只影响新写入，旧记录要重建
+        @Expect(store.rebuildFilterEntries(collection), 1)
+        @Expect(store.idsFiltered(collection, fieldFilter('namespace', 'work'), 0, 10).size, 1)
+
+        // 大小写、空白归一并去重
+        store.setFilterFields([' Namespace ', 'namespace', ''])
+        @Expect(store.filterFields().size, 1)
+        @Expect(store.filterFields()[0], 'namespace')
+        store.close()
+    }
+
+    /** 白名单不能清空：空了会让所有过滤查询静默返回空 */
+    @TestCase
+    func testEmptyFilterFieldsRejected(): Unit {
+        let store = newStore()
+        var thrown = false
+        try{
+            store.setFilterFields(Array<String>())
+        }catch(e: Exception){
+            thrown = true
+        }
+        @Expect(thrown, true)
+        store.close()
+    }
 
     /** 元数据过滤走倒排：只返回命中的 kind，且分页在过滤之后 */
     @TestCase

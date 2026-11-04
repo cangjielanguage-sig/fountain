@@ -40,7 +40,7 @@ public interface VectorStore {
 ```
 
 `VectorRecord` 字段：`id`、`payload`（不透明 JSON）、`dense`、`sparse`、`colbert`、
-`filters`（白名单 `kind`/`save_day`/`tags`）、`vectors`（命名 dense，方案 C）、`saveTime`。
+`filters`（白名单字段，默认 `kind`/`save_day`/`tags`，可配置）、`vectors`（命名 dense，方案 C）、`saveTime`。
 
 ## 存储布局
 
@@ -55,7 +55,7 @@ public interface VectorStore {
 | `v:s:{id}` | sparse（`token:weight,...` 文本） |
 | `v:c:{id}:{part}` | colbert 分片（每片 ≤64KB） |
 | `i:t:{token}:{id}` | 稀疏倒排 posting |
-| `f:{field}:{value}:{id}` | 过滤索引（kind / save_day / tags） |
+| `f:{field}:{value}:{id}` | 过滤索引（白名单字段，默认 kind / save_day / tags） |
 | `fl:{id}` | 该记录的过滤字段名单 |
 | `m:ivf` / `m:cent:{i}` / `i:c:{i}:{id}` / `i:r:{id}` | IVF 配置 / 簇心 / 桶成员 / 反向指针 |
 | `m:ttl` | 集合 TTL（epoch 秒） |
@@ -67,9 +67,22 @@ public interface VectorStore {
 - **两阶段写**：`payload → dense → sparse → colbert 分片 → 倒排 → ready`；读路径一律先校验 `r:{id}`；
 - **f32 小端**，与 `f_llm.store.ColbertCodec` 字节兼容（同一条 colbert 可在 PG 列与本库之间搬移）；
 - **colbert 分片**：96 token × 1024 维 ≈ 384KB，按 64KB 切片；
-- **过滤**：同字段多值 OR、跨字段 AND；白名单外字段查询恒不命中；
+- **过滤**：同字段多值 OR、跨字段 AND；白名单外字段查询恒不命中；白名单可用 `setFilterFields([...])` 配置，改后需 `rebuildFilterEntries(collection)` 重建旧记录的索引；
 - **IVF**：确定性 k-means（初始簇心等距抽样，10 轮），`nprobe` 默认 8，候选不足 `limit` 时回退全量扫描；
 - **TTL**：过期集合读操作返回空；取消 TTL 后数据重新可见（未被 `purgeExpired` 时）。
+
+## 过滤字段配置
+
+默认只给 `kind` / `save_day` / `tags` 建倒排。要按别的字段（`namespace`、`userId` 等）在服务端过滤，两步：
+
+```cangjie
+store.setFilterFields(['kind', 'namespace', 'userId'])   // 影响之后的写入
+store.rebuildFilterEntries('u1:global')                  // 给已有记录补索引
+```
+
+- 名称会去空白、转小写、去重；传空数组直接抛错（空白名单会让所有过滤查询静默返回空）；
+- `filterMetaKey` 保存**全部** filters，倒排只覆盖白名单字段，所以换白名单后能靠 `rebuildFilterEntries` 重建；
+- fhydra 侧读环境变量 `hydra_filterFields`（逗号分隔），启动时调用 `HydraRpc.configure()` 装配。
 
 ## 版本
 
@@ -83,3 +96,4 @@ public interface VectorStore {
 | v0.5 | 两阶段写、崩溃恢复、TTL、导出 |
 | v0.5.1 | 过滤索引（kind / save_day / tags） |
 | v0.6 | 方案 C：一条记录多命名 dense + saveTime 排序 |
+| v0.6.1 | 过滤字段白名单可配置（`setFilterFields` / `rebuildFilterEntries`），meta 保存全部 filters |

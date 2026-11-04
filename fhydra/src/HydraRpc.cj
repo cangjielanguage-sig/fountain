@@ -37,6 +37,16 @@ public class HydraRpc {
     public init() {
     }
 
+    /**
+     * 启动时装配过滤字段白名单（`hydra_filterFields`）。
+     *
+     * 只影响新写入的记录；已有数据要换白名单时，需另调
+     * `FStoreVectorStore.rebuildFilterEntries(collection)` 重建倒排。
+     */
+    public static func configure(): Unit {
+        store.setFilterFields(HydraConfig.filterFields())
+    }
+
     @JsonRpcMeta['健康检查', '1s']
     public func health(): String {
         '{"status":"ok","version":"1.3.17"}'

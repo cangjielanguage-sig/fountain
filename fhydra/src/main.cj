@@ -23,6 +23,8 @@ import fountain::f_mvc.MVCStarter
  * 端口等参数读 `mvc_port` / `mvc_host` 环境变量（与 f_mvc 约定一致）。
  */
 main(): Int64 {
+    // 过滤字段白名单要在第一次读写前装配好（hydra_filterFields）
+    HydraRpc.configure()
     // 先初始化 MVC（装配 Server 与路由），再阻塞启动
     MVCStarter.initialize()
     MVCStarter.start()
