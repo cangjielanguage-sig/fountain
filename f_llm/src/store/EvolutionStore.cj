@@ -160,6 +160,8 @@ public class FStoreEvolutionStore <: EvolutionStore {
      * 标题长度放在前面，避免 `a:b` 与 `a` 这类标题互相污染前缀。
      */
     private static const IDX = 'f_llm:evolution:idx:'
+    /** 全表的时间索引：`time:{补零 at}:{补零 id}` → 数据键；`list` 走这条 */
+    private static const TIME = 'f_llm:evolution:time:'
     private static let SEP = String.fromUtf8([3u8])
 
     private let store: Store
@@ -191,15 +193,39 @@ public class FStoreEvolutionStore <: EvolutionStore {
             let payload = '${entry.skillTitle}${SEP}${entry.action}${SEP}${entry.at}${SEP}${entry.detail}'
             store.add('${DATA}${id}'.toArray(), payload.toArray())
             store.add('${INDEX}${id}'.toArray(), '1'.toArray())
+            let dataKey = '${DATA}${id}'
             // 条件键 → 数据键：bySkill 直接按前缀扫，不需要全表遍历
-            store.add(indexKey(entry.skillTitle, entry.at, id).toArray(),
-                      '${DATA}${id}'.toArray())
+            store.add(indexKey(entry.skillTitle, entry.at, id).toArray(), dataKey.toArray())
+            // 时间键 → 数据键：list 也走索引，写入序与时间序不一致时也能正确排序
+            store.add('${TIME}${pad(entry.at, 20)}:${pad(id, 20)}'.toArray(), dataKey.toArray())
             box.value = id
         }
         box.value
     }
 
+    /** 按时间索引前缀扫：键补零后字典序即时间序，倒着取就是最近的在前 */
     public func list(offset: Int64, limit: Int64): ArrayList<EvolutionEntry> {
+        let keys = ArrayList<String>()
+        for((key, _) in store.prefix(TIME.toArray())){
+            keys.add(String.fromUtf8(key))
+        }
+        if(keys.isEmpty()){
+            // 索引上线前写入的旧记录：退化成按 id 倒序
+            return legacyList(offset, limit)
+        }
+        let result = ArrayList<EvolutionEntry>()
+        var index = keys.size - 1 - offset
+        while(index >= 0 && Int64(result.size) < limit){
+            match(readByKey(keys[index])){
+                case Some(entry) => result.add(entry)
+                case None => ()
+            }
+            index--
+        }
+        result
+    }
+
+    private func legacyList(offset: Int64, limit: Int64): ArrayList<EvolutionEntry> {
         let ids = ArrayList<Int64>()
         for((key, _) in store.prefix(INDEX.toArray())){
             let text = String.fromUtf8(key)
@@ -210,7 +236,6 @@ public class FStoreEvolutionStore <: EvolutionStore {
                 }
             }
         }
-        // 倒序：新记录在前
         sortDesc(ids)
         let result = ArrayList<EvolutionEntry>()
         var index = offset

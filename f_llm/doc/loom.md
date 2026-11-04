@@ -359,9 +359,12 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 **`f_store` 没有二级索引，用「条件键 → 数据键」自己造一个**：
 
 ```
-f_llm:evolution:data:{id}                        → skillTitle ⋯ action ⋯ at ⋯ detail
-f_llm:evolution:idx:{标题长度}:{标题}:{补零at}:{补零id}  → f_llm:evolution:data:{id}
+f_llm:evolution:data:{id}                             → skillTitle ⋯ action ⋯ at ⋯ detail
+f_llm:evolution:idx:{标题长度}:{标题}:{补零at}:{补零id}   → f_llm:evolution:data:{id}   （bySkill）
+f_llm:evolution:time:{补零at}:{补零id}                 → f_llm:evolution:data:{id}   （list）
 ```
+
+`list` 也走时间索引：写入序与时间序不一致时（补写历史记录、时钟回拨）仍按时间倒序，`offset`/`limit` 也作用在时间序上。
 
 `bySkill` 扫 `idx:{长度}:{标题}:` 前缀，键里补零让字典序等于时间序，倒着取就是最近的在前；标题长度放在前面，避免 `a:b` 与 `a` 这类标题互相污染前缀。索引上线前写入的旧记录无索引键，`bySkill` 会退化成全表扫描兜底。
 
