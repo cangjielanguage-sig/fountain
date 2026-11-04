@@ -110,7 +110,7 @@ public class SkillEvolutionJob {
                            embedder!: ?(String) -> Array<Float64> = None,
                            matcherThreshold!: Float64 = 0.75,
                            nameCandidates!: Bool = false,
-                           ledger!: ?LoomStoreGateway = None,
+                           ledger!: ?EvolutionStore = None,
                            now!: Int64 = 0): SkillEvolutionReport {
         let evolved = ArrayList<String>()
         let rejected = ArrayList<String>()
@@ -194,9 +194,9 @@ public class SkillEvolutionJob {
         let report = SkillEvolutionReport(evolved, rejected, skipped, created,
             Int64(matched.candidates.size))
         // 报告留档：传了 gateway 才写，写失败不影响本轮结果
-        if(let Some(gateway) <- ledger){
+        if(let Some(target) <- ledger){
             try{
-                SkillEvolutionLedger.write(gateway, report, now)
+                SkillEvolutionLedger.write(target, report, now)
             }catch(error: Exception){
                 ()
             }

@@ -21,13 +21,9 @@ import std.unittest.testmacro.*
 
 import fountain::f_llm.store.*
 
-/** 演进报告库：写入与回读 */
+/** 演进报告表：写入、回读、按技能筛选 */
 @Test
 class SkillEvolutionLedger_test {
-    private static func gateway(): LoomStoreGateway {
-        LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
-    }
-
     private static func report(): SkillEvolutionReport {
         SkillEvolutionReport(
             ArrayList<String>(['日报助手: v1 -> v2 (passed)']),
@@ -37,48 +33,57 @@ class SkillEvolutionLedger_test {
             1)
     }
 
-    /** 四类结果都落库，条数对得上 */
+    /** 四类结果都落表，条数对得上 */
     @TestCase
     func testWritesAllOutcomes(): Unit {
-        let gateway = gateway()
-        let written = SkillEvolutionLedger.write(gateway, report(), 1700000000)
+        let store = InMemoryEvolutionStore()
+        let written = SkillEvolutionLedger.write(store, report(), 1700000000)
         @Expect(written, 4)
-        let records = SkillEvolutionLedger.list(gateway, limit: 10)
-        @Expect(records.size, 4)
-        @Expect(records[0].docId.startsWith('loom:evolution:'), true)
+        @Expect(SkillEvolutionLedger.list(store, limit: 10).size, 4)
     }
 
-    /** 读回来能区分动作类型与详情 */
+    /** 能区分动作类型，详情原样保留 */
     @TestCase
     func testListPreservesActionAndDetail(): Unit {
-        let gateway = gateway()
-        SkillEvolutionLedger.write(gateway, report(), 1700000000)
-        let records = SkillEvolutionLedger.list(gateway, limit: 10)
+        let store = InMemoryEvolutionStore()
+        SkillEvolutionLedger.write(store, report(), 1700000000)
+        let entries = SkillEvolutionLedger.list(store, limit: 10)
         var actions = ArrayList<String>()
-        for(item in records){
+        for(item in entries){
             actions.add(item.action)
         }
         @Expect(actions.contains('evolved'), true)
         @Expect(actions.contains('created'), true)
         @Expect(actions.contains('rejected'), true)
         @Expect(actions.contains('skipped'), true)
+        @Expect(entries[0].detail.isEmpty(), false)
     }
 
-    /** 空报告：不写任何东西 */
+    /** 空报告不写任何东西 */
     @TestCase
     func testEmptyReportWritesNothing(): Unit {
-        let gateway = gateway()
+        let store = InMemoryEvolutionStore()
         let empty = SkillEvolutionReport(ArrayList<String>(), ArrayList<String>(),
             ArrayList<String>(), ArrayList<String>(), 0)
-        @Expect(SkillEvolutionLedger.write(gateway, empty, 1), 0)
-        @Expect(SkillEvolutionLedger.list(gateway, limit: 5).size, 0)
+        @Expect(SkillEvolutionLedger.write(store, empty, 1), 0)
+        @Expect(SkillEvolutionLedger.list(store, limit: 5).size, 0)
     }
 
-    /** limit 生效：最多返回指定条数 */
+    /** 按技能筛选：只返回该技能的记录 */
+    @TestCase
+    func testHistoryFiltersBySkill(): Unit {
+        let store = InMemoryEvolutionStore()
+        SkillEvolutionLedger.write(store, report(), 1700000000)
+        let history = SkillEvolutionLedger.history(store, '日报助手', limit: 10)
+        @Expect(history.size, 1)
+        @Expect(history[0].action, 'evolved')
+    }
+
+    /** limit 生效 */
     @TestCase
     func testListRespectsLimit(): Unit {
-        let gateway = gateway()
-        SkillEvolutionLedger.write(gateway, report(), 1700000000)
-        @Expect(SkillEvolutionLedger.list(gateway, limit: 2).size, 2)
+        let store = InMemoryEvolutionStore()
+        SkillEvolutionLedger.write(store, report(), 1700000000)
+        @Expect(SkillEvolutionLedger.list(store, limit: 2).size, 2)
     }
 }

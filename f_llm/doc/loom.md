@@ -340,6 +340,10 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `prompt` | `remove` | `{"name","version"}` | `true/false` |
 | `character` | `get` | `{"userId":1}` | `{userId,characterKey,prompts}`，未命中 `''` |
 | `character` | `set` / `reset` | `{"userId","characterKey","prompts"}` / `{"userId"}` | `ok` |
+| `evolution` | `save` | `{"skill","action","detail","at"}` | 记录 id |
+| `evolution` | `list` / `by_skill` | `{"offset","limit"}` / `{"skill","limit"}` | `[{id,skill,action,detail,at}]` |
+
+`evolution` 是**独立表**（`EvolutionStore`）：`f_store` 实现按 `f_llm:evolution:*` 键布局落盘，内存实现用于测试。审计只按「技能 + 时间」查，不做向量检索，因此不依赖 `f_hydra`。
 
 未列出的 op 一律抛错，不静默返回空值。
 

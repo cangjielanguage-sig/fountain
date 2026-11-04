@@ -46,16 +46,22 @@ import fountain::f_llm.store.*
 public class LoomStoreGateway {
     private let content: ContentStore
     private let meta: MetaStore
+    /** 演进报告表：可选，未装配时 `evolution.*` 抛可读错误 */
+    private let evolution: ?EvolutionStore
 
-    public init(content: ContentStore, meta: MetaStore) {
+    public init(content: ContentStore, meta: MetaStore,
+                evolution!: ?EvolutionStore = None) {
         this.content = content
         this.meta = meta
+        this.evolution = evolution
     }
 
     /** 容器用：取当前配置的内容族与元数据族 */
     public init() {
         this.content = Stores.content()
         this.meta = Stores.meta()
+        // 零配置装配：报告表与 meta 共用同一份 f_store 路径
+        this.evolution = Some(FStoreEvolutionStore())
     }
 
     public func call(kind: String, op: String, payload: String): String {
@@ -282,6 +288,26 @@ public class LoomStoreGateway {
             }
         }
 
+        if(name == 'evolution'){
+            let target = match(evolution){
+                case Some(store) => store
+                case None => throw LoomException('loom store gateway: evolution store is not installed')
+            }
+            if(action == 'save'){
+                let id = target.save(EvolutionEntry(0, strOf(args, 'skill'),
+                    strOf(args, 'action'), strOf(args, 'detail'), intOf(args, 'at')))
+                return id.toString()
+            }
+            if(action == 'list'){
+                return entriesJson(target.list(intOf(args, 'offset'), intOf(args, 'limit')))
+            }
+            if(action == 'by_skill'){
+                let limit = intOf(args, 'limit')
+                return entriesJson(target.bySkill(strOf(args, 'skill'),
+                    if(limit > 0){ limit }else{ 20 }))
+            }
+        }
+
         throw LoomException('loom store gateway: unsupported ${kind}.${op}')
     }
 
@@ -341,6 +367,23 @@ public class LoomStoreGateway {
         '{"id":${skill.id},"title":${FlowPlan.jsonQuote(skill.title)},'
             + '"details":${FlowPlan.jsonQuote(skill.details)},'
             + '"version":${skill.version}}'
+    }
+
+    private static func entriesJson(entries: ArrayList<EvolutionEntry>): String {
+        var text = '['
+        var first = true
+        for(entry in entries){
+            if(!first){
+                text += ','
+            }
+            first = false
+            text += '{"id":${entry.id},'
+                + '"skill":${FlowPlan.jsonQuote(entry.skillTitle)},'
+                + '"action":${FlowPlan.jsonQuote(entry.action)},'
+                + '"detail":${FlowPlan.jsonQuote(entry.detail)},'
+                + '"at":${entry.at}}'
+        }
+        text + ']'
     }
 
     private static func promptJson(entry: PromptEntry): String {

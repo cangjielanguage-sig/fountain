@@ -172,6 +172,21 @@ class LoomStoreGateway_test {
         @Expect(hits.contains('"kind":"note"'), false)
     }
 
+    /** 演进报告表：写一条、按技能查一条 */
+    @TestCase
+    func testEvolutionSaveAndQuery(): Unit {
+        let store = InMemoryEvolutionStore()
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore(), evolution: store)
+        @Expect(gateway.call('evolution', 'save',
+            '{"skill":"日报助手","action":"evolved","detail":"v1 -> v2","at":10}'), '1')
+        let listed = gateway.call('evolution', 'list', '{"offset":0,"limit":10}')
+        @Expect(listed.contains('"skill":"日报助手"'), true)
+        @Expect(listed.contains('"action":"evolved"'), true)
+        let bySkill = gateway.call('evolution', 'by_skill', '{"skill":"日报助手","limit":5}')
+        @Expect(bySkill.contains('v1 -> v2'), true)
+        @Expect(gateway.call('evolution', 'by_skill', '{"skill":"不存在","limit":5}'), '[]')
+    }
+
     @TestCase
     func testUnsupportedOpRejected(): Unit {
         var message = ''
