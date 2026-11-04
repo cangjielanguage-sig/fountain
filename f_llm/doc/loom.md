@@ -343,7 +343,16 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `evolution` | `save` | `{"skill","action","detail","at"}` | 记录 id |
 | `evolution` | `list` / `by_skill` | `{"offset","limit"}` / `{"skill","limit"}` | `[{id,skill,action,detail,at}]` |
 
-`evolution` 是**独立表**（`EvolutionStore`）：`f_store` 实现按 `f_llm:evolution:*` 键布局落盘，内存实现用于测试。审计只按「技能 + 时间」查，不做向量检索，因此不依赖 `f_hydra`。
+`evolution` 是**独立表**（`EvolutionStore`），实现跟随 `llm_metaStore`：
+
+| 配置值 | 实现 | 存储 |
+|---|---|---|
+| `f_store`（默认） | `FStoreEvolutionStore` | 键 `f_llm:evolution:index:{id}` / `data:{id}` |
+| `memory` | `InMemoryEvolutionStore` | 进程内 |
+| `postgres` | `PostgresEvolutionStore` | 表 `llm_skill_evolution`（首次写入自动建表） |
+| `mysql` | `MySqlEvolutionStore` | 表 `llm_skill_evolution`（首次写入自动建表） |
+
+审计只按「技能 + 时间」查，不做向量检索，因此不依赖 `f_hydra`。SQL 版的 `id` 由应用层用 `MAX(id)+1` 分配（表里无自增列），PG/MySQL 写入口径一致，也不依赖各驱动对 `RETURNING` / `LAST_INSERT_ID()` 的支持差异。
 
 未列出的 op 一律抛错，不静默返回空值。
 

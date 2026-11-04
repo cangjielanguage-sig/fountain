@@ -60,8 +60,8 @@ public class LoomStoreGateway {
     public init() {
         this.content = Stores.content()
         this.meta = Stores.meta()
-        // 零配置装配：报告表与 meta 共用同一份 f_store 路径
-        this.evolution = Some(FStoreEvolutionStore())
+        // 零配置装配：报告表跟随 llm_metaStore（f_store / memory / postgres / mysql）
+        this.evolution = Some(EvolutionStores.current())
     }
 
     public func call(kind: String, op: String, payload: String): String {
