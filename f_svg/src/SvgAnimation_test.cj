@@ -74,6 +74,17 @@ public class SvgAnimation_test {
         )
         let missingTimeline = SvgTimeline(missing)
         @Assert(missingTimeline.warnings.size >= 3)
+        @Assert(missingTimeline.animations().size == 0)
+        @Assert(near(missingTimeline.duration(), 0.0))
+        @Assert(missingTimeline.sample(0.5).toString() == missing.toString())
+
+        let missingType = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animateTransform attributeName="transform" dur="1s"/></rect>'
+        )
+        let missingTypeTimeline = SvgTimeline(missingType)
+        @Assert(missingTypeTimeline.animations().size == 0)
+        @Assert(missingTypeTimeline.warnings.size >= 1)
     }
 
     /** 时间解析：s / ms / indefinite / id.begin / id.end / 事件型。 */

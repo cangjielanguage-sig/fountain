@@ -273,7 +273,10 @@ private func collectAnimationSpecs(
         match (node) {
             case ElementNode(child) =>
                 if (isSvgAnimationTag(child.tag)) {
-                    out.add(buildAnimationSpec(child, element, warnings))
+                    match (buildAnimationSpec(child, element, warnings)) {
+                        case Some(spec) => out.add(spec)
+                        case None => ()
+                    }
                 }
                 collectAnimationSpecs(child, out, warnings)
             case _ => ()
@@ -294,7 +297,7 @@ private func buildAnimationSpec(
     element: SvgElement,
     parent: SvgElement,
     warnings: ArrayList<String>
-): SvgAnimationSpec {
+): ?SvgAnimationSpec {
     let kind = match (element.tag) {
         case "animateTransform" => SvgAnimationKind.AnimateTransform
         case "animateMotion" => SvgAnimationKind.AnimateMotion
@@ -303,7 +306,8 @@ private func buildAnimationSpec(
     }
     let attributeName = element.attr("attributeName") ?? ""
     if (attributeName.size == 0 && (kind == SvgAnimationKind.Animate || kind == SvgAnimationKind.Set)) {
-        warnings.add("动画缺少 attributeName")
+        warnings.add("动画缺少 attributeName，已忽略")
+        return None
     }
     let values = parseAnimationValues(element.attr("values"))
     if (values.size > 10000) {
@@ -311,35 +315,39 @@ private func buildAnimationSpec(
     }
     let transformType = element.attr("type") ?? "translate"
     if (kind == SvgAnimationKind.AnimateTransform && element.attr("type").isNone()) {
-        warnings.add("animateTransform 缺少 type，按 translate 处理")
+        warnings.add("animateTransform 缺少 type，已忽略")
+        return None
     }
     var pathData: ?SvgPathData = None
     if (kind == SvgAnimationKind.AnimateMotion) {
         pathData = resolveMotionPath(element, parent, warnings)
         if (pathData.isNone()) {
-            warnings.add("animateMotion 缺少 path / mpath")
+            warnings.add("animateMotion 缺少 path / mpath，已忽略")
+            return None
         }
     }
-    SvgAnimationSpec(
-        element,
-        kind,
-        Some(parent),
-        attributeName,
-        element.attr("begin"),
-        element.attr("end"),
-        parseSvgTimeValue(element.attr("dur") ?? "indefinite") ?? Float64.Inf,
-        parseRepeatCount(element.attr("repeatCount")),
-        parseSvgTimeValue(element.attr("repeatDur") ?? "indefinite") ?? Float64.Inf,
-        (element.attr("fill") ?? "remove") == "freeze",
-        values,
-        parseKeyTimes(element.attr("keyTimes")),
-        parseKeySplines(element.attr("keySplines")),
-        SvgCalcMode.fromName(element.attr("calcMode") ?? "linear"),
-        (element.attr("additive") ?? "replace") == "sum",
-        (element.attr("accumulate") ?? "none") == "sum",
-        transformType,
-        element.attr("rotate") ?? "0",
-        pathData
+    Some(
+        SvgAnimationSpec(
+            element,
+            kind,
+            Some(parent),
+            attributeName,
+            element.attr("begin"),
+            element.attr("end"),
+            parseSvgTimeValue(element.attr("dur") ?? "indefinite") ?? Float64.Inf,
+            parseRepeatCount(element.attr("repeatCount")),
+            parseSvgTimeValue(element.attr("repeatDur") ?? "indefinite") ?? Float64.Inf,
+            (element.attr("fill") ?? "remove") == "freeze",
+            values,
+            parseKeyTimes(element.attr("keyTimes")),
+            parseKeySplines(element.attr("keySplines")),
+            SvgCalcMode.fromName(element.attr("calcMode") ?? "linear"),
+            (element.attr("additive") ?? "replace") == "sum",
+            (element.attr("accumulate") ?? "none") == "sum",
+            transformType,
+            element.attr("rotate") ?? "0",
+            pathData
+        )
     )
 }
 
