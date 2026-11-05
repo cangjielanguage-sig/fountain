@@ -1499,6 +1499,7 @@ Persistence is split into two independent families, each with three choices:
 |---|---|---|---|
 | Content | memories, experience, knowledge, documents | `f_hydra` (default) / `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
 | Metadata | characters, skills, prompts, model configs | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
+| Evolution | reports, state, consumed knowledge, daily lease | reports/state follow `llm_metaStore`; the lease follows `llm_memoryStore` | see "Storage: evolution reports / state / lease" below |
 
 - An unknown value **fails startup** with the list of available implementations; there is no silent fallback.
 - With `llm_metaStore=f_store` no database is required for metadata; data lives under `llm_metaStorePath`.
@@ -1653,7 +1654,9 @@ Notes:
 
 ## Configuration items
 
-All configuration items are environment variables
+All configuration items are environment variables. This section lists the legacy chain; the storage and evaluation
+keys (`llm_memoryStore` / `llm_metaStore` / `llm_embeddingUrl` / `hydra_filterFields` / `fllm_*`, …) are listed in
+"Environment variables (new in this branch)" at the end of this document.
 ```cj
 public static const LLM = 'llm'
 /**
@@ -1764,3 +1767,206 @@ conf.auth = '<key>'
 ```
 
 Model normalisation: `ModelNames.normalize('deepseek/deepseek-flash') == MODEL_NAME_DEEPSEEK_FLASH` (also accepts aggregator spellings such as `deepseek-ai/DeepSeek-V3`, `zhipu/glm-5`). **Normalisation is for capability checks and logs only — the wire `model` stays `actualLlmName`, otherwise the gateway returns 404.**
+
+---
+
+## loom: text to flow
+
+Turn a natural-language request into an executable flow (`fountain::f_llm.loom`, details in `doc/loom.md`):
+
+```
+natural language
+→ Planner (LLM returns a JSON plan, or clarification questions)
+→ CodeGen (plan → step sources + flow source, no compilation)
+→ LoomRegistry / LoomStore (persist sources and status)
+→ LoomCompiler (compile step closures)
+→ LoomRunner (topological execution, emits events)
+```
+
+State machine: `clarifying → pending → compiled`; a failed recompile marks that flow `failed`
+without affecting others.
+
+### Tools exposed to the model
+
+| Tool | Key params | Behaviour |
+|---|---|---|
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, execute?, parallel?` | `confirm=false` returns the plan only; `confirm=true` compiles; `execute=true` also runs it |
+| `loomDelete` | `name` | Remove from registry and store |
+| `memoryCall` | `op`(search/add/remove) + `payload` | Same gateway as `loomStore("memory", …)` |
+| `knowledgeIngest` | `docId, title, content` | Write a knowledge document |
+| `listTools` / `searchTools` | `offset, limit` / `query, topK` | List tools, keyword-search tools |
+| `skillImport` | `path` | Import a skill package; idempotent by title |
+| `scheduleCreate` / `scheduleDelete` | `name, cron, payload?` / `name` | Register / cancel a scheduled flow |
+
+### JIT entry points available inside a flow
+
+```cj
+loomCallTool(name, argsJson)          // registered tool or MCP tool
+loomCallLlm(model, system, input)     // large model call
+loomStore(kind, op, payload)          // read/write the six stores
+```
+
+| kind | ops | Notes |
+|---|---|---|
+| `memory` | `add` / `get` / `list` / `search` / `remove` | `list` accepts `kind` (filter before paging) |
+| `experience` | same as `memory` | Alias that forces `kind=experience` |
+| `knowledge` | `get` / `docIds` / `search` / `upsert` / `remove` | |
+| `skill` | `load` / `get` / `list` / `upsert` / `count` / `remove` | `load` fetches details by title |
+| `prompt` | `latest` / `get` / `put` / `remove` | |
+| `character` | `get` / `set` / `reset` | `characterKey` must be predefined (or `custom`) |
+| `evolution` | `list` / `by_skill` | **Read-only**: reports are written by the background job |
+
+### Persona and character
+
+`FlowPlan.persona` and the user's `character` both end up as the system prefix, resolved in three levels:
+
+```
+1. prompt store: prompt.latest(name) hit → use its content
+2. built-in persona body: PredefinedCharacters.bodyOf(name) (13 predefined personas, text in code)
+3. literal text: neither matched → treat the argument itself as the body
+```
+
+`custom` is special: the body comes only from `character.prompts`, never the literal word `custom`.
+`character.prompts` is appended to the persona text as user-level extra instructions (language, length, …).
+The character record is resolved by `LoomMemoryPolicy.userId` (skipped when `userId <= 0`).
+
+### Skill injection
+
+| Mode | Usage | Notes |
+|---|---|---|
+| Explicit | `LoomRunner.run(..., skills: ['daily-report'])` | Loaded by title, fixed order |
+| Automatic | omit `skills` with `autoSkills=true` (default) | Search using plan notes + start input, take `skillTopK` (default 3) |
+
+`SkillCatalog` runs in two modes: vector cosine when an encoder is installed (vectors cached by
+`title#version`), otherwise keyword fallback (substring, character-overlap ratio, title coverage).
+**Encoder failures degrade silently**, so use `SkillCatalog.embedFailureDetail()` — returns
+`(query-side failures, skill-side failures)` — when diagnosing.
+
+### Extraction at flow end
+
+`LoomRunner` does this in `finally` (both success and failure):
+
+| Output | kind | Condition |
+|---|---|---|
+| Context digest | `note` | `policy.enabled` (default true) and at least one model call happened |
+| Experience | `experience` (`experience_failed` on failure) | same as above |
+| Knowledge document | `loom:<flow>:<seq>` | requires `writeKnowledge` |
+
+With `summarize=true` the model returns `{"memory":"…","experience":"…"}`; invalid JSON falls back to
+rule-based extraction.
+
+> This belongs to the **loom** path and is independent of the "Extracting memory" section above
+> (`Memory` + summarising model, used by the agent path). Both write to the same memory store.
+
+## Experience → skill evolution
+
+Evolution is executed exclusively by `SkillEvolutionJob` (flow end only writes experience):
+
+```
+trigger → read materials newer than the watermark (experience + knowledge)
+  → SkillMatcher: assign to existing skills / cluster into new-skill candidates
+  → evolve existing skills first: Policy → model rewrites details → SkillGate A/B → version + 1
+  → then create new skills: cluster large enough → SkillNamer (must return samples) → version 1
+  → SkillEvolutionLedger records the report → advance the watermark
+```
+
+| Component | Default policy |
+|---|---|
+| `SkillEvolutionPolicy` | ≥ 3 samples, success rate ≥ 0.8, 1-day cooldown; **2 days after a failed gate** |
+| `SkillGate` | Runs the skill's own `samples` against old/new details; new must be ≥ old and reach `minScore` |
+| `SkillNamer` | Title ≤ 24 chars, **at least one sample required** — otherwise the skill cannot self-evolve |
+| Knowledge dedupe | `processedAmong(docIds)` membership check, so a batch is not re-clustered every run |
+
+Register at startup (disabled when `cron` is empty):
+
+```cj
+LoomWiring.wire(chat, plannerModel: 'chat-pro',
+                evolutionCron: '0 0 3 * * * *',
+                evolutionUserId: 7,
+                evolutionNamespace: 'work',
+                evolutionNameCandidates: true,
+                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))
+```
+
+### Multi-process exclusion: daily lease
+
+The job runs once a day; a time-based UUID plus a date-level optimistic lock ensures only one process runs it
+(`f_util.UUID.unixTimeBased`):
+
+| Vector store (`llm_memoryStore`) | Lease location | Exclusion |
+|---|---|---|
+| `mysql` / `postgres` | single-row table `llm_evolution_lease` | `UPDATE ... WHERE lease_value = old`, a real CAS |
+| `f_hydra` | payload of a local all-zero vector record | local storage, single process |
+| `fhydra` | payload of a remote all-zero vector record | write-then-read verification |
+| others | f_store / in-memory | single process |
+
+An all-zero vector is used because a lease must never surface in semantic search (cosine is 0 with any query).
+
+## Storage: evolution reports / state / lease
+
+Storage grew from two families to two families plus three tables, all following `llm_metaStore`
+(the lease follows `llm_memoryStore`):
+
+| Purpose | Interface | Implementations | Location |
+|---|---|---|---|
+| Evolution report | `EvolutionStore` | `FStore` / `InMemory` / `Postgres` / `MySql` | three f_store keys, or table `llm_skill_evolution` |
+| Evolution state (watermark + per-skill cooldown) | `EvolutionStateStore` | same four | f_store keys, or table `llm_skill_evolution_state` (watermark in row `__run__`) |
+| Consumed knowledge | same | same | table `llm_skill_evolution_knowledge` |
+| Daily lease | `EvolutionLease` | PG / MySQL / f_hydra / f_store / in-memory | table `llm_evolution_lease` or a vector record |
+
+`f_store` has no secondary index, so condition keys point at data keys:
+
+```
+f_llm:evolution:data:{id}                             → record body
+f_llm:evolution:idx:{titleLen}:{title}:{padAt}:{padId} → data key (bySkill)
+f_llm:evolution:time:{padAt}:{padId}                   → data key (list)
+```
+
+`LoomWiring.wire` calls `EvolutionStores.bootstrap()` + `EvolutionStateStores.bootstrap()` +
+`EvolutionLeases.bootstrap()` at startup: SQL deployments create tables and indexes
+(PG also gets `idx_evo_skill (skill_title, at_time DESC)`); failures do not block startup.
+
+## Retrieval evaluation
+
+Unit tests only verify ranking logic; semantic quality needs the real model (`doc/retrieval-eval.md`):
+
+| Path | Content |
+|---|---|
+| `eval/retrieval_corpus.tsv` | 50 documents (10 topics × 5) |
+| `eval/retrieval_queries.tsv` | 612 positives (300 templated + 300 hard + 12 multi-label) + 10 negatives |
+| `eval/run_eval.sh` | One-shot real-embedding run with a printed report |
+
+```bash
+eval/run_eval.sh                          # bge-m3 at 127.0.0.1:8000 by default
+fllm_evalMinScore=0.5 eval/run_eval.sh    # adjust the threshold
+```
+
+Metrics: `recall@1` / `recall@5` / `MRR` / `nDCG@5` (rank-sensitive, normalised by the ideal ordering for
+multi-label cases) plus the negative pass rate. Measured with bge-m3 at `minScore=0.5`: templated ~100%,
+**hard recall@1 39.66% / nDCG@5 54.76%**, negatives 90%; character overlap scores only 22% on the same hard set.
+
+## Environment variables (new in this branch)
+
+| Key | Default | Purpose |
+|---|---|---|
+| `llm_memoryStore` | `f_hydra` | Content family and lease (`f_hydra`/`fhydra`/`postgres`/`mysql`/`inMemory`) |
+| `llm_metaStore` | `f_store` | Metadata family plus evolution report/state |
+| `llm_metaStorePath` | `./data/f_llm-meta` | f_store path |
+| `llm_embeddingUrl` | `http://127.0.0.1:8000/v1/embeddings` | BGE-M3 endpoint used by `DefaultEmbedder` |
+| `llm_hydraPath` / `llm_hydraUrl` / `llm_hydraSecret` | `./data/f_hydra` / `http://127.0.0.1:18081/rpc` / empty | f_hydra local path, remote URL, shared secret |
+| `hydra_filterFields` | `kind,save_day,tags` | Server-side inverted-index allowlist (rebuilt on restart when changed) |
+| `fllm_runEval` | unset | `1` enables the real-model evaluation |
+| `fllm_evalModel` / `fllm_evalMinScore` / `fllm_evalDir` | `bge-m3` / `0.2` / `./eval` | Evaluation parameters |
+
+## Documentation index
+
+| File | Content |
+|---|---|
+| `doc/f_llm.md` | Full design (the long form of this README) |
+| `doc/f_llm-memory-design.md` | Memory, knowledge, skill and persona design with prompts |
+| `doc/loom.md` | loom orchestration, store gateway, persona, skill evolution, report table |
+| `doc/retrieval-eval.md` | Retrieval evaluation: data format, metrics, real baselines, thresholds |
+| `doc/content-store.md` | Content-store contract |
+| `doc/known-limitations.md` | Known limitations (read-only config, concurrency, cost) |
+| `doc/dev-env.md` | Development environment and dependencies |
+| `doc/todo.md` | Open items |

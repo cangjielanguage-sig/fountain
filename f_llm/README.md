@@ -1478,6 +1478,7 @@ f_llm 的持久化分两族，各自三选一，可交叉组合：
 |---|---|---|---|
 | 内容族 | 记忆、经验、知识、文档 | `f_hydra`（默认）/ `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
 | 元数据族 | 人格、技能、提示词、模型配置 | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
+| 演进族 | 演进报告、演进状态、已消费知识、每日租约 | 报告/状态跟随 `llm_metaStore`；租约跟随 `llm_memoryStore` | 见下文「存储：演进报告 / 状态 / 租约」 |
 
 - 未知配置值**启动失败**并打印可选列表，不静默回退；
 - 元数据走 `f_store` 时无需任何数据库，数据落在 `llm_metaStorePath`；
@@ -1625,7 +1626,9 @@ Config.set<String>([
 
 ## 配置项
 
-所有配置项都是环境变量
+所有配置项都是环境变量。本节列出的是早期链路的键；存储与评测相关的新键
+（`llm_memoryStore` / `llm_metaStore` / `llm_embeddingUrl` / `hydra_filterFields` / `fllm_*` 等）
+见文末「环境变量一览（新增部分）」。
 ```cj
 public static const LLM = 'llm'
 /**
@@ -1755,3 +1758,201 @@ conf.auth = '<key>'
 ```
 
 模型名归一：`ModelNames.normalize('deepseek/deepseek-flash') == MODEL_NAME_DEEPSEEK_FLASH`（也认 `deepseek-ai/DeepSeek-V3`、`zhipu/glm-5` 等聚合平台写法）。**归一只用于能力判断与日志，报文里的 `model` 永远是 `actualLlmName` 原文**——改掉前缀会 404。
+
+---
+
+## loom：文本 → 流程编排
+
+把一句自然语言变成可执行的流程（`fountain::f_llm.loom`，详见 `doc/loom.md`）：
+
+```
+自然语言描述
+→ Planner（LLM 产出 JSON 计划，或返回澄清问题）
+→ CodeGen（计划 → 步骤源码 + 流程源码，不编译）
+→ LoomRegistry / LoomStore（存源码与状态）
+→ LoomCompiler（编译步骤闭包）
+→ LoomRunner（拓扑序执行，结果事件）
+```
+
+状态机：`clarifying → pending → compiled`，编译失败标 `failed`（单条失败不影响其它流程）。
+
+### 工具（注册给模型）
+
+| 工具 | 关键参数 | 行为 |
+|---|---|---|
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, execute?, parallel?` | `confirm=false` 只返回计划；`confirm=true` 编译标 compiled；`execute=true` 顺带跑一次 |
+| `loomDelete` | `name` | 从注册表与库中移除 |
+| `memoryCall` | `op`(search/add/remove) + `payload` | 读写记忆，与 `loomStore("memory", …)` 同一网关 |
+| `knowledgeIngest` | `docId, title, content` | 写入知识库 |
+| `listTools` / `searchTools` | `offset, limit` / `query, topK` | 列工具、按关键词检索工具 |
+| `skillImport` | `path` | 导入技能包目录，同名 title 幂等 |
+| `scheduleCreate` / `scheduleDelete` | `name, cron, payload?` / `name` | 注册/取消定时任务 |
+
+### 流程内可用的 JIT 入口
+
+```cj
+loomCallTool(name, argsJson)          // 调已注册的 tool / MCP
+loomCallLlm(model, system, input)     // 调大模型
+loomStore(kind, op, payload)          // 读写六类存储
+```
+
+| kind | op | 说明 |
+|---|---|---|
+| `memory` | `add` / `get` / `list` / `search` / `remove` | `list` 支持 `kind` 过滤（先过滤再分页） |
+| `experience` | 同 `memory` | 入口别名，强制 `kind=experience` |
+| `knowledge` | `get` / `docIds` / `search` / `upsert` / `remove` | |
+| `skill` | `load` / `get` / `list` / `upsert` / `count` / `remove` | `load` 按标题取正文 |
+| `prompt` | `latest` / `get` / `put` / `remove` | |
+| `character` | `get` / `set` / `reset` | `characterKey` 必须是预定义值（或 `custom`） |
+| `evolution` | `list` / `by_skill` | **只读**：报告由后台演进任务写，模型不该改审计记录 |
+
+### 人格与角色
+
+`FlowPlan.persona` 与 `character` 最终都汇成 system 前缀，解析是**三级回落**：
+
+```
+1. prompt 库：prompt.latest(name) 命中 → 用它的 content
+2. 内置角色正文：PredefinedCharacters.bodyOf(name)（13 个预定义人格，正文固化在代码）
+3. 字面文本：以上都没有 → 把入参本身当正文
+```
+
+`custom` 是特例：正文只来自 `character.prompts`，不会把 `custom` 这个词当人格。
+`character.prompts` 作为**用户级附加要求**（语言、篇幅等）追加在人格正文之后。
+角色记录按 `LoomMemoryPolicy.userId` 取（`userId<=0` 时跳过，不查库）。
+
+### 技能注入
+
+| 方式 | 用法 | 说明 |
+|---|---|---|
+| 显式 | `LoomRunner.run(..., skills: ['日报助手'])` | 按标题加载，顺序固定 |
+| 自动 | 不传 `skills` 且 `autoSkills=true`（默认） | 用「计划备注 + 起始输入」检索，取 `skillTopK`（默认 3）条 |
+
+`SkillCatalog` 两种模式：装了编码器走向量余弦（向量按 `标题#版本` 缓存），否则/失败退关键词
+（词面包含、字符命中比例、标题覆盖比例）。**编码失败会静默降级**，排障读
+`SkillCatalog.embedFailureDetail()`——返回 `(query 侧失败数, 技能侧失败数)`。
+
+### 流程结束的提炼
+
+`LoomRunner` 在 `finally` 里（成功失败都走）：
+
+| 产出 | kind | 条件 |
+|---|---|---|
+| 上下文摘要 | `note` | `policy.enabled`（默认 true）且本次至少调过一次模型 |
+| 执行经验 | `experience`（失败为 `experience_failed`） | 同上 |
+| 知识文档 | `loom:<流程>:<序号>` | 额外开 `writeKnowledge` |
+
+`summarize=true` 时改由模型返回 `{"memory":"…","experience":"…"}`，JSON 非法回落规则提炼。
+
+> 这套提炼属于 **loom 链路**，与上文「提取记忆」章节（`Memory` + 摘要模型那条老链路）是两套独立机制：
+> 老链路面向智能体对话，loom 链路面向流程执行，两者写的是同一份记忆存储。
+
+## 经验 → 技能演进
+
+演进统一由 `SkillEvolutionJob` 执行（流程结束只写经验，不改技能）：
+
+```
+到点触发 → 读水位线后的新增素材（经验 + 知识）
+  → SkillMatcher：归到已有技能 / 聚成新技能候选
+  → 先演进已有技能：Policy 判定 → 模型改正文 → SkillGate A/B → 版本 +1
+  → 再提炼新技能：簇够大 → SkillNamer 起名（必须带样例）→ version=1
+  → SkillEvolutionLedger 落报告 → 推进水位线
+```
+
+| 组件 | 默认策略 |
+|---|---|
+| `SkillEvolutionPolicy` | 样本 ≥ 3、成功率 ≥ 0.8、冷却 1 天；**上次门禁失败则 2 天** |
+| `SkillGate` | 用技能自带 `samples` 跑旧版/新版，`新版 ≥ 旧版` 且达 `minScore` 才落库；无样例直接拒绝 |
+| `SkillNamer` | 名字 ≤ 24 字，**必须至少 1 条样例**，否则不建（没样例的新技能无法自我演进） |
+| 知识去重 | `processedAmong(docIds)` 成员判定，避免同一批知识每轮重复聚类 |
+
+启动注册（不写 cron 就不启用）：
+
+```cj
+LoomWiring.wire(chat, plannerModel: 'chat-pro',
+                evolutionCron: '0 0 3 * * * *',       // 空串 = 不启用
+                evolutionUserId: 7,
+                evolutionNamespace: 'work',
+                evolutionNameCandidates: true,
+                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))
+```
+
+### 多进程互斥：每日租约
+
+任务一天只跑一次，用「时间型 UUID + 日期级乐观锁」保证只有一个进程执行（`f_util.UUID.unixTimeBased`）：
+
+| 向量存储（`llm_memoryStore`） | 租约存哪 | 互斥 |
+|---|---|---|
+| `mysql` / `postgres` | 单行表 `llm_evolution_lease` | `UPDATE ... WHERE lease_value = 旧值`，真正 CAS |
+| `f_hydra` | 本地全 0 向量记录的 payload | 本地存储，单进程无需跨进程 |
+| `fhydra` | 远程全 0 向量记录 | 先写后读校验 |
+| 其它 | f_store / 内存 | 单进程 |
+
+全 0 向量的原因：租约不该被任何语义检索命中（与任何查询的余弦都是 0）。
+
+## 存储：演进报告 / 状态 / 租约
+
+存储从「两族」扩到「两族 + 三张表」，都跟随 `llm_metaStore`（租约跟随 `llm_memoryStore`）：
+
+| 用途 | 接口 | 实现 | 落点 |
+|---|---|---|---|
+| 演进报告 | `EvolutionStore` | `FStoreEvolutionStore` / `InMemoryEvolutionStore` / `PostgresEvolutionStore` / `MySqlEvolutionStore` | f_store 三键 或表 `llm_skill_evolution` |
+| 演进状态（水位线 + 每技能冷却） | `EvolutionStateStore` | 同上四实现 | f_store 键 或表 `llm_skill_evolution_state`（水位线用保留行 `__run__`） |
+| 已消费知识 | 同上 | 同上 | 表 `llm_skill_evolution_knowledge` |
+| 每日租约 | `EvolutionLease` | PG / MySQL / f_hydra / f_store / 内存 | 表 `llm_evolution_lease` 或向量记录 |
+
+`f_store` 没有二级索引，用「条件键 → 数据键」自建：
+
+```
+f_llm:evolution:data:{id}                             → 记录本体
+f_llm:evolution:idx:{标题长度}:{标题}:{补零at}:{补零id}   → 数据键（bySkill）
+f_llm:evolution:time:{补零at}:{补零id}                 → 数据键（list）
+```
+
+`LoomWiring.wire` 启动时调 `EvolutionStores.bootstrap()` + `EvolutionStateStores.bootstrap()` +
+`EvolutionLeases.bootstrap()`：SQL 部署建表建索引（PG 另有 `idx_evo_skill (skill_title, at_time DESC)`），
+失败不阻断启动。
+
+## 检索评测
+
+单测只能验证排序逻辑，语义质量要用真实模型测（`doc/retrieval-eval.md`）：
+
+| 位置 | 内容 |
+|---|---|
+| `eval/retrieval_corpus.tsv` | 50 条语料（10 主题 × 5） |
+| `eval/retrieval_queries.tsv` | 612 条正样本（300 模板化 + 300 难样本 + 12 多相关）+ 10 条负样本 |
+| `eval/run_eval.sh` | 一键跑真实 embedding 并输出报告 |
+
+```bash
+eval/run_eval.sh                          # 默认 bge-m3 + 127.0.0.1:8000
+fllm_evalMinScore=0.5 eval/run_eval.sh    # 调阈值
+```
+
+指标：`recall@1` / `recall@5` / `MRR` / `nDCG@5`（位置敏感、多相关按理想排序归一）+ 负样本通过率。
+实测（bge-m3，`minScore=0.5`）：模板化 ~100%、**难样本 recall@1 39.66%、nDCG@5 54.76%**、
+负样本 90%；同一 `hard` 集合上字符重合只有 22%。
+
+## 环境变量一览（新增部分）
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `llm_memoryStore` | `f_hydra` | 内容族 + 租约选型（`f_hydra`/`fhydra`/`postgres`/`mysql`/`inMemory`） |
+| `llm_metaStore` | `f_store` | 元数据族 + 演进报告/状态选型 |
+| `llm_metaStorePath` | `./data/f_llm-meta` | f_store 路径 |
+| `llm_embeddingUrl` | `http://127.0.0.1:8000/v1/embeddings` | BGE-M3 端点（`DefaultEmbedder` 用） |
+| `llm_hydraPath` / `llm_hydraUrl` / `llm_hydraSecret` | `./data/f_hydra` / `http://127.0.0.1:18081/rpc` / 空 | f_hydra 本地路径、远程地址、共享密钥 |
+| `hydra_filterFields` | `kind,save_day,tags` | fhydra 服务端倒排白名单（改后重启自动重建） |
+| `fllm_runEval` | 未设 | `1` 时才跑真实模型评测 |
+| `fllm_evalModel` / `fllm_evalMinScore` / `fllm_evalDir` | `bge-m3` / `0.2` / `./eval` | 评测参数 |
+
+## 文档索引
+
+| 文件 | 内容 |
+|---|---|
+| `doc/f_llm.md` | 完整设计（这份 README 的详版） |
+| `doc/f_llm-memory-design.md` | 记忆/知识/技能/人格的设计与提示词 |
+| `doc/loom.md` | loom 编排、存储网关、人格、技能演进、报告表 |
+| `doc/retrieval-eval.md` | 检索评测：数据格式、指标、真实基线、门槛建议 |
+| `doc/content-store.md` | 内容族存储契约 |
+| `doc/known-limitations.md` | 已知限制（配置只读、并发、成本等） |
+| `doc/dev-env.md` | 开发环境与依赖 |
+| `doc/todo.md` | 待办与未实现项 |
