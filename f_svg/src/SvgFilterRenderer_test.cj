@@ -252,3 +252,45 @@ public class SvgFilterRegionOrderM3_test {
         @Assert(error.kind == SvgErrorKind.Limit)
     }
 }
+
+@Test
+public class SvgFilterAttributeM3_test {
+    /** 空 filter 属性跳过并记 warning。 */
+    @TestCase
+    public func emptyFilterWarns(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let bitmap = renderer.render(
+            SvgParser.parse(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\">" +
+                "<rect width=\"10\" height=\"10\" fill=\"red\" filter=\"\"/></svg>"
+            )
+        )
+        @Assert(colorNear(bitmap.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
+        var found = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("filter")) {
+                found = true
+            }
+        }
+        @Assert(found)
+    }
+
+    /** 非 url() 的 filter 值同样跳过并记 warning。 */
+    @TestCase
+    public func nonUrlFilterWarns(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(
+            SvgParser.parse(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\">" +
+                "<rect width=\"10\" height=\"10\" fill=\"red\" filter=\"blur\"/></svg>"
+            )
+        )
+        var found = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("filter")) {
+                found = true
+            }
+        }
+        @Assert(found)
+    }
+}
