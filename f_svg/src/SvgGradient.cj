@@ -285,7 +285,7 @@ public class SvgGradientSampler {
         let dy = y2 - y1
         let denominator = dx * dx + dy * dy
         if (denominator < 1e-12) {
-            return 0.0
+            return 1.0
         }
         ((point.x - x1) * dx + (point.y - y1) * dy) / denominator
     }
