@@ -15,4 +15,27 @@ limitations under the License.
 */
 package fountain::f_svg
 
+/** 抗锯齿档位。 */
+public enum SvgAntiAliasMode <: Equatable<SvgAntiAliasMode> & ToString {
+    /** 每像素超采样，覆盖率由命中数平均（默认）。 */
+    | Supersample
+    /** 解析覆盖率，`samplesPerPixel` 不参与计算。 */
+    | Analytic
+
+    public operator func ==(that: SvgAntiAliasMode): Bool {
+        match ((this, that)) {
+            case (Supersample, Supersample) => true
+            case (Analytic, Analytic) => true
+            case _ => false
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Supersample => "Supersample"
+            case Analytic => "Analytic"
+        }
+    }
+}
+
 // TODO(M3-9): 解析覆盖率光栅化。

@@ -497,6 +497,11 @@ public class SvgStyleResolver <: ToString {
                     return Some(lower)
                 }
                 return None
+            case "image-rendering" =>
+                match (SvgImageRendering.fromName(lower)) {
+                    case Some(rendering) => return Some(rendering.toString())
+                    case None => return None
+                }
             case _ => return None
         }
     }

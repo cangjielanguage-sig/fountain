@@ -15,4 +15,51 @@ limitations under the License.
 */
 package fountain::f_svg
 
-// TODO(M3-5): image 资源提供者与 data URI 解析。
+/** `<image>` 的采样质量。 */
+public enum SvgImageRendering <: Equatable<SvgImageRendering> & ToString {
+    | Auto
+    | OptimizeQuality
+    | Pixelated
+    | OptimizeSpeed
+
+    public operator func ==(that: SvgImageRendering): Bool {
+        match ((this, that)) {
+            case (Auto, Auto) => true
+            case (OptimizeQuality, OptimizeQuality) => true
+            case (Pixelated, Pixelated) => true
+            case (OptimizeSpeed, OptimizeSpeed) => true
+            case _ => false
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Auto => "auto"
+            case OptimizeQuality => "optimizeQuality"
+            case Pixelated => "pixelated"
+            case OptimizeSpeed => "optimizeSpeed"
+        }
+    }
+
+    internal static func fromName(name: String): ?SvgImageRendering {
+        match (name.trimAscii().toAsciiLower()) {
+            case "auto" => Some(Auto)
+            case "optimizequality" => Some(OptimizeQuality)
+            case "pixelated" => Some(Pixelated)
+            case "optimizespeed" => Some(OptimizeSpeed)
+            case _ => None
+        }
+    }
+}
+
+/**
+ * `<image>` 外部资源提供者。
+ *
+ * 由调用方实现并承担安全责任；`f_svg` 不会自行联网或读取文件系统。
+ * 返回 `None` 表示不提供该资源。
+ */
+public interface SvgImageResourceProvider {
+    func resolve(href: String): ?Array<Byte>
+}
+
+// TODO(M3-5): data URI 解析与单次渲染缓存。

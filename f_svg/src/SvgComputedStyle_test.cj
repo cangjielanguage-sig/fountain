@@ -379,3 +379,40 @@ public class SvgComputedStyle_test {
         println("CSS 1000 类选择器 x 1000 元素（匹配 + 计算样式）耗时: ${elapsed.toNanoseconds() / 1000000} ms")
     }
 }
+
+@Test
+public class SvgComputedStyleM3_test {
+    /** image-rendering 初始值、继承、内联覆盖与非法值回退。 */
+    @TestCase
+    public func imageRendering(): Unit {
+        let rect = SvgRect()
+        let initial = styleOf(computeTree(rect), rect)
+        @Assert(initial.get("image-rendering") == Some("auto"))
+        @Assert(initial.imageRendering() == SvgImageRendering.Auto)
+
+        let root = SvgRoot()
+        let group = SvgContainer(SvgContainerKind.Group)
+        let child = SvgRect()
+        root.appendElement(group)
+        group.appendElement(child)
+        group.setAttr("image-rendering", "pixelated")
+        let inherited = styleOf(computeTree(root), child)
+        @Assert(inherited.get("image-rendering") == Some("pixelated"))
+        @Assert(inherited.imageRendering() == SvgImageRendering.Pixelated)
+
+        let overridden = SvgRect()
+        overridden.setAttr("image-rendering", "auto")
+        overridden.style = "image-rendering: pixelated"
+        let inlineStyle = styleOf(computeTree(overridden), overridden)
+        @Assert(inlineStyle.get("image-rendering") == Some("pixelated"))
+
+        let invalid = SvgRect()
+        invalid.setAttr("image-rendering", "nearest")
+        let resolver = SvgStyleResolver()
+        let noParent: ?SvgComputedStyle = None
+        let computed = resolver.computeElement(invalid, noParent)
+        @Assert(computed.get("image-rendering") == Some("auto"))
+        @Assert(resolver.warnings.size >= 1)
+        @Assert(resolver.warnings[0].contains("image-rendering"))
+    }
+}

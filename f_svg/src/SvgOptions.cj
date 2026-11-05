@@ -53,6 +53,8 @@ public struct SvgSecurityOptions {
     public let allowDataImages: Bool
     public let maxElements: Int64
     public let maxDepth: Int64
+    /** gzip 解压输出上限（字节），默认 64 MiB。 */
+    public let maxDecompressedBytes: Int64
 
     public init(
         unsafePolicy!: SvgUnsafePolicy = SvgUnsafePolicy.Remove,
@@ -61,8 +63,12 @@ public struct SvgSecurityOptions {
         allowExternalReferences!: Bool = false,
         allowDataImages!: Bool = true,
         maxElements!: Int64 = 1_000_000,
-        maxDepth!: Int64 = 512
+        maxDepth!: Int64 = 512,
+        maxDecompressedBytes!: Int64 = 64 * 1024 * 1024
     ) {
+        if (maxDecompressedBytes <= 0) {
+            throw invalidValue("maxDecompressedBytes 必须为正，实际 ${maxDecompressedBytes}")
+        }
         this.unsafePolicy = unsafePolicy
         this.allowScript = allowScript
         this.allowEventAttributes = allowEventAttributes
@@ -70,6 +76,7 @@ public struct SvgSecurityOptions {
         this.allowDataImages = allowDataImages
         this.maxElements = maxElements
         this.maxDepth = maxDepth
+        this.maxDecompressedBytes = maxDecompressedBytes
     }
 }
 

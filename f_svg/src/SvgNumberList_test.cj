@@ -99,4 +99,19 @@ public class SvgNumberList_test {
         let list = SvgNumberList.parse("1.5 -2 3e2")
         @Assert(SvgNumberList.parse(list.toString()) == list)
     }
+
+    /** stdDeviation 等场景：单值 / 双值 / 负值 / 非有限值。 */
+    @TestCase
+    public func m3DeviationShapes(): Unit {
+        @Assert(SvgNumberList.parse("2").values == [2.0])
+        @Assert(SvgNumberList.parse("2 3").values == [2.0, 3.0])
+        @Assert(SvgNumberList.parse("2,3").values == [2.0, 3.0])
+        @Assert(SvgNumberList.parse("-1").values == [-1.0])
+        @Assert(SvgNumberList.parse("-1.5 -2.5").values == [-1.5, -2.5])
+
+        let overflow = expectSvgException({=> SvgNumberList.parse("1e999")})
+        @Assert(overflow.kind == SvgErrorKind.InvalidValue)
+        let negativeOverflow = expectSvgException({=> SvgNumberList.parse("-1e999")})
+        @Assert(negativeOverflow.kind == SvgErrorKind.InvalidValue)
+    }
 }

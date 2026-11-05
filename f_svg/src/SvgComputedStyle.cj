@@ -99,7 +99,8 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("mask", false, "none"),
     SvgPropertySpec("clip-rule", true, "nonzero"),
     SvgPropertySpec("stop-color", false, "black"),
-    SvgPropertySpec("stop-opacity", false, "1")
+    SvgPropertySpec("stop-opacity", false, "1"),
+    SvgPropertySpec("image-rendering", true, "auto")
 ]
 
 internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {
@@ -251,6 +252,11 @@ public class SvgComputedStyle <: ToString {
 
     public func stopOpacity(): Float64 {
         tryParseSvgFloat(this.get("stop-opacity") ?? "1") ?? 1.0
+    }
+
+    /** `<image>` 的取样质量；未设置时按 `auto`。 */
+    public func imageRendering(): SvgImageRendering {
+        SvgImageRendering.fromName(this.get("image-rendering") ?? "auto") ?? SvgImageRendering.Auto
     }
 
     public func toString(): String {

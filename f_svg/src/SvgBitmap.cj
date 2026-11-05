@@ -199,6 +199,10 @@ public struct SvgRenderOptions {
     public let maxPixels: Int64
     public let fonts: ?SvgFontRegistry
     public let devicePixelRatio: Float64
+    /** `<image>` 外部资源提供者；`None` 时非 data URI 一律画占位。 */
+    public let images: ?SvgImageResourceProvider
+    /** 抗锯齿档位；默认超采样，保持 M2 输出。 */
+    public let antiAlias: SvgAntiAliasMode
 
     public init(
         width!: Int64 = 0,
@@ -207,7 +211,9 @@ public struct SvgRenderOptions {
         samplesPerPixel!: Int64 = 4,
         maxPixels!: Int64 = 64 * 1024 * 1024,
         fonts!: ?SvgFontRegistry = None,
-        devicePixelRatio!: Float64 = 1.0
+        devicePixelRatio!: Float64 = 1.0,
+        images!: ?SvgImageResourceProvider = None,
+        antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample
     ) {
         if (width < 0 || height < 0) {
             throw invalidValue("渲染宽高不能为负，实际 ${width}×${height}")
@@ -228,6 +234,8 @@ public struct SvgRenderOptions {
         this.maxPixels = maxPixels
         this.fonts = fonts
         this.devicePixelRatio = devicePixelRatio
+        this.images = images
+        this.antiAlias = antiAlias
     }
 
     /** 校验输出像素总数；超限抛 `Limit`。 */
