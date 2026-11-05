@@ -48,7 +48,10 @@
 可用能力（运行期按需调用，禁止虚构不存在的工具名）：
 - loomCallTool(name, argsJson)：调用已注册的 tool_call 或 MCP 工具
 - loomCallLlm(model, system, input)：调用大模型
-- loomStore(kind, op, payload)：kind = memory | knowledge | skill；op = search | add | upsert | remove | docIds | count
+- loomStore(kind, op, payload)：
+  kind = memory | knowledge | skill | experience | prompt | character | evolution
+  op   = search | get | list | load | add | upsert | remove | docIds | count | latest | put | set | reset | by_skill
+- 计划的 persona 可写提示词名（取 prompt.latest 正文）或字面文本，执行时会拼在每次模型调用的 system 前
 已注册工具：[memoryCall, listTools, …]
 步骤需要事实时，优先排一个调用上述能力的步骤去查，不要先问用户。
 ```
@@ -66,13 +69,23 @@
 
 ```cangjie
 // 方式一：到点执行一整条流程（payload 写进 StartEvent.data）
-ScheduleCreateFunction().call(createParam(
-    '{"name":"daily","cron":"0 0 9 * * * *","payload":"{\\"range\\":\\"today\\"}"}'))
+// 工具通道（流程内或模型调用）
+loomCallTool("scheduleCreate",
+    '{"name":"daily","cron":"0 0 9 * * * *","payload":"{\\"range\\":\\"today\\"}"}')
+
+// 直接调 API：call 接收参数对象，不是 JSON 字符串
+let param = ScheduleCreateParam()
+param.name = 'daily'
+param.cron = '0 0 9 * * * *'
+param.payload = '{"range":"today"}'
+let _ = ScheduleCreateFunction().call(param)
 // 到点 → LoomService.executeNow(name, host, StartEvent(..., data: payload))
 
 // 方式二：只跑某一步（JIT 闭包包成 () -> Unit）
 JitTicktockTask.create('sync-job', '0 0 9 * * * *', step, scheduler, payload: 'hello')
 ```
+
+`ScheduleCreateParam` / `ScheduleDeleteParam` 的字段由 `@DataAssist[props fields]` 生成读写属性；`call` 返回 `FunctionResult`。
 
 | 约定 | 原因 |
 |---|---|
@@ -123,7 +136,7 @@ LoomRunner.runCompiled
        ├─ snapshot()         取快照
        ├─ clear()            关闭记录（提炼阶段的模型请求不会被记进来）
        ├─ unbind()
-       └─ LoomMemoryExtractor.extract(plan.name, turns, host, policy)
+       └─ LoomMemoryExtractor.extract(plan.name, turns, host, policy, outcome: 'success' | 'failed')
 ```
 
 提炼结果写两条记忆，都走 `memory.add`：
@@ -213,12 +226,16 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 也可以手工注册：
 
 ```cangjie
+// chat 是 (system, user) -> String；host.callLlm 是 (model, system, input) 三参，需要适配
+let evolveChat = { system: String, user: String => host.callLlm(model, system, user) }
 SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler(),
     { => Stores.meta().skills.list() },
     { => SkillEvolutionJob.load(LoomStoreGateway(), 7, 'work') },
-    host.callLlm, EvolutionStateStores.current(),
+    evolveChat, EvolutionStateStores.current(),
     nameCandidates: true, ledger: EvolutionStores.current(),
-    embedder: SkillCatalog.embeddingEncoder('bge-m3'))
+    lease: EvolutionLeases.current(),
+    embedder: SkillCatalog.embeddingEncoder('bge-m3'),
+    clock: { => DateTime.now().toUnixTimeStamp().toSeconds() })
 ```
 
 状态存储跟随 `llm_metaStore`：`f_store`（默认）/ `memory` / `postgres` / `mysql`（表 `llm_skill_evolution_state`，水位线用保留行 `__run__`）。
@@ -317,8 +334,15 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 | 模式 | 条件 | 打分 |
 |---|---|---|
-| 向量 | `LoomWiring.wire(skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))` 传入编码器 | 余弦相似度，向量按 `标题#版本` 缓存 |
+| 向量 | 传入编码器：`skillEmbedder: Some({ text => DefaultEmbedder().embed(text) })` | 余弦相似度，向量按 `标题#版本` 缓存 |
 | 关键词 | 没传编码器，或编码失败 | 词面包含 / 字符命中比例 / 标题被任务描述覆盖的比例 |
+
+编码器的两种来源，选错了会「装了编码器却在跑关键词」：
+
+| 来源 | 依赖 | 适用 |
+|---|---|---|
+| `SkillCatalog.embeddingEncoder('bge-m3')` | `LLMConfs` 里有同名平台配置，没有就抛异常 → 静默降级 | 已配置模型平台 |
+| `{ text => DefaultEmbedder().embed(text) }` | 只读 `llm_embeddingUrl` | 本机/自建 BGE-M3 |
 
 编码失败会**整体退回关键词**，不会因为一次 embedding 服务抖动就让技能不可用。
 
@@ -413,6 +437,7 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | kind | op | payload | 返回 |
 |---|---|---|---|
 | `knowledge` | `docIds` | `{"offset":0,"limit":50}` | JSON 字符串数组 |
+| `knowledge` | `get` | `{"docId":"d1"}` | 文档 JSON，未命中 `''` |
 | `knowledge` | `upsert` | `{"docId":"d1","title":"t","content":"…"}` | `ok` |
 | `knowledge` | `remove` | `{"docId":"d1"}` | `true/false` |
 | `knowledge` | `search` | `{"text":"cangjie","limit":5}` | `[{docId,seq,score,content}]` |
@@ -439,7 +464,7 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 | 配置值 | 实现 | 存储 |
 |---|---|---|
-| `f_store`（默认） | `FStoreEvolutionStore` | 键 `f_llm:evolution:index:{id}` / `data:{id}` |
+| `f_store`（默认） | `FStoreEvolutionStore` | 键 `f_llm:evolution:data:{id}` + 两个索引（`idx:` 按技能、`time:` 按时间） |
 | `memory` | `InMemoryEvolutionStore` | 进程内 |
 | `postgres` | `PostgresEvolutionStore` | 表 `llm_skill_evolution`（首次写入自动建表） |
 | `mysql` | `MySqlEvolutionStore` | 表 `llm_skill_evolution`（首次写入自动建表） |
@@ -516,7 +541,7 @@ f_llm:loom:data:{name}:s     → stepSources（同上编码）
 
 | 项 | 说明 |
 |---|---|
-| 并行执行 | 目前用 `ImmediateFlow` 同步派发（分叉按顺序 emit，不并行）；要真并行需换 `AsyncFlow` |
+| 并行默认关闭 | 不传 `parallel` 时用 `ImmediateFlow` 顺序 emit；`parallel=true` 才换 `AsyncFlow` |
 | 汇聚数据 | 汇合步骤只拿最后到达的那条数据，不做多路合并 |
 | 汇聚计数 | `JoinBarrier` 计数在单次执行内有效；执行结束不复位（流程不重入） |
 | `confirm` 后自动执行 | 需要显式调用 `LoomService.executeNow`，`loomExecute` 不自动执行 |

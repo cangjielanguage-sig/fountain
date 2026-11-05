@@ -327,9 +327,12 @@ let _ = LoomRunner().run(plan, host,
 
 | kind | Purpose | Key fields |
 |---|---|---|
-| `tool` | call a registered tool / MCP | `tool`, `args` |
+| `tool` | call a registered tool | `tool`, `args` |
+| `mcp` | call an MCP tool | `tool`, `args` |
 | `llm` | call the model | `model`, `system`, `input` |
 | `jit` | arbitrary Cangjie snippet, may call `loomStore` | `input` is source; must produce `let <id>_result = …` |
+
+`http` is a reserved kind; `plan.validate()` rejects it explicitly rather than silently treating it as `llm`.
 
 | Rule | Notes |
 |---|---|

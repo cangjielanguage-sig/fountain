@@ -333,9 +333,12 @@ let _ = LoomRunner().run(plan, host,
 
 | kind | 用途 | 关键字段 |
 |---|---|---|
-| `tool` | 调已注册工具 / MCP | `tool`、`args` |
+| `tool` | 调已注册工具 | `tool`、`args` |
+| `mcp` | 调 MCP 工具 | `tool`、`args` |
 | `llm` | 调模型 | `model`、`system`、`input` |
 | `jit` | 任意 Cangjie 片段，可调 `loomStore` | `input` 是源码，需产出 `let <id>_result = …` |
+
+`http` 是保留 kind，`plan.validate()` 会明确拒绝（不会被当成 `llm` 静默执行）。
 
 | 规则 | 说明 |
 |---|---|
