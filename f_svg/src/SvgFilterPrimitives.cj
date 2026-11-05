@@ -412,27 +412,21 @@ private func colorMatrixFor(
     }
 }
 
-/** `feTile`：把输入的非透明内容当作 tile 周期平铺到滤镜区域。 */
+/** `feTile`：以完整输入缓冲为一个 tile 周期平铺到滤镜区域（含透明区域）。 */
 internal func tileFilterBuffer(
     input: SvgFilterBuffer,
     width: Int64,
     height: Int64
 ): SvgFilterBuffer {
     let output = SvgFilterBuffer(width, height)
-    let content = tileContentBounds(input)
-    if (content.size == 0) {
-        return output
-    }
-    let originX = content[0]
-    let originY = content[1]
-    let tileWidth = content[2]
-    let tileHeight = content[3]
+    let tileWidth = input.width
+    let tileHeight = input.height
     var y = 0
     while (y < height) {
         var x = 0
         while (x < width) {
-            let sourceX = originX + positiveMod(x - originX, tileWidth)
-            let sourceY = originY + positiveMod(y - originY, tileHeight)
+            let sourceX = positiveMod(x, tileWidth)
+            let sourceY = positiveMod(y, tileHeight)
             let sourceBase = (sourceY * input.width + sourceX) * 4
             let targetBase = (y * width + x) * 4
             output.pixels[targetBase] = input.pixels[sourceBase]

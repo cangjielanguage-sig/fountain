@@ -21,7 +21,7 @@ import std.unittest.testmacro.*
 
 @Test
 public class SvgFilterTileChainM3_test {
-    /** feTile 在真实滤镜链中按输入内容尺寸平铺到滤镜区域。 */
+    /** feTile 在真实滤镜链中把完整输入缓冲平铺到滤镜区域。 */
     @TestCase
     public func tileRepeatsAcrossRegion(): Unit {
         let document = SvgParser.parse(
@@ -30,8 +30,8 @@ public class SvgFilterTileChainM3_test {
         )
         let filter = filterOf(document)
         let source = SvgBitmap(6, 6)
-        for (y in 0..2) {
-            for (x in 0..2) {
+        for (y in 0..6) {
+            for (x in 0..6) {
                 source.setPixel(x, y, SvgColor.fromRgb(255, 0, 0))
             }
         }
@@ -47,6 +47,24 @@ public class SvgFilterTileChainM3_test {
                 @Assert(colorNear(output.pixel(x, y), SvgColor.fromRgb(255, 0, 0)))
             }
         }
+    }
+
+    /** 输入缓冲含透明 padding 时，tile 周期仍为完整缓冲尺寸。 */
+    @TestCase
+    public func fullBufferIsTilePeriod(): Unit {
+        let input = SvgFilterBuffer(4, 4)
+        for (y in 0..2) {
+            for (x in 0..2) {
+                let base = (y * input.width + x) * 4
+                input.pixels[base] = 255
+                input.pixels[base + 3] = 255
+            }
+        }
+        let output = tileFilterBuffer(input, 9, 9)
+        @Assert(output.pixels[(0 * 9 + 0) * 4 + 3] > 0)
+        @Assert(output.pixels[(2 * 9 + 2) * 4 + 3] == 0)
+        @Assert(output.pixels[(4 * 9 + 4) * 4 + 3] > 0)
+        @Assert(output.pixels[(6 * 9 + 6) * 4 + 3] == 0)
     }
 
     /** 输入全透明时 feTile 输出透明并记 warning。 */
