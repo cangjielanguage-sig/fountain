@@ -525,12 +525,15 @@ private func arcBounds(
     let endAngle = theta1 + delta
     let low = if (theta1 < endAngle) { theta1 } else { endAngle }
     let high = if (theta1 < endAngle) { endAngle } else { theta1 }
-    for (quadrant in 0..4) {
-        var angle = Float64(quadrant) * SVG_GEOM_PI / 2.0
-        while (angle < low) {
-            angle += 2.0 * SVG_GEOM_PI
-        }
-        if (angle <= high) {
+    // 参数角处的 x / y 导数为零；对旋转椭圆也适用。
+    let xExtremumAngle = atan2(-adjustedRy * sinPhi, adjustedRx * cosPhi)
+    let yExtremumAngle = atan2(adjustedRy * cosPhi, adjustedRx * sinPhi)
+    for (base in [xExtremumAngle, yExtremumAngle]) {
+        for (offset in -4..=4) {
+            let angle = base + Float64(offset) * SVG_GEOM_PI
+            if (angle < low || angle > high) {
+                continue
+            }
             let cosAngle = cos(angle)
             let sinAngle = sin(angle)
             let px = cx + adjustedRx * cosPhi * cosAngle - adjustedRy * sinPhi * sinAngle

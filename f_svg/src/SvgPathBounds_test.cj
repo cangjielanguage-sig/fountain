@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_svg
 
+import std.math.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -130,6 +131,14 @@ public class SvgPathBounds_test {
         let flat = pathBounds("M0 0 A20 10 0 0 1 40 0") ?? SvgBounds.empty()
         @Assert(near(flat.x, 0.0) && near(flat.y, -10.0))
         @Assert(near(flat.width, 40.0) && near(flat.height, 10.0))
+
+        let minorPath = SvgPathData.parse("M0 0 A20 20 0 0 1 20 0")
+        let majorPath = SvgPathData.parse("M0 0 A20 20 0 1 1 20 0")
+        let minor = pathDataBounds(minorPath) ?? SvgBounds.empty()
+        let major = pathDataBounds(majorPath) ?? SvgBounds.empty()
+        @Assert(!boundsNear(minor, major))
+        @Assert(arcBoundsMatchFlattened(minorPath, minor))
+        @Assert(arcBoundsMatchFlattened(majorPath, major))
     }
 
     /** 零长段、重复点与非有限参数。 */
@@ -227,6 +236,28 @@ public class SvgPathBounds_test {
         let emptyStyle = styleOf(computeTree(emptyText), emptyText)
         @Assert(SvgGeometry.bounds(emptyText, style: emptyStyle, fonts: Some(registry)).isNone())
     }
+}
+
+internal func arcBoundsMatchFlattened(path: SvgPathData, box: SvgBounds): Bool {
+    let contours = flattenPathData(path, SvgMatrix.identity, 0.001)
+    if (contours.size == 0 || contours[0].size == 0) {
+        return false
+    }
+    var minX = contours[0][0].x
+    var maxX = minX
+    var minY = contours[0][0].y
+    var maxY = minY
+    for (contour in contours) {
+        for (point in contour) {
+            if (point.x < minX) { minX = point.x }
+            if (point.x > maxX) { maxX = point.x }
+            if (point.y < minY) { minY = point.y }
+            if (point.y > maxY) { maxY = point.y }
+        }
+    }
+    let tolerance = 0.05
+    abs(box.x - minX) <= tolerance && abs(box.y - minY) <= tolerance &&
+    abs(box.width - (maxX - minX)) <= tolerance && abs(box.height - (maxY - minY)) <= tolerance
 }
 
 internal func strokeStyle(

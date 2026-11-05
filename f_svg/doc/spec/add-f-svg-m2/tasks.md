@@ -58,7 +58,7 @@
 - [ ] 6.1 先写 `SvgPathBounds_test.cj`：M/L/H/V/Z 端点与子路径起点
 - [ ] 6.2 先写三次贝塞尔极值用例：控制点同侧、异侧、退化共线、端点极值
 - [ ] 6.3 先写二次贝塞尔极值用例（含 `T` 的隐式控制点）
-- [ ] 6.4 先写弧用例：半圆、整圆、大弧/小弧、翻转标志、`rx/ry = 0`、四种轴向极值
+- [ ] 6.4 先写弧用例：半圆、整圆、大弧/小弧、翻转标志、`rx/ry = 0`、四种轴向极值（`SvgPathBounds_test.arcBounds`，大/小弧与四轴向极值用扁平化点集对照）
 - [ ] 6.5 先写退化用例：零长段、`NaN` 参数、重复点
 - [ ] 6.6 实现内部路径段迭代器（绝对化 + `H/V` 转 `L` + `S/T` 控制点推导）
 - [ ] 6.7 实现三次/二次贝塞尔导数求根与极值纳入
@@ -131,7 +131,7 @@
 
 - [ ] 11.1 先写 `SvgFont_test.cj`：接口契约、注册表精确匹配、family 列表回退、默认注册表
 - [ ] 11.2 实现 `SvgFont` / `SvgFontRegistry`
-- [ ] 11.3 先写 `SvgHersheyFont_test.cj`：ASCII 32–126 全覆盖、空格无路径、非 ASCII 返回 `None`、字号线性缩放、ascent/descent
+- [ ] 11.3 先写 Hershey 用例（实际文件 `SvgFont_test.cj`）：ASCII 32–126 全覆盖、空格返回空路径、非 ASCII 返回 `None`、字号线性缩放、ascent/descent
 - [ ] 11.4 实现 Hershey 静态字形表与 `glyphPath` / `advance` / `glyphBounds`
 - [ ] 11.5 先写 `SvgTextRenderer_test.cj` 布局用例：连续 advance、`letter-spacing`、`word-spacing`
 - [ ] 11.6 先写 `text-anchor` 三值、`x/y` 列表、`dx/dy` 列表、`textLength` + `lengthAdjust` 两模式
@@ -178,9 +178,9 @@
 - [ ] 14.8 实现 `SvgInterpolator` 各类型插值
 - [ ] 14.9 先写 `animateTransform` 用例：五种 type、`from/to` 参数形式、`additive=sum` 与基础变换合成
 - [ ] 14.10 实现变换分解/合成插值，无法分解时离散
-- [ ] 14.11 先写 `animateMotion` 用例：直线运动、路径运动、`rotate=auto`/`auto-reverse`/角度、`keyPoints`
+- [ ] 14.11 先写 `animateMotion` 用例：直线运动、路径运动、`rotate=auto`/`auto-reverse`/角度、`keyPoints`（`SvgAnimation_test.animateMotion` / `animateMotionKeyPoints`）
 - [ ] 14.12 实现沿路径运动与切线旋转
-- [ ] 14.13 先写 `SvgTimeline_test.cj`：`duration()`、`animations()`、同元素多动画覆盖、`by`/`additive`/`accumulate`
+- [ ] 14.13 先写时间轴用例（实际文件 `SvgAnimation_test.cj`）：`duration()`、`animations()`、同元素多动画覆盖、`by`/`additive`/`accumulate`
 - [ ] 14.14 实现动画深拷贝（`SvgDocument` → 副本，含 prolog/epilog/warnings，并重建 `parent` 链，保证 `elementById` 可用）
 - [ ] 14.15 实现 `SvgTimeline.sample` / `sampleCurrent`，并写「采样不修改原文档」断言
 - [ ] 14.16 先写上限用例：`values` 10001 抛 `Limit`、`mpath` 深度 64 抛 `Limit`
@@ -205,6 +205,6 @@
 - [ ] 16.4 核对 README、`doc/f_svg模块设计.md`、`doc/f_svg-M2设计.md` 与公开 API 一致，修正漂移
 - [ ] 16.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning
 - [ ] 16.6 运行 `cjpm test`，确认 M1 216 条 + M2 新增用例全绿
-- [ ] 16.7 对照 `specs/svg-css`、`svg-geometry`、`svg-rasterization`、`svg-paint-and-clip`、`svg-text`、`svg-render-pipeline`、`svg-png`、`svg-animation`、`svg-security` 逐条确认场景有用例
+- [ ] 16.7 对照 `specs/svg-css`、`svg-geometry`、`svg-rasterization`、`svg-paint-and-clip`、`svg-text`、`svg-render-pipeline`、`svg-png`、`svg-animation`、`svg-security` 逐条确认场景有用例（实际映射与剩余缺口见 `verification.md` / `fix-plan.md`）
 - [ ] 16.8 按 `AGENTS.md` 在 `feature/f-svg-m2` 分阶段提交，最后 `git merge --no-ff` 回 `feature/f_svg` 并删除分支
 - [ ] 16.9 归档本变更：`/opsx:archive add-f-svg-m2`
