@@ -177,7 +177,19 @@ public class SvgRenderTreeBuilder {
         this.guard = Some(value)
     }
 
+    /** 公开构建入口没有外部会话时自建守卫；后续嵌套构建复用同一实例。 */
+    private func ensureGuard(): SvgRenderGuard {
+        match (this.guard) {
+            case Some(value) => value
+            case None =>
+                let created = SvgRenderGuard()
+                this.guard = Some(created)
+                created
+        }
+    }
+
     public func build(document: SvgDocument, options!: SvgRenderOptions = SvgRenderOptions()): SvgDisplayList {
+        this.ensureGuard()
         let root = document.root
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(root)
@@ -224,6 +236,7 @@ public class SvgRenderTreeBuilder {
         fonts: ?SvgFontRegistry,
         root!: ?SvgElement = None
     ): SvgDisplayList {
+        this.ensureGuard()
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(container)
         for (warning in resolver.warnings) {
@@ -261,6 +274,7 @@ public class SvgRenderTreeBuilder {
         if (width <= 0 || height <= 0) {
             throw invalidValue("render(element) 的宽高必须为正")
         }
+        this.ensureGuard()
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(element)
         for (warning in resolver.warnings) {

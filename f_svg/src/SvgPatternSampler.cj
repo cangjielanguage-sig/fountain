@@ -115,6 +115,31 @@ public class SvgPatternSampler {
         this.images = Some(images)
     }
 
+    /** 没有外部会话时自建守卫：公开 `sample` 入口也必须受跨嵌套引用保护。 */
+    private func ensureGuard(): SvgRenderGuard {
+        match (this.guard) {
+            case Some(value) => value
+            case None =>
+                let created = SvgRenderGuard()
+                this.guard = Some(created)
+                created
+        }
+    }
+
+    /** 没有外部会话时自建解码预算，并在本次取样器生命周期内复用。 */
+    private func ensureImages(options: SvgRenderOptions): SvgImageResource {
+        match (this.images) {
+            case Some(value) => value
+            case None =>
+                let created = SvgImageResource(
+                    provider: options.images,
+                    budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
+                )
+                this.images = Some(created)
+                created
+        }
+    }
+
     /** 返回可平铺 tile 位图；不合法时返回 `None`。 */
     public func sample(
         pattern: SvgPattern,
@@ -142,18 +167,12 @@ public class SvgPatternSampler {
             case Some(tile) => return Some(tile)
             case None => ()
         }
-        let active = match (this.guard) {
-            case Some(value) => value.enter(pattern.identity, "pattern", this.warnings)
-            case None => true
-        }
+        let active = this.ensureGuard().enter(pattern.identity, "pattern", this.warnings)
         if (!active) {
             return None
         }
         let result = this.sampleTileUncached(pattern, objectBounds, options, key)
-        match (this.guard) {
-            case Some(value) => value.leave()
-            case None => ()
-        }
+        this.ensureGuard().leave()
         result
     }
 
@@ -229,6 +248,7 @@ public class SvgPatternSampler {
                     SvgMatrix.identity
                 }
                 let builder = SvgRenderTreeBuilder()
+                builder.attachGuard(this.ensureGuard())
                 let list = builder.buildContent(
                     source,
                     pixelWidth,
@@ -243,15 +263,11 @@ public class SvgPatternSampler {
                     }
                     return None
                 }
-                let tileRenderer = match ((this.images, this.guard)) {
-                    case (Some(imageResource), Some(sessionGuard)) =>
-                        SvgRenderer(
-                            options: options,
-                            sessionImages: imageResource,
-                            sessionGuard: sessionGuard
-                        )
-                    case _ => SvgRenderer(options: options)
-                }
+                let tileRenderer = SvgRenderer(
+                    options: options,
+                    sessionImages: this.ensureImages(options),
+                    sessionGuard: this.ensureGuard()
+                )
                 let rendered = tileRenderer.renderDisplayList(list)
                 if (tileRenderer.warnings.size > 0) {
                     for (warning in tileRenderer.warnings) {
