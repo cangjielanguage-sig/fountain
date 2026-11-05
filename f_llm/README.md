@@ -629,7 +629,7 @@ FLLM_DB_TEST=1 cjpm test  # 额外跑 postgres / mysql 真库集成用例
 
 | 文件 | 内容 |
 |---|---|
-| `doc/f_llm.md` | 完整设计（长文，覆盖本文所有细节） |
+| `doc/f_llm.md` | 设计文档：分层、契约、数据布局、关键流程、失败降级、测试策略 |
 | `doc/f_llm-memory-design.md` | 记忆 / 知识 / 技能 / 人格的设计与提示词 |
 | `doc/loom.md` | loom 编排、存储网关、人格、技能演进、报告表 |
 | `doc/retrieval-eval.md` | 检索评测：数据格式、指标、真实基线、门槛 |

@@ -619,7 +619,7 @@ Integration tests probe connectivity and skip themselves when the database is un
 
 | File | Content |
 |---|---|
-| `doc/f_llm.md` | Full design (long form of this README) |
+| `doc/f_llm.md` | Design doc: layering, contracts, data layout, key flows, failure handling, test strategy |
 | `doc/f_llm-memory-design.md` | Memory, knowledge, skill and persona design with prompts |
 | `doc/loom.md` | loom orchestration, store gateway, persona, skill evolution, report table |
 | `doc/retrieval-eval.md` | Retrieval evaluation: data format, metrics, baselines, thresholds |
