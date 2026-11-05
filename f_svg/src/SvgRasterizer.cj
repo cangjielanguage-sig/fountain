@@ -138,12 +138,112 @@ public class SvgRasterizer {
         fillRule: SvgFillRule,
         opacity: Float64
     ): Unit {
-        if (contours.size == 0) {
+        match (this.computeCoverage(contours, fillRule)) {
+            case Some(coverage) => this.compositeCoverage(coverage, color, opacity)
+            case None => ()
+        }
+    }
+
+    /** 渐变等逐像素画笔画填充。 */
+    internal func fillContoursShader(
+        contours: Array<Array<SvgPoint>>,
+        fillRule: SvgFillRule,
+        opacity: Float64,
+        colorAt: (Int64, Int64) -> SvgColor
+    ): Unit {
+        match (this.computeCoverage(contours, fillRule)) {
+            case Some(coverage) => this.compositeCoverageShader(coverage, opacity, colorAt)
+            case None => ()
+        }
+    }
+
+    /** 渐变填充：在用户空间采样，设备像素中心经逆矩阵回到用户坐标。 */
+    public func fillGradient(
+        path: SvgPathData,
+        gradient: SvgGradient,
+        boundingBox: SvgBounds,
+        currentColor: SvgColor,
+        root!: ?SvgElement = None,
+        matrix!: SvgMatrix = SvgMatrix.identity,
+        fillRule!: SvgFillRule = SvgFillRule.Nonzero,
+        opacity!: Float64 = 1.0
+    ): Unit {
+        if (opacity <= 0.0) {
             return
+        }
+        let contours = flattenPathData(path, matrix, 0.25)
+        let inverse = matrix.invert() ?? SvgMatrix.identity
+        let sampler = SvgGradientSampler(root: root)
+        this.fillContoursShader(
+            contours,
+            fillRule,
+            opacity,
+            { x, y =>
+                let user = inverse.apply(SvgPoint(Float64(x) + 0.5, Float64(y) + 0.5))
+                sampler.sample(gradient, user, boundingBox, currentColor)
+            }
+        )
+    }
+
+    /** 渐变描边。 */
+    public func strokeGradient(
+        path: SvgPathData,
+        gradient: SvgGradient,
+        boundingBox: SvgBounds,
+        currentColor: SvgColor,
+        root!: ?SvgElement = None,
+        matrix!: SvgMatrix = SvgMatrix.identity,
+        strokeWidth!: Float64 = 1.0,
+        lineCap!: SvgLineCap = SvgLineCap.Butt,
+        lineJoin!: SvgLineJoin = SvgLineJoin.Miter,
+        miterLimit!: Float64 = 4.0,
+        dashArray!: Array<Float64> = Array<Float64>(),
+        dashOffset!: Float64 = 0.0,
+        opacity!: Float64 = 1.0
+    ): Unit {
+        if (strokeWidth <= 0.0 || opacity <= 0.0) {
+            return
+        }
+        let scale = matrixScale(matrix)
+        let userTolerance = if (scale > RASTER_EPSILON) { 0.25 / scale } else { 0.25 }
+        let userContours = flattenPathData(path, SvgMatrix.identity, userTolerance)
+        let style = SvgStrokeStyle(
+            strokeWidth,
+            lineCap: lineCap,
+            lineJoin: lineJoin,
+            miterLimit: miterLimit,
+            dashArray: dashArray,
+            dashOffset: dashOffset
+        )
+        let outlines = SvgStrokeOutliner.outlineContours(userContours, style)
+        let transformed = ArrayList<Array<SvgPoint>>()
+        for (contour in outlines) {
+            let points = ArrayList<SvgPoint>()
+            for (point in contour) {
+                points.add(matrix.apply(point))
+            }
+            transformed.add(points.toArray())
+        }
+        let inverse = matrix.invert() ?? SvgMatrix.identity
+        let sampler = SvgGradientSampler(root: root)
+        this.fillContoursShader(
+            transformed.toArray(),
+            SvgFillRule.Nonzero,
+            opacity,
+            { x, y =>
+                let user = inverse.apply(SvgPoint(Float64(x) + 0.5, Float64(y) + 0.5))
+                sampler.sample(gradient, user, boundingBox, currentColor)
+            }
+        )
+    }
+
+    private func computeCoverage(contours: Array<Array<SvgPoint>>, fillRule: SvgFillRule): ?Array<Int64> {
+        if (contours.size == 0) {
+            return None
         }
         let edges = buildEdges(contours)
         if (edges.size == 0) {
-            return
+            return None
         }
         var minX = Float64.Inf
         var maxX = -Float64.Inf
@@ -168,7 +268,7 @@ public class SvgRasterizer {
         let firstRow = maxInt64(0, Int64(floor(minY)))
         let lastRow = minInt64(this.bitmap.height - 1, Int64(ceil(maxY)) - 1)
         if (firstRow > lastRow) {
-            return
+            return None
         }
         let coverage = Array<Int64>(this.bitmap.width * this.bitmap.height, repeat: 0)
         let samples = this.samplesPerPixel
@@ -189,7 +289,7 @@ public class SvgRasterizer {
                 }
             }
         }
-        this.compositeCoverage(coverage, color, opacity)
+        Some(coverage)
     }
 
     private func rasterizeSpan(coverage: Array<Int64>, span: SvgSpan, row: Int64, samples: Int64): Unit {
@@ -217,6 +317,29 @@ public class SvgRasterizer {
                 }
             }
             column++
+        }
+    }
+
+    private func compositeCoverageShader(
+        coverage: Array<Int64>,
+        opacity: Float64,
+        colorAt: (Int64, Int64) -> SvgColor
+    ): Unit {
+        let total = this.samplesPerPixel * this.samplesPerPixel
+        var index = 0
+        while (index < coverage.size) {
+            let count = coverage[index]
+            if (count > 0) {
+                let x = index % this.bitmap.width
+                let y = index / this.bitmap.width
+                let color = colorAt(x, y)
+                let coverageRatio = Float64(count) / Float64(total)
+                let alpha = coverageRatio * color.alpha * opacity
+                if (alpha > 0.0) {
+                    this.bitmap.blend(x, y, SvgRgba.fromColor(color, alpha))
+                }
+            }
+            index++
         }
     }
 
