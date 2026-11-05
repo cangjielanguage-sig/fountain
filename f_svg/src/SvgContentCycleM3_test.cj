@@ -135,6 +135,71 @@ public class SvgContentCycleM3_test {
         @Assert(found)
     }
 
+    /** pattern 自引用循环 warning 必须带引用名与元素路径。 */
+    @TestCase
+    public func patternCycleWarningHasElementLocation(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">" +
+            "<defs><pattern id=\"p\" width=\"10\" height=\"10\" patternUnits=\"userSpaceOnUse\">" +
+            "<rect width=\"10\" height=\"10\" fill=\"url(#p)\"/></pattern></defs>" +
+            "<rect width=\"20\" height=\"20\" fill=\"url(#p)\"/></svg>"
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(document)
+        var located = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("循环") && warning.contains("#p") &&
+                warning.contains("/svg[1]/")) {
+                located = true
+            }
+        }
+        @Assert(located)
+    }
+
+    /** marker 自引用循环 warning 必须带引用名与元素路径。 */
+    @TestCase
+    public func markerCycleWarningHasElementLocation(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +
+            "<defs><marker id=\"m\" markerWidth=\"4\" markerHeight=\"4\">" +
+            "<line x1=\"0\" y1=\"0\" x2=\"4\" y2=\"0\" stroke=\"red\" marker-end=\"url(#m)\"/>" +
+            "</marker></defs>" +
+            "<line x1=\"5\" y1=\"5\" x2=\"25\" y2=\"5\" stroke=\"black\" marker-end=\"url(#m)\"/>" +
+            "</svg>"
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(document)
+        var located = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("循环") && warning.contains("#m") &&
+                warning.contains("/svg[1]/")) {
+                located = true
+            }
+        }
+        @Assert(located)
+    }
+
+    /** pattern 深度超限消息也必须带引用名与元素路径。 */
+    @TestCase
+    public func patternDepthLimitMessageHasLocation(): Unit {
+        let document = SvgParser.parse(patternChainSvg(70))
+        let pattern = (document.root.child("defs").getOrThrow().child("pattern").getOrThrow() as
+            SvgPattern).getOrThrow()
+        let sampler = SvgPatternSampler(root: Some(document.root))
+        let error = expectSvgException(
+            {
+                => sampler.sample(
+                    pattern,
+                    SvgBounds(0.0, 0.0, 20.0, 20.0),
+                    SvgMatrix.identity,
+                    SvgRenderOptions(samplesPerPixel: 1)
+                )
+            }
+        )
+        @Assert(error.kind == SvgErrorKind.Limit)
+        @Assert(error.message.contains("#p") && error.message.contains("/svg[1]/"))
+    }
+
     /** 直接调用公开 builder 的 65 层 marker 链抛 Limit。 */
     @TestCase
     public func publicBuilderDepthLimit(): Unit {

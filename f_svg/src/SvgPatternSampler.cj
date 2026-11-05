@@ -168,7 +168,12 @@ public class SvgPatternSampler {
             case None => ()
         }
         let sessionGuard = this.ensureGuard()
-        let active = sessionGuard.enter(pattern.identity, "pattern", this.warnings)
+        let label = svgRenderGuardLabel(
+            "pattern",
+            pattern.attr("id") ?? "",
+            svgElementPath(this.root, pattern)
+        )
+        let active = sessionGuard.enter(pattern.identity, label, this.warnings)
         if (!active) {
             return None
         }

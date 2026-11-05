@@ -30,16 +30,16 @@ internal class SvgRenderGuard {
     private let stack = ArrayList<Int64>()
 
     /** 进入一层引用；返回 `false` 表示命中循环，调用方应停止展开。 */
-    func enter(identity: Int64, kind: String, warnings: ArrayList<String>): Bool {
+    func enter(identity: Int64, label: String, warnings: ArrayList<String>): Bool {
         for (value in this.stack) {
             if (value == identity) {
-                warnings.add("${kind} 存在内容自引用循环，已停止展开")
+                warnings.add("${label} 存在内容自引用循环，已停止展开")
                 return false
             }
         }
         if (Int64(this.stack.size) >= SVG_MAX_REFERENCE_DEPTH) {
             throw SvgException(
-                "${kind} 内容嵌套深度超过上限 ${SVG_MAX_REFERENCE_DEPTH}",
+                "${label} 内容嵌套深度超过上限 ${SVG_MAX_REFERENCE_DEPTH}",
                 kind: SvgErrorKind.Limit
             )
         }
@@ -52,4 +52,14 @@ internal class SvgRenderGuard {
             this.stack.remove(at: this.stack.size - 1)
         }
     }
+}
+
+/** 引用守卫消息前缀：引用名 + 元素路径，满足 warning 可定位要求。 */
+internal func svgRenderGuardLabel(kind: String, id: String, path: String): String {
+    let name = if (id.size > 0) {
+        "「#${id}」"
+    } else {
+        ""
+    }
+    "${kind}${name}（元素「${path}」）"
 }

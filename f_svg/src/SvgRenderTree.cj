@@ -722,7 +722,12 @@ public class SvgRenderTreeBuilder {
         let base = context.matrix.multiply(elementTransformMatrix(shape))
         let sessionGuard = this.ensureGuard()
         for (instance in instances) {
-            if (!sessionGuard.enter(instance.marker.identity, "marker", this.warnings)) {
+            let label = svgRenderGuardLabel(
+                "marker",
+                instance.marker.attr("id") ?? "",
+                svgElementPath(Some(context.root), instance.marker)
+            )
+            if (!sessionGuard.enter(instance.marker.identity, label, this.warnings)) {
                 continue
             }
             let expanded = ArrayList<SvgDisplayCommand>()
