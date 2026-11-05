@@ -257,7 +257,7 @@ private func splitColorArgs(content: String): SvgColorArgs {
     }
 }
 
-private func splitSvgSpaces(text: String): ArrayList<String> {
+internal func splitSvgSpaces(text: String): ArrayList<String> {
     let parts = ArrayList<String>()
     let bytes = text.unsafeBytes()
     var i = 0
