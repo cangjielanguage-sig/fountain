@@ -82,22 +82,25 @@ public class SvgClipPathMasker {
         samplesPerPixel!: Int64 = 4,
         contentMatrix!: SvgMatrix = SvgMatrix.identity,
         units!: SvgCoordinateUnits = SvgCoordinateUnits.UserSpaceOnUse,
-        targetBox!: SvgBounds = SvgBounds.empty()
+        targetBox!: SvgBounds = SvgBounds.empty(),
+        root!: ?SvgElement = None,
+        warnings!: ?ArrayList<String> = None
     ): SvgCoverageMask {
-        let bitmap = SvgBitmap(width, height)
-        let raster = SvgRasterizer(bitmap, samplesPerPixel: samplesPerPixel)
-        var matrix = contentMatrix
-        if (units == SvgCoordinateUnits.ObjectBoundingBox) {
-            matrix = matrix.multiply(bboxMatrix(targetBox))
-        }
-        let fillRule = SvgFillRule.fromName((clip.attr("clip-rule") ?? "nonzero").trimAscii().toAsciiLower()) ??
-            SvgFillRule.Nonzero
-        renderClipChildren(clip, matrix, raster, fillRule)
-        let coverage = Array<Byte>(width * height, repeat: 0)
-        for (index in 0..coverage.size) {
-            coverage[index] = bitmap.pixels[index * 4 + 3]
-        }
-        SvgCoverageMask(width, height, coverage)
+        let rootElement = root ?? rootOfSvgElement(clip)
+        let warningList = warnings ?? ArrayList<String>()
+        renderClipCoverage(
+            clip,
+            width,
+            height,
+            samplesPerPixel,
+            contentMatrix,
+            units,
+            targetBox,
+            rootElement,
+            warningList,
+            Array<String>(),
+            0
+        )
     }
 }
 
@@ -111,35 +114,26 @@ public class SvgMasker {
         contentMatrix!: SvgMatrix = SvgMatrix.identity,
         maskUnits!: SvgCoordinateUnits = SvgCoordinateUnits.ObjectBoundingBox,
         maskContentUnits!: SvgCoordinateUnits = SvgCoordinateUnits.UserSpaceOnUse,
-        targetBox!: SvgBounds = SvgBounds.empty()
+        targetBox!: SvgBounds = SvgBounds.empty(),
+        root!: ?SvgElement = None,
+        warnings!: ?ArrayList<String> = None
     ): SvgCoverageMask {
-        let bitmap = SvgBitmap(width, height)
-        let raster = SvgRasterizer(bitmap, samplesPerPixel: samplesPerPixel)
-        var content = contentMatrix
-        if (maskContentUnits == SvgCoordinateUnits.ObjectBoundingBox) {
-            content = content.multiply(bboxMatrix(targetBox))
-        }
-        renderMaskChildren(mask, content, raster)
-        let region = maskRegion(mask, width, height, contentMatrix, maskUnits, targetBox)
-        let alphaType = (mask.attr("mask-type") ?? "luminance").trimAscii().toAsciiLower() == "alpha"
-        let coverage = Array<Byte>(width * height, repeat: 0)
-        for (y in 0..height) {
-            for (x in 0..width) {
-                if (x < region.x || y < region.y || x >= region.x + region.width ||
-                    y >= region.y + region.height) {
-                    continue
-                }
-                let color = bitmap.pixel(x, y)
-                let value = if (alphaType) {
-                    color.alpha
-                } else {
-                    (0.2125 * Float64(color.red) + 0.7154 * Float64(color.green) +
-                        0.0721 * Float64(color.blue)) / 255.0 * color.alpha
-                }
-                coverage[y * width + x] = quantizeSvgChannel(value)
-            }
-        }
-        SvgCoverageMask(width, height, coverage)
+        let rootElement = root ?? rootOfSvgElement(mask)
+        let warningList = warnings ?? ArrayList<String>()
+        renderMaskCoverage(
+            mask,
+            width,
+            height,
+            samplesPerPixel,
+            contentMatrix,
+            maskUnits,
+            maskContentUnits,
+            targetBox,
+            rootElement,
+            warningList,
+            Array<String>(),
+            0
+        )
     }
 }
 
@@ -176,64 +170,450 @@ private func bboxMatrix(box: SvgBounds): SvgMatrix {
     SvgMatrix.translate(box.x, box.y).multiply(SvgMatrix.scale(box.width, box.height))
 }
 
+private func renderClipCoverage(
+    clip: SvgElement,
+    width: Int64,
+    height: Int64,
+    samplesPerPixel: Int64,
+    contentMatrix: SvgMatrix,
+    units: SvgCoordinateUnits,
+    targetBox: SvgBounds,
+    root: ?SvgElement,
+    warnings: ArrayList<String>,
+    stack: Array<String>,
+    depth: Int64
+): SvgCoverageMask {
+    let bitmap = SvgBitmap(width, height)
+    var matrix = contentMatrix
+    if (units == SvgCoordinateUnits.ObjectBoundingBox) {
+        matrix = matrix.multiply(bboxMatrix(targetBox))
+    }
+    let fillRule = SvgFillRule.fromName((clip.attr("clip-rule") ?? "nonzero").trimAscii().toAsciiLower()) ??
+        SvgFillRule.Nonzero
+    renderClipChildren(
+        clip,
+        matrix,
+        bitmap,
+        fillRule,
+        samplesPerPixel,
+        root,
+        warnings,
+        stack,
+        depth
+    )
+    let coverage = Array<Byte>(width * height, repeat: 0)
+    for (index in 0..coverage.size) {
+        coverage[index] = bitmap.pixels[index * 4 + 3]
+    }
+    SvgCoverageMask(width, height, coverage)
+}
+
+private func renderMaskCoverage(
+    mask: SvgElement,
+    width: Int64,
+    height: Int64,
+    samplesPerPixel: Int64,
+    contentMatrix: SvgMatrix,
+    maskUnits: SvgCoordinateUnits,
+    maskContentUnits: SvgCoordinateUnits,
+    targetBox: SvgBounds,
+    root: ?SvgElement,
+    warnings: ArrayList<String>,
+    stack: Array<String>,
+    depth: Int64
+): SvgCoverageMask {
+    let bitmap = SvgBitmap(width, height)
+    var content = contentMatrix
+    if (maskContentUnits == SvgCoordinateUnits.ObjectBoundingBox) {
+        content = content.multiply(bboxMatrix(targetBox))
+    }
+    renderMaskChildren(mask, content, bitmap, samplesPerPixel, root, warnings, stack, depth)
+    let region = maskRegion(mask, width, height, contentMatrix, maskUnits, targetBox)
+    let alphaType = (mask.attr("mask-type") ?? "luminance").trimAscii().toAsciiLower() == "alpha"
+    let coverage = Array<Byte>(width * height, repeat: 0)
+    for (y in 0..height) {
+        for (x in 0..width) {
+            if (x < region.x || y < region.y || x >= region.x + region.width ||
+                y >= region.y + region.height) {
+                continue
+            }
+            let color = bitmap.pixel(x, y)
+            let value = if (alphaType) {
+                color.alpha
+            } else {
+                (0.2125 * Float64(color.red) + 0.7154 * Float64(color.green) +
+                    0.0721 * Float64(color.blue)) / 255.0 * color.alpha
+            }
+            coverage[y * width + x] = quantizeSvgChannel(value)
+        }
+    }
+    SvgCoverageMask(width, height, coverage)
+}
+
 private func renderClipChildren(
     element: SvgElement,
     matrix: SvgMatrix,
-    raster: SvgRasterizer,
-    fillRule: SvgFillRule
+    bitmap: SvgBitmap,
+    fillRule: SvgFillRule,
+    samplesPerPixel: Int64,
+    root: ?SvgElement,
+    warnings: ArrayList<String>,
+    stack: Array<String>,
+    depth: Int64
 ): Unit {
     for (node in element.children) {
         match (node) {
             case ElementNode(child) =>
                 let childMatrix = matrix.multiply(elementTransformMatrix(child))
-                match (elementPathData(child)) {
-                    case Some(data) =>
+                let clipId = readEffectId(child.attr("clip-path"))
+                let maskId = readEffectId(child.attr("mask"))
+                let data = elementPathData(child)
+                if (clipId.isNone() && maskId.isNone()) {
+                    match (data) {
+                        case Some(path) =>
+                            let rule = SvgFillRule.fromName(
+                                (child.attr("clip-rule") ?? fillRule.attrName()).trimAscii().toAsciiLower()
+                            ) ?? fillRule
+                            SvgRasterizer(bitmap, samplesPerPixel: samplesPerPixel).fill(
+                                path,
+                                matrix: childMatrix,
+                                color: SvgColor.Black,
+                                fillRule: rule
+                            )
+                        case None => renderClipChildren(
+                            child,
+                            childMatrix,
+                            bitmap,
+                            fillRule,
+                            samplesPerPixel,
+                            root,
+                            warnings,
+                            stack,
+                            depth
+                        )
+                    }
+                    continue
+                }
+                let layer = SvgBitmap(bitmap.width, bitmap.height)
+                match (data) {
+                    case Some(path) =>
                         let rule = SvgFillRule.fromName(
                             (child.attr("clip-rule") ?? fillRule.attrName()).trimAscii().toAsciiLower()
                         ) ?? fillRule
-                        raster.fill(data, matrix: childMatrix, color: SvgColor.Black, fillRule: rule)
-                    case None => renderClipChildren(child, childMatrix, raster, fillRule)
+                        SvgRasterizer(layer, samplesPerPixel: samplesPerPixel).fill(
+                            path,
+                            matrix: childMatrix,
+                            color: SvgColor.Black,
+                            fillRule: rule
+                        )
+                    case None => renderClipChildren(
+                        child,
+                        childMatrix,
+                        layer,
+                        fillRule,
+                        samplesPerPixel,
+                        root,
+                        warnings,
+                        stack,
+                        depth
+                    )
                 }
+                let box = match (data) {
+                    case Some(path) => pathDataBounds(path) ?? SvgBounds.empty()
+                    case None => SvgBounds.empty()
+                }
+                match (clipId) {
+                    case Some(id) => applyClipReference(
+                        layer,
+                        id,
+                        childMatrix,
+                        box,
+                        samplesPerPixel,
+                        root,
+                        warnings,
+                        stack,
+                        depth
+                    )
+                    case None => ()
+                }
+                match (maskId) {
+                    case Some(id) => applyMaskReference(
+                        layer,
+                        id,
+                        childMatrix,
+                        box,
+                        samplesPerPixel,
+                        root,
+                        warnings,
+                        stack,
+                        depth
+                    )
+                    case None => ()
+                }
+                SvgGroupCompositor.composite(bitmap, layer, 1.0)
             case _ => ()
         }
     }
 }
 
-private func renderMaskChildren(element: SvgElement, matrix: SvgMatrix, raster: SvgRasterizer): Unit {
+private func renderMaskChildren(
+    element: SvgElement,
+    matrix: SvgMatrix,
+    bitmap: SvgBitmap,
+    samplesPerPixel: Int64,
+    root: ?SvgElement,
+    warnings: ArrayList<String>,
+    stack: Array<String>,
+    depth: Int64
+): Unit {
     for (node in element.children) {
         match (node) {
             case ElementNode(child) =>
                 let childMatrix = matrix.multiply(elementTransformMatrix(child))
-                match (elementPathData(child)) {
-                    case Some(data) =>
-                        match (child) {
-                            case shape: SvgShape =>
-                                let paint = shape.fill ?? SvgPaint.of(SvgColor.Black)
-                                if (paint.kind == SvgPaintKind.Color) {
-                                    match (paint.color) {
-                                        case Some(color) =>
-                                            let fillOpacity = shape.fillOpacity ?? 1.0
-                                            let opacity = shape.opacity ?? 1.0
-                                            let alpha = clampSvgUnit(fillOpacity * opacity)
-                                            if (alpha > 0.0) {
-                                                raster.fill(
-                                                    data,
-                                                    matrix: childMatrix,
-                                                    color: color,
-                                                    fillRule: SvgFillRule.Nonzero,
-                                                    opacity: alpha
-                                                )
-                                            }
-                                        case None => ()
-                                    }
-                                }
-                            case _ => ()
-                        }
-                    case None => renderMaskChildren(child, childMatrix, raster)
+                let clipId = readEffectId(child.attr("clip-path"))
+                let maskId = readEffectId(child.attr("mask"))
+                let data = elementPathData(child)
+                if (clipId.isNone() && maskId.isNone()) {
+                    match (data) {
+                        case Some(path) => drawMaskPath(child, path, childMatrix, bitmap, samplesPerPixel)
+                        case None => renderMaskChildren(
+                            child,
+                            childMatrix,
+                            bitmap,
+                            samplesPerPixel,
+                            root,
+                            warnings,
+                            stack,
+                            depth
+                        )
+                    }
+                    continue
                 }
+                let layer = SvgBitmap(bitmap.width, bitmap.height)
+                match (data) {
+                    case Some(path) => drawMaskPath(child, path, childMatrix, layer, samplesPerPixel)
+                    case None => renderMaskChildren(
+                        child,
+                        childMatrix,
+                        layer,
+                        samplesPerPixel,
+                        root,
+                        warnings,
+                        stack,
+                        depth
+                    )
+                }
+                let box = match (data) {
+                    case Some(path) => pathDataBounds(path) ?? SvgBounds.empty()
+                    case None => SvgBounds.empty()
+                }
+                match (clipId) {
+                    case Some(id) => applyClipReference(
+                        layer,
+                        id,
+                        childMatrix,
+                        box,
+                        samplesPerPixel,
+                        root,
+                        warnings,
+                        stack,
+                        depth
+                    )
+                    case None => ()
+                }
+                match (maskId) {
+                    case Some(id) => applyMaskReference(
+                        layer,
+                        id,
+                        childMatrix,
+                        box,
+                        samplesPerPixel,
+                        root,
+                        warnings,
+                        stack,
+                        depth
+                    )
+                    case None => ()
+                }
+                SvgGroupCompositor.composite(bitmap, layer, 1.0)
             case _ => ()
         }
     }
+}
+
+private func drawMaskPath(
+    child: SvgElement,
+    path: SvgPathData,
+    matrix: SvgMatrix,
+    bitmap: SvgBitmap,
+    samplesPerPixel: Int64
+): Unit {
+    match (child) {
+        case shape: SvgShape =>
+            let paint = shape.fill ?? SvgPaint.of(SvgColor.Black)
+            if (paint.kind == SvgPaintKind.Color) {
+                match (paint.color) {
+                    case Some(color) =>
+                        let fillOpacity = shape.fillOpacity ?? 1.0
+                        let opacity = shape.opacity ?? 1.0
+                        let alpha = clampSvgUnit(fillOpacity * opacity)
+                        if (alpha > 0.0) {
+                            SvgRasterizer(bitmap, samplesPerPixel: samplesPerPixel).fill(
+                                path,
+                                matrix: matrix,
+                                color: color,
+                                fillRule: SvgFillRule.Nonzero,
+                                opacity: alpha
+                            )
+                        }
+                    case None => ()
+                }
+            }
+        case _ => ()
+    }
+}
+
+private func applyClipReference(
+    bitmap: SvgBitmap,
+    id: String,
+    matrix: SvgMatrix,
+    box: SvgBounds,
+    samplesPerPixel: Int64,
+    root: ?SvgElement,
+    warnings: ArrayList<String>,
+    stack: Array<String>,
+    depth: Int64
+): Unit {
+    if (depth >= 64) {
+        if (containsSvgStackId(stack, id)) {
+            warnings.add("clipPath 循环引用在深度 64 终止「${id}」")
+            return
+        }
+        throw SvgException("clipPath 引用深度超过 64", kind: SvgErrorKind.Limit)
+    }
+    let target = findSvgElementById(root, id)
+    let clip = match (target) {
+        case Some(value) => value
+        case None =>
+            warnings.add("clipPath 引用目标「${id}」不存在")
+            return
+    }
+    let units = SvgCoordinateUnits.fromName(
+        (clip.attr("clipPathUnits") ?? "userSpaceOnUse").trimAscii()
+    ) ?? SvgCoordinateUnits.UserSpaceOnUse
+    let nextStack = appendSvgStackId(stack, id)
+    let mask = renderClipCoverage(
+        clip,
+        bitmap.width,
+        bitmap.height,
+        samplesPerPixel,
+        matrix,
+        units,
+        box,
+        root,
+        warnings,
+        nextStack,
+        depth + 1
+    )
+    mask.applyTo(bitmap)
+}
+
+private func applyMaskReference(
+    bitmap: SvgBitmap,
+    id: String,
+    matrix: SvgMatrix,
+    box: SvgBounds,
+    samplesPerPixel: Int64,
+    root: ?SvgElement,
+    warnings: ArrayList<String>,
+    stack: Array<String>,
+    depth: Int64
+): Unit {
+    if (depth >= 64) {
+        if (containsSvgStackId(stack, id)) {
+            warnings.add("mask 循环引用在深度 64 终止「${id}」")
+            return
+        }
+        throw SvgException("mask 引用深度超过 64", kind: SvgErrorKind.Limit)
+    }
+    let target = findSvgElementById(root, id)
+    let maskElement = match (target) {
+        case Some(value) => value
+        case None =>
+            warnings.add("mask 引用目标「${id}」不存在")
+            return
+    }
+    let maskUnits = SvgCoordinateUnits.fromName(
+        (maskElement.attr("maskUnits") ?? "objectBoundingBox").trimAscii()
+    ) ?? SvgCoordinateUnits.ObjectBoundingBox
+    let contentUnits = SvgCoordinateUnits.fromName(
+        (maskElement.attr("maskContentUnits") ?? "userSpaceOnUse").trimAscii()
+    ) ?? SvgCoordinateUnits.UserSpaceOnUse
+    let nextStack = appendSvgStackId(stack, id)
+    let mask = renderMaskCoverage(
+        maskElement,
+        bitmap.width,
+        bitmap.height,
+        samplesPerPixel,
+        matrix,
+        maskUnits,
+        contentUnits,
+        box,
+        root,
+        warnings,
+        nextStack,
+        depth + 1
+    )
+    mask.applyTo(bitmap)
+}
+
+private func readEffectId(raw: ?String): ?String {
+    match (raw) {
+        case Some(text) =>
+            let trimmed = text.trimAscii()
+            if (trimmed.size < 4 || trimmed[0..4].toAsciiLower() != "url(") {
+                return None
+            }
+            let close = indexOfSvgByte(trimmed, b')')
+            if (close < 0) {
+                return None
+            }
+            var inner = trimAsciiQuotes(trimmed[4..close].trimAscii())
+            if (inner.size > 0 && inner[0] == b'#') {
+                return Some(inner[1..])
+            }
+            None
+        case None => None
+    }
+}
+
+private func rootOfSvgElement(element: SvgElement): SvgElement {
+    var current = element
+    while (true) {
+        match (current.parent) {
+            case Some(parent) => current = parent
+            case None => return current
+        }
+    }
+    current
+}
+
+private func appendSvgStackId(stack: Array<String>, id: String): Array<String> {
+    let result = ArrayList<String>()
+    for (value in stack) {
+        result.add(value)
+    }
+    result.add(id)
+    result.toArray()
+}
+
+private func containsSvgStackId(stack: Array<String>, id: String): Bool {
+    for (value in stack) {
+        if (value == id) {
+            return true
+        }
+    }
+    false
 }
 
 private func elementTransformMatrix(element: SvgElement): SvgMatrix {

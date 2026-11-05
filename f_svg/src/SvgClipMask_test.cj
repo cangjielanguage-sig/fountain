@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_svg
 
+import std.collection.*
 import std.math.*
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -192,6 +193,108 @@ public class SvgClipMask_test {
         )
         @Assert(boxMask.coverageAt(20, 20) == 255)
         @Assert(boxMask.coverageAt(5, 5) == 0)
+    }
+
+    /** 嵌套 clipPath / mask 引用与循环、深度上限。 */
+    @TestCase
+    public func nestedReferences(): Unit {
+        let root = SvgRoot()
+        let inner = clipElementWithRect(5.0, 5.0, 5.0, 5.0)
+        inner.setAttr("id", "inner")
+        root.appendElement(inner)
+        let outer = SvgContainer(SvgContainerKind.ClipPath)
+        outer.setAttr("id", "outer")
+        let rect = SvgRect(x: SvgLength(0.0), y: SvgLength(0.0), width: SvgLength(10.0), height: SvgLength(10.0))
+        rect.setAttr("clip-path", "url(#inner)")
+        outer.appendElement(rect)
+        root.appendElement(outer)
+        let nested = SvgClipPathMasker.render(
+            outer,
+            10,
+            10,
+            samplesPerPixel: 1,
+            contentMatrix: SvgMatrix.identity,
+            units: SvgCoordinateUnits.UserSpaceOnUse,
+            targetBox: SvgBounds(0.0, 0.0, 10.0, 10.0),
+            root: Some(root)
+        )
+        @Assert(nested.coverageAt(2, 2) == 0)
+        @Assert(nested.coverageAt(7, 7) == 255)
+
+        let cycleRoot = SvgRoot()
+        let cycleClip = SvgContainer(SvgContainerKind.ClipPath)
+        cycleClip.setAttr("id", "cycle")
+        let cycleGroup = SvgContainer(SvgContainerKind.Group)
+        cycleGroup.setAttr("clip-path", "url(#cycle)")
+        cycleClip.appendElement(cycleGroup)
+        cycleRoot.appendElement(cycleClip)
+        let clipWarnings = ArrayList<String>()
+        SvgClipPathMasker.render(
+            cycleClip,
+            4,
+            4,
+            samplesPerPixel: 1,
+            contentMatrix: SvgMatrix.identity,
+            units: SvgCoordinateUnits.UserSpaceOnUse,
+            targetBox: SvgBounds(0.0, 0.0, 4.0, 4.0),
+            root: Some(cycleRoot),
+            warnings: Some(clipWarnings)
+        )
+        @Assert(clipWarnings.size >= 1)
+
+        let maskRoot = SvgRoot()
+        let cycleMask = SvgContainer(SvgContainerKind.Mask)
+        cycleMask.setAttr("id", "cycleMask")
+        let maskGroup = SvgContainer(SvgContainerKind.Group)
+        maskGroup.setAttr("mask", "url(#cycleMask)")
+        cycleMask.appendElement(maskGroup)
+        maskRoot.appendElement(cycleMask)
+        let maskWarnings = ArrayList<String>()
+        SvgMasker.render(
+            cycleMask,
+            4,
+            4,
+            samplesPerPixel: 1,
+            contentMatrix: SvgMatrix.identity,
+            maskUnits: SvgCoordinateUnits.UserSpaceOnUse,
+            maskContentUnits: SvgCoordinateUnits.UserSpaceOnUse,
+            targetBox: SvgBounds(0.0, 0.0, 4.0, 4.0),
+            root: Some(maskRoot),
+            warnings: Some(maskWarnings)
+        )
+        @Assert(maskWarnings.size >= 1)
+
+        let deepRoot = SvgRoot()
+        var index = 0
+        while (index <= 65) {
+            let clip = SvgContainer(SvgContainerKind.ClipPath)
+            clip.setAttr("id", "deep${index}")
+            if (index == 65) {
+                clip.appendElement(
+                    SvgRect(width: SvgLength(4.0), height: SvgLength(4.0))
+                )
+            } else {
+                let group = SvgContainer(SvgContainerKind.Group)
+                group.setAttr("clip-path", "url(#deep${index + 1})")
+                clip.appendElement(group)
+            }
+            deepRoot.appendElement(clip)
+            index++
+        }
+        let first = deepRoot.childrenOf("clipPath")[0]
+        let deepError = expectSvgException({=>
+            SvgClipPathMasker.render(
+                first,
+                4,
+                4,
+                samplesPerPixel: 1,
+                contentMatrix: SvgMatrix.identity,
+                units: SvgCoordinateUnits.UserSpaceOnUse,
+                targetBox: SvgBounds(0.0, 0.0, 4.0, 4.0),
+                root: Some(deepRoot)
+            )
+        })
+        @Assert(deepError.kind == SvgErrorKind.Limit)
     }
 
     /** 组透明度：整组合成一次、嵌套与非法值。 */

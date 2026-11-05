@@ -120,7 +120,8 @@ public class SvgRenderer {
                         frame.clipPath,
                         frame.mask,
                         frame.matrix,
-                        frame.bounds
+                        frame.bounds,
+                        list.root
                     )
                     let target = if (frames.size > 0) {
                         frames[frames.size - 1].bitmap
@@ -145,7 +146,8 @@ public class SvgRenderer {
                             command.clipPath,
                             command.mask,
                             command.matrix,
-                            command.bounds
+                            command.bounds,
+                            list.root
                         )
                         SvgGroupCompositor.composite(target, layer, 1.0)
                     } else {
@@ -343,7 +345,8 @@ public class SvgRenderer {
         clipPath: ?SvgElement,
         maskElement: ?SvgElement,
         matrix: SvgMatrix,
-        bounds: ?SvgBounds
+        bounds: ?SvgBounds,
+        root: SvgElement
     ): Unit {
         match (clipRect) {
             case Some(rect) => clipBitmapToRect(bitmap, rect)
@@ -362,7 +365,9 @@ public class SvgRenderer {
                     samplesPerPixel: this.options.samplesPerPixel,
                     contentMatrix: matrix,
                     units: units,
-                    targetBox: targetBox
+                    targetBox: targetBox,
+                    root: Some(root),
+                    warnings: Some(this.warnings)
                 )
                 mask.applyTo(bitmap)
             case None => ()
@@ -383,7 +388,9 @@ public class SvgRenderer {
                     contentMatrix: matrix,
                     maskUnits: maskUnits,
                     maskContentUnits: contentUnits,
-                    targetBox: targetBox
+                    targetBox: targetBox,
+                    root: Some(root),
+                    warnings: Some(this.warnings)
                 )
                 mask.applyTo(bitmap)
             case None => ()
