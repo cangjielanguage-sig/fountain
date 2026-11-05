@@ -572,8 +572,8 @@ public class SvgPngStreamLimitM3_test {
     /** decode(stream) 读取总量超过上限时抛 Limit。 */
     @TestCase
     public func streamByteLimit(): Unit {
-        let stream = SvgEndlessZeroStream(SVG_MAX_PNG_STREAM_BYTES + 1)
-        let error = expectSvgException({=> SvgPngDecoder.decode(stream)})
+        let stream = SvgEndlessZeroStream(17)
+        let error = expectSvgException({=> SvgPngDecoder.decode(stream, maxBytes: 16)})
         @Assert(error.kind == SvgErrorKind.Limit)
     }
 }

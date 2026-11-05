@@ -63,17 +63,21 @@ public class SvgPngDecoder {
     }
 
     public static func decode(stream: InputStream): SvgBitmap {
+        decode(stream, maxBytes: SVG_MAX_PNG_STREAM_BYTES)
+    }
+
+    internal static func decode(stream: InputStream, maxBytes!: Int64): SvgBitmap {
+        if (maxBytes <= 0) {
+            throw invalidValue("PNG 流字节上限必须为正，实际 ${maxBytes}")
+        }
         let out = ByteBuffer()
         let buffer = Array<Byte>(8192, repeat: 0)
         var total: Int64 = 0
         var count = stream.read(buffer)
         while (count > 0) {
             total += count
-            if (total > SVG_MAX_PNG_STREAM_BYTES) {
-                throw SvgException(
-                    "PNG 流超过字节上限 ${SVG_MAX_PNG_STREAM_BYTES}",
-                    kind: SvgErrorKind.Limit
-                )
+            if (total > maxBytes) {
+                throw SvgException("PNG 流超过字节上限 ${maxBytes}", kind: SvgErrorKind.Limit)
             }
             out.write(buffer[0..count])
             count = stream.read(buffer)
