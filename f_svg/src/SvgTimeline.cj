@@ -41,6 +41,7 @@ private class SvgAnimationSpec {
     let accumulate: Bool
     let transformType: String
     let rotate: String
+    let keyPoints: Array<Float64>
     let pathData: ?SvgPathData
     var begin: Float64 = 0.0
     var end: Float64 = 0.0
@@ -64,6 +65,7 @@ private class SvgAnimationSpec {
         accumulate: Bool,
         transformType: String,
         rotate: String,
+        keyPoints: Array<Float64>,
         pathData: ?SvgPathData
     ) {
         this.element = element
@@ -88,6 +90,7 @@ private class SvgAnimationSpec {
         this.accumulate = accumulate
         this.transformType = transformType
         this.rotate = rotate
+        this.keyPoints = keyPoints
         this.pathData = pathData
     }
 
@@ -226,7 +229,7 @@ public class SvgTimeline {
         if (spec.kind == SvgAnimationKind.AnimateMotion) {
             match (spec.pathData) {
                 case Some(path) =>
-                    let motion = sampleMotion(path, state.progress, spec.rotate)
+                    let motion = sampleMotion(path, state.progress, spec.rotate, spec.keyPoints, spec.keyTimes)
                     let motionTransform = SvgTransform(
                         [SvgTransformOp.Translate(motion[0], motion[1]),
                         SvgTransformOp.Rotate(motion[2], 0.0, 0.0)]
@@ -346,6 +349,7 @@ private func buildAnimationSpec(
             (element.attr("accumulate") ?? "none") == "sum",
             transformType,
             element.attr("rotate") ?? "0",
+            parseKeyPoints(element.attr("keyPoints"), warnings),
             pathData
         )
     )
@@ -417,6 +421,26 @@ private func parseKeySplines(raw: ?String): Array<Array<Float64>> {
             }
             result.toArray()
         case None => Array<Array<Float64>>()
+    }
+}
+
+private func parseKeyPoints(raw: ?String, warnings: ArrayList<String>): Array<Float64> {
+    match (raw) {
+        case Some(text) =>
+            let result = ArrayList<Float64>()
+            var invalid = false
+            for (part in splitSvgSemicolon(text)) {
+                let value = tryParseSvgFloat(part) ?? 0.0
+                if (value < 0.0 || value > 1.0) {
+                    invalid = true
+                }
+                result.add(clampSvgUnit(value))
+            }
+            if (invalid) {
+                warnings.add("animateMotion 的 keyPoints 超出 0..1，已钳制")
+            }
+            result.toArray()
+        case None => Array<Float64>()
     }
 }
 
@@ -763,7 +787,48 @@ private func parseAnimationTransform(spec: SvgAnimationSpec, text: String): SvgT
     SvgTransform.parse(spec.transformType + "(" + trimmed + ")")
 }
 
-private func sampleMotion(path: SvgPathData, progress: Float64, rotate: String): Array<Float64> {
+private func resolveMotionProgress(
+    progress: Float64,
+    keyPoints: Array<Float64>,
+    keyTimes: Array<Float64>
+): Float64 {
+    let clamped = clampSvgUnit(progress)
+    if (keyPoints.size == 0) {
+        return clamped
+    }
+    if (keyPoints.size == 1) {
+        return clampSvgUnit(keyPoints[0])
+    }
+    let times = if (keyTimes.size == keyPoints.size) {
+        keyTimes
+    } else {
+        let uniform = Array<Float64>(keyPoints.size, repeat: 0.0)
+        for (index in 0..keyPoints.size) {
+            uniform[index] = Float64(index) / Float64(keyPoints.size - 1)
+        }
+        uniform
+    }
+    var segment = 0
+    for (position in 0..times.size - 1) {
+        if (clamped >= times[position]) {
+            segment = position
+        }
+    }
+    if (segment >= keyPoints.size - 1) {
+        return clampSvgUnit(keyPoints[keyPoints.size - 1])
+    }
+    let span = times[segment + 1] - times[segment]
+    let local = if (span <= 0.0) { 1.0 } else { clampSvgUnit((clamped - times[segment]) / span) }
+    clampSvgUnit(keyPoints[segment] + (keyPoints[segment + 1] - keyPoints[segment]) * local)
+}
+
+private func sampleMotion(
+    path: SvgPathData,
+    progress: Float64,
+    rotate: String,
+    keyPoints: Array<Float64>,
+    keyTimes: Array<Float64>
+): Array<Float64> {
     let contours = flattenPathData(path, SvgMatrix.identity, 0.1)
     if (contours.size == 0 || contours[0].size == 0) {
         return [0.0, 0.0, 0.0]
@@ -776,7 +841,7 @@ private func sampleMotion(path: SvgPathData, progress: Float64, rotate: String):
     for (index in 1..points.size) {
         total += distanceBetween(points[index - 1], points[index])
     }
-    let target = clampSvgUnit(progress) * total
+    let target = resolveMotionProgress(progress, keyPoints, keyTimes) * total
     var walked = 0.0
     for (index in 1..points.size) {
         let segmentLength = distanceBetween(points[index - 1], points[index])

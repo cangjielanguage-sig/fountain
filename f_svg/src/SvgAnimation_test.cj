@@ -234,6 +234,35 @@ public class SvgAnimation_test {
         @Assert(near(parseNumericAttribute(Some(sampleAttribute(linear, 0.5, "r", "x"))), 2.0))
     }
 
+    /** animateMotion：keyPoints 与 keyTimes 映射路径进度。 */
+    @TestCase
+    public func animateMotionKeyPoints(): Unit {
+        let line = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animateMotion path="M0 0 L10 0" keyPoints="0;0.5" keyTimes="0;1" dur="1s" fill="freeze"/>' +
+            '</rect>'
+        )
+        let lineMatrix = sampleTransformMatrix(line, 0.5, "r")
+        @Assert(near(lineMatrix.e, 2.5) && near(lineMatrix.f, 0.0))
+
+        let curve = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animateMotion path="M0 0 C0 10 10 10 10 0" keyPoints="0;1" keyTimes="0;1" dur="1s" fill="freeze"/>' +
+            '</rect>'
+        )
+        let curveMatrix = sampleTransformMatrix(curve, 0.5, "r")
+        @Assert(near(curveMatrix.e, 5.0))
+        @Assert(curveMatrix.f > 0.0)
+
+        let invalid = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animateMotion path="M0 0 L10 0" keyPoints="0;2;-1" dur="1s" fill="freeze"/></rect>'
+        )
+        let invalidTimeline = SvgTimeline(invalid)
+        invalidTimeline.sample(0.5)
+        @Assert(invalidTimeline.warnings.size >= 1)
+    }
+
     /** duration / animations / 同元素多动画 / by / additive / accumulate。 */
     @TestCase
     public func timelineSemantics(): Unit {
