@@ -263,6 +263,39 @@ public class SvgAnimation_test {
         @Assert(invalidTimeline.warnings.size >= 1)
     }
 
+    /** keyTimes / keySplines 数量不符时回退并记 warning。 */
+    @TestCase
+    public func keyTimesAndSplinesWarnings(): Unit {
+        let badKeyTimes = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" values="0;10;20" keyTimes="0;1" dur="1s" fill="freeze"/></rect>'
+        )
+        let keyTimesTimeline = SvgTimeline(badKeyTimes)
+        keyTimesTimeline.sample(0.5)
+        var keyTimesWarning = false
+        for (warning in keyTimesTimeline.warnings) {
+            if (warning.contains("keyTimes")) {
+                keyTimesWarning = true
+            }
+        }
+        @Assert(keyTimesWarning)
+
+        let badSplines = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" values="0;10;20" calcMode="spline" keySplines="0 0 1 1" ' +
+            'dur="1s" fill="freeze"/></rect>'
+        )
+        let splineTimeline = SvgTimeline(badSplines)
+        splineTimeline.sample(0.5)
+        var splineWarning = false
+        for (warning in splineTimeline.warnings) {
+            if (warning.contains("keySplines")) {
+                splineWarning = true
+            }
+        }
+        @Assert(splineWarning)
+    }
+
     /** duration / animations / 同元素多动画 / by / additive / accumulate。 */
     @TestCase
     public func timelineSemantics(): Unit {

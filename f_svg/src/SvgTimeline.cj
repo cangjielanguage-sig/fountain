@@ -211,7 +211,7 @@ public class SvgTimeline {
     ): Unit {
         let base = target.attr(spec.attributeName) ?? "0"
         if (spec.kind == SvgAnimationKind.AnimateTransform) {
-            let animated = evaluateTransformValue(spec, state.progress)
+            let animated = evaluateTransformValue(spec, state.progress, this.warnings)
             if (spec.additive) {
                 let baseTransform = match (target.transform) {
                     case Some(value) => value
@@ -247,7 +247,7 @@ public class SvgTimeline {
             }
             return
         }
-        var value = evaluateKeyframeValue(spec, state.progress, base)
+        var value = evaluateKeyframeValue(spec, state.progress, base, this.warnings)
         if (spec.accumulate && state.iteration > 0) {
             let frames = effectiveFrames(spec, base)
             match ((tryParseSvgFloat(value), tryParseSvgFloat(frames[0]), tryParseSvgFloat(frames[frames.size - 1]))) {
@@ -591,7 +591,12 @@ private func animationStateAt(spec: SvgAnimationSpec, time: Float64): SvgAnimati
     SvgAnimationState(true, progress, iteration)
 }
 
-private func evaluateKeyframeValue(spec: SvgAnimationSpec, progress: Float64, base: String): String {
+private func evaluateKeyframeValue(
+    spec: SvgAnimationSpec,
+    progress: Float64,
+    base: String,
+    warnings: ArrayList<String>
+): String {
     if (spec.kind == SvgAnimationKind.Set) {
         return spec.element.attr("to") ?? base
     }
@@ -602,7 +607,7 @@ private func evaluateKeyframeValue(spec: SvgAnimationSpec, progress: Float64, ba
     if (frames.size == 1) {
         return frames[0]
     }
-    let times = effectiveKeyTimesForFrames(spec, frames)
+    let times = effectiveKeyTimesForFrames(spec, frames, warnings)
     if (spec.calcMode == SvgCalcMode.Discrete) {
         var index = 0
         for (position in 0..times.size) {
@@ -625,7 +630,16 @@ private func evaluateKeyframeValue(spec: SvgAnimationSpec, progress: Float64, ba
     var local = if (span <= 0.0) { 1.0 } else { (progress - times[segment]) / span }
     local = clampSvgUnit(local)
     let mode = if (spec.calcMode == SvgCalcMode.Spline) { SvgCalcMode.Linear } else { spec.calcMode }
-    interpolateAnimationValue(frames[segment], frames[segment + 1], local, mode, spec, segment)
+    interpolateAnimationValue(
+        frames[segment],
+        frames[segment + 1],
+        local,
+        mode,
+        spec,
+        segment,
+        frames.size,
+        warnings
+    )
 }
 
 private func effectiveFrames(spec: SvgAnimationSpec, base: String): Array<String> {
@@ -647,9 +661,16 @@ private func effectiveFrames(spec: SvgAnimationSpec, base: String): Array<String
     [from, to]
 }
 
-private func effectiveKeyTimes(spec: SvgAnimationSpec, count: Int64): Array<Float64> {
+private func effectiveKeyTimes(
+    spec: SvgAnimationSpec,
+    count: Int64,
+    warnings: ArrayList<String>
+): Array<Float64> {
     if (spec.keyTimes.size == count) {
         return spec.keyTimes
+    }
+    if (spec.keyTimes.size > 0) {
+        warnings.add("keyTimes 数量 ${spec.keyTimes.size} 与关键帧数量 ${count} 不一致，回退均匀分布")
     }
     let times = Array<Float64>(count, repeat: 0.0)
     for (index in 0..count) {
@@ -659,11 +680,15 @@ private func effectiveKeyTimes(spec: SvgAnimationSpec, count: Int64): Array<Floa
 }
 
 /** `paced` 按相邻关键帧的数值距离生成时间分布，其余模式沿用 keyTimes。 */
-private func effectiveKeyTimesForFrames(spec: SvgAnimationSpec, frames: Array<String>): Array<Float64> {
+private func effectiveKeyTimesForFrames(
+    spec: SvgAnimationSpec,
+    frames: Array<String>,
+    warnings: ArrayList<String>
+): Array<Float64> {
     if (spec.calcMode == SvgCalcMode.Paced && frames.size > 1) {
         return pacedKeyTimes(frames)
     }
-    effectiveKeyTimes(spec, frames.size)
+    effectiveKeyTimes(spec, frames.size, warnings)
 }
 
 private func pacedKeyTimes(frames: Array<String>): Array<Float64> {
@@ -726,12 +751,20 @@ private func interpolateAnimationValue(
     t: Float64,
     mode: SvgCalcMode,
     spec: SvgAnimationSpec,
-    segment: Int64
+    segment: Int64,
+    frameCount: Int64,
+    warnings: ArrayList<String>
 ): String {
     var local = t
-    if (spec.calcMode == SvgCalcMode.Spline && segment < spec.keySplines.size) {
-        let spline = spec.keySplines[segment]
-        local = SvgInterpolator.splineValue(local, spline[0], spline[1], spline[2], spline[3])
+    if (spec.calcMode == SvgCalcMode.Spline) {
+        if (spec.keySplines.size == frameCount - 1 && segment < spec.keySplines.size) {
+            let spline = spec.keySplines[segment]
+            local = SvgInterpolator.splineValue(local, spline[0], spline[1], spline[2], spline[3])
+        } else if (spec.keySplines.size != frameCount - 1) {
+            warnings.add(
+                "keySplines 数量 ${spec.keySplines.size} 与关键帧数量 ${frameCount} 不匹配，回退 linear"
+            )
+        }
     }
     match ((tryParseSvgFloat(from), tryParseSvgFloat(to))) {
         case (Some(first), Some(second)) =>
@@ -754,7 +787,11 @@ private func interpolateAnimationValue(
     SvgInterpolator.stringValue(from, to, local, mode: mode)
 }
 
-private func evaluateTransformValue(spec: SvgAnimationSpec, progress: Float64): SvgTransform {
+private func evaluateTransformValue(
+    spec: SvgAnimationSpec,
+    progress: Float64,
+    warnings: ArrayList<String>
+): SvgTransform {
     let frames = effectiveFrames(spec, "translate(0 0)")
     if (frames.size == 0) {
         return SvgTransform.identity
@@ -762,7 +799,7 @@ private func evaluateTransformValue(spec: SvgAnimationSpec, progress: Float64): 
     if (frames.size == 1) {
         return parseAnimationTransform(spec, frames[0])
     }
-    let times = effectiveKeyTimesForFrames(spec, frames)
+    let times = effectiveKeyTimesForFrames(spec, frames, warnings)
     var segment = 0
     for (position in 0..times.size - 1) {
         if (progress >= times[position]) {
