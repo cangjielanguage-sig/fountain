@@ -99,4 +99,127 @@ public enum SvgMarkerOrient <: Equatable<SvgMarkerOrient> & ToString {
     }
 }
 
-// TODO(M3-8): marker 类型化模型。
+/** `marker` 元素。保留 `SvgContainer` 的子节点与 `kind` 行为。 */
+public class SvgMarker <: SvgContainer {
+    private let unitsCache = SvgValueCache<SvgMarkerUnits>()
+    private let orientCache = SvgValueCache<SvgMarkerOrient>()
+    private let refXCache = SvgValueCache<SvgLength>()
+    private let refYCache = SvgValueCache<SvgLength>()
+    private let widthCache = SvgValueCache<SvgLength>()
+    private let heightCache = SvgValueCache<SvgLength>()
+    private let viewBoxCache = SvgValueCache<SvgViewBox>()
+    private let aspectCache = SvgValueCache<SvgPreserveAspectRatio>()
+
+    public init() {
+        super(SvgContainerKind.Marker)
+    }
+
+    public mut prop markerUnits: SvgMarkerUnits {
+        get() {
+            this.unitsCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("markerUnits")) {
+                        case Some(text) => SvgMarkerUnits.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgMarkerUnits.StrokeWidth
+        }
+        set(value) {
+            this.setAttr("markerUnits", value.toString())
+        }
+    }
+
+    public mut prop orient: SvgMarkerOrient {
+        get() {
+            this.orientCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("orient")) {
+                        case Some(text) => SvgMarkerOrient.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgMarkerOrient.Angle(0.0)
+        }
+        set(value) {
+            this.setAttr("orient", value.toString())
+        }
+    }
+
+    public mut prop refX: SvgLength {
+        get() {
+            this.refXCache.get(this.attributesVersion, {=> readLength(this, "refX")}) ?? SvgLength(0.0)
+        }
+        set(value) {
+            writeLength(this, "refX", Some(value))
+        }
+    }
+
+    public mut prop refY: SvgLength {
+        get() {
+            this.refYCache.get(this.attributesVersion, {=> readLength(this, "refY")}) ?? SvgLength(0.0)
+        }
+        set(value) {
+            writeLength(this, "refY", Some(value))
+        }
+    }
+
+    public mut prop markerWidth: SvgLength {
+        get() {
+            this.widthCache.get(this.attributesVersion, {=> readLength(this, "markerWidth")}) ??
+                SvgLength(3.0)
+        }
+        set(value) {
+            writeLength(this, "markerWidth", Some(value))
+        }
+    }
+
+    public mut prop markerHeight: SvgLength {
+        get() {
+            this.heightCache.get(this.attributesVersion, {=> readLength(this, "markerHeight")}) ??
+                SvgLength(3.0)
+        }
+        set(value) {
+            writeLength(this, "markerHeight", Some(value))
+        }
+    }
+
+    public mut prop viewBox: ?SvgViewBox {
+        get() {
+            this.viewBoxCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("viewBox")) {
+                        case Some(text) => tryParseSvgViewBox(text)
+                        case None => None
+                    }
+                }
+            )
+        }
+        set(value) {
+            match (value) {
+                case Some(box) => this.setAttr("viewBox", box.toString())
+                case None => this.removeAttr("viewBox")
+            }
+        }
+    }
+
+    public mut prop preserveAspectRatio: SvgPreserveAspectRatio {
+        get() {
+            this.aspectCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("preserveAspectRatio")) {
+                        case Some(text) => tryParseSvgPreserveAspectRatio(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgPreserveAspectRatio.Default
+        }
+        set(value) {
+            this.setAttr("preserveAspectRatio", value.toString())
+        }
+    }
+}

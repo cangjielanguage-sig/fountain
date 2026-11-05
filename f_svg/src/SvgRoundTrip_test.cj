@@ -83,3 +83,41 @@ public class SvgRoundTrip_test {
         println("大样本：解析 ${parseMs} ms，序列化 ${writeMs} ms")
     }
 }
+
+private let M3_ROUND_TRIP_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\">" +
+    "<defs>" +
+    "<filter id=\"f\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\" " +
+    "filterUnits=\"userSpaceOnUse\" primitiveUnits=\"objectBoundingBox\">" +
+    "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"1 2\" result=\"blur\"/>" +
+    "<feOffset in=\"blur\" dx=\"2\" dy=\"3\"/>" +
+    "<feFlood flood-color=\"#336699\" flood-opacity=\"0.5\"/>" +
+    "<feBlend in2=\"SourceGraphic\" mode=\"screen\"/>" +
+    "<feComposite in2=\"blur\" operator=\"arithmetic\" k1=\"1\" k2=\"0\" k3=\"0\" k4=\"0\"/>" +
+    "<feColorMatrix type=\"matrix\" values=\"1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0\"/>" +
+    "<feTile in=\"blur\"/>" +
+    "<feMerge><feMergeNode in=\"blur\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>" +
+    "</filter>" +
+    "<pattern id=\"p\" x=\"0\" y=\"0\" width=\"8\" height=\"8\" patternUnits=\"userSpaceOnUse\" " +
+    "patternContentUnits=\"objectBoundingBox\" patternTransform=\"rotate(45)\" href=\"#base\">" +
+    "<rect width=\"4\" height=\"4\"/>" +
+    "</pattern>" +
+    "<marker id=\"m\" markerUnits=\"userSpaceOnUse\" refX=\"2\" refY=\"3\" " +
+    "markerWidth=\"5\" markerHeight=\"6\" orient=\"auto\" viewBox=\"0 0 10 10\">" +
+    "<path d=\"M 0 0 L 4 4\"/>" +
+    "</marker>" +
+    "</defs>" +
+    "<path d=\"M 0 0 L 10 0\" marker-start=\"url(#m)\" marker-end=\"url(#m)\"/>" +
+    "</svg>"
+
+@Test
+public class SvgRoundTripM3_test {
+    /** filter / pattern / marker / fe*：解析 → 写出 → 再解析结构等价。 */
+    @TestCase
+    public func m3ElementsStructuralEquivalence(): Unit {
+        let original = SvgParser.parse(M3_ROUND_TRIP_SVG)
+        let written = writeSvgString(original)
+        let reparsed = SvgParser.parse(written)
+        @Assert(documentSnapshot(reparsed) == documentSnapshot(original))
+        @Assert(writeSvgString(reparsed) == written)
+    }
+}

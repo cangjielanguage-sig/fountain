@@ -36,8 +36,20 @@ public class SvgTag {
             case "stop" => Some(SvgStop())
             case "use" => Some(SvgUse())
             case "image" => Some(SvgImage())
+            case "filter" => Some(SvgFilter())
+            case "pattern" => Some(SvgPattern())
+            case "marker" => Some(SvgMarker())
+            case "feGaussianBlur" => Some(SvgFeGaussianBlur())
+            case "feOffset" => Some(SvgFeOffset())
+            case "feFlood" => Some(SvgFeFlood())
+            case "feBlend" => Some(SvgFeBlend())
+            case "feComposite" => Some(SvgFeComposite())
+            case "feMerge" => Some(SvgFeMerge())
+            case "feMergeNode" => Some(SvgFeMergeNode())
+            case "feColorMatrix" => Some(SvgFeColorMatrix())
+            case "feTile" => Some(SvgFeTile())
             case "style" | "title" | "desc" | "metadata" => Some(SvgElement(tag))
-            case "g" | "defs" | "symbol" | "marker" | "pattern" | "clipPath" | "mask" | "switch" | "a" |
+            case "g" | "defs" | "symbol" | "clipPath" | "mask" | "switch" | "a" |
                 "foreignObject" =>
                 match (SvgContainerKind.fromTag(tag)) {
                     case Some(kind) => Some(SvgContainer(kind))
@@ -51,8 +63,11 @@ public class SvgTag {
         match (tag) {
             case "svg" | "rect" | "circle" | "ellipse" | "line" | "polyline" | "polygon" | "path" |
                 "text" | "tspan" | "textPath" | "linearGradient" | "radialGradient" | "stop" | "use" |
-                "image" | "g" | "defs" | "symbol" | "marker" | "pattern" | "clipPath" | "mask" |
-                "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" => true
+                "image" | "g" | "defs" | "symbol" | "clipPath" | "mask" |
+                "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" |
+                "filter" | "pattern" | "marker" | "feGaussianBlur" | "feOffset" | "feFlood" |
+                "feBlend" | "feComposite" | "feMerge" | "feMergeNode" | "feColorMatrix" |
+                "feTile" => true
             case _ => false
         }
     }

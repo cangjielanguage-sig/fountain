@@ -92,7 +92,7 @@ public enum SvgContainerKind <: Equatable<SvgContainerKind> & ToString {
 }
 
 /** 结构容器：`g` / `defs` / `symbol` / `marker` / `pattern` / `clipPath` / `mask` / `switch` / `a` / `foreignObject`。 */
-public class SvgContainer <: SvgElement {
+public open class SvgContainer <: SvgElement {
     public let kind: SvgContainerKind
 
     public init(kind: SvgContainerKind) {

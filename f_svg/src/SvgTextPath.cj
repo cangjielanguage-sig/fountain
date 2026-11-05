@@ -18,6 +18,7 @@ package fountain::f_svg
 /** `textPath` 元素。 */
 public class SvgTextPath <: SvgTextElement {
     private let startOffsetCache = SvgValueCache<SvgLength>()
+    private let pathCache = SvgValueCache<SvgPathData>()
 
     public init(href!: ?String = None, startOffset!: ?SvgLength = None) {
         super("textPath")
@@ -41,6 +42,27 @@ public class SvgTextPath <: SvgTextElement {
         }
         set(value) {
             writeLength(this, "startOffset", value)
+        }
+    }
+
+    /** `path` 属性（`d` 语法），优先于 `href` 指向的路径。 */
+    public mut prop path: ?SvgPathData {
+        get() {
+            this.pathCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("path")) {
+                        case Some(text) => SvgPathData.tryParse(text)
+                        case None => None
+                    }
+                }
+            )
+        }
+        set(value) {
+            match (value) {
+                case Some(data) => this.setAttr("path", data.toString())
+                case None => this.removeAttr("path")
+            }
         }
     }
 }

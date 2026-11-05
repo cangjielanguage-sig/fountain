@@ -175,3 +175,331 @@ public enum SvgColorMatrixType <: Equatable<SvgColorMatrixType> & ToString {
 }
 
 // TODO(M3-1/M3-2): 滤镜原语基类与八个 fe* 原语模型。
+
+/** 滤镜原语基类：`in` 与 `result` 图连接属性。 */
+public abstract class SvgFilterPrimitive <: SvgElement {
+    protected init(tag: String) {
+        super(tag)
+    }
+
+    public mut prop inSource: ?String {
+        get() {
+            this.attr("in")
+        }
+        set(value) {
+            this.writeOptionalAttribute("in", value)
+        }
+    }
+
+    public mut prop result: ?String {
+        get() {
+            this.attr("result")
+        }
+        set(value) {
+            this.writeOptionalAttribute("result", value)
+        }
+    }
+}
+
+/** `feGaussianBlur` 原语。 */
+public class SvgFeGaussianBlur <: SvgFilterPrimitive {
+    private let deviationCache = SvgValueCache<SvgNumberList>()
+
+    public init() {
+        super("feGaussianBlur")
+    }
+
+    public mut prop stdDeviation: SvgNumberList {
+        get() {
+            this.deviationCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("stdDeviation")) {
+                        case Some(text) =>
+                            try {
+                                SvgNumberList.parse(text)
+                            } catch (_: SvgException) {
+                                SvgNumberList(Array<Float64>())
+                            }
+                        case None => SvgNumberList(Array<Float64>())
+                    }
+                }
+            ) ?? SvgNumberList(Array<Float64>())
+        }
+        set(value) {
+            this.setAttr("stdDeviation", value.toString())
+        }
+    }
+}
+
+/** `feOffset` 原语。 */
+public class SvgFeOffset <: SvgFilterPrimitive {
+    private let dxCache = SvgValueCache<SvgLength>()
+    private let dyCache = SvgValueCache<SvgLength>()
+
+    public init() {
+        super("feOffset")
+    }
+
+    public mut prop dx: SvgLength {
+        get() {
+            this.dxCache.get(this.attributesVersion, {=> readLength(this, "dx")}) ?? SvgLength(0.0)
+        }
+        set(value) {
+            writeLength(this, "dx", Some(value))
+        }
+    }
+
+    public mut prop dy: SvgLength {
+        get() {
+            this.dyCache.get(this.attributesVersion, {=> readLength(this, "dy")}) ?? SvgLength(0.0)
+        }
+        set(value) {
+            writeLength(this, "dy", Some(value))
+        }
+    }
+}
+
+/** `feFlood` 原语。 */
+public class SvgFeFlood <: SvgFilterPrimitive {
+    private let colorCache = SvgValueCache<SvgPaint>()
+    private let opacityCache = SvgValueCache<Float64>()
+
+    public init() {
+        super("feFlood")
+    }
+
+    public mut prop floodColor: SvgPaint {
+        get() {
+            this.colorCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("flood-color")) {
+                        case Some(text) => tryParseSvgPaint(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgPaint.of(SvgColor.Black)
+        }
+        set(value) {
+            this.setAttr("flood-color", value.toString())
+        }
+    }
+
+    public mut prop floodOpacity: Float64 {
+        get() {
+            this.opacityCache.get(this.attributesVersion, {=> readFloat(this, "flood-opacity")}) ?? 1.0
+        }
+        set(value) {
+            writeFloat(this, "flood-opacity", Some(clampSvgUnit(value)))
+        }
+    }
+}
+
+/** `feBlend` 原语。 */
+public class SvgFeBlend <: SvgFilterPrimitive {
+    private let modeCache = SvgValueCache<SvgBlendMode>()
+
+    public init() {
+        super("feBlend")
+    }
+
+    public mut prop in2: ?String {
+        get() {
+            this.attr("in2")
+        }
+        set(value) {
+            this.writeOptionalAttribute("in2", value)
+        }
+    }
+
+    public mut prop mode: SvgBlendMode {
+        get() {
+            this.modeCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("mode")) {
+                        case Some(text) => SvgBlendMode.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgBlendMode.Normal
+        }
+        set(value) {
+            this.setAttr("mode", value.toString())
+        }
+    }
+}
+
+/** `feComposite` 原语。 */
+public class SvgFeComposite <: SvgFilterPrimitive {
+    private let operatorCache = SvgValueCache<SvgCompositeOperator>()
+    private let k1Cache = SvgValueCache<Float64>()
+    private let k2Cache = SvgValueCache<Float64>()
+    private let k3Cache = SvgValueCache<Float64>()
+    private let k4Cache = SvgValueCache<Float64>()
+
+    public init() {
+        super("feComposite")
+    }
+
+    public mut prop in2: ?String {
+        get() {
+            this.attr("in2")
+        }
+        set(value) {
+            this.writeOptionalAttribute("in2", value)
+        }
+    }
+
+    /** `operator` 属性；`operator` 是语言关键字，故命名为 `operatorKind`。 */
+    public mut prop operatorKind: SvgCompositeOperator {
+        get() {
+            this.operatorCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("operator")) {
+                        case Some(text) => SvgCompositeOperator.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgCompositeOperator.Over
+        }
+        set(value) {
+            this.setAttr("operator", value.toString())
+        }
+    }
+
+    public mut prop k1: Float64 {
+        get() {
+            this.k1Cache.get(this.attributesVersion, {=> readFloat(this, "k1")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "k1", Some(value))
+        }
+    }
+
+    public mut prop k2: Float64 {
+        get() {
+            this.k2Cache.get(this.attributesVersion, {=> readFloat(this, "k2")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "k2", Some(value))
+        }
+    }
+
+    public mut prop k3: Float64 {
+        get() {
+            this.k3Cache.get(this.attributesVersion, {=> readFloat(this, "k3")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "k3", Some(value))
+        }
+    }
+
+    public mut prop k4: Float64 {
+        get() {
+            this.k4Cache.get(this.attributesVersion, {=> readFloat(this, "k4")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "k4", Some(value))
+        }
+    }
+}
+
+/** `feMerge` 原语：子节点为 `feMergeNode` 序列。 */
+public class SvgFeMerge <: SvgFilterPrimitive {
+    public init() {
+        super("feMerge")
+    }
+
+    /** 按子节点顺序读取各 `feMergeNode` 的 `in`；缺省为空字符串。 */
+    public prop inputs: ArrayList<String> {
+        get() {
+            let result = ArrayList<String>()
+            for (node in this.children) {
+                match (node) {
+                    case ElementNode(element) =>
+                        match (element) {
+                            case mergeNode: SvgFeMergeNode => result.add(mergeNode.inSource ?? "")
+                            case _ => ()
+                        }
+                    case _ => ()
+                }
+            }
+            result
+        }
+    }
+}
+
+/** `feMergeNode` 子元素。 */
+public class SvgFeMergeNode <: SvgElement {
+    public init() {
+        super("feMergeNode")
+    }
+
+    public mut prop inSource: ?String {
+        get() {
+            this.attr("in")
+        }
+        set(value) {
+            this.writeOptionalAttribute("in", value)
+        }
+    }
+}
+
+/** `feColorMatrix` 原语。 */
+public class SvgFeColorMatrix <: SvgFilterPrimitive {
+    private let typeCache = SvgValueCache<SvgColorMatrixType>()
+    private let valuesCache = SvgValueCache<Array<Float64>>()
+
+    public init() {
+        super("feColorMatrix")
+    }
+
+    public mut prop matrixType: SvgColorMatrixType {
+        get() {
+            this.typeCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("type")) {
+                        case Some(text) => SvgColorMatrixType.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgColorMatrixType.Matrix
+        }
+        set(value) {
+            this.setAttr("type", value.toString())
+        }
+    }
+
+    public mut prop values: Array<Float64> {
+        get() {
+            this.valuesCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("values")) {
+                        case Some(text) =>
+                            try {
+                                Some(SvgNumberList.parse(text).values)
+                            } catch (_: SvgException) {
+                                Some(Array<Float64>())
+                            }
+                        case None => None
+                    }
+                }
+            ) ?? Array<Float64>()
+        }
+        set(value) {
+            this.setAttr("values", SvgNumberList(value).toString())
+        }
+    }
+}
+
+/** `feTile` 原语。 */
+public class SvgFeTile <: SvgFilterPrimitive {
+    public init() {
+        super("feTile")
+    }
+}

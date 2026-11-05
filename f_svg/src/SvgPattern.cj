@@ -15,4 +15,120 @@ limitations under the License.
 */
 package fountain::f_svg
 
-// TODO(M3-3): pattern 类型化模型。
+/**
+ * `pattern` 元素。
+ *
+ * 保留 `SvgContainer` 的子节点、`kind` 与标签名行为；`href` 继承与 tile 取样在渲染层实现。
+ */
+public class SvgPattern <: SvgContainer {
+    private let xCache = SvgValueCache<SvgLength>()
+    private let yCache = SvgValueCache<SvgLength>()
+    private let widthCache = SvgValueCache<SvgLength>()
+    private let heightCache = SvgValueCache<SvgLength>()
+    private let unitsCache = SvgValueCache<SvgCoordinateUnits>()
+    private let contentUnitsCache = SvgValueCache<SvgCoordinateUnits>()
+    private let transformCache = SvgValueCache<SvgTransform>()
+
+    public init() {
+        super(SvgContainerKind.Pattern)
+    }
+
+    public mut prop x: ?SvgLength {
+        get() {
+            this.xCache.get(this.attributesVersion, {=> readLength(this, "x")})
+        }
+        set(value) {
+            writeLength(this, "x", value)
+        }
+    }
+
+    public mut prop y: ?SvgLength {
+        get() {
+            this.yCache.get(this.attributesVersion, {=> readLength(this, "y")})
+        }
+        set(value) {
+            writeLength(this, "y", value)
+        }
+    }
+
+    public mut prop width: ?SvgLength {
+        get() {
+            this.widthCache.get(this.attributesVersion, {=> readLength(this, "width")})
+        }
+        set(value) {
+            writeLength(this, "width", value)
+        }
+    }
+
+    public mut prop height: ?SvgLength {
+        get() {
+            this.heightCache.get(this.attributesVersion, {=> readLength(this, "height")})
+        }
+        set(value) {
+            writeLength(this, "height", value)
+        }
+    }
+
+    public mut prop patternUnits: SvgCoordinateUnits {
+        get() {
+            this.unitsCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("patternUnits")) {
+                        case Some(text) => SvgCoordinateUnits.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgCoordinateUnits.ObjectBoundingBox
+        }
+        set(value) {
+            this.setAttr("patternUnits", value.attrName())
+        }
+    }
+
+    public mut prop patternContentUnits: SvgCoordinateUnits {
+        get() {
+            this.contentUnitsCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("patternContentUnits")) {
+                        case Some(text) => SvgCoordinateUnits.fromName(text.trimAscii())
+                        case None => None
+                    }
+                }
+            ) ?? SvgCoordinateUnits.UserSpaceOnUse
+        }
+        set(value) {
+            this.setAttr("patternContentUnits", value.attrName())
+        }
+    }
+
+    public mut prop patternTransform: ?SvgTransform {
+        get() {
+            this.transformCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("patternTransform")) {
+                        case Some(text) => tryParseSvgTransform(text)
+                        case None => None
+                    }
+                }
+            )
+        }
+        set(value) {
+            match (value) {
+                case Some(transform) => this.setAttr("patternTransform", transform.toString())
+                case None => this.removeAttr("patternTransform")
+            }
+        }
+    }
+
+    public mut prop href: ?String {
+        get() {
+            readSvgHref(this)
+        }
+        set(value) {
+            writeSvgHref(this, value)
+        }
+    }
+}

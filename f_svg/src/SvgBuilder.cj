@@ -194,6 +194,19 @@ private func buildSvgOne(
         checkRequiredAttributes(local, xml, path)
     }
     buildSvgChildren(element, xml, namespace, path, depth, context)
+    if (element is SvgFilter) {
+        for (node in element.children) {
+            match (node) {
+                case ElementNode(child) =>
+                    if (!(child is SvgFilterPrimitive)) {
+                        context.warnings.add(
+                            "元素「${path}」的 filter 内出现非 fe* 子元素「${child.tag}」，已保留但不参与滤镜链"
+                        )
+                    }
+                case _ => ()
+            }
+        }
+    }
     Some(element)
 }
 
@@ -506,6 +519,14 @@ private func isValidSvgAttribute(local: String, value: String): Bool {
         case "lengthAdjust" => SvgLengthAdjust.fromName(value.trimAscii()).isSome()
         case "gradientUnits" => SvgCoordinateUnits.fromName(value.trimAscii()).isSome()
         case "spreadMethod" => SvgSpreadMethod.fromName(value.trimAscii()).isSome()
+        case "filterUnits" | "primitiveUnits" | "patternUnits" | "patternContentUnits" =>
+            SvgCoordinateUnits.fromName(value.trimAscii()).isSome()
+        case "markerUnits" => SvgMarkerUnits.fromName(value.trimAscii()).isSome()
+        case "orient" => SvgMarkerOrient.fromName(value.trimAscii()).isSome()
+        case "mode" => SvgBlendMode.fromName(value.trimAscii()).isSome()
+        case "operator" => SvgCompositeOperator.fromName(value.trimAscii()).isSome()
+        case "image-rendering" => SvgImageRendering.fromName(value).isSome()
+        case "path" => SvgPathData.tryParse(value).isSome()
         case _ => true
     }
 }
