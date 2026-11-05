@@ -243,7 +243,7 @@ private func elementTransformMatrix(element: SvgElement): SvgMatrix {
     }
 }
 
-private func elementPathData(element: SvgElement): ?SvgPathData {
+internal func elementPathData(element: SvgElement): ?SvgPathData {
     match (element) {
         case rect: SvgRect =>
             let width = lengthOrZero(rect.width)
@@ -285,6 +285,21 @@ private func elementPathData(element: SvgElement): ?SvgPathData {
                 case None => return None
             }
         case path: SvgPath => return path.d
+        case line: SvgLine =>
+            return Some(
+                SvgPathData([
+                    SvgPathCommand(
+                        SvgPathCommandKind.MoveTo,
+                        false,
+                        [lengthOrZero(line.x1), lengthOrZero(line.y1)]
+                    ),
+                    SvgPathCommand(
+                        SvgPathCommandKind.LineTo,
+                        false,
+                        [lengthOrZero(line.x2), lengthOrZero(line.y2)]
+                    )
+                ])
+            )
         case _ => ()
     }
     None

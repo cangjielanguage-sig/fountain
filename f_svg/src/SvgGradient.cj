@@ -466,7 +466,7 @@ public class SvgGradientSampler {
     }
 }
 
-private func stripSvgHash(href: String): String {
+internal func stripSvgHash(href: String): String {
     let trimmed = href.trimAscii()
     if (trimmed.size > 0 && trimmed[0] == b'#') {
         trimmed[1..]
@@ -475,7 +475,7 @@ private func stripSvgHash(href: String): String {
     }
 }
 
-private func findGradientById(element: ?SvgElement, id: String): ?SvgGradient {
+internal func findGradientById(element: ?SvgElement, id: String): ?SvgGradient {
     match (element) {
         case Some(node) =>
             if (node.attr("id") == Some(id)) {
