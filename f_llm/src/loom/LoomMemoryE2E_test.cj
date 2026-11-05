@@ -76,9 +76,9 @@ class LoomMemoryE2E_test {
             '{"title":"日报助手","details":"三段式：结论-数据-建议",'
             + '"functions":"{}","version":1}')
         target.call('prompt', 'put',
-            '{"name":"reviewer","version":1,"content":"你是严格评审员"}')
+            '{"name":"rigorous","version":1,"content":"你是严格评审员"}')
         target.call('character', 'set',
-            '{"userId":5,"characterKey":"reviewer","prompts":""}')
+            '{"userId":5,"characterKey":"rigorous","prompts":""}')
     }
 
     /** 六个步骤串成一条链：三个检索 → 两个写入 → 一次模型调用 */
@@ -344,12 +344,17 @@ class LoomMemoryE2E_test {
         }
     }
 
-    /** 流程内直接读人格（character.get），结果能进模型 input */
+    /**
+     * 流程内直接读人格（character.get），结果能进模型 input。
+     *
+     * `characterKey` 必须是 [PredefinedCharacters] 里的预定义值（生产实现会校验），
+     * 所以这里用 `rigorous` 而不是随手编的名字——内存实现不校验，用它写用例会掩盖这条约束。
+     */
     @TestCase
     func testCharacterGetReachesModel(): Unit {
         let target = gateway()
         target.call('character', 'set',
-            '{"userId":5,"characterKey":"reviewer","prompts":"tone,length"}')
+            '{"userId":5,"characterKey":"rigorous","prompts":"tone,length"}')
         LoomHostApi.installStore(target.call)
         LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: USER))
         try{
@@ -367,7 +372,7 @@ class LoomMemoryE2E_test {
             let host = E2eHost()
             LoomRunner().run(value, host,
                 StartEvent(category: 'loom', tag: 'character-e2e', name: 'start', data: '读人格'))
-            @Expect(host.lastInput.contains('"characterKey":"reviewer"'), true)
+            @Expect(host.lastInput.contains('"characterKey":"rigorous"'), true)
             // prompts 是同一条记录上的附加提示词名列表
             @Expect(host.lastInput.contains('"prompts":"tone,length"'), true)
             // 未配置的用户返回空串，不会编造
