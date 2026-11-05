@@ -483,6 +483,30 @@ plan.persona = ''
 `scheduleCreate` 注册的流程任务由 `LoomScheduler`（`TicktockScheduler`，基于 `f_ticktock`）驱动；
 JIT 步骤在任务里执行时由 `JitTicktockTask` 承接。`LoomSchedules` 未安装时注册与触发都跳过。
 
+### 流程路由（Supervisor）
+
+流程多了以后，调用方不必再记「该找哪个流程」：打开 `llm_supervisor`，已编译流程自动登记成路由目标，
+一段描述交给模型判定落在哪条流程上。
+
+```bash
+export llm_supervisor=true        # 打开路由；每个流程对应唯一事件 sv/<流程名>
+export llm_loomOnNoUsable=true    # 可选：没有可用流程时自动编排一条并执行
+```
+
+```cangjie
+// 描述 → 选路 → 派发（描述作为事件数据，经 {start.output} 进入首步）
+let outcome = Supervisor.current().getOrThrow().dispatch('把今天的提交汇总一下')
+println(outcome.kind)   // dispatched | created | noUsableFlow | clarifying
+println(outcome.flow)   // 命中的流程名（created 时是新建的 auto-<时间戳>）
+```
+
+| 行为 | 说明 |
+|---|---|
+| 登记 | `execute` / `confirmFlow` 落库后自动登记；`delete` 自动摘除；重启时按流程库重建 |
+| 选路 | 只把 `compiled` 流程的名称/描述/事件名发给模型；非 JSON、空名、不在表内一律按无可用处理 |
+| 无可用 | `llm_loomOnNoUsable=false` → 返回「没有可完成此工作的流程」；`true` → 自动编排、登记并执行 |
+| 关闭态 | 零开销：不注册、不选路、不产生额外模型调用 |
+
 ---
 
 ## 经验 → 技能演进
@@ -600,6 +624,8 @@ println(outcome.report)
 | `llm_toolResultMaxBytes` / `llm_fetchMaxBytes` | 无 | 工具结果 / 抓取内容上限 |
 | `llm_prunerLlmName` / `llm_summarisingLlmName` | 无 | 依赖模型的裁剪器 / 提炼所用模型 |
 | `llm_balanceLowThreshold` | 无 | 余额告警阈值 |
+| `llm_supervisor` | `false` | 打开流程路由（Supervisor）：已编译流程自动登记、可按描述派发 |
+| `llm_loomOnNoUsable` | `false` | Supervisor 判定无可用流程时自动编排新流程；仅 `llm_supervisor=true` 时生效 |
 
 ### 其它
 

@@ -24,6 +24,65 @@
 | `compiled` | 步骤闭包编译成功，可执行 |
 | `failed` | 启动重编译失败，需人工修 |
 
+## Supervisor（流程路由）
+
+流程攒多以后，调用方不该再记「这段活该找哪个流程」。Supervisor 把已编译流程注册成路由目标，
+由模型判定一段描述落到哪条流程，再把描述作为事件投递进去。
+
+**两个开关**（都只在启动时读一次）：
+
+| 配置项 | 默认 | 作用 |
+|---|---|---|
+| `llm_supervisor` | `false` | 打开流程路由；关闭时不注册、不选路、**不产生任何额外模型调用** |
+| `llm_loomOnNoUsable` | `false` | 没有可用流程时自动编排新流程；仅 `llm_supervisor=true` 时生效 |
+
+关闭态是零开销的：`Supervisor.tap/untap` 首行判断「有没有装」，没装直接 return。
+
+### 路由表
+
+| 项 | 说明 |
+|---|---|
+| 一条路由 | 流程名、描述、**唯一事件名 `sv/<流程名>`**、状态 |
+| 注册时机 | `LoomService.execute` / `confirmFlow` 落库后自动登记；`LoomService.delete` 自动摘除 |
+| 不登记的状态 | `clarifying`（没有源码、也无法执行） |
+| 幂等 | 同名流程重复登记只更新描述/状态，不产生第二条 |
+| 并发 | 表由 `Mutex` 保护，与 `LoomRegistry` 一致 |
+| 初始化 | `LoomWiring.wire` 在开关打开时用 `LoomRegistry.compiledFlows()` 播种（重启后从存储恢复的流程也在此进来） |
+| 持久化 | **不落库**：路由表是流程库的派生视图，避免双份真相 |
+
+事件名用 `sv/` 前缀，与 `LoomRunner` 内部的 `loom/<name>#<seq>` 流程 tag 区分开——日志里一眼能看出
+「这是外部派发」还是「这是内部步骤」。
+
+### 派发
+
+```cangjie
+let outcome = Supervisor.current().getOrThrow().dispatch('把今天的提交汇总一下')
+// outcome.kind = dispatched | created | noUsableFlow | clarifying
+// outcome.flow / outcome.event / outcome.result
+```
+
+1. 取 `routable()`（只含 `compiled`）；
+2. 拼提示词：每条流程的「名称 / 描述 / 事件名」+ 需求原文，要求只输出 `{"flow":"<名称>"}`；
+3. 解析回落（`Planner.stripFence` + JSON）：非 JSON、缺 `flow` 字段、空串、名字不在候选内——**一律按无可用流程处理，不抛错**；
+4. 命中后在流程库**二次确认状态**（路由表可能落后，比如刚被改回 `pending`）；
+5. 以 `StartEvent(category: 'supervisor', tag: <名称>, name: 'sv/<名称>', data: <描述>)` 执行，
+   描述经 `{start.output}` 进入首步。
+
+选路阶段模型调用抛异常也按无可用流程处理；派发阶段的执行异常原样抛出（执行失败是真实失败）。
+
+### 无可用流程
+
+| `llm_loomOnNoUsable` | 行为 |
+|---|---|
+| `false` | 立即返回，消息固定为「没有可完成此工作的流程」，不建流程、不执行 |
+| `true` | 生成名字 `auto-<秒级时间戳>`（撞名顺延 `-2`、`-3`…）→ `execute(dryRun=false)` → `confirmFlow` → 登记 → 派发；编排落到 `clarifying` 则**不登记、不执行**，把问题交回调用方 |
+
+### 限制
+
+- 路由表不持久化：进程重启后由流程库重建，因此「表里有什么」永远等于「库里有什么（可执行的）」；
+- 选路是单轮提示词 + 单值输出，没有 top-k 候选与置信度；
+- 一次派发只落一条流程，不做多流程串联。
+
 ## 工具
 
 | 工具 | 关键参数 | 行为 |

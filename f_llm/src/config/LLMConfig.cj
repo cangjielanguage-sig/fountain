@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.config
 
 import std.convert.*
@@ -21,7 +21,7 @@ import std.fs.{Path, exists, Directory}
 import fountain::f_config.*
 
 public struct LLMConfig {
-    private init(){}
+    private init() {}
     public static const LLM_REBUILD_INDEX_ON_START = 'llm_rebuildIndexOnStart'
     public static const LLM_REBUILD_INDEX_USER_ID = 'llm_rebuildIndexUserId'
     public static const LLM_REBUILD_INDEX_NAMESPACE = 'llm_rebuildIndexNamespace'
@@ -48,6 +48,23 @@ public struct LLMConfig {
     /** 数据库配置源开关：`llm_db=true` */
     public static func isDatabaseEnabled(): Bool {
         Config.getValue<Bool>(LLM_DB) ?? false
+    }
+
+    /** Supervisor 开关：`llm_supervisor=true` 才启用流程路由（默认关闭） */
+    public static const LLM_SUPERVISOR = LLM + '_supervisor'
+    /** 无可用流程时是否自动编排新流程；仅 `llm_supervisor=true` 时生效 */
+    public static const LLM_LOOM_ON_NO_USABLE = LLM + '_loomOnNoUsable'
+
+    public static func supervisorEnabled(): Bool {
+        Config.getValue<Bool>(LLM_SUPERVISOR) ?? false
+    }
+
+    /** 无可用流程时才自动编排；supervisor 没开时该开关一律不生效 */
+    public static func loomOnNoUsable(): Bool {
+        if (!supervisorEnabled()) {
+            return false
+        }
+        Config.getValue<Bool>(LLM_LOOM_ON_NO_USABLE) ?? false
     }
 
     /** 配置来源名：database（默认）/ env / file:<path> */
@@ -165,16 +182,16 @@ public struct LLMConfig {
     public static func getBalanceLowThreshold(): Int64 {
         Config.getValue<Int64>(LLM_BALANCE_LOW_THRESHOLD) ?? 100
     }
-    private static func getPath(key: String, join!: String = ''){
-        var path =  if(let Some(p) <- Config.getString(key)){
+    private static func getPath(key: String, join!: String = '') {
+        var path = if (let Some(p) <- Config.getString(key)) {
             Path(p)
-        }else{
+        } else {
             getWorkingDirectory()
         }
-        if(join.size > 0){
+        if (join.size > 0) {
             path = path.join(join)
         }
-        if(!exists(path)){
+        if (!exists(path)) {
             Directory.create(path, recursive: true)
         }
         path

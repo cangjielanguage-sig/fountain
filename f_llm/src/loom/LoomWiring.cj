@@ -12,11 +12,12 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
+import std.collection.*
 import std.time.DateTime
-
+import fountain::f_llm.config.LLMConfig
 import fountain::f_llm.store.*
 
 /**
@@ -50,41 +51,37 @@ public class LoomWiring {
      * @param evolutionUserId / evolutionNamespace 取经验与知识用的归属
      * @param evolutionModel 演进用的模型名；空串则交给 chat 回调取默认
      */
-    public static func wire(chat: (String, String, String) -> String,
-                            plannerModel!: String = '',
-                            store!: ?LoomStore = None,
-                            memoryPolicy!: ?LoomMemoryPolicy = None,
-                            skillEmbedder!: ?(String) -> Array<Float64> = None,
-                            evolutionCron!: String = '',
-                            evolutionUserId!: Int64 = 0,
-                            evolutionNamespace!: String = 'loom',
-                            evolutionModel!: String = '',
-                            evolutionNameCandidates!: Bool = true,
-                            evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy()): LoomService {
+    public static func wire(chat: (String, String, String) -> String, plannerModel!: String = '',
+        store!: ?LoomStore = None, memoryPolicy!: ?LoomMemoryPolicy = None,
+        skillEmbedder!: ?(String) -> Array<Float64> = None, evolutionCron!: String = '', evolutionUserId!: Int64 = 0,
+        evolutionNamespace!: String = 'loom', evolutionModel!: String = '', evolutionNameCandidates!: Bool = true,
+        evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy()): LoomService {
         let settings = StoreSettings.load()
         // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
-        let chosen = match(store){
+        let chosen = match (store) {
             case Some(value) => value
             case None => LoomBootstrap.storeFor(settings.metaStore)
         }
         let registry = LoomRegistry(store: chosen)
         LoomBootstrap.startup(registry)
-        let planner = Planner({ system, user => chat(plannerModel, system, user) })
+        let planner = Planner({system, user => chat(plannerModel, system, user)})
         let service = LoomService(planner, registry)
         LoomServices.install(service)
         // 默认存储网关：loomStore(kind, op, payload) 直接落到知识/记忆/技能 Store（惰性取容器）
-        LoomHostApi.installStore({ kind, op, payload =>
-            LoomStoreGateway().call(kind, op, payload)
+        LoomHostApi.installStore({
+            kind, op, payload => LoomStoreGateway().call(kind, op, payload)
         })
         // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
         LoomServices.installHost(DefaultLoomHost(chat))
+        // Supervisor：开关打开时用已编译流程播种路由表（重启后恢复的流程也在这里进来）
+        installSupervisor(service, registry, chat, plannerModel)
         // 记忆策略：默认开启（规则提炼），需要模型总结时由调用方传入 summarize=true
-        match(memoryPolicy){
+        match (memoryPolicy) {
             case Some(policy) => LoomMemoryPolicy.install(policy)
             case None => ()
         }
         // 技能目录：惰性取技能库；传了 embedder 就是向量检索，否则退回关键词
-        SkillCatalog.install({ => Stores.meta().skills }, embedder: skillEmbedder)
+        SkillCatalog.install({=> Stores.meta().skills}, embedder: skillEmbedder)
         // 演进报告表：mysql/postgres 部署在启动时建表建索引（失败不阻断启动）
         EvolutionStores.bootstrap()
         // 演进状态：默认落 f_store；mysql/postgres 建表
@@ -92,41 +89,58 @@ public class LoomWiring {
         // 每日租约：跟着向量存储走（SQL 建单行表 / hydra 全 0 向量 / 本地 f_store）
         let _ = EvolutionLeases.bootstrap()
         // 技能演进统一由 SkillEvolutionJob 执行：配了 cron 就注册成周期任务
-        registerEvolution(chat, evolutionCron, evolutionUserId, evolutionNamespace,
-            evolutionModel, evolutionNameCandidates, evolutionPolicy, skillEmbedder)
+        registerEvolution(chat, evolutionCron, evolutionUserId, evolutionNamespace, evolutionModel,
+            evolutionNameCandidates, evolutionPolicy, skillEmbedder)
         service
     }
 
-    /** 注册周期演进任务；未配 cron 或未装调度器时什么都不做 */
-    private static func registerEvolution(chat: (String, String, String) -> String,
-                                          cron: String, userId: Int64, namespace: String,
-                                          model: String, nameCandidates: Bool,
-                                          policy: SkillEvolutionPolicy,
-                                          embedder: ?(String) -> Array<Float64>): Unit {
-        if(cron.trimAscii().isEmpty()){
+    /**
+     * 装配 Supervisor：`llm_supervisor` 关闭时什么都不做（零开销、零行为变化）。
+     *
+     * 路由表不落库，开机时按 `LoomRegistry` 里已恢复的流程重建；
+     * 选路与派发复用同一份 chat 回调（模型名取 `plannerModel`）。
+     */
+    private static func installSupervisor(service: LoomService, registry: LoomRegistry,
+        chat: (String, String, String) -> String, plannerModel: String): Unit {
+        if (!LLMConfig.supervisorEnabled()) {
             return
         }
-        let scheduler = match(LoomSchedules.current()){
+        let host: LoomHost = match (LoomServices.currentHost()) {
+            case Some(value) => value
+            case None => DefaultLoomHost(chat)
+        }
+        let flows = ArrayList<LoomFlow>()
+        for (flow in registry.compiledFlows()) {
+            flows.add(flow)
+        }
+        let _ = Supervisor.install(service, host, {system, user => chat(plannerModel, system, user)}, flows: flows)
+    }
+
+    /** 注册周期演进任务；未配 cron 或未装调度器时什么都不做 */
+    private static func registerEvolution(chat: (String, String, String) -> String, cron: String, userId: Int64,
+        namespace: String, model: String, nameCandidates: Bool, policy: SkillEvolutionPolicy,
+        embedder: ?(String) -> Array<Float64>): Unit {
+        if (cron.trimAscii().isEmpty()) {
+            return
+        }
+        let scheduler = match (LoomSchedules.current()) {
             case Some(value) => value
             case None => return
         }
         let state = EvolutionStateStores.current()
         let ledger = EvolutionStores.current()
         // 租约构造可能打开本地存储；失败就不做互斥（单进程也安全）
-        let lease: ?EvolutionLease = try{
+        let lease: ?EvolutionLease = try {
             Some(EvolutionLeases.current())
-        }catch(error: Exception){
+        } catch (error: Exception) {
             None
         }
         // chat 是 (model, system, user)；演进侧只需要 (system, user)
-        let evolveChat = { system: String, user: String => chat(model, system, user) }
-        SkillEvolutionJob.schedule('loom-skill-evolution', cron, scheduler,
-            { => Stores.meta().skills.list() },
+        let evolveChat = {system: String, user: String => chat(model, system, user)}
+        SkillEvolutionJob.schedule('loom-skill-evolution', cron, scheduler, {=> Stores.meta().skills.list()},
             // 网关与存储都在任务触发时才构造：注册阶段不碰内容存储，避免启动即建连接
-            { => SkillEvolutionJob.load(LoomStoreGateway(), userId, namespace) },
-            evolveChat, state,
-            policy: policy, embedder: embedder,
-            nameCandidates: nameCandidates, ledger: ledger, lease: lease,
-            clock: { => DateTime.now().toUnixTimeStamp().toSeconds() })
+            {=> SkillEvolutionJob.load(LoomStoreGateway(), userId, namespace)}, evolveChat, state, policy: policy,
+            embedder: embedder, nameCandidates: nameCandidates, ledger: ledger, lease: lease,
+            clock: {=> DateTime.now().toUnixTimeStamp().toSeconds()})
     }
 }

@@ -474,6 +474,29 @@ Switches in `LoomMemoryPolicy`:
 
 Flows registered by `scheduleCreate` run through `LoomScheduler` (`TicktockScheduler`, backed by `f_ticktock`); JIT steps inside a scheduled run are handled by `JitTicktockTask`. When `LoomSchedules` is not installed, both registration and firing are skipped.
 
+### Flow routing (Supervisor)
+
+Once there are many flows, callers no longer need to remember which one handles what: turn on `llm_supervisor` and compiled flows register as routing targets, with a model deciding which flow a description belongs to.
+
+```bash
+export llm_supervisor=true        # enable routing; each flow maps to a unique event sv/<flow-name>
+export llm_loomOnNoUsable=true    # optional: auto-build and run a new flow when none fits
+```
+
+```cangjie
+// description → routing → dispatch (the description becomes event data, reaching the first step as {start.output})
+let outcome = Supervisor.current().getOrThrow().dispatch('summarise today's commits')
+println(outcome.kind)   // dispatched | created | noUsableFlow | clarifying
+println(outcome.flow)   // chosen flow (for created: the generated auto-<timestamp>)
+```
+
+| Behaviour | Notes |
+|---|---|
+| Registration | `execute` / `confirmFlow` register on commit; `delete` unregisters; rebuilt from the flow store on startup |
+| Routing | Only `compiled` flows (name/description/event) go to the model; non-JSON, blank or unknown names count as "no usable flow" |
+| No usable flow | `llm_loomOnNoUsable=false` → returns "没有可完成此工作的流程"; `true` → plan, register and run a new flow |
+| Disabled | Zero overhead: no registration, no routing, no extra model calls |
+
 ---
 
 ## Experience → skill evolution
@@ -590,6 +613,8 @@ All environment variables, read once at startup.
 | `llm_toolResultMaxBytes` / `llm_fetchMaxBytes` | none | Tool result / fetch size limits |
 | `llm_prunerLlmName` / `llm_summarisingLlmName` | none | Model for model-dependent pruners / extraction |
 | `llm_balanceLowThreshold` | none | Balance warning threshold |
+| `llm_supervisor` | `false` | Enable flow routing (Supervisor): compiled flows auto-register and can be dispatched by description |
+| `llm_loomOnNoUsable` | `false` | Auto-build a new flow when Supervisor finds no usable one; effective only with `llm_supervisor=true` |
 
 ### Others
 
