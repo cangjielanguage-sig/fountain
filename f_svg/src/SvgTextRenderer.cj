@@ -97,6 +97,8 @@ private class SvgTextChar {
     var yBase: Float64 = 0.0
     var dx: Float64 = 0.0
     var dy: Float64 = 0.0
+    var xExplicit: Bool = false
+    var yExplicit: Bool = false
 
     init(codePoint: Int64, state: SvgTextState) {
         this.codePoint = codePoint
@@ -350,13 +352,18 @@ private func collectSvgTextChars(
                             match (span.x) {
                                 case Some(values) => if (values.size > 0) {
                                     for (index in start..out.size) {
+                                        let char = out[index]
+                                        if (char.xExplicit) {
+                                            continue
+                                        }
                                         let offset = index - start
                                         let valueIndex = if (offset < values.size) {
                                             offset
                                         } else {
                                             values.size - 1
                                         }
-                                        out[index].xOverride = Some(values[valueIndex].value)
+                                        char.xOverride = Some(values[valueIndex].value)
+                                        char.xExplicit = true
                                     }
                                 }
                                 case None => ()
@@ -364,13 +371,18 @@ private func collectSvgTextChars(
                             match (span.y) {
                                 case Some(values) => if (values.size > 0) {
                                     for (index in start..out.size) {
+                                        let char = out[index]
+                                        if (char.yExplicit) {
+                                            continue
+                                        }
                                         let offset = index - start
                                         let valueIndex = if (offset < values.size) {
                                             offset
                                         } else {
                                             values.size - 1
                                         }
-                                        out[index].yBase = values[valueIndex].value
+                                        char.yBase = values[valueIndex].value
+                                        char.yExplicit = true
                                     }
                                 }
                                 case None => ()
@@ -392,19 +404,23 @@ private func applyRootTextAttributes(text: SvgTextElement, chars: ArrayList<SvgT
         let char = chars[index]
         match (xValues) {
             case Some(values) =>
-                if (index < values.size) {
-                    char.xOverride = Some(values[index].value)
-                } else if (values.size > 0) {
-                    char.xOverride = Some(values[values.size - 1].value)
+                if (!char.xExplicit) {
+                    if (index < values.size) {
+                        char.xOverride = Some(values[index].value)
+                    } else if (values.size > 0) {
+                        char.xOverride = Some(values[values.size - 1].value)
+                    }
                 }
             case None => ()
         }
         match (yValues) {
             case Some(values) =>
-                if (index < values.size) {
-                    char.yBase = values[index].value
-                } else if (values.size > 0) {
-                    char.yBase = values[values.size - 1].value
+                if (!char.yExplicit) {
+                    if (index < values.size) {
+                        char.yBase = values[index].value
+                    } else if (values.size > 0) {
+                        char.yBase = values[values.size - 1].value
+                    }
                 }
             case None => ()
         }

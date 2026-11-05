@@ -184,6 +184,48 @@ public class SvgTextRenderer_test {
         @Assert(rotateRenderer.warnings.size >= 1)
     }
 
+    /** tspan 显式 x/y 不被外层 tspan 与根 text 覆盖。 */
+    @TestCase
+    public func explicitTspanPositionWins(): Unit {
+        let renderer = SvgTextRenderer()
+
+        let direct = makeText("")
+        let directSpan = SvgTspan()
+        directSpan.x = [SvgLength(50.0)]
+        directSpan.y = [SvgLength(30.0)]
+        directSpan.appendText("A")
+        direct.appendElement(directSpan)
+        direct.x = [SvgLength(0.0)]
+        direct.y = [SvgLength(0.0)]
+        let directLayout = renderer.layout(direct, style: textStyleOf(direct))
+        @Assert(directLayout.glyphs.size == 1)
+        @Assert(near(directLayout.glyphs[0].x, 50.0))
+        @Assert(near(directLayout.glyphs[0].y, 30.0))
+
+        let nested = makeText("")
+        let outer = SvgTspan()
+        outer.x = [SvgLength(50.0)]
+        let inner = SvgTspan()
+        inner.x = [SvgLength(80.0)]
+        inner.appendText("A")
+        outer.appendElement(inner)
+        nested.appendElement(outer)
+        nested.x = [SvgLength(0.0)]
+        let nestedLayout = renderer.layout(nested, style: textStyleOf(nested))
+        @Assert(nestedLayout.glyphs.size == 1)
+        @Assert(near(nestedLayout.glyphs[0].x, 80.0))
+
+        let plain = makeText("A")
+        let plainSpan = SvgTspan()
+        plainSpan.appendText("B")
+        plain.appendElement(plainSpan)
+        plain.x = [SvgLength(7.0)]
+        let plainLayout = renderer.layout(plain, style: textStyleOf(plain))
+        @Assert(plainLayout.glyphs.size == 2)
+        @Assert(near(plainLayout.glyphs[0].x, 7.0))
+        @Assert(near(plainLayout.glyphs[1].x, 7.0))
+    }
+
     /** 文本轮廓接入光栅器。 */
     @TestCase
     public func rasterizedText(): Unit {
