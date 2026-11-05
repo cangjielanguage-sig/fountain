@@ -78,7 +78,12 @@ public class SvgTextPathLayout {
         advances: Array<Float64>,
         path: SvgPathData,
         startOffset: SvgLength,
-        anchor: SvgTextAnchor
+        anchor: SvgTextAnchor,
+        side!: SvgTextPathSide = SvgTextPathSide.Left,
+        method!: SvgTextPathMethod = SvgTextPathMethod.Align,
+        spacing!: SvgTextPathSpacing = SvgTextPathSpacing.Auto,
+        sideOffsets!: Array<Float64> = Array<Float64>(),
+        dxOffsets!: Array<Float64> = Array<Float64>()
     ): Array<SvgTextPlacement> {
         this.pathEmpty = false
         let contours = flattenPathData(path, SvgMatrix.identity, 0.25)
@@ -110,6 +115,17 @@ public class SvgTextPathLayout {
         for (advance in advances) {
             textAdvance += advance
         }
+        let adjusted = Array<Float64>(advances.size, repeat: 0.0)
+        for (index in 0..advances.size) {
+            adjusted[index] = advances[index]
+        }
+        if (method == SvgTextPathMethod.Stretch && total > 0.0 && textAdvance > 0.0) {
+            let factor = total / textAdvance
+            for (index in 0..adjusted.size) {
+                adjusted[index] = adjusted[index] * factor
+            }
+            textAdvance = total
+        }
         var start = if (startOffset.unit == SvgLengthUnit.Percent) {
             startOffset.value / 100.0 * total
         } else {
@@ -132,7 +148,12 @@ public class SvgTextPathLayout {
         let result = ArrayList<SvgTextPlacement>()
         var cursor = start
         var truncated = false
-        for (advance in advances) {
+        var index: Int64 = 0
+        while (index < adjusted.size) {
+            let advance = adjusted[index]
+            if (spacing == SvgTextPathSpacing.Exact && index < dxOffsets.size) {
+                cursor += dxOffsets[index]
+            }
             let centerDistance = cursor + advance / 2.0
             if (cursor + advance > total || centerDistance > total) {
                 truncated = true
@@ -140,10 +161,29 @@ public class SvgTextPathLayout {
             }
             let origin = samplePoint(segments, cursor)
             let center = samplePoint(segments, centerDistance)
+            var originX = origin.x
+            var originY = origin.y
+            var centerX = center.x
+            var centerY = center.y
+            if (index < sideOffsets.size && sideOffsets[index] != 0.0) {
+                let offset = if (side == SvgTextPathSide.Left) {
+                    sideOffsets[index]
+                } else {
+                    -sideOffsets[index]
+                }
+                let radians = center.angle * 3.141592653589793 / 180.0
+                let normalX = -sin(radians) * offset
+                let normalY = cos(radians) * offset
+                originX += normalX
+                originY += normalY
+                centerX += normalX
+                centerY += normalY
+            }
             result.add(
-                SvgTextPlacement(center.x, center.y, origin.x, origin.y, center.angle)
+                SvgTextPlacement(centerX, centerY, originX, originY, center.angle)
             )
             cursor += advance
+            index++
         }
         if (truncated) {
             this.warnings.add("文本长度超过 textPath 路径长度，超出部分已截断")

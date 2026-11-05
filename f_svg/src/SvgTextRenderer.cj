@@ -28,6 +28,10 @@ public class SvgTextGlyph {
     public let path: ?SvgPathData
     /** 字形旋转角（度），由 textPath 切线与 rotate 列表叠加。 */
     public let angle: Float64
+    /** 字形 ascent，用于装饰线定位。 */
+    public let ascent: Float64
+    /** 该字形生效的装饰线（祖先传播后的结果）。 */
+    public let decoration: SvgTextDecoration
 
     internal init(
         codePoint: Int64,
@@ -36,7 +40,9 @@ public class SvgTextGlyph {
         advance: Float64,
         fontSize: Float64,
         path: ?SvgPathData,
-        angle!: Float64 = 0.0
+        angle!: Float64 = 0.0,
+        ascent!: Float64 = 0.0,
+        decoration!: SvgTextDecoration = SvgTextDecoration.none
     ) {
         this.codePoint = codePoint
         this.x = x
@@ -45,6 +51,8 @@ public class SvgTextGlyph {
         this.fontSize = fontSize
         this.path = path
         this.angle = angle
+        this.ascent = ascent
+        this.decoration = decoration
     }
 }
 
@@ -74,6 +82,7 @@ private class SvgTextState {
     let dominant: SvgDominantBaseline
     let alignment: SvgAlignmentBaseline
     let shift: SvgBaselineShift
+    let decoration: SvgTextDecoration
 
     init(
         fontSize: Float64,
@@ -84,7 +93,8 @@ private class SvgTextState {
         wordSpacing: Float64,
         dominant!: SvgDominantBaseline = SvgDominantBaseline.Auto,
         alignment!: SvgAlignmentBaseline = SvgAlignmentBaseline.Auto,
-        shift!: SvgBaselineShift = SvgBaselineShift.Baseline
+        shift!: SvgBaselineShift = SvgBaselineShift.Baseline,
+        decoration!: SvgTextDecoration = SvgTextDecoration.none
     ) {
         this.fontSize = fontSize
         this.family = family
@@ -95,6 +105,7 @@ private class SvgTextState {
         this.dominant = dominant
         this.alignment = alignment
         this.shift = shift
+        this.decoration = decoration
     }
 }
 
@@ -111,6 +122,7 @@ private class SvgTextChar {
     let shift: SvgBaselineShift
     let parentDominant: SvgDominantBaseline
     let isRoot: Bool
+    let decoration: SvgTextDecoration
     var xOverride: ?Float64 = None
     var yBase: Float64 = 0.0
     var dx: Float64 = 0.0
@@ -136,6 +148,7 @@ private class SvgTextChar {
         this.shift = state.shift
         this.parentDominant = parentDominant
         this.isRoot = isRoot
+        this.decoration = state.decoration
     }
 }
 
@@ -178,7 +191,8 @@ public class SvgTextRenderer {
             style.wordSpacing().value,
             dominant: style.dominantBaseline(),
             alignment: SvgAlignmentBaseline.Auto,
-            shift: style.baselineShift()
+            shift: style.baselineShift(),
+            decoration: effectiveTextDecoration(text, style)
         )
         let chars = ArrayList<SvgTextChar>()
         collectSvgTextChars(
@@ -195,6 +209,7 @@ public class SvgTextRenderer {
         let advances = ArrayList<Float64>()
         let paths = ArrayList<?SvgPathData>()
         let baselineOffsets = ArrayList<Float64>()
+        let ascentValues = ArrayList<Float64>()
         var missingGlyph = false
         for (index in 0..count) {
             let char = chars[index]
@@ -207,18 +222,17 @@ public class SvgTextRenderer {
                         missingGlyph = true
                     }
                     paths.add(entry.path)
+                    let ascent = charFontAscent(value, char)
+                    ascentValues.add(ascent)
                     baselineOffsets.add(
-                        baselineOffsetFor(
-                            char,
-                            charFontAscent(value, char),
-                            charFontDescent(value, char)
-                        )
+                        baselineOffsetFor(char, ascent, charFontDescent(value, char))
                     )
                 case None =>
                     missingGlyph = true
                     this.warnings.add("未找到字体「${char.family}」，使用占位字形")
                     advances.add(char.fontSize * 0.5)
                     paths.add(placeholderGlyph(char.fontSize, char.fontSize * 0.5))
+                    ascentValues.add(char.fontSize * 0.8)
                     baselineOffsets.add(
                         baselineOffsetFor(char, char.fontSize * 0.8, char.fontSize * 0.2)
                     )
@@ -292,6 +306,44 @@ public class SvgTextRenderer {
             this.warnings,
             location: location
         )
+        let writingMode = style.writingMode()
+        let vertical = writingMode.isVertical() && textPathElement.isNone()
+        if (writingMode.isVertical() && textPathElement.isSome()) {
+            this.warnings.add("${location} writing-mode 与 textPath 同时出现，已忽略 writing-mode")
+        }
+        let columnPositions = ArrayList<Float64>()
+        let verticalPositions = ArrayList<Float64>()
+        var verticalTotal = 0.0
+        var verticalAnchor = 0.0
+        if (vertical) {
+            var columnPen = 0.0
+            var lastColumn: ?Float64 = None
+            for (index in 0..count) {
+                let column = chars[index].xOverride ?? 0.0
+                match (lastColumn) {
+                    case Some(previous) => if (previous != column) {
+                        columnPen = 0.0
+                    }
+                    case None => ()
+                }
+                lastColumn = Some(column)
+                columnPositions.add(column)
+                verticalPositions.add(columnPen)
+                columnPen += advances[index] * scaleX
+                if (index < count - 1) {
+                    columnPen += chars[index].letterSpacing + extra
+                    if (chars[index].codePoint == 32) {
+                        columnPen += chars[index].wordSpacing
+                    }
+                }
+            }
+            verticalTotal = columnPen
+            verticalAnchor = match (style.textAnchor()) {
+                case SvgTextAnchor.Start => 0.0
+                case SvgTextAnchor.Middle => -verticalTotal / 2.0
+                case SvgTextAnchor.End => -verticalTotal
+            }
+        }
         match (textPathElement) {
             case Some(pathElement) =>
                 match (resolveTextPathData(pathElement, root)) {
@@ -301,11 +353,41 @@ public class SvgTextRenderer {
                             advanceArray[index] = advances[index] * scaleX
                         }
                         let pathLayout = SvgTextPathLayout()
+                        let sideValue = SvgTextPathSide.fromNameOrWarn(
+                            pathElement.attr("side"),
+                            this.warnings,
+                            "${location} textPath side"
+                        )
+                        let methodValue = SvgTextPathMethod.fromNameOrWarn(
+                            pathElement.attr("method"),
+                            this.warnings,
+                            "${location} textPath method"
+                        )
+                        let spacingValue = SvgTextPathSpacing.fromNameOrWarn(
+                            pathElement.attr("spacing"),
+                            this.warnings,
+                            "${location} textPath spacing"
+                        )
+                        let sideOffsets = Array<Float64>(count, repeat: 0.0)
+                        if (pathElement.attr("side").isSome()) {
+                            for (index in 0..count) {
+                                sideOffsets[index] = 0.5 * chars[index].fontSize
+                            }
+                        }
+                        let dxOffsets = Array<Float64>(count, repeat: 0.0)
+                        for (index in 0..count) {
+                            dxOffsets[index] = chars[index].dx
+                        }
                         let placed = pathLayout.place(
                             advanceArray,
                             pathData,
                             pathElement.startOffset ?? SvgLength(0.0),
-                            style.textAnchor()
+                            style.textAnchor(),
+                            side: sideValue,
+                            method: methodValue,
+                            spacing: spacingValue,
+                            sideOffsets: sideOffsets,
+                            dxOffsets: dxOffsets
                         )
                         for (warning in pathLayout.warnings) {
                             this.warnings.add("${location} textPath：${warning}")
@@ -351,6 +433,12 @@ public class SvgTextRenderer {
                     angle = placed[index].angle + rotations[index]
                 case None => ()
             }
+            if (vertical) {
+                x = columnPositions[index]
+                y = char.yBase + char.dy + verticalPositions[index] + verticalAnchor +
+                    baselineOffsets[index]
+                angle = rotations[index] + 90.0
+            }
             glyphs.add(
                 SvgTextGlyph(
                     char.codePoint,
@@ -359,7 +447,9 @@ public class SvgTextRenderer {
                     advances[index] * scaleX,
                     char.fontSize,
                     path,
-                    angle: angle
+                    angle: angle,
+                    ascent: ascentValues[index],
+                    decoration: char.decoration
                 )
             )
             match (path) {
@@ -377,6 +467,56 @@ public class SvgTextRenderer {
         }
         let resultBounds: ?SvgBounds = if (hasBounds) { Some(bounds) } else { None }
         SvgTextLayout(glyphs.toArray(), total, resultBounds, missingGlyph)
+    }
+
+    /** 装饰线路径；与字形使用同一旋转矩阵，按字形逐个生成。 */
+    public func decorationOutline(
+        text: SvgTextElement,
+        style!: SvgComputedStyle,
+        root!: ?SvgElement = None
+    ): ?SvgPathData {
+        let layout = this.layout(text, style: style, root: root)
+        let commands = ArrayList<SvgPathCommand>()
+        for (glyph in layout.glyphs) {
+            if (glyph.decoration.isNone()) {
+                continue
+            }
+            let matrix = SvgMatrix.translate(glyph.x, glyph.y)
+                .multiply(SvgMatrix.rotate(glyph.angle))
+            let thickness = SvgTextDecorationGeometry.thickness(glyph.fontSize)
+            if (glyph.decoration.underline) {
+                appendDecorationRect(
+                    commands,
+                    matrix,
+                    glyph.advance,
+                    SvgTextDecorationGeometry.underlineOffset(glyph.fontSize),
+                    thickness
+                )
+            }
+            if (glyph.decoration.overline) {
+                appendDecorationRect(
+                    commands,
+                    matrix,
+                    glyph.advance,
+                    SvgTextDecorationGeometry.overlineOffset(glyph.ascent),
+                    thickness
+                )
+            }
+            if (glyph.decoration.lineThrough) {
+                appendDecorationRect(
+                    commands,
+                    matrix,
+                    glyph.advance,
+                    SvgTextDecorationGeometry.lineThroughOffset(glyph.ascent),
+                    thickness
+                )
+            }
+        }
+        if (commands.size == 0) {
+            None
+        } else {
+            Some(SvgPathData(commands.toArray()))
+        }
     }
 
     /** 合并所有字形路径，供光栅器与形状共用填充 / 描边 / 渐变管线。 */
@@ -423,6 +563,46 @@ public class SvgTextRenderer {
         this.glyphCache[key] = entry
         entry
     }
+}
+
+private func appendDecorationRect(
+    commands: ArrayList<SvgPathCommand>,
+    matrix: SvgMatrix,
+    width: Float64,
+    offsetY: Float64,
+    thickness: Float64
+): Unit {
+    let p0 = matrix.apply(SvgPoint(0.0, offsetY))
+    let p1 = matrix.apply(SvgPoint(width, offsetY))
+    let p2 = matrix.apply(SvgPoint(width, offsetY + thickness))
+    let p3 = matrix.apply(SvgPoint(0.0, offsetY + thickness))
+    commands.add(SvgPathCommand(SvgPathCommandKind.MoveTo, false, [p0.x, p0.y]))
+    commands.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [p1.x, p1.y]))
+    commands.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [p2.x, p2.y]))
+    commands.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [p3.x, p3.y]))
+    commands.add(SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>()))
+}
+
+/** 装饰线传播：最近声明祖先生效，显式 `none` 关闭。 */
+private func effectiveTextDecoration(text: SvgTextElement, style: SvgComputedStyle): SvgTextDecoration {
+    if (style.sourceOf("text-decoration") != CssStyleSource.Default) {
+        return SvgTextDecoration.tryParse(style.get("text-decoration") ?? "none") ??
+            SvgTextDecoration.none
+    }
+    var current = text.parent
+    while (true) {
+        match (current) {
+            case Some(element) =>
+                match (element.attr("text-decoration")) {
+                    case Some(value) =>
+                        return SvgTextDecoration.tryParse(value) ?? SvgTextDecoration.none
+                    case None => ()
+                }
+                current = element.parent
+            case None => break
+        }
+    }
+    SvgTextDecoration.none
 }
 
 private func charFontAscent(font: SvgFont, char: SvgTextChar): Float64 {
@@ -509,6 +689,11 @@ private func collectSvgTextChars(
                             case Some(text) => SvgBaselineShift.fromName(text) ?? state.shift
                             case None => state.shift
                         }
+                        let nextDecoration = match (span.attr("text-decoration")) {
+                            case Some(text) =>
+                                SvgTextDecoration.tryParse(text) ?? state.decoration
+                            case None => state.decoration
+                        }
                         let next = SvgTextState(
                             span.fontSize?.value ?? state.fontSize,
                             span.fontFamily ?? state.family,
@@ -518,7 +703,8 @@ private func collectSvgTextChars(
                             span.wordSpacing?.value ?? state.wordSpacing,
                             dominant: nextDominant,
                             alignment: nextAlignment,
-                            shift: nextShift
+                            shift: nextShift,
+                            decoration: nextDecoration
                         )
                         let start = out.size
                         collectSvgTextChars(

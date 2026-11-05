@@ -275,6 +275,20 @@ public class SvgRenderer {
                 )
                 this.drawFill(bitmap, textCommand, list, style, patterns)
                 this.drawStroke(bitmap, textCommand, list, style, patterns)
+                match (textRenderer.decorationOutline(text, style: style, root: Some(list.root))) {
+                    case Some(decoration) =>
+                        let decorationCommand = SvgDisplayCommand(
+                            SvgDisplayCommandKind.FillPath,
+                            command.tag,
+                            command.matrix,
+                            path: Some(decoration),
+                            style: Some(style),
+                            bounds: command.bounds,
+                            opacity: command.opacity
+                        )
+                        this.drawFill(bitmap, decorationCommand, list, style, patterns)
+                    case None => ()
+                }
             case Image =>
                 let box = match (command.bounds) {
                     case Some(value) => value
