@@ -16,10 +16,18 @@ limitations under the License.
 package fountain::f_svg
 
 /**
- * f_svg —— SVG 1.1 静态文档模块。
+ * f_svg —— SVG 1.1 文档与渲染模块。
  *
- * 设计见 `doc/f_svg模块设计.md`。模块只负责「把 SVG 文档讲清楚、改对、写回去」：
- * 值类型、类型化文档模型、解析与生成、安全过滤。不渲染、不做 CSS 级联、不做动画。
+ * M1 负责「把 SVG 文档讲清楚、改对、写回去」：值类型、类型化模型、解析/生成、安全过滤。
+ * M2 在此基础上增加：
  *
+ * - CSS 子集解析、选择器、级联、继承与计算样式（`CssStyleSheet` / `SvgStyleResolver`）；
+ * - 形状/路径/描边包围盒与视口映射（`SvgGeometry` / `SvgViewport`）；
+ * - CPU 软件光栅、描边轮廓、渐变、裁剪、蒙版与组透明度（`SvgRasterizer` 等）；
+ * - 可插拔字体接口与内置 Hershey ASCII 文本（`SvgFont` / `SvgTextRenderer`）；
+ * - 确定性 PNG 编码（`SvgPngEncoder`）；
+ * - SMIL 时间轴与不修改原文档的采样快照（`SvgTimeline`）。
+ *
+ * M2 仍不内置 CJK 字体、不解码外部图像、不执行脚本，也不访问网络。
  * 底层 XML 全部交给 `fountain::f_xml`，本模块不实现第二套 XML 词法器。
  */

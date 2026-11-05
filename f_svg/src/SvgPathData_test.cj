@@ -215,4 +215,15 @@ public class SvgPathData_test {
         @Assert(params.x == 10.0)
         @Assert(params.y == 20.0)
     }
+
+    /** 绝对命令不得再叠加当前点；T 依赖此语义。 */
+    @TestCase
+    public func absoluteCommandsAreNotOffset(): Unit {
+        let curve = SvgPathData.parse("M10 10 C20 20 30 30 40 40").toAbsolute()
+        @Assert(curve.commands[1].values == [20.0, 20.0, 30.0, 30.0, 40.0, 40.0])
+        let smooth = SvgPathData.parse("M10 10 Q20 20 30 10 T40 10").toAbsolute()
+        @Assert(smooth.commands[2].values == [40.0, 10.0])
+        let relative = SvgPathData.parse("M10 10 c1 1 2 2 3 3").toAbsolute()
+        @Assert(relative.commands[1].values == [11.0, 11.0, 12.0, 12.0, 13.0, 13.0])
+    }
 }
