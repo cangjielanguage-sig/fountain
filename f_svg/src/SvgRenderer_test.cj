@@ -107,6 +107,82 @@ public class SvgRenderer_test {
         @Assert(colorNear(hiddenBitmap.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
     }
 
+    /** 渲染入口的 maxPixels、外部图片与定义容器端到端行为。 */
+    @TestCase
+    public func renderSecurityAndDefinitionContainers(): Unit {
+        let big = svgDoc('<rect width="1000" height="1000" fill="red"/>', width: 1000, height: 1000)
+        let pixelsError = expectSvgException({=>
+            SvgRenderer(options: SvgRenderOptions(maxPixels: 100)).render(big)
+        })
+        @Assert(pixelsError.kind == SvgErrorKind.Limit)
+
+        let externalImage = svgDoc(
+            '<image href="file:///etc/passwd" x="2" y="2" width="6" height="6"/>',
+            width: 10,
+            height: 10
+        )
+        let imageRenderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let imageBitmap = imageRenderer.render(externalImage)
+        @Assert(imageBitmap.pixel(5, 5).alpha == 0.0)
+        var imageWarning = false
+        for (warning in imageRenderer.warnings) {
+            if (warning.contains("image")) {
+                imageWarning = true
+            }
+        }
+        @Assert(imageWarning)
+
+        let defsOnly = svgDoc(
+            '<defs><linearGradient id="g"><stop offset="0" stop-color="red"/></linearGradient>' +
+            '<clipPath id="c"><rect width="10" height="10"/></clipPath>' +
+            '<symbol id="s"><rect width="10" height="10"/></symbol></defs>',
+            width: 10,
+            height: 10
+        )
+        let defsBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(defsOnly)
+        for (y in 0..defsBitmap.height) {
+            for (x in 0..defsBitmap.width) {
+                @Assert(defsBitmap.pixel(x, y).alpha == 0.0)
+            }
+        }
+    }
+
+    /** 单元素渲染不继承真实祖先样式。 */
+    @TestCase
+    public func renderElementDoesNotInheritAncestors(): Unit {
+        let document = SvgParser.parse(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">' +
+            '<g fill="red"><rect id="r" width="10" height="10"/></g></svg>'
+        )
+        let rect = document.elementsByTag("rect")[0]
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(
+            rect,
+            width: 20,
+            height: 20
+        )
+        @Assert(colorNear(bitmap.pixel(5, 5), SvgColor.Black))
+    }
+
+    /** 不同 samplesPerPixel 下各自重复渲染一致。 */
+    @TestCase
+    public func sampleCountDeterminism(): Unit {
+        let document = svgDoc(
+            '<rect width="8" height="8" fill="#123456"/>' +
+            '<circle cx="6" cy="6" r="2" fill="red" opacity="0.5"/>',
+            width: 10,
+            height: 10
+        )
+        for (samples in [1, 2, 4]) {
+            let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: samples))
+            let first = renderer.render(document)
+            let second = renderer.render(document)
+            @Assert(first.pixels.size == second.pixels.size)
+            for (index in 0..first.pixels.size) {
+                @Assert(first.pixels[index] == second.pixels[index])
+            }
+        }
+    }
+
     /** 渐变、裁剪与文本在渲染管线中生效。 */
     @TestCase
     public func paintAndClipPipeline(): Unit {
