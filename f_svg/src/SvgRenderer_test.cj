@@ -93,6 +93,11 @@ public class SvgRenderer_test {
         let defaultBitmap = SvgRenderer().render(noSize)
         @Assert(defaultBitmap.width == 300 && defaultBitmap.height == 150)
 
+        let fractional = SvgRenderer(
+            options: SvgRenderOptions(width: 101, height: 101, devicePixelRatio: 1.1, samplesPerPixel: 1)
+        ).render(document)
+        @Assert(fractional.width == 112 && fractional.height == 112)
+
         let hidden = svgDoc(
             '<g visibility="hidden"><rect width="10" height="10" visibility="visible" fill="red"/></g>',
             width: 10,

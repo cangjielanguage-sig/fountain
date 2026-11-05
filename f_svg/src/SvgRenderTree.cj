@@ -168,8 +168,8 @@ public class SvgRenderTreeBuilder {
         let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
         let logicalHeight = if (options.height > 0) { Float64(options.height) } else { viewport.height }
         let ratio = options.devicePixelRatio
-        let outputWidth = maxInt64(1, Int64(round(logicalWidth * ratio)))
-        let outputHeight = maxInt64(1, Int64(round(logicalHeight * ratio)))
+        let outputWidth = maxInt64(1, ceilSvgPixel(logicalWidth * ratio))
+        let outputHeight = maxInt64(1, ceilSvgPixel(logicalHeight * ratio))
         let matrix = SvgMatrix.scale(ratio, ratio)
             .multiply(viewport.transform(root))
             .multiply(elementTransformMatrix(root))
@@ -209,8 +209,8 @@ public class SvgRenderTreeBuilder {
             this.warnings.add(warning)
         }
         let ratio = options.devicePixelRatio
-        let outputWidth = maxInt64(1, Int64(round(Float64(width) * ratio)))
-        let outputHeight = maxInt64(1, Int64(round(Float64(height) * ratio)))
+        let outputWidth = maxInt64(1, ceilSvgPixel(Float64(width) * ratio))
+        let outputHeight = maxInt64(1, ceilSvgPixel(Float64(height) * ratio))
         let matrix = SvgMatrix.scale(ratio, ratio)
         let commands = ArrayList<SvgDisplayCommand>()
         let context = SvgRenderTreeContext(
@@ -633,6 +633,12 @@ private func symbolDimension(container: SvgContainer, name: String, index: Int64
 
 private func maxInt64(first: Int64, second: Int64): Int64 {
     if (first > second) { first } else { second }
+}
+
+/** 像素尺寸向上取整；减去相对 epsilon 抵消浮点乘法误差。 */
+private func ceilSvgPixel(value: Float64): Int64 {
+    let tolerance = if (value > 1.0) { value * 1e-12 } else { 1e-12 }
+    Int64(ceil(value - tolerance))
 }
 
 private func arrayContainsSvgString(values: Array<String>, target: String): Bool {
