@@ -176,6 +176,19 @@ public open class SvgElement <: ToString {
         true
     }
 
+    /** 原样追加 / 替换属性，保留 `QName` 的前缀与 URI。供解析器使用。 */
+    internal func appendAttribute(name: QName, value: String): Unit {
+        for (index in 0..this.attributes.size) {
+            if (this.attributes[index].name == name) {
+                this.attributes[index] = SvgAttribute(name, value)
+                this.attributesVersion++
+                return
+            }
+        }
+        this.attributes.add(SvgAttribute(name, value))
+        this.attributesVersion++
+    }
+
     public func removeAttr(name: String): Bool {
         let index = this.bareAttributeIndex(name)
         if (index < 0) {
