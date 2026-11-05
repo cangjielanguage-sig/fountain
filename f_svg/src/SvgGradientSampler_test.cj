@@ -185,8 +185,9 @@ public class SvgGradientSampler_test {
         addStop(zero, 0.0, SvgColor.fromRgb(255, 0, 0))
         addStop(zero, 1.0, SvgColor.fromRgb(0, 0, 255))
         let zeroWarnings = SvgGradientSampler()
-        zeroWarnings.sample(zero, SvgPoint(5.0, 5.0), box, SvgColor.Black)
+        let zeroColor = zeroWarnings.sample(zero, SvgPoint(5.0, 5.0), box, SvgColor.Black)
         @Assert(zeroWarnings.warnings.size >= 1)
+        @Assert(zeroColor.alpha == 0.0)
 
         let withFr = SvgRadialGradient()
         withFr.setAttr("r", "50%")

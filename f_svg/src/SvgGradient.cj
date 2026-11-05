@@ -254,6 +254,9 @@ public class SvgGradientSampler {
         } else {
             this.radialT(chain, gradientPoint, boundingBox, isObject)
         }
+        if (t.isNaN()) {
+            return SvgColor(0, 0, 0, alpha: 0.0)
+        }
         sampleStops(stops, applyGradientSpread(t, spread))
     }
 
@@ -312,8 +315,8 @@ public class SvgGradientSampler {
             this.warnings.add("径向渐变的 fr / FR 在 M2 忽略")
         }
         if (r <= 0.0) {
-            this.warnings.add("径向渐变半径 r <= 0，已按末端颜色处理")
-            return 1.0
+            this.warnings.add("径向渐变半径 r <= 0，不绘制")
+            return Float64.NaN
         }
         let dx = point.x - fx
         let dy = point.y - fy
