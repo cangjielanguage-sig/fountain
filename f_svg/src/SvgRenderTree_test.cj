@@ -89,6 +89,33 @@ public class SvgRenderTree_test {
         let cycleBuilder = SvgRenderTreeBuilder()
         cycleBuilder.build(cycle)
         @Assert(cycleBuilder.warnings.size >= 1)
+
+        let deepUse = StringBuilder()
+        deepUse.append("<defs>")
+        for (index in 0..=65) {
+            deepUse.append('<g id="u${index}">')
+            if (index < 65) {
+                deepUse.append('<use href="#u${index + 1}"/>')
+            }
+            deepUse.append("</g>")
+        }
+        deepUse.append("</defs><use href=\"#u0\"/>")
+        let deepUseError = expectSvgException({=>
+            SvgRenderTreeBuilder().build(svgDoc(deepUse.toString()))
+        })
+        @Assert(deepUseError.kind == SvgErrorKind.Limit)
+
+        let deepSvg = StringBuilder()
+        for (_ in 0..=65) {
+            deepSvg.append('<svg width="10" height="10">')
+        }
+        for (_ in 0..=65) {
+            deepSvg.append("</svg>")
+        }
+        let deepSvgError = expectSvgException({=>
+            SvgRenderTreeBuilder().build(svgDoc(deepSvg.toString()))
+        })
+        @Assert(deepSvgError.kind == SvgErrorKind.Limit)
     }
 
     /** 嵌套 svg：视口缩放、x/y 偏移与裁剪区域。 */

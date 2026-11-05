@@ -439,8 +439,7 @@ public class SvgGradientSampler {
                     }
                     chain.add(node)
                     if (depth >= 64) {
-                        this.warnings.add("渐变 href 深度超过 64")
-                        break
+                        throw SvgException("渐变 href 深度超过 64", kind: SvgErrorKind.Limit)
                     }
                     match (node.href) {
                         case Some(href) =>

@@ -127,6 +127,7 @@ private class SvgRenderTreeContext {
     let styles: SvgComputedStyleTree
     let root: SvgElement
     let depth: Int64
+    let useStack: Array<String>
 
     init(
         matrix: SvgMatrix,
@@ -135,7 +136,8 @@ private class SvgRenderTreeContext {
         clipRect: ?SvgBounds,
         styles: SvgComputedStyleTree,
         root: SvgElement,
-        depth: Int64
+        depth: Int64,
+        useStack: Array<String>
     ) {
         this.matrix = matrix
         this.width = width
@@ -144,6 +146,7 @@ private class SvgRenderTreeContext {
         this.styles = styles
         this.root = root
         this.depth = depth
+        this.useStack = useStack
     }
 }
 
@@ -181,7 +184,8 @@ public class SvgRenderTreeBuilder {
                         None,
                         styles,
                         root,
-                        0
+                        0,
+                        Array<String>()
                     )
                     this.walkChildren(root, context, commands)
                 }
@@ -216,7 +220,8 @@ public class SvgRenderTreeBuilder {
             None,
             styles,
             element,
-            0
+            0,
+            Array<String>()
         )
         this.walkElement(element, context, commands)
         SvgDisplayList(commands.toArray(), element, outputWidth, outputHeight, Float64(width), Float64(height))
@@ -326,7 +331,8 @@ public class SvgRenderTreeBuilder {
             None,
             context.styles,
             context.root,
-            context.depth
+            context.depth,
+            context.useStack
         )
         if (container.kind == SvgContainerKind.Switch) {
             for (node in container.children) {
@@ -358,8 +364,7 @@ public class SvgRenderTreeBuilder {
         commands: ArrayList<SvgDisplayCommand>
     ): Unit {
         if (context.depth > 64) {
-            this.warnings.add("嵌套 svg 深度超过 64")
-            return
+            throw SvgException("嵌套 svg 深度超过 64", kind: SvgErrorKind.Limit)
         }
         let viewport = SvgViewport.nestedViewport(svg, context.width, context.height)
         var matrix = SvgViewport.nestedTransform(context.matrix, svg, context.width, context.height)
@@ -385,7 +390,8 @@ public class SvgRenderTreeBuilder {
             Some(combinedClip),
             context.styles,
             context.root,
-            context.depth + 1
+            context.depth + 1,
+            context.useStack
         )
         this.walkChildren(svg, childContext, commands)
     }
@@ -395,10 +401,6 @@ public class SvgRenderTreeBuilder {
         context: SvgRenderTreeContext,
         commands: ArrayList<SvgDisplayCommand>
     ): Unit {
-        if (context.depth >= 64) {
-            this.warnings.add("use 引用深度超过 64，已停止展开")
-            return
-        }
         let href = readSvgHref(use)
         let targetId = match (href) {
             case Some(value) => stripSvgHash(value)
@@ -407,6 +409,13 @@ public class SvgRenderTreeBuilder {
         if (targetId.size == 0) {
             this.warnings.add("use 缺少 href")
             return
+        }
+        if (context.depth >= 64) {
+            if (arrayContainsSvgString(context.useStack, targetId)) {
+                this.warnings.add("use 循环引用在深度 64 终止")
+                return
+            }
+            throw SvgException("use 引用深度超过 64", kind: SvgErrorKind.Limit)
         }
         let target = match (findSvgElementById(Some(context.root), targetId)) {
             case Some(value) => value
@@ -457,6 +466,11 @@ public class SvgRenderTreeBuilder {
             case _ => ()
         }
         matrix = matrix.multiply(elementTransformMatrix(target))
+        let nextStack = ArrayList<String>()
+        for (id in context.useStack) {
+            nextStack.add(id)
+        }
+        nextStack.add(targetId)
         let childContext = SvgRenderTreeContext(
             matrix,
             context.width,
@@ -464,7 +478,8 @@ public class SvgRenderTreeBuilder {
             clipRect,
             context.styles,
             context.root,
-            context.depth + 1
+            context.depth + 1,
+            nextStack.toArray()
         )
         if (target.tag == "symbol") {
             this.walkChildren(target, childContext, commands)
@@ -618,4 +633,13 @@ private func symbolDimension(container: SvgContainer, name: String, index: Int64
 
 private func maxInt64(first: Int64, second: Int64): Int64 {
     if (first > second) { first } else { second }
+}
+
+private func arrayContainsSvgString(values: Array<String>, target: String): Bool {
+    for (value in values) {
+        if (value == target) {
+            return true
+        }
+    }
+    false
 }

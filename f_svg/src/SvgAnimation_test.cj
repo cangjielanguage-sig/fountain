@@ -334,6 +334,26 @@ public class SvgAnimation_test {
         @Assert(snapshot.root.tag == "svg")
     }
 
+    /** mpath 循环引用只记 warning，不按深度超限抛异常。 */
+    @TestCase
+    public func mpathCycleWarns(): Unit {
+        let document = animationDoc(
+            '<path id="p0"><animateMotion dur="1s"><mpath href="#p1"/></animateMotion></path>' +
+            '<path id="p1"><animateMotion dur="1s"><mpath href="#p0"/></animateMotion></path>' +
+            '<rect id="r" width="10" height="10">' +
+            '<animateMotion dur="1s"><mpath href="#p0"/></animateMotion></rect>'
+        )
+        let timeline = SvgTimeline(document)
+        var cycleWarning = false
+        for (warning in timeline.warnings) {
+            if (warning.contains("循环")) {
+                cycleWarning = true
+            }
+        }
+        @Assert(cycleWarning)
+        timeline.sample(0.5)
+    }
+
     /** 硬上限：values 10001、mpath 深度 64。 */
     @TestCase
     public func animationLimits(): Unit {

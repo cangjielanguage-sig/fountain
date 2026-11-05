@@ -463,8 +463,14 @@ private func resolveMotionPath(
         case None => return None
     }
     var depth = 0
+    let visited = HashMap<String, Bool>()
     var targetIdValue = targetId
     while (true) {
+        if (visited.get(targetIdValue).isSome()) {
+            warnings.add("mpath 引用出现循环「${targetIdValue}」，已停止")
+            return None
+        }
+        visited[targetIdValue] = true
         if (depth > 64) {
             throw SvgException("mpath 引用深度超过 64", kind: SvgErrorKind.Limit)
         }

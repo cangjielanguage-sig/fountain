@@ -286,9 +286,12 @@ public class SvgGradientSampler_test {
         }
         let deepSampler = SvgGradientSampler(root: Some(deepRoot))
         match (lastGradient) {
-            case Some(gradient) => deepSampler.sample(gradient, SvgPoint(5.0, 0.0), box, SvgColor.Black)
+            case Some(gradient) =>
+                let deepError = expectSvgException({=>
+                    deepSampler.sample(gradient, SvgPoint(5.0, 0.0), box, SvgColor.Black)
+                })
+                @Assert(deepError.kind == SvgErrorKind.Limit)
             case None => @Fail("缺少渐变")
         }
-        @Assert(deepSampler.warnings.size >= 1)
     }
 }
