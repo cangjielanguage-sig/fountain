@@ -48,6 +48,7 @@
 | 幂等 | 同名流程重复登记只更新描述/状态，不产生第二条 |
 | 并发 | 表由 `Mutex` 保护，与 `LoomRegistry` 一致 |
 | 初始化 | `LoomWiring.wire` 在开关打开时用 `LoomRegistry.compiledFlows()` 播种（重启后从存储恢复的流程也在此进来） |
+| 存储不可用 | 恢复失败不阻断启动：`LoomBootstrap.startup` 置 `ReloadResult.restoreFailed=true` 并继续，路由表为空、流程服务照常可用 |
 | 持久化 | **不落库**：路由表是流程库的派生视图，避免双份真相 |
 
 事件名用 `sv/` 前缀，与 `LoomRunner` 内部的 `loom/<name>#<seq>` 流程 tag 区分开——日志里一眼能看出

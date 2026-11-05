@@ -22,6 +22,24 @@ import std.unittest.testmacro.*
 import fountain::f_config.Config
 import fountain::f_llm.config.LLMConfig
 
+/** 存储不可用的桩：`list` 直接抛，模拟库比应用晚就绪 / 连接断掉 */
+class FailingLoomStore <: LoomStore {
+    public func save(flow: LoomFlow): Unit {
+    }
+
+    public func get(name: String): ?LoomFlow {
+        None
+    }
+
+    public func list(offset: Int64, limit: Int64): ArrayList<LoomFlow> {
+        throw LoomException('loom store unavailable')
+    }
+
+    public func remove(name: String): Bool {
+        false
+    }
+}
+
 @Test
 class LoomWiringSupervisor_test {
     private static func plannedJson(name: String): String {
@@ -51,6 +69,32 @@ class LoomWiringSupervisor_test {
             @Expect(supervisor.routes().size, 1)
             @Expect(supervisor.routable().size, 1)
             @Expect(supervisor.eventOf('daily').getOrThrow(), 'sv/daily')
+        }finally{
+            Config.remove(LLMConfig.LLM_SUPERVISOR)
+            Config.remove('llm_metaStore')
+            Supervisor.reset()
+            LoomServices.reset()
+        }
+    }
+
+    /** 存储不可用：装配不中断，Supervisor 装得上但路由为空，流程服务照常可用 */
+    @TestCase
+    func testWireSurvivesUnavailableStore(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        Config.set<Bool>([(LLMConfig.LLM_SUPERVISOR, true)])
+        Config.set<String>([('llm_metaStore', 'memory')])
+        try{
+            let service = LoomWiring.wire({ _, _, _ => plannedJson('daily') },
+                store: FailingLoomStore())
+            @Expect(service.status('daily'), '')
+            @Expect(Supervisor.current().isSome(), true)
+            @Expect(Supervisor.current().getOrThrow().routes().size, 0)
+
+            // 直接看启动报告里的失败标记，避免「静默吞掉」
+            let result = LoomBootstrap.startup(LoomRegistry(store: FailingLoomStore()))
+            @Expect(result.restoreFailed, true)
+            @Expect(result.restored, 0)
         }finally{
             Config.remove(LLMConfig.LLM_SUPERVISOR)
             Config.remove('llm_metaStore')

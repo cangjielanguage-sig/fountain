@@ -81,6 +81,8 @@ public class Supervisor {
     private var serviceRef: ?LoomService = None
     private var hostRef: ?LoomHost = None
     private var chatRef: ?(String, String) -> String = None
+    /** 自动新建流程的命名时钟（秒级），测试可注入固定值 **/
+    private var clockRef: ?() -> Int64 = None
 
     public init() {
     }
@@ -89,11 +91,14 @@ public class Supervisor {
      * 安装单例，并用现有流程播种路由表（启动时从存储恢复的流程由装配方传进来）。
      */
     public static func install(service: LoomService, host: LoomHost, chat: (String, String) -> String,
-        flows!: ArrayList<LoomFlow> = ArrayList<LoomFlow>()): Supervisor {
+        flows!: ArrayList<LoomFlow> = ArrayList<LoomFlow>(), clock!: () -> Int64 = {
+            => DateTime.now().toUnixTimeStamp().toSeconds()
+        }): Supervisor {
         let supervisor = Supervisor()
         supervisor.serviceRef = Some(service)
         supervisor.hostRef = Some(host)
         supervisor.chatRef = Some(chat)
+        supervisor.clockRef = Some(clock)
         synchronized(staticMutex) {
             installed = Some(supervisor)
         }
@@ -215,7 +220,11 @@ public class Supervisor {
 
     /** 自动新建流程的名字：`auto-<秒级时间戳>`，撞名就顺延 `-2`、`-3`… */
     private func nextFlowName(service: LoomService): String {
-        let base = 'auto-${DateTime.now().toUnixTimeStamp().toSeconds()}'
+        let now = match (clockRef) {
+            case Some(value) => value()
+            case None => DateTime.now().toUnixTimeStamp().toSeconds()
+        }
+        let base = 'auto-${now}'
         var candidate = base
         var index = 2
         while (!service.status(candidate).isEmpty()) {

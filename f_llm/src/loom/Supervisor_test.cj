@@ -479,6 +479,45 @@ class Supervisor_test {
         }
     }
 
+    /** 自动新建的名字撞上已有流程时顺延 `-2`（注入固定时钟，避免依赖真实秒数） */
+    @TestCase
+    func testAutoCreateNameCollisionSuffixes(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        LoomHostApi.unbind()
+
+        let registry = LoomRegistry()
+        let planJson = llmPlanJson('auto-1000')
+        let taken = LoomFlow('auto-1000', description: '已存在的自动流程')
+        taken.planJson = planJson
+        taken.mark(LoomStatus.PENDING)
+        registry.put(taken)
+
+        let service = LoomService(Planner({ _, _ => planJson }), registry)
+        let host = SupervisorRecordingHost()
+        LoomHostApi.bind(host)
+        LoomServices.installHost(host)
+        let counter = CallCounter()
+        let chat = { system: String, user: String =>
+            if(counter.next() == 1){
+                '{"flow":""}'
+            }else{
+                planJson
+            }
+        }
+        let supervisor = Supervisor.install(service, host, chat, clock: { => 1000 })
+
+        setSwitches(true, true)
+        try{
+            let outcome = supervisor.dispatch('没有任何流程能做的活')
+            @Expect(outcome.kind, SupervisorOutcome.CREATED)
+            @Expect(outcome.flow, 'auto-1000-2')
+            @Expect(service.status('auto-1000'), LoomStatus.PENDING)
+        }finally{
+            clearSwitches()
+        }
+    }
+
     @TestCase
     func testClosedStateKeepsLoomUsable(): Unit {
         Supervisor.reset()

@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 /** 启动恢复的统计（§9.9） */
@@ -20,6 +20,8 @@ public class ReloadResult {
     public var restored: Int64 = 0
     public var compiled: Int64 = 0
     public var failed: Int64 = 0
+    /** 存储不可用导致恢复失败（不阻断启动，但要能被观测到） */
+    public var restoreFailed: Bool = false
 
     public init() {
     }
@@ -44,20 +46,19 @@ public class LoomBootstrap {
      */
     public static func storeFor(metaStore: String): LoomStore {
         let name = metaStore.trimAscii().toAsciiLower()
-        if(name.isEmpty() || name == 'f_store'){
+        if (name.isEmpty() || name == 'f_store') {
             return FStoreLoomStore()
         }
-        if(name == 'postgres'){
+        if (name == 'postgres') {
             return PostgresLoomStore()
         }
-        if(name == 'mysql'){
+        if (name == 'mysql') {
             return MySqlLoomStore()
         }
-        if(name == 'memory' || name == 'inmemory'){
+        if (name == 'memory' || name == 'inmemory') {
             return MemoryLoomStore()
         }
-        throw IllegalStateException(
-            'unknown loom store: "${metaStore}"; expected f_store|memory|postgres|mysql')
+        throw IllegalStateException('unknown loom store: \"${metaStore}\"; expected f_store|memory|postgres|mysql')
     }
 
     /**
@@ -65,17 +66,22 @@ public class LoomBootstrap {
      */
     public static func startup(registry: LoomRegistry, compiler!: ?LoomCompiler = None): ReloadResult {
         let result = ReloadResult()
-        result.restored = registry.restore()
-        let engine = match(compiler){
+        // 库可能比应用晚就绪：恢复失败只做标记，不阻断启动（内容族/流程服务仍可用）
+        try {
+            result.restored = registry.restore()
+        } catch (e: Exception) {
+            result.restoreFailed = true
+        }
+        let engine = match (compiler) {
             case Some(value) => value
             case None => LoomCompiler()
         }
-        for(flow in registry.compiledFlows()){
-            try{
+        for (flow in registry.compiledFlows()) {
+            try {
                 let plan = Planner.parse(flow.planJson, requestOf(flow))
                 engine.compileSteps(plan.plan.getOrThrow())
                 result.compiled++
-            }catch(e: Exception){
+            } catch (e: Exception) {
                 flow.mark(LoomStatus.FAILED)
                 registry.put(flow)
                 result.failed++
@@ -86,9 +92,9 @@ public class LoomBootstrap {
 
     /** 恢复时描述可能为空：`LoomRequest` 会校验非空，这里补一个占位 */
     internal static func requestOf(flow: LoomFlow): LoomRequest {
-        let description = if(flow.description.trimAscii().isEmpty()){
+        let description = if (flow.description.trimAscii().isEmpty()) {
             'restored loom flow ${flow.name}'
-        }else{
+        } else {
             flow.description
         }
         LoomRequest(flow.name, description)
