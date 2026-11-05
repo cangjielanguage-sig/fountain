@@ -20,8 +20,8 @@
 | 类型化程度    | 形状 / 文本 / 渐变 / 引用有独立类型；容器复用 `SvgElement`；未知内容无损保留              |
 | 安全默认     | 默认移除 `<script>`、`on*` 事件属性、外部引用，并记录 warning                    |
 | M1 范围    | 值类型、模型、解析、生成、安全过滤、往返一致性                                        |
-| M2 范围    | CSS 解析与级联、渲染（光栅化）、渐变色标继承、裁剪 / 蒙版语义、路径包围盒                       |
-| M3 范围    | SMIL 动画、滤镜、SVGZ（依赖 gzip）、高级渲染特性                                |
+| M2 范围    | CSS 解析与级联、几何包围盒与视口、CPU 软件光栅、描边 / 渐变 / 裁剪 / 蒙版、文本、PNG、SMIL 动画   |
+| M3 范围    | 滤镜与 `fe*` 原语、图案、PNG 解码与 `<image>`、SVGZ、`textPath` / rotate、marker、解析覆盖率 AA |
 
 ---
 
@@ -74,9 +74,10 @@ f_base      StringGenerator、BaseException 等基础设施
 
 **后续里程碑不做**（M3 及以后）：
 
-- SMIL 动画、滤镜、SVGZ（gzip 容器）；
-- 字体度量与复杂文本排版（渲染阶段只做基础字体度量）；
-- `foreignObject` 内部语义（保留原始子树，不解释 XHTML）。
+- JPEG / WebP / GIF 解码、`feImage` 外部图像原语；
+- TTF/OTF 字体解析与内置 CJK 字体；
+- `foreignObject` 内部语义（保留原始子树，不解释 XHTML）；
+- GPU / native 光栅后端。
 
 > 判断标准：M1 只负责「把文档讲清楚」；任何需要**像素**的能力都放到 M2 的渲染层。
 
