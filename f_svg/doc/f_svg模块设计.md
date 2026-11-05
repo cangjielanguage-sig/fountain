@@ -301,10 +301,6 @@ public struct SvgPaint <: ToString {
     public static func referencing(id: String, fallback!: ?SvgPaint = None): SvgPaint
     public static func parse(text: String): SvgPaint
 }
-
-public struct SvgPaintServerRef {   // 解析 url(#id) 的中间结果
-    public let id: String
-}
 ```
 
 解析规则：

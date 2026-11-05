@@ -48,15 +48,6 @@ public enum SvgPaintKind <: Equatable<SvgPaintKind> & ToString {
     }
 }
 
-/** `url(#id)` 解析的中间结果。`id` 保留 `#` 前缀。 */
-public struct SvgPaintServerRef {
-    public let id: String
-
-    public init(id: String) {
-        this.id = id
-    }
-}
-
 /**
  * 画笔：`none` / `currentColor` / 颜色 / 同文档片段引用（可带回退）。
  *

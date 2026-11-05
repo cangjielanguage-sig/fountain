@@ -136,11 +136,4 @@ public class SvgPaint_test {
         let hashOnly = expectSvgException({=> SvgPaint.referencing("#")})
         @Assert(hashOnly.kind == SvgErrorKind.InvalidValue)
     }
-
-    /** 引用解析的中间结果结构。 */
-    @TestCase
-    public func serverReference(): Unit {
-        let reference = SvgPaintServerRef("#grad1")
-        @Assert(reference.id == "#grad1")
-    }
 }

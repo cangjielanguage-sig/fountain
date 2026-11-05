@@ -34,7 +34,7 @@
 
 - [x] 4.1 先写 `SvgPaint_test.cj`：`none` / `currentColor` / 颜色 / `url(#id)` / 带引号 `url("#id")` / 三种 fallback
 - [x] 4.2 先写失败用例：`url("http://...")`、非法 `url()`、空串
-- [x] 4.3 实现 `SvgPaint` / `SvgPaintKind` / `SvgPaintServerRef`，外部引用抛 `SvgException(kind: Security)`
+- [x] 4.3 实现 `SvgPaint` / `SvgPaintKind`，外部引用抛 `SvgException(kind: Security)`（解析中间结果并入 `reference`，不单独暴露类型）
 - [x] 4.4 确保 `SvgPaint.parse` 无任何 I/O 依赖（代码审查项）
 
 ## 5. 矩阵与变换（M1.2）
