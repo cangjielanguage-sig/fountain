@@ -193,11 +193,38 @@ public class CssSelector <: ToString {
         CssSelector(parts.toArray(), combinators.toArray())
     }
 
-    /**
-     * 匹配元素。当前阶段只提供模型，匹配在 M2.1 选择器任务中实现。
-     */
+    /** 从右端开始匹配；后代组合符逐级回溯祖先，子代只检查直接父元素。 */
     public func matches(element: SvgElement): Bool {
-        false
+        this.matchPartAt(this.parts.size - 1, element)
+    }
+
+    private func matchPartAt(index: Int64, element: SvgElement): Bool {
+        if (!cssPartMatches(this.parts[index], element)) {
+            return false
+        }
+        if (index == 0) {
+            return true
+        }
+        match (this.combinators[index - 1]) {
+            case Child =>
+                match (element.parent) {
+                    case Some(parent) => this.matchPartAt(index - 1, parent)
+                    case None => false
+                }
+            case Descendant =>
+                var current = element.parent
+                while (true) {
+                    match (current) {
+                        case Some(parent) =>
+                            if (this.matchPartAt(index - 1, parent)) {
+                                return true
+                            }
+                            current = parent.parent
+                        case None => return false
+                    }
+                }
+                false
+        }
     }
 
     public func toString(): String {
@@ -287,4 +314,145 @@ private func buildCssSelectorPart(text: String, start: Int64, end: Int64): CssSe
         }
     }
     CssSelectorPart(typeName, id, classes.toArray())
+}
+
+/** 复合选择器与单个元素匹配：类型、id、全部 class 词。 */
+private func cssPartMatches(part: CssSelectorPart, element: SvgElement): Bool {
+    match (part.typeName) {
+        case Some(name) => if (element.tag != name) {
+            return false
+        }
+        case None => ()
+    }
+    match (part.id) {
+        case Some(id) => if (element.attr("id") != Some(id)) {
+            return false
+        }
+        case None => ()
+    }
+    if (part.classes.size > 0) {
+        match (element.attr("class")) {
+            case Some(text) =>
+                for (className in part.classes) {
+                    if (!cssClassListContains(text, className)) {
+                        return false
+                    }
+                }
+            case None => return false
+        }
+    }
+    true
+}
+
+/** 以 ASCII 空白分隔的 class 词表。 */
+internal func cssClassListContains(text: String, name: String): Bool {
+    let bytes = text.unsafeBytes()
+    var i = 0
+    while (i < bytes.size) {
+        while (i < bytes.size && isCssSpace(bytes[i])) {
+            i++
+        }
+        let start = i
+        while (i < bytes.size && !isCssSpace(bytes[i])) {
+            i++
+        }
+        if (i > start && text[start..i] == name) {
+            return true
+        }
+    }
+    false
+}
+
+/**
+ * 右端简单选择器倒排桶：按 id / class / type 预过滤候选规则。
+ *
+ * 非循环引用、非通配选择器才进入桶；通配与多选择器规则走 `universal` 列表。
+ */
+internal class CssSelectorIndex {
+    private let byId = HashMap<String, ArrayList<Int64>>()
+    private let byClass = HashMap<String, ArrayList<Int64>>()
+    private let byType = HashMap<String, ArrayList<Int64>>()
+    private let universal = ArrayList<Int64>()
+
+    init(rules: Array<CssRule>) {
+        for (index in 0..rules.size) {
+            let selector = rules[index].selectors[0]
+            let rightmost = selector.parts[selector.parts.size - 1]
+            match (rightmost.id) {
+                case Some(id) => CssSelectorIndex.addTo(this.byId, id, index)
+                case None =>
+                    if (rightmost.classes.size > 0) {
+                        CssSelectorIndex.addTo(this.byClass, rightmost.classes[0], index)
+                    } else {
+                        match (rightmost.typeName) {
+                            case Some(name) => CssSelectorIndex.addTo(this.byType, name, index)
+                            case None => this.universal.add(index)
+                        }
+                    }
+            }
+        }
+    }
+
+    /** 返回可能匹配的规则下标，去重后升序；调用方仍需完整 `matches` 校验。 */
+    func candidates(element: SvgElement): Array<Int64> {
+        let seen = HashMap<Int64, Bool>()
+        let result = ArrayList<Int64>()
+        CssSelectorIndex.collect(this.universal, seen, result)
+        match (element.attr("id")) {
+            case Some(id) =>
+                match (this.byId.get(id)) {
+                    case Some(list) => CssSelectorIndex.collect(list, seen, result)
+                    case None => ()
+                }
+            case None => ()
+        }
+        match (element.attr("class")) {
+            case Some(text) =>
+                for ((key, list) in this.byClass) {
+                    if (cssClassListContains(text, key)) {
+                        CssSelectorIndex.collect(list, seen, result)
+                    }
+                }
+            case None => ()
+        }
+        match (this.byType.get(element.tag)) {
+            case Some(list) => CssSelectorIndex.collect(list, seen, result)
+            case None => ()
+        }
+        var i = 1
+        while (i < result.size) {
+            let value = result[i]
+            var j = i - 1
+            while (j >= 0 && result[j] > value) {
+                result[j + 1] = result[j]
+                j--
+            }
+            result[j + 1] = value
+            i++
+        }
+        result.toArray()
+    }
+
+    private static func addTo(bucket: HashMap<String, ArrayList<Int64>>, key: String, index: Int64): Unit {
+        match (bucket.get(key)) {
+            case Some(list) => list.add(index)
+            case None =>
+                let created = ArrayList<Int64>()
+                created.add(index)
+                bucket[key] = created
+        }
+    }
+
+    private static func collect(
+        source: ArrayList<Int64>,
+        seen: HashMap<Int64, Bool>,
+        result: ArrayList<Int64>
+    ): Unit {
+        for (index in source) {
+            if (seen.get(index).isNone()) {
+                seen[index] = true
+                result.add(index)
+            }
+        }
+    }
 }

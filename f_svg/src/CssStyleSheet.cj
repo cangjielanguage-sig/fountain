@@ -56,6 +56,17 @@ public class CssRule <: ToString {
         this.order = order
     }
 
+    /** 分组选择器的特异性取最高值。 */
+    public func specificity(): CssSpecificity {
+        var best = CssSpecificity.zero
+        for (index in 0..this.selectors.size) {
+            if (this.selectors[index].specificity.compareTo(best) > 0) {
+                best = this.selectors[index].specificity
+            }
+        }
+        best
+    }
+
     public func toString(): String {
         let selectorTexts = ArrayList<String>()
         for (selector in this.selectors) {
