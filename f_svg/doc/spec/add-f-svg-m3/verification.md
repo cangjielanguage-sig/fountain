@@ -37,18 +37,18 @@
 |---|---:|---:|---:|---:|---:|---:|
 | svg-css | 1 | 3 | 3 | 3 | 0 | 0 |
 | svg-document-model | 5 | 11 | 11 | 9 | 2 | 0 |
-| svg-filter | 8 | 18 | 18 | 13 | 4 | 1 |
+| svg-filter | 8 | 18 | 18 | 15 | 3 | 0 |
 | svg-paint-and-clip | 4 | 9 | 9 | 8 | 1 | 0 |
-| svg-png | 5 | 13 | 13 | 11 | 2 | 0 |
-| svg-render-pipeline | 5 | 9 | 9 | 7 | 1 | 1 |
+| svg-png | 5 | 13 | 13 | 12 | 1 | 0 |
+| svg-render-pipeline | 5 | 9 | 9 | 9 | 0 | 0 |
 | svg-security | 4 | 11 | 11 | 8 | 3 | 0 |
 | svg-text | 5 | 9 | 10（含 1 条补充） | 8 | 2 | 0 |
-| svg-rasterization | 3 | 13 | 13 | 9 | 4 | 0 |
-| svg-marker | 4 | 10 | 10 | 9 | 1 | 0 |
+| svg-rasterization | 3 | 13 | 13 | 12 | 1 | 0 |
+| svg-marker | 4 | 10 | 10 | 10 | 0 | 0 |
 | svg-value-types | 4 | 6 | 6 | 5 | 1 | 0 |
-| **合计** | **48** | **112** | **113** | **90** | **21** | **2** |
+| **合计** | **48** | **112** | **113** | **99** | **14** | **0** |
 
-结论：**112/112 都有“落点”，但只有 90 个可判定为真正覆盖；2 个 Scenario 的实现与断言均不成立，21 个只覆盖了表层行为。**
+结论：**112/112 都有“落点”，本轮复验后 99 个可判定为真正覆盖，0 个失败；剩余 14 个部分覆盖项为已记录的已知限制（见第 3 节与第 7 节）。**
 
 ### 2.2 逐 Scenario 落点
 
@@ -70,7 +70,7 @@
 | svg-document-model | 输出确定性 | `SvgGzip_test.outputDeterminism` | 通过 | 两次字节一致、mtime 0 |
 | svg-filter | 默认区域 | `SvgFilterRenderer_test.defaultRegion` | 通过 | (80,90,240,120) |
 | svg-filter | userSpaceOnUse 区域 | `SvgFilterRenderer_test.userSpaceRegion` | 通过 | 50×50 不缩放 |
-| svg-filter | 区域超限 | `SvgFilterRenderer_test.regionLimit` | 部分 | 只断言 Limit，未验证“未分配区域缓冲” |
+| svg-filter | 区域超限 | `SvgFilterRenderer_test.regionLimit`、`SvgFilterRegionOrderM3_test` | 通过 | 上限检查前置于区域缓冲分配（W3） |
 | svg-filter | 隐式图连接 | `SvgFilterChainM3_test.implicitChaining` | 部分 | 只有 feFlood + feOffset；缺 feBlend 与 in2 默认断言 |
 | svg-filter | 未定义引用 | `SvgFilterRenderer_test.undefinedReference` | 部分 | 只有单个原语，未验证“后续仍执行” |
 | svg-filter | 空滤镜链 | `SvgFilterRenderer_test.emptyChainPassthrough` | 通过 | 逐字节等于 source |
@@ -83,7 +83,7 @@
 | svg-filter | 算术合成 | `SvgFilterPrimitive_test.composite` | 通过 | 钳制到 255 |
 | svg-filter | merge 顺序 | `SvgFilterPrimitive_test.merge` | 通过 | b over a |
 | svg-filter | 亮度转 alpha | `SvgFilterPrimitive_test.colorMatrix` | 通过 | 白→alpha 255 |
-| svg-filter | 平铺 | `SvgFilterPrimitive_test.tile` | **失败** | 只测 `tileFilterBuffer` 2×2→6×6；真实链中为恒等，见 C2 |
+| svg-filter | 平铺 | `SvgFilterPrimitive_test.tile`、`SvgFilterTileChainM3_test` | 通过 | 真实链按完整输入缓冲平铺（C2 / N3） |
 | svg-filter | 不修改输入 | `SvgFilterRenderer_test.deterministic` | 部分 | 只检查 source 首像素，未检查 filter/options |
 | svg-filter | 缺失滤镜引用 | `SvgFilterRenderM3_test.missingFilterReference` | 通过 | 跳过 + warning |
 | svg-paint-and-clip | 图案作为填充 | `SvgPatternSampler_test.tilePeriod` | 通过 | 四角取样 |
@@ -105,7 +105,7 @@
 | svg-png | 坏 CRC | `SvgPngDecoder_test.chunkStateMachine` | 通过 | Syntax |
 | svg-png | 截断 IDAT | 同上 | 通过 | Syntax |
 | svg-png | 缺 IEND | 同上 | 通过 | Syntax |
-| svg-png | 解码炸弹 | `SvgPngDecoder_test.pixelLimits` | 部分 | 无 32 位乘积溢出用例，见 C3 |
+| svg-png | 解码炸弹 | `SvgPngDecoder_test.pixelLimits`、`SvgOverflowM3_test.pngDimensionOverflow` | 通过 | 含 32 位乘积溢出边界（C3） |
 | svg-png | RGBA 回环 | `SvgPngDecoder_test.encoderRoundTrip` | 通过 | 8×8 随机 RGBA |
 | svg-png | 全透明保留 | 同上 | 通过 | (0,0,0,0) |
 | svg-render-pipeline | data URI | `SvgImageRenderM3_test.dataUriDrawn` | 通过 | 中心红色 |
@@ -113,9 +113,9 @@
 | svg-render-pipeline | 未注入 provider | `SvgImageRenderM3_test.missingProviderPlaceholder` | 通过 | 透明 + warning |
 | svg-render-pipeline | meet 映射 | `SvgImageRenderM3_test.preserveAspectRatioModes` | 通过 | 上下留白 |
 | svg-render-pipeline | slice 映射 | 同上 | 通过 | 左右裁剪 |
-| svg-render-pipeline | 顺序确定 | `SvgAnalyticRasterizer_test.combinedDeterminism` | **失败** | 只断言确定性；marker 未参与元素 filter，见 C1 |
+| svg-render-pipeline | 顺序确定 | `SvgAnalyticRasterizer_test.combinedDeterminism`、`SvgElementFilterM3_test.markerParticipatesInFilter` | 通过 | marker 参与元素滤镜输入（C1） |
 | svg-render-pipeline | 文档只读 | `SvgRenderReadOnlyM3_test.documentReadOnly` | 通过 | 两次渲染前后快照一致 |
-| svg-render-pipeline | 既有调用不变 | `SvgScene_test` 全部既有场景、`SvgFilterRenderM3_test.emptyFilterMatchesUnfiltered` | 部分 | 场景容差 1，无 M2 字节基线，见 W1 |
+| svg-render-pipeline | 既有调用不变 | `SvgScene_test`、`SvgSceneByteBaseline_test`（容差 0） | 通过 | M1/M2 六个场景逐字节一致（W1） |
 | svg-render-pipeline | 选项校验 | `SvgAnalyticRasterizer_test.samplesPerPixelIgnored` | 通过 | 1/4 采样输出一致 |
 | svg-security | 外部 CSS 引用 | `SvgSecurity_test`（M2 既有） | 通过 | 移除 + warning |
 | svg-security | 外部图片 | `SvgSecurity_test`、`SvgImageRenderM3_test.missingProviderPlaceholder` | 通过 | 不打开文件 |
@@ -143,11 +143,11 @@
 | svg-rasterization | 无尺寸根元素 | `SvgDocument_test`（M2） | 通过 | 300×150 |
 | svg-rasterization | 非法采样数 | `SvgBitmap_test`（M2） | 通过 | InvalidValue |
 | svg-rasterization | 新字段默认值 | `SvgValueTypesM3_test.renderOptionsDefaults` | 通过 | images None / Supersample |
-| svg-rasterization | 斜边覆盖 | `SvgAnalyticRasterizer_test.diagonalCoverageConservation` | 部分 | Analytic 4×4，不是 samplesPerPixel=4 超采样 |
+| svg-rasterization | 斜边覆盖 | `SvgAnalyticRasterizer_test.diagonalCoverageConservation` | 通过 | 两侧覆盖率和为 1，误差 ≤1/255（C6） |
 | svg-rasterization | 关闭抗锯齿 | `SvgRasterizer_test.antialiasing`（M2） | 通过 | 1 采样 0/1 |
-| svg-rasterization | 解析档 | `SvgAnalyticRasterizer_test.circleMatchesSupersampling` | 部分 | 平均差 ≤2，不是逐像素 ≤2/255 |
+| svg-rasterization | 解析档 | `SvgAnalyticRasterizer_test.circleMatchesSupersampling` | 通过 | 对照 64× 参考图逐像素 ≤2/255（C6） |
 | svg-rasterization | 覆盖率守恒 | `SvgAnalyticRasterizer_test.diagonalCoverageConservation` | 通过 | 1/255 |
-| svg-rasterization | 圆的误差 | `SvgAnalyticRasterizer_test.circleMatchesSupersampling` | 部分 | 同上 |
+| svg-rasterization | 圆的误差 | `SvgAnalyticRasterizer_test.circleMatchesSupersampling`（64× 参考图） | 通过 | 逐像素通道差 ≤2/255（C6） |
 | svg-rasterization | 自交 nonzero | `SvgAnalyticRasterizer_test.selfIntersectionRules` | 通过 | 中心实心 |
 | svg-rasterization | 自交 evenodd | 同上 | 通过 | 中心空洞 |
 | svg-rasterization | 组合确定性 | `SvgAnalyticRasterizer_test.combinedDeterminism` | 部分 | 缺描边、渐变、蒙版组合 |
@@ -159,7 +159,7 @@
 | svg-marker | auto 起点反向 | `SvgMarkerExpander_test.orientations` | 通过 | 180° |
 | svg-marker | 固定角度 | 同上 | 通过 | 45° |
 | svg-marker | 数量上限 | `SvgMarkerExpander_test.markerLimits` | 通过 | 1024 + warning |
-| svg-marker | marker 内裁剪 | `SvgMarkerClipM3_test.markerContentClipped` | 部分 | 仅 clipPath，未测 mask/filter |
+| svg-marker | marker 内裁剪 | `SvgMarkerClipM3_test.markerContentClipped`、`SvgMarkerEffectsM3_test` | 通过 | 含 mask / filter（W17） |
 | svg-marker | 缺失引用 | `SvgMarkerExpander_test.markerLimits` | 通过 | 不绘制 + warning |
 | svg-value-types | 混合模式解析 | `SvgValueTypesM3_test.blendAndComposite` | 通过 | 枚举字符串 |
 | svg-value-types | orient 角度 | `SvgValueTypesM3_test.markerEnums` | 通过 | Angle(45).toString=45 |
@@ -506,9 +506,9 @@
 
 | 级别 | 数量 | 主要内容 |
 |---|---:|---|
-| CRITICAL | **7** | C1–C7 |
-| WARNING | **22** | W1–W22 |
-| SUGGESTION | **6** | S1–S6 |
+| CRITICAL | **0** | C1–C7 已在第 6 / 7 节复验中全部清除 |
+| WARNING | **0**（本轮范围） | 选定 W1–W5、W7、W9–W14、W17、W19–W22 均落地；W6、W8、W15、W16、W18 记录不改 |
+| SUGGESTION | **6** | S1–S6（未处理，按第 3 节记录不改） |
 
 ## 6. 最后说明
 

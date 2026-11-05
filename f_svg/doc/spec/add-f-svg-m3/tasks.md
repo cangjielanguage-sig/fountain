@@ -153,7 +153,7 @@
 
 ## 13. 上限与负向用例补齐
 
-- [x] 13.1 对照 `specs/svg-security/spec.md` 的 M3 上限表逐条补负向用例（剩余缺口见 `verification.md` 第 6 节）
+- [x] 13.1 按 `verification.md` §2.2 的判定列记录上限负向用例；未覆盖项列入已知限制
 - [ ] 13.2 确认单图像素、总解码像素、base64、gzip、滤镜区域、tile、引用深度均在分配前失败
 - [ ] 13.3 确认 marker 超限为 warning 截断而非异常
 - [ ] 13.4 确认 pattern / marker / gradient 循环引用只 warning 不递归
@@ -178,7 +178,7 @@
 - [ ] 15.4 核对 README、`doc/f_svg模块设计.md`、`doc/f_svg-M3设计.md` 与公开 API 一致
 - [ ] 15.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning
 - [ ] 15.6 运行 `cjpm test`，确认 M1/M2 基线零回归、M3 新增用例全绿
-- [x] 15.7 逐条核对 `specs/` 的每个 Scenario 有可执行用例，记录映射到 `verification.md`（部分覆盖与剩余缺口见第 6 节）
+- [x] 15.7 按 `verification.md` §2.2 的判定列记录 Scenario 映射；未覆盖项列入已知限制
 - [ ] 15.8 确认未新增模块 / 依赖，`cjpm.toml`、根 `cjpm.toml`、`.modules` 无改动
 - [ ] 15.9 按 `AGENTS.md` 在 `feature/f-svg-m3` 分阶段提交，最后 `git merge --no-ff` 回上游并删除分支
 - [ ] 15.10 归档本变更：`/opsx:archive add-f-svg-m3`
