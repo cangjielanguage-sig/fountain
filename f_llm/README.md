@@ -154,7 +154,7 @@ let preview = service.execute(LoomRequest(
 | `DRC` | `DRCContextPruner` | 动态相关度裁剪 |
 | `Summary` / `Keywords` | 依赖模型 | 摘要 / 关键词压缩 |
 
-裁剪策略通过 `ContextPrunerMediator.prune(...)` 调用；各策略都以「保留首条 system 消息」为约定（细节见 `doc/f_llm-memory-design.md` §7.3）。
+裁剪策略通过 `ContextPrunerMediator.prune(...)` 调用；各策略都以「保留首条 system 消息」为约定（人格与技能的注入位置见 `doc/f_llm-memory-design.md` §6.5）。
 
 ### 工具调用
 

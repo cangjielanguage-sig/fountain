@@ -150,7 +150,7 @@ The source is chosen by `llm_confSource`; `llm_confs` can inline a set of config
 | `DRC` | `DRCContextPruner` | Dynamic relevance pruning |
 | `Summary` / `Keywords` | model-dependent | Summary / keyword compression |
 
-Pruning runs through `ContextPrunerMediator.prune(...)`; every strategy keeps the leading system message (details in `doc/f_llm-memory-design.md` §7.3).
+Pruning runs through `ContextPrunerMediator.prune(...)`; every strategy keeps the leading system message (see `doc/f_llm-memory-design.md` §6.5 for where persona and skills are injected).
 
 ### Tool calling
 

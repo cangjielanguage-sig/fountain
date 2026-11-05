@@ -1,6 +1,6 @@
 # 内容族存储（记忆 / 经验 / 知识 / 文档）
 
-> 对应设计与代码：`f_llm-memory-design.md` §5.3、§6；实现 `f_llm/src/store/`。
+> 对应设计与代码：`f_llm-memory-design.md` §2、§3；实现 `f_llm/src/store/`。
 > 状态：PostgreSQL 已实现并通过集成测试；MySQL 与 f_hydra / fhydra 待接。
 
 ## 1. 表
