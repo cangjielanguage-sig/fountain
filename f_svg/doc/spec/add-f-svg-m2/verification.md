@@ -1,6 +1,9 @@
 # add-f-svg-m2 归档后实现校验报告
 
-## 0. 校验结论
+## 0. 校验结论（初检）
+
+> **本报告分两段读**：§0–§5 是修复前的**初检基线**；§6 是修复结果与最终验证。
+> **当前状态：C1–C9 全部清除，必须修复的 WARNING 全部落地，`cjpm test` 341/341 通过，CRITICAL = 0。**
 
 - 本次为只读校验：未修改 `f_svg/src`、`f_svg/testdata`、`openspec/specs` 或归档目录；仅执行了 `cjpm test` / `cjpm build`，会更新 `target` 缓存。
 - `cjpm test`：**330 / 330 通过，0 failed，0 skipped**。
@@ -323,4 +326,26 @@
 
 - **W16 / SUGGESTION 1-6**：不在本次必须修复范围，未改动。
 - 最终验证：`cjpm test` **341 / 341 通过，0 failed，0 error**；`cjpm build` 成功，`f_svg` 自身 0 warning（构建输出 warning 均来自 `f_xml` 等依赖）。
+
+---
+
+## 7. 复验修复结果（2026-11-05，feature/f_svg，第二轮）
+
+修复依据：`fix-plan-2.md`。N1–N3（CRITICAL）与 N4–N9（WARNING）逐项先补失败用例（Red），确认失败原因后写最小实现（Green），`cjpm test` 全绿后独立提交。
+
+| 编号 | 结果 | 主要落点与用例 |
+|---|---|---|
+| N1 | 已修复 | `SvgAnimationSpec.targetPath` 记录 `elementPath()`；`sample()` 按 `id` 优先、结构路径兜底定位，`findSvgElementByPath` 处理同名兄弟序号；用例 `SvgAnimation_test.targetWithoutId` |
+| N2 | 已修复 | `interpolateAnimationValue` 在标量之后、颜色之前接入 `SvgInterpolator.numericList`；`numericList` 短列表用末值补齐；`by`、`additive`、`accumulate` 共用逐项列表规则；用例 `SvgAnimation_test.numericListInterpolation`、`SvgInterpolator_test.numericLists` |
+| N3 | 已修复 | `sortedAnimationSpecsByBegin` 在采样前做稳定升序排序，`begin` 相等保持文档顺序；用例 `SvgAnimation_test.beginOrdering` |
+| N4 | 已修复 | `SvgStyleResolver.cascade` 对非法 `font-size` 回退父计算值并产生含元素路径的 warning；用例 `SvgComputedStyle_test.invalidValuesDegrade` |
+| N5 | 已修复 | `stroke-dasharray` 列表逐项按当前元素字号解析 `em` / `ex` 后再格式化；用例 `SvgComputedStyle_test.invalidValuesDegrade` |
+| N6 | 已修复 | `SvgTextLayout.missingGlyph` 记录缺字，`SvgGeometry.textElementBounds` 遇缺字返回 `None`，渲染占位路径不变；用例 `SvgGeometry_test.textBoundsRequireAllGlyphs` |
+| N7 | 已修复 | `tspan` 的 `x` / `y` 列表逐字符消费，短列表复用末值；用例 `SvgTextRenderer_test.tspanPositionLists` |
+| N8 | 已修复 | 线性渐变退化分支由 `linearT` 返回 `None`，`sample` 直接取末 stop，不再经过 `spreadMethod`；用例 `SvgGradientSampler_test.linearEndpoints` |
+| N9 | 已修复 | 以归档副本 `openspec/changes/archive/2026-11-05-add-f-svg-m2/tasks.md` 覆盖工作副本，两份 `diff` 为空，157/157 勾选 |
+
+- 最终验证：`cjpm test` **346 / 346 通过，0 failed，0 error**；`cjpm build` 成功，`f_svg` 自身 errlog 0 字节（构建输出 warning 均来自 `f_xml` 等依赖）。
+- 分级结果：**CRITICAL = 0**，本轮计划内 WARNING = 0；W16 与 SUGGESTION 1–6 保持记录、未改动。
+
 
