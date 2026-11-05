@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_svg
 
+import std.io.OutputStream
+import std.fs.{FSException, File, Path}
 import std.math.*
 
 /** 预乘 RGBA 颜色，内部合成统一使用。 */
@@ -152,6 +154,24 @@ public class SvgBitmap <: ToString {
         this.pixels[index + 1] = UInt8(Int64(result.green))
         this.pixels[index + 2] = UInt8(Int64(result.blue))
         this.pixels[index + 3] = quantizeSvgChannel(result.alpha)
+    }
+
+    /** 输出 PNG 到流。 */
+    public func writePng(output: OutputStream): Unit {
+        SvgPngEncoder.write(this, output)
+    }
+
+    public func toPngBytes(): Array<Byte> {
+        SvgPngEncoder.encode(this)
+    }
+
+    /** 保存 PNG；目标目录不存在时抛 `InvalidValue`。 */
+    public func savePng(path: Path): Unit {
+        try {
+            File.writeTo(path, this.toPngBytes())
+        } catch (_: FSException) {
+            throw invalidValue("无法写入 PNG：${path}")
+        }
     }
 
     public func toString(): String {

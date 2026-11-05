@@ -77,6 +77,11 @@ public class SvgRenderer {
         this.renderDisplayList(list)
     }
 
+    /** 渲染为 PNG 字节。 */
+    public func renderToPng(document: SvgDocument): Array<Byte> {
+        this.render(document).toPngBytes()
+    }
+
     private func renderDisplayList(list: SvgDisplayList): SvgBitmap {
         this.options.validatePixels(list.width, list.height)
         let output = SvgBitmap(list.width, list.height)
@@ -419,4 +424,12 @@ private func rectPathData(box: SvgBounds): SvgPathData {
         SvgPathCommand(SvgPathCommandKind.LineTo, false, [box.x, box.y + box.height]),
         SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>())
     ])
+}
+
+/** 顶层 PNG 渲染便捷函数。 */
+public func renderToPng(
+    document: SvgDocument,
+    options!: SvgRenderOptions = SvgRenderOptions()
+): Array<Byte> {
+    SvgRenderer(options: options).render(document).toPngBytes()
 }

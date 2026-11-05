@@ -65,6 +65,17 @@ public class SvgRenderer_test {
         }
     }
 
+    /** renderToPng 输出合法 PNG 签名，方法入口与顶层入口一致。 */
+    @TestCase
+    public func renderToPngEntry(): Unit {
+        let document = svgDoc('<rect width="10" height="10" fill="red"/>', width: 10, height: 10)
+        let bytes = SvgRenderer().renderToPng(document)
+        @Assert(bytes.size > 8)
+        @Assert(bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+        let topLevel = renderToPng(document)
+        @Assert(bytes == topLevel)
+    }
+
     /** 渐变、裁剪与文本在渲染管线中生效。 */
     @TestCase
     public func paintAndClipPipeline(): Unit {
