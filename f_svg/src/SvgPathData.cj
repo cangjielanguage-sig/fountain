@@ -233,22 +233,38 @@ public class SvgPathData <: ToString {
                     result.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [currentX, y]))
                     currentY = y
                 case CurveTo =>
-                    let values = absolutePairs(command.values, 6, currentX, currentY)
+                    let values = if (command.relative) {
+                        absolutePairs(command.values, 6, currentX, currentY)
+                    } else {
+                        command.values
+                    }
                     result.add(SvgPathCommand(SvgPathCommandKind.CurveTo, false, values))
                     currentX = values[4]
                     currentY = values[5]
                 case SmoothCurveTo =>
-                    let values = absolutePairs(command.values, 4, currentX, currentY)
+                    let values = if (command.relative) {
+                        absolutePairs(command.values, 4, currentX, currentY)
+                    } else {
+                        command.values
+                    }
                     result.add(SvgPathCommand(SvgPathCommandKind.SmoothCurveTo, false, values))
                     currentX = values[2]
                     currentY = values[3]
                 case QuadraticBezierTo =>
-                    let values = absolutePairs(command.values, 4, currentX, currentY)
+                    let values = if (command.relative) {
+                        absolutePairs(command.values, 4, currentX, currentY)
+                    } else {
+                        command.values
+                    }
                     result.add(SvgPathCommand(SvgPathCommandKind.QuadraticBezierTo, false, values))
                     currentX = values[2]
                     currentY = values[3]
                 case SmoothQuadraticBezierTo =>
-                    let values = absolutePairs(command.values, 2, currentX, currentY)
+                    let values = if (command.relative) {
+                        absolutePairs(command.values, 2, currentX, currentY)
+                    } else {
+                        command.values
+                    }
                     result.add(SvgPathCommand(SvgPathCommandKind.SmoothQuadraticBezierTo, false, values))
                     currentX = values[0]
                     currentY = values[1]
