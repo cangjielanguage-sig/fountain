@@ -63,6 +63,34 @@ public class SvgParser {
         buildSvgDocument(document, options)
     }
 
+    /**
+     * 按魔数自动识别 SVGZ：前两字节为 `1F 8B` 时 gzip 解压后解析，否则按字节解析。
+     *
+     * 命中魔数但解压失败时抛 `Syntax`，不静默回退为文本。
+     */
+    public static func parseAuto(
+        bytes: Array<Byte>,
+        options!: SvgParseOptions = SvgParseOptions()
+    ): SvgDocument {
+        if (bytes.size >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
+            parseGzip(bytes, options: options)
+        } else {
+            parse(bytes, options: options)
+        }
+    }
+
+    /** 强制按 gzip 解压后解析；非 gzip 输入抛 `Syntax`。 */
+    public static func parseGzip(
+        bytes: Array<Byte>,
+        options!: SvgParseOptions = SvgParseOptions()
+    ): SvgDocument {
+        let decoded = SvgGzip.decompress(
+            bytes,
+            maxBytes: options.security.maxDecompressedBytes
+        )
+        parse(decoded, options: options)
+    }
+
     private static func loadXml(loader: () -> XmlDocument): XmlDocument {
         try {
             loader()
