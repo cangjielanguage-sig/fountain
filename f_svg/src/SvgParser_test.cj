@@ -239,6 +239,24 @@ public class SvgParser_test {
         @Assert(withAttribute.warnings.size == 0)
     }
 
+    /** style/title/desc/metadata 是已知但无语义的标签，严格模式不拒绝。 */
+    @TestCase
+    public func knownMetadataTags(): Unit {
+        let text = "<svg><style>.a{fill:red}</style><title>T</title><desc>D</desc>" +
+            "<metadata><x:foo xmlns:x=\"urn:x\"/></metadata></svg>"
+        let strict = SvgParser.parse(text, options: SvgParseOptions(strict: true))
+        let style = strict.root.child("style").getOrThrow()
+        @Assert(!(style is SvgUnknownElement))
+        @Assert(style.text() == ".a{fill:red}")
+        @Assert(strict.root.child("title").getOrThrow().text() == "T")
+        @Assert(strict.root.child("desc").getOrThrow().text() == "D")
+        @Assert(strict.root.child("metadata").isSome())
+        @Assert(strict.warnings.size == 0)
+
+        let loose = SvgParser.parse(text)
+        @Assert(loose.warnings.size == 0)
+    }
+
     /** 标签表全覆盖：每个已知标签都得到对应模型类型。 */
     @TestCase
     public func tagTableCoverage(): Unit {

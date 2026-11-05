@@ -97,7 +97,8 @@ public class SvgTransform_test {
         let bad = [
             "translate(a)", "translate(1,2,3)", "scale()", "rotate(1,2)", "matrix(1 2 3)",
             "matrix(1 2 3 4 5 6 7)", "translate(1,,2)", "translate(1,)", "bounce(1)",
-            "translate(1) garbage", "translate 1 2", "scale(1e)"
+            "translate(1) garbage", "translate 1 2", "scale(1e)",
+            "translate(1, )", "translate(1 ,)", "matrix(1 2 3 4 5 6,)", "translate(1),"
         ]
         for (text in bad) {
             let current = text

@@ -800,7 +800,8 @@ public class SvgDocument <: ToString {
 
 - `declaration` / `doctype` 复用 `f_xml` 类型，保证 DOCTYPE 与 XML 声明可无损往返；
 - `warnings` 记录宽松模式下的降级（非法属性值、被移除的不安全内容等）；
-- `elementById` 深度优先，返回第一个匹配（不要求 id 唯一，但按规范应唯一）。
+- `elementById` 深度优先，返回第一个匹配（不要求 id 唯一，但按规范应唯一）；
+- `elementsByTag` 只返回后代元素，不含根元素自身。
 
 ---
 
@@ -853,6 +854,7 @@ public class SvgParser {
 | `text` / `tspan` / `textPath`                                                                           | `SvgText` / `SvgTspan` / `SvgTextPath` |
 | `linearGradient` / `radialGradient` / `stop`                                                            | 对应渐变类 / `SvgStop`                      |
 | `use` / `image`                                                                                         | `SvgUse` / `SvgImage`                  |
+| `style` / `title` / `desc` / `metadata`                                                                 | 通用 `SvgElement`（保留内容，不解释、不告警）           |
 | 其他                                                                                                      | `SvgUnknownElement`                    |
 
 ### 5.3 命名空间

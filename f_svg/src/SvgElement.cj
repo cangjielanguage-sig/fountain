@@ -313,8 +313,8 @@ public open class SvgElement <: ToString {
                 match (node) {
                     case ElementNode(element) => out.append(element.toString())
                     case TextNode(text) => out.append(escapeSvgText(text))
-                    case CDataNode(text) => out.append("<![CDATA[${text}]]>")
-                    case CommentNode(text) => out.append("<!--${text}-->")
+                    case CDataNode(text) => out.append(serializeSvgCData(text))
+                    case CommentNode(text) => out.append(serializeSvgComment(text))
                     case PiNode(target, data) => out.append("<?${target} ${data}?>")
                 }
             }
@@ -479,6 +479,47 @@ internal func writeSvgHref(element: SvgElement, value: ?String): Unit {
             element.removeAttr("href")
             element.removeAttr(SvgNamespaces.XLINK, "href")
     }
+}
+
+/** CDATA 中出现 `]]>` 时拆成两段，保证输出仍是合法 XML。 */
+internal func serializeSvgCData(text: String): String {
+    let runes = ArrayList<Rune>()
+    for (rune in text.runes()) {
+        runes.add(rune)
+    }
+    let out = StringBuilder()
+    out.append("<![CDATA[")
+    var index = 0
+    while (index < runes.size) {
+        if (runes[index] == r']' && index + 2 < runes.size && runes[index + 1] == r']' &&
+            runes[index + 2] == r'>') {
+            out.append("]]]]><![CDATA[>")
+            index += 3
+        } else {
+            out.append(runes[index])
+            index++
+        }
+    }
+    out.append("]]>")
+    out.toString()
+}
+
+/** 注释中的 `--` 与结尾 `-` 会破坏 XML，插入空格规避。 */
+internal func serializeSvgComment(text: String): String {
+    let out = StringBuilder()
+    var previousDash = false
+    for (rune in text.runes()) {
+        if (previousDash && rune == r'-') {
+            out.append(" ")
+        }
+        out.append(rune)
+        previousDash = rune == r'-'
+    }
+    var body = out.toString()
+    if (body.endsWith("-")) {
+        body += " "
+    }
+    "<!--" + body + "-->"
 }
 
 internal func escapeSvgText(text: String): String {

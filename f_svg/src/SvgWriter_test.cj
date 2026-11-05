@@ -283,6 +283,18 @@ public class SvgWriter_test {
         @Assert(error.kind == SvgErrorKind.InvalidValue)
     }
 
+    /** xlink=false 只折叠 SVG / XLink 命名空间的 href。 */
+    @TestCase
+    public func xlinkFalseKeepsForeignHref(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:e=\"urn:e\">" +
+            "<e:item e:href=\"#a\"/></svg>"
+        )
+        let text = writeSvgString(document, options: SvgWriteOptions(xlink: false))
+        @Assert(text.contains("e:href=\"#a\""))
+        @Assert(text.contains("xmlns:e="))
+    }
+
     /** 元素写入省略 XML 声明以外的前后杂项。 */
     @TestCase
     public func writeSingleElement(): Unit {

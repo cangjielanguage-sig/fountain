@@ -119,6 +119,27 @@ public class SvgDocument_test {
         @Assert(document.elementsByTag("rect").size == 0)
     }
 
+    /** elementsByTag 只返回后代，不含根元素自身。 */
+    @TestCase
+    public func elementsByTagExcludesRoot(): Unit {
+        let root = SvgRoot()
+        root.appendElement(SvgRect(width: SvgLength(1.0), height: SvgLength(1.0)))
+        let document = SvgDocument(root)
+        @Assert(document.elementsByTag("svg").size == 0)
+        @Assert(document.elementsByTag("rect").size == 1)
+    }
+
+    /** SvgDocument.toString 与 writeSvgString 默认选项一致。 */
+    @TestCase
+    public func toStringMatchesWriter(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><use href=\"#a\"/></svg>"
+        )
+        let text = document.toString()
+        @Assert(text == writeSvgString(document))
+        @Assert(text.contains("xlink:href=\"#a\""))
+    }
+
     /** warnings 只增不减。 */
     @TestCase
     public func warningsAccumulate(): Unit {

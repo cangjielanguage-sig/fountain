@@ -218,6 +218,22 @@ public class SvgElement_test {
         @Assert(group.toString() == "<g><rect x=\"10\" width=\"80\"/></g>")
     }
 
+    /** CDATA 的 `]]>` 与注释的 `--` 序列化时保持 XML 合法。 */
+    @TestCase
+    public func cdataAndCommentSafety(): Unit {
+        let element = SvgElement("g")
+        element.appendChild(SvgNode.CDataNode("a]]>b"))
+        element.appendChild(SvgNode.CommentNode("a--b"))
+        element.appendChild(SvgNode.CommentNode("x-"))
+        let text = element.toString()
+        @Assert(text.contains("]]]]><![CDATA[>"))
+        @Assert(!text.contains("a--b"))
+        @Assert(text.contains("<!--a- -b-->"))
+        @Assert(text.contains("<!--x- -->"))
+        @Assert(SvgNode.CDataNode("a]]>b").toString() == "<![CDATA[a]]]]><![CDATA[>b]]>")
+        @Assert(SvgNode.CommentNode("a--b").toString() == "<!--a- -b-->")
+    }
+
     /** SvgAttribute 的结构与字符串。 */
     @TestCase
     public func attributeStruct(): Unit {

@@ -37,10 +37,15 @@ public class SvgDocument <: ToString {
         findSvgElementById(this.root, id)
     }
 
-    /** 全部 local name 匹配的元素（不区分命名空间）。 */
+    /** 全部后代元素（不区分命名空间），不含根元素自身。 */
     public func elementsByTag(tag: String): ArrayList<SvgElement> {
         let result = ArrayList<SvgElement>()
-        collectSvgElementsByTag(this.root, tag, result)
+        for (node in this.root.children) {
+            match (node) {
+                case ElementNode(child) => collectSvgElementsByTag(child, tag, result)
+                case _ => ()
+            }
+        }
         result
     }
 
@@ -59,7 +64,7 @@ public class SvgDocument <: ToString {
     }
 
     public func toString(): String {
-        this.toXmlDocument().toString()
+        writeSvgString(this)
     }
 }
 

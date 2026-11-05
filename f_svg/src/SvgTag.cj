@@ -36,6 +36,7 @@ public class SvgTag {
             case "stop" => Some(SvgStop())
             case "use" => Some(SvgUse())
             case "image" => Some(SvgImage())
+            case "style" | "title" | "desc" | "metadata" => Some(SvgElement(tag))
             case "g" | "defs" | "symbol" | "marker" | "pattern" | "clipPath" | "mask" | "switch" | "a" |
                 "foreignObject" =>
                 match (SvgContainerKind.fromTag(tag)) {
@@ -51,7 +52,7 @@ public class SvgTag {
             case "svg" | "rect" | "circle" | "ellipse" | "line" | "polyline" | "polygon" | "path" |
                 "text" | "tspan" | "textPath" | "linearGradient" | "radialGradient" | "stop" | "use" |
                 "image" | "g" | "defs" | "symbol" | "marker" | "pattern" | "clipPath" | "mask" |
-                "switch" | "a" | "foreignObject" => true
+                "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" => true
             case _ => false
         }
     }

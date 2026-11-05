@@ -111,6 +111,7 @@
 
 - 非 SVG 命名空间的元素 → `SvgUnknownElement`，保留 `QName`（前缀/URI）、属性与子树；
 - SVG 命名空间中的未知标签 → 宽松模式 `SvgUnknownElement` + warning，严格模式抛 `Unsupported`；
+- `style` / `title` / `desc` / `metadata` → 已知但无语义的标签，映射为通用 `SvgElement`，保留内容且不告警；
 - 未知属性（含 `data-*` 与编辑器私有属性）→ 原样保留在 `attributes`；
 - 注释、PI、CDATA → 保留为对应 `SvgNode`；
 - `<!DOCTYPE>` → 保留在 `SvgDocument.doctype`。
@@ -124,6 +125,11 @@
 
 - **WHEN** 解析 `<rect data-x="1" inkscape:label="a"/>`
 - **THEN** 两个属性都出现在 `attributes` 中且值不变
+
+#### Scenario: 无语义已知标签
+
+- **WHEN** 严格模式解析含 `<style>`、`<title>`、`<desc>`、`<metadata>` 的文档
+- **THEN** 均成功构建为通用 `SvgElement`，不抛 `Unsupported`，也不产生未知标签 warning
 
 ### Requirement: 文档对象
 

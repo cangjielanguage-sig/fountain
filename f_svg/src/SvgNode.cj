@@ -27,8 +27,8 @@ public enum SvgNode <: ToString {
         match (this) {
             case ElementNode(element) => element.toString()
             case TextNode(text) => text
-            case CDataNode(text) => "<![CDATA[${text}]]>"
-            case CommentNode(text) => "<!--${text}-->"
+            case CDataNode(text) => serializeSvgCData(text)
+            case CommentNode(text) => serializeSvgComment(text)
             case PiNode(target, data) => "<?${target} ${data}?>"
         }
     }
