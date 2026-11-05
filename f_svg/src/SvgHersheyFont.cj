@@ -24,7 +24,7 @@ private let HERSHEY_GLYPHS: HashMap<Int64, String> = buildHersheyGlyphs()
  * 内置单线字体（Hershey 风格）。
  *
  * 字形在 4×6 网格上以折线描述，`glyphPath` 按字号线性缩放；
- * 覆盖 ASCII 32–126，空格无路径，非 ASCII 返回 `None`。
+ * 覆盖 ASCII 32–126，空格返回空路径，非 ASCII 返回 `None`。
  */
 public class SvgHersheyFont <: SvgFont {
     private static let GLYPH_UNITS = 6.0
@@ -35,6 +35,9 @@ public class SvgHersheyFont <: SvgFont {
     public func glyphPath(codePoint: Int64, fontSize: Float64): ?SvgPathData {
         if (fontSize <= 0.0) {
             return None
+        }
+        if (codePoint == 32) {
+            return Some(SvgPathData(Array<SvgPathCommand>()))
         }
         let encoded = match (HERSHEY_GLYPHS.get(codePoint)) {
             case Some(value) => value

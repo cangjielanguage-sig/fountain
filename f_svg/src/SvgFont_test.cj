@@ -44,11 +44,16 @@ public class SvgFont_test {
         @Assert(defaultRegistry.resolve("only-second", "normal", "normal").isNone())
     }
 
-    /** ASCII 32–126 全覆盖、空格无路径、非 ASCII 返回 None。 */
+    /** ASCII 32–126 全覆盖、空格空字形、非 ASCII 返回 None。 */
     @TestCase
     public func hersheyCoverage(): Unit {
         let font = SvgHersheyFont()
-        @Assert(font.glyphPath(32, 10.0).isNone())
+        let space = font.glyphPath(32, 10.0)
+        @Assert(space.isSome())
+        match (space) {
+            case Some(path) => @Assert(path.commands.size == 0)
+            case None => @Fail("空格应返回空字形路径")
+        }
         @Assert(font.advance(32, 10.0) > 0.0)
         for (codePoint in 33..=126) {
             @Assert(font.glyphPath(codePoint, 10.0).isSome())
