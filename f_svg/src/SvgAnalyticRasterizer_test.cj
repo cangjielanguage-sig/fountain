@@ -113,13 +113,23 @@ public class SvgAnalyticRasterizer_test {
             "<marker id=\"m\" markerWidth=\"4\" markerHeight=\"4\">" +
             "<rect width=\"4\" height=\"4\" fill=\"blue\"/></marker></defs>" +
             "<g clip-path=\"url(#c)\" filter=\"url(#f)\">" +
-            "<circle cx=\"20\" cy=\"20\" r=\"15\" fill=\"url(#p)\" marker-end=\"url(#m)\"/>" +
+            "<circle cx=\"20\" cy=\"20\" r=\"15\" fill=\"url(#p)\"/>" +
+            "<path d=\"M 10 20 L 28 20\" fill=\"none\" stroke=\"black\" " +
+            "marker-end=\"url(#m)\"/>" +
             "</g></svg>"
         )
         let options = SvgRenderOptions(samplesPerPixel: 4, antiAlias: SvgAntiAliasMode.Analytic)
         let first = SvgRenderer(options: options).render(document)
         let second = SvgRenderer(options: options).render(document)
         @Assert(first.pixels == second.pixels)
+        var markerPixels = 0
+        for (index in 0..first.pixels.size / 4) {
+            if (first.pixels[index * 4] < 60 && first.pixels[index * 4 + 2] > 180 &&
+                first.pixels[index * 4 + 3] > 0) {
+                markerPixels++
+            }
+        }
+        @Assert(markerPixels > 0)
     }
 }
 

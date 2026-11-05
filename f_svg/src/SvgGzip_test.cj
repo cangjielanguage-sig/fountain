@@ -98,3 +98,17 @@ public class SvgGzip_test {
         @Assert(documentSnapshot(reparsed) == documentSnapshot(original))
     }
 }
+
+@Test
+public class SvgGzipDepthM3_test {
+    /** 解压后仍受 maxDepth 约束。 */
+    @TestCase
+    public func decompressedDepthBounded(): Unit {
+        let deep = "<svg xmlns=\"http://www.w3.org/2000/svg\"><g><g><g><g>" +
+            "<rect width=\"1\" height=\"1\"/></g></g></g></g></svg>"
+        let compressed = writeGzip(SvgParser.parse(deep))
+        let options = SvgParseOptions(security: SvgSecurityOptions(maxDepth: 3))
+        let error = expectSvgException({=> SvgParser.parseGzip(compressed, options: options)})
+        @Assert(error.kind == SvgErrorKind.Limit)
+    }
+}

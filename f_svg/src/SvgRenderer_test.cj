@@ -440,3 +440,34 @@ public class SvgRenderReadOnlyM3_test {
         @Assert(documentSnapshot(document) == before)
     }
 }
+
+@Test
+public class SvgImageEffectsM3_test {
+    /** image 的 filter 与 mask 正常生效。 */
+    @TestCase
+    public func imageMaskAndFilter(): Unit {
+        let uri = m3PngDataUri(m3RedPng(4, 4))
+        let filtered = svgDoc(
+            "<defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" " +
+            "width=\"10\" height=\"10\"><feOffset dx=\"3\" dy=\"0\"/></filter></defs>" +
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"10\" height=\"10\" filter=\"url(#f)\"/>",
+            width: 10,
+            height: 10
+        )
+        let filteredBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(filtered)
+        @Assert(colorNear(filteredBitmap.pixel(8, 5), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(filteredBitmap.pixel(1, 5).alpha == 0.0)
+
+        let masked = svgDoc(
+            "<defs><mask id=\"m\"><rect x=\"0\" y=\"0\" width=\"5\" height=\"10\" fill=\"white\"/></mask></defs>" +
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"10\" height=\"10\" mask=\"url(#m)\"/>",
+            width: 10,
+            height: 10
+        )
+        let maskedBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(masked)
+        @Assert(colorNear(maskedBitmap.pixel(2, 5), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(maskedBitmap.pixel(8, 5).alpha == 0.0)
+    }
+}

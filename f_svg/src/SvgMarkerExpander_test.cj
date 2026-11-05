@@ -279,3 +279,33 @@ public class SvgMarkerSubpathM3_test {
         @Assert(starts.contains(30.0))
     }
 }
+
+@Test
+public class SvgMarkerEffectsM3_test {
+    /** marker 内容的 filter 与 mask 正常生效。 */
+    @TestCase
+    public func markerContentMaskAndFilter(): Unit {
+        let filtered = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +
+            "<defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" " +
+            "width=\"8\" height=\"8\"><feOffset dx=\"2\" dy=\"0\"/></filter>" +
+            "<marker id=\"m\" markerWidth=\"4\" markerHeight=\"4\">" +
+            "<rect width=\"4\" height=\"4\" fill=\"red\" filter=\"url(#f)\"/></marker></defs>" +
+            "<line x1=\"10\" y1=\"10\" x2=\"25\" y2=\"10\" stroke=\"black\" marker-start=\"url(#m)\"/></svg>"
+        )
+        let filteredBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(filtered)
+        @Assert(colorNear(filteredBitmap.pixel(15, 10), SvgColor.fromRgb(255, 0, 0)))
+
+        let masked = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +
+            "<defs><mask id=\"m\"><rect x=\"0\" y=\"0\" width=\"2\" height=\"4\" fill=\"white\"/></mask>" +
+            "<marker id=\"mk\" markerWidth=\"4\" markerHeight=\"4\">" +
+            "<rect width=\"4\" height=\"4\" fill=\"red\" mask=\"url(#m)\"/></marker></defs>" +
+            "<line x1=\"10\" y1=\"10\" x2=\"25\" y2=\"10\" stroke=\"black\" marker-start=\"url(#mk)\"/></svg>"
+        )
+        let maskedBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(masked)
+        @Assert(colorNear(maskedBitmap.pixel(10, 10), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(maskedBitmap.pixel(13, 10).alpha == 0.0)
+    }
+}

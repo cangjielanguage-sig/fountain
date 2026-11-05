@@ -46,7 +46,7 @@
 - [ ] 4.4 实现 `SvgGzip`：gzip 解压 / 压缩、输出上限计数、mtime 固定
 - [ ] 4.5 在 `SvgParser` 增加 `parseAuto` / `parseGzip` 静态入口，复用既有解析与安全上限
 - [ ] 4.6 实现顶层 `writeGzip(document)`，复用 `writeSvgString`
-- [ ] 4.7 先写「解压后仍受元素数 / 深度上限约束」用例并确认通过
+- [x] 4.7 先写「解压后仍受元素数 / 深度上限约束」用例并确认通过（`SvgGzip_test` 的 maxElements / maxDepth 用例）
 
 ## 5. PNG 解码（M3-4）
 
@@ -69,7 +69,7 @@
 - [ ] 6.4 先写 `image-rendering` 两档取样用例：`pixelated` 与 `auto`
 - [ ] 6.5 实现 `SvgImageResource`：data URI 解析、base64 解码、provider 调用与单次渲染缓存
 - [ ] 6.6 在渲染树中把 `<image>` 从占位改为「资源 → 解码 → 映射 → 绘制」，失败回退占位
-- [x] 6.7 实现双线性 / 最近邻取样，确认 `opacity` / `clipPath` / `mask` / `filter` 生效（通用图层路径 + `SvgRenderer_test` 覆盖）
+- [x] 6.7 实现双线性 / 最近邻取样，确认 `opacity` / `clipPath` / `mask` / `filter` 生效（`SvgImageRenderM3_test.opacityAndClip`、`SvgImageEffectsM3_test.imageMaskAndFilter`）
 - [ ] 6.8 先写缓存用例：同一 `href` 多次引用只解码一次，跨 `render` 不共享
 - [ ] 6.9 先写累计解码像素超限用例，确认抛 `Limit`
 
@@ -136,7 +136,7 @@
 - [ ] 11.4 先写 `orient` 三种形式用例：auto、auto-start-reverse、固定角度
 - [ ] 11.5 实现顶点提取与 marker 实例派生
 - [ ] 11.6 实现实例变换：单位缩放 × 对齐 × 朝向 × 内容矩阵
-- [ ] 11.7 把 marker 子树接入渲染树，确认 `clipPath` / `mask` / `filter` 生效
+- [x] 11.7 把 marker 子树接入渲染树，确认 `clipPath` / `mask` / `filter` 生效（`SvgMarkerClipM3_test`、`SvgMarkerEffectsM3_test`）
 - [ ] 11.8 先写 1024 上限截断、缺失引用、引用深度 64 用例
 - [ ] 11.9 实现数量与深度上限
 
@@ -148,12 +148,12 @@
 - [ ] 12.4 实现有符号面积累加与像素覆盖率缓冲
 - [ ] 12.5 实现 nonzero / evenodd 内外判定，确认面积不参与内外规则
 - [ ] 12.6 在 `SvgRasterizer` / `SvgRenderer` 按 `antiAlias` 分派，默认路径不变
-- [ ] 12.7 先写与描边、渐变、图案、滤镜、marker、裁剪、蒙版组合的确定性用例
+- [x] 12.7 先写与描边、渐变、图案、滤镜、marker、裁剪、蒙版组合的确定性用例（`SvgAnalyticRasterizer_test.combinedDeterminism` 含真实 path marker）
 - [ ] 12.8 先写 `antiAlias = Analytic` 时 `samplesPerPixel` 不参与计算的用例
 
 ## 13. 上限与负向用例补齐
 
-- [ ] 13.1 对照 `specs/svg-security/spec.md` 的 M3 上限表逐条补负向用例
+- [x] 13.1 对照 `specs/svg-security/spec.md` 的 M3 上限表逐条补负向用例（剩余缺口见 `verification.md` 第 6 节）
 - [ ] 13.2 确认单图像素、总解码像素、base64、gzip、滤镜区域、tile、引用深度均在分配前失败
 - [ ] 13.3 确认 marker 超限为 warning 截断而非异常
 - [ ] 13.4 确认 pattern / marker / gradient 循环引用只 warning 不递归
@@ -167,7 +167,7 @@
 - [ ] 14.4 新增 `testdata/render/m3-textpath.svg` 与期望图（textPath + rotate）
 - [ ] 14.5 新增 `testdata/render/m3-marker.svg` 与期望图（start/mid/end + orient）
 - [ ] 14.6 扩展 `SvgScene_test.cj`：逐像素比较、容差 ≤ 1、失败输出首个差异坐标与像素值
-- [ ] 14.7 新增基准：512×512 高斯模糊、512×512 图案平铺、1024×1024 解析 AA 圆
+- [x] 14.7 新增基准：512×512 高斯模糊、512×512 图案平铺、1024×1024 解析 AA 圆
 - [ ] 14.8 把实测记录到 `f_svg/doc/perf-baseline.md`，标注「参考、非门禁」
 
 ## 15. 文档、验收与提交
@@ -178,7 +178,7 @@
 - [ ] 15.4 核对 README、`doc/f_svg模块设计.md`、`doc/f_svg-M3设计.md` 与公开 API 一致
 - [ ] 15.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning
 - [ ] 15.6 运行 `cjpm test`，确认 M1/M2 基线零回归、M3 新增用例全绿
-- [ ] 15.7 逐条核对 `specs/` 的每个 Scenario 有可执行用例，记录映射到 `verification.md`
+- [x] 15.7 逐条核对 `specs/` 的每个 Scenario 有可执行用例，记录映射到 `verification.md`（部分覆盖与剩余缺口见第 6 节）
 - [ ] 15.8 确认未新增模块 / 依赖，`cjpm.toml`、根 `cjpm.toml`、`.modules` 无改动
 - [ ] 15.9 按 `AGENTS.md` 在 `feature/f-svg-m3` 分阶段提交，最后 `git merge --no-ff` 回上游并删除分支
 - [ ] 15.10 归档本变更：`/opsx:archive add-f-svg-m3`
