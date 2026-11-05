@@ -94,9 +94,7 @@ internal func parseSvgNumberSequence(text: String, separator: SvgListSeparator):
                 i = token.end
             case None => throw invalidValue("列表中出现非法数字")
         }
-        let beforeSpace = i
         i = skipSvgSpaces(bytes, i)
-        let hadSpace = i > beforeSpace
         if (i >= bytes.size) {
             break
         }
