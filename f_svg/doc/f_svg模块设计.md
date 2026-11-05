@@ -602,6 +602,10 @@ public struct SvgAttribute {
 **命名空间前缀**：`setAttr(namespace:local:value:)` 对同一 URI 复用已分配前缀，新 URI 依次分配
 `ns1`、`ns2`…，并跳过已占用的前缀；`xlink` 与 `xml` 使用固定前缀。
 
+**可变列表的边界**：`attributes`、`children`、`warnings` 为便于只读遍历直接暴露为可变列表。
+调用方写入属性或子节点时应使用 `setAttr` / `removeAttr` / `appendChild`，否则会绕过
+`attributesVersion` 缓存失效与 `parent` 维护；`warnings` 按契约只增，不应清空。
+
 ### 4.3 容器与根
 
 ```cangjie
@@ -899,6 +903,7 @@ public class SvgException <: BaseException {
 - 行 / 列来自 `f_xml` 的 `XmlException`（1-based）；
 - `f_xml` 抛出的 `XmlException` 在 `SvgParser` 边界统一包装为 `SvgException(kind: Syntax)`，  
   保留原始消息与位置；
+- 构建期的语义 / 安全错误只保证 `elementPath`，`line` / `column` 为 `0`（位置未知）；
 - `elementPath` 形如 `/svg[1]/g[2]/rect[1]`，由构建器维护，便于定位。
 
 ### 5.6 解析流程
@@ -916,7 +921,8 @@ public class SvgException <: BaseException {
 4. 收集 warnings
 ```
 
-**不做二次解析**：每个属性只解析一次；类型化值存入字段，原始字符串同时保留（用于无损往返）。
+**构建时校验一次，类型化值惰性解析**：构建阶段对已知属性做一次合法性校验；类型化值不在此时
+预置，而是在首次读取时解析并按 `attributesVersion` 缓存。未被访问的属性不付出类型化解析成本。
 
 > 设计取舍：类型化字段与原始属性**同时存在**。`setAttr("x", "10")` 后  
 > 类型化 `x` 字段需要同步更新——实现上用 setter 写原始属性，读取时按需解析并缓存，  

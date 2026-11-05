@@ -194,6 +194,9 @@ Build-time value and security errors also carry `elementPath()`:
 /svg[1]/g[2]/rect[1]
 ```
 
+Build-time (value / security / structure) errors use `line == 0` and `column == 0`;
+locate them via `elementPath`. Only XML lexical/syntax errors keep line/column.
+
 ## Samples and tests
 
 `testdata/` contains six small samples: `basic-shapes.svg`, `text.svg`,
@@ -221,3 +224,7 @@ exists and is skipped otherwise. Performance reference values are recorded in
   `id` may be written with or without `#` and is stored as `#id`; an empty id throws
   `InvalidValue`.
 - The "no alignment" value of `SvgAspectAlign` is `NoAlign` (serialized as `none`).
+- `attributes` / `children` / `warnings` are exposed as mutable lists for read-only
+  traversal convenience. Write through `setAttr` / `removeAttr` / `appendChild`;
+  mutating the lists directly bypasses cache invalidation and `parent` maintenance.
+  `warnings` is append-only by contract and should not be cleared.

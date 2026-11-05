@@ -181,10 +181,12 @@ toUserUnits(SvgLength(50.0, unit: SvgLengthUnit.Percent), SvgLengthAxis.Horizont
 
 `f_xml::XmlException` 在解析边界包装为 `SvgException(kind: SvgErrorKind.Syntax)`，
 保留 1-based 行列。构建期的值错误与安全错误额外携带 `elementPath()`：
-
 ```
 /svg[1]/g[2]/rect[1]
 ```
+
+构建期（值 / 安全 / 结构）错误的 `line` 与 `column` 为 `0`，定位以 `elementPath` 为准；
+只有 XML 词法/语法错误保留行列。
 
 ## 样本与测试
 
@@ -211,3 +213,6 @@ cjpm test
 - `SvgPaint` 的引用工厂方法名为 `referencing(id, fallback:)`（与字段 `reference` 区分）；
   `id` 可带或不带 `#`，统一存为 `#id`，空 id 抛 `InvalidValue`。
 - `SvgAspectAlign` 的无对齐取值名为 `NoAlign`（序列化为 `none`）。
+- `attributes` / `children` / `warnings` 为只读遍历方便直接暴露为可变列表；写入请使用
+  `setAttr` / `removeAttr` / `appendChild`，直接改列表会绕过缓存失效与 `parent` 维护。
+  `warnings` 按契约只增，不应清空。

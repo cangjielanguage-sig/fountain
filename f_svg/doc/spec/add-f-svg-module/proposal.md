@@ -15,8 +15,8 @@ fountain 目前只有 `f_xml` 这一层通用 XML 能力：它能解析、遍历
 - 新增类型化模型：`SvgNode`、`SvgAttribute`、`SvgElement`、`SvgRoot`、`SvgContainer`、七种形状、三种文本元素、两种渐变与 `SvgStop`、`SvgUse`、`SvgImage`、`SvgUnknownElement`、`SvgDocument`。
 - 新增解析入口 `SvgParser`（`InputStream` / `bytes` / `text` / `Path` / 已解析 `XmlDocument` 五种重载），内部复用 `f_xml::XmlParser`。
 - 新增生成入口 `SvgWriter` 与 `writeSvgString`，内部构造 `XmlDocument` 后交给 `f_xml::XmlWriter`。
-- 新增安全策略：默认移除 `<script>`、`on*` 事件属性、外部引用与 `javascript:` 协议，并逐条写入 `SvgDocument.warnings`；元素数/深度上限硬失败。
-- 新增 `SvgException`（`Syntax` / `InvalidValue` / `Unsupported` / `Security` / `Limit`），保留行列与元素路径。
+- 新增安全策略：默认移除任意命名空间下 local name 为 `script` 的元素、`on*` 事件属性、外部引用与 `javascript:` 协议，并逐条写入 `SvgDocument.warnings`；元素数/深度上限硬失败。
+- 新增 `SvgException`（`Syntax` / `InvalidValue` / `Unsupported` / `Security` / `Limit`）：XML 词法/语法错误保留行列；构建期语义与安全错误携带元素路径（`line` / `column` 为 0）。
 - 登记发布：根 `.modules` 的 `[include]`、根 `cjpm.toml` 的 `[dependencies]`、中英文 README 的模块清单。
 
 **明确不做（M1 边界）**：渲染/光栅化、CSS 解析与级联、SMIL 动画、滤镜、SVGZ、`foreignObject` 内部 XHTML 语义、字体度量、流式增量输出。`<style>` 与 `style=""` 原样保留但不解释。

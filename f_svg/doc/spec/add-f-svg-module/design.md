@@ -61,7 +61,7 @@ f_base：BaseException / StringGenerator
 
 `SvgElement.attributes` 保存原始字符串与 `QName`（含前缀），这是**唯一**可写状态。类型化 getter 按需解析并缓存，缓存条目挂在 `attributesVersion: Int64` 上；任何 `setAttr` / `removeAttr` 都会 `version += 1`，旧缓存整体失效。
 
-解析阶段在构建元素的同一次 DFS 里完成已知属性的首次解析与校验（每个属性只解析一次），把结果填入缓存；之后若调用方修改属性，下一次读取重新解析。
+解析阶段在构建元素的同一次 DFS 里完成已知属性的校验；类型化值不在构建期预置，而是在首次读取时解析并按 `attributesVersion` 缓存。这样每个属性在解析阶段只校验一次，未被访问的属性也不会付出类型化解析成本。
 
 取舍说明：设计文档 §5.6 写作「类型化值存入字段」，§5.6 末注又要求「setter 写原始属性、读取时按需解析并缓存」。二者统一为「原始字符串为准、类型化为派生」，避免双份状态漂移。`SvgDocument.toXmlDocument()` 始终基于 `attributes`，因此往返不依赖缓存是否正确。
 
@@ -88,7 +88,9 @@ f_base：BaseException / StringGenerator
 
 ### D6. 值类型规范化优先于保真
 
-值类型的 `toString` 输出规范形式（最短数字、标准颜色写法、标准命令序列），并满足 `parse(toString(x)) == x`。原始属性字符串仍保存在 `attributes`，所以「保真往返」看 `attributes`，「语义往返」看值类型。两者互不替代。
+值类型的 `toString` 输出规范形式（最短数字、标准颜色写法、标准命令序列），并对规范形式可表示的值满足 `parse(toString(x)) == x`。原始属性字符串仍保存在 `attributes`，所以「保真往返」看 `attributes`，「语义往返」看值类型。两者互不替代。
+
+已知不保真边界：`|v| < 1e-6` 归零、超过 6 位小数被舍入；`SvgColor` 的 alpha 可由 `0..255` 字节精确表示时输出 `#rrggbbaa`，否则输出 `rgba()`。
 
 `formatSvgNumber` 固定规则：无科学计数法、最多 6 位小数、`-0.0 → 0`、`|v| < 1e-6` 归零、非有限值抛 `InvalidValue`。
 
@@ -132,7 +134,7 @@ f_svg/
     SvgDocument.cj  SvgTag.cj
     SvgOptions.cj  SvgParser.cj  SvgBuilder.cj
     SvgWriter.cj
-    *_test.cj                 与实现同名，仓库既有约定
+    *_test.cj                 与实现同名；同一主题的测试可合并到主实现同名文件
   testdata/
     basic-shapes.svg  text.svg  gradient.svg
     namespaces.svg    comments.svg  unsafe.svg
@@ -153,7 +155,7 @@ f_svg/
 | 结构等价往返 | 标签/URI/属性展开名与值/文本/子节点顺序/注释/PI/CDATA 一致 |
 | 安全默认移除 | 脚本、事件属性、外部引用；逐条 warning |
 | 上限硬失败 | 元素数、深度、实体上限不因宽松模式放行 |
-| 值类型自洽 | `parse(toString(x)) == x` |
+| 值类型自洽 | 对规范形式可表示的值，`parse(toString(x)) == x`；精度边界见 D6 |
 | 无 I/O | 解析器不联网、不打开外部文件或外部实体 |
 
 ## Risks / Trade-offs
@@ -163,7 +165,7 @@ f_svg/
 | 类型化缓存与原始属性不一致 | 读取到过期值 | 单一 `attributesVersion` 失效；写入路径只经 `attributes`；往返测试只依赖原始属性 |
 | 缩进写入产生空白文本节点 | 往返后模型多出空白 | 文档声明该行为；往返测试默认紧凑模式，缩进模式只做结构宽容比较 |
 | 未知前缀在写出时被重命名 | 编辑器私有属性外观变化 | `QName` 保留前缀与 URI，`f_xml::XmlWriter` 按原前缀声明 |
-| `#rrggbbaa` 等 CSS Color 4 扩展超出 SVG 1.1 | 严格消费方可能不识别 | 仅解析侧接受，`toString` 在 alpha ≠ 1 时输出 `rgba()`，不主动产出 8 位 hex |
+| `#rrggbbaa` 等 CSS Color 4 扩展超出 SVG 1.1 | 严格消费方可能不识别 | 仅解析侧接受；`toString` 在 alpha 可由字节精确表示时输出 8 位 hex，其余输出 `rgba()` |
 | 双份树内存 | 大文档峰值升高 | M1 接受；性能目标只作回归参考，不做硬门禁；流式输出列 M2 |
 | 路径词法边界多 | 解析错位 | 单遍状态机 + 覆盖 §9.2 全部边界的表驱动用例 |
 
