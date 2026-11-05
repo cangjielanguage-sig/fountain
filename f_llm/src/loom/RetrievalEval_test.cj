@@ -83,10 +83,10 @@ class RetrievalEval_test {
     }
 
     /**
-     * 随附数据集：50 条语料 + 300 条正样本 + 10 条负样本。
+     * 随附数据集：50 条语料 + 350 条正样本（300 模板化 + 50 难样本）+ 10 条负样本。
      *
-     * 规模是按「单主题结论」定的：10 个主题各 30 条，单主题 recall@1 的 95% 区间约 ±18 点；
-     * 全局 300 条约 ±4 点，够做换模型的粗判。要卡 5 点级回归仍需 500+，见 doc。
+     * 规模是按「单主题结论」定的：10 个模板化主题各 30 条，单主题 recall@1 的 95% 区间约 ±18 点；
+     * 全局 350 条约 ±4 点，够做换模型的粗判。要卡 5 点级回归仍需 500+，见 doc。
      */
     @TestCase
     func testShippedDatasetIsWellFormed(): Unit {
@@ -124,11 +124,15 @@ class RetrievalEval_test {
         }
 
         @Expect(negatives, 10)
-        @Expect(evalCases.size - negatives, 300)
-        // 10 个主题、每主题至少 30 条——这是「单主题结论」的最低门槛
-        @Expect(perTopic.size, 10)
-        for((_, count) in perTopic){
-            @Expect(count >= 30, true)
+        @Expect(evalCases.size - negatives, 350)
+        // 11 个主题：10 个模板化主题各至少 30 条（「单主题结论」的最低门槛）+ hard
+        @Expect(perTopic.size, 11)
+        for((topic, count) in perTopic){
+            if(topic == 'hard'){
+                @Expect(count, 50)
+            }else{
+                @Expect(count >= 30, true)
+            }
         }
 
         // 覆盖检查：每条语料都要被至少一条 query 引用。
@@ -181,10 +185,10 @@ class RetrievalEval_test {
     }
 
     /**
-     * 数据集「可检索」：用一个最笨的字符重合打分器跑一遍，recall@5 不能太低。
+     * 数据集「可检索」且分层有效：字符重合打分器在模板化样本上很高、在难样本上明显更低。
      *
-     * 这条挡的不是模型质量，而是**数据集退化**——比如 query 与期望文档完全对不上，
-     * 或换了文档 id 忘了改 query 文件。
+     * 前半挡**数据集退化**（query 与期望文档对不上、改了 id 忘改 query）；
+     * 后半挡**难样本失效**（如果难样本跟模板化一样容易，它就失去了区分模型的意义）。
      */
     @TestCase
     func testShippedDatasetIsRetrievable(): Unit {
@@ -235,9 +239,30 @@ class RetrievalEval_test {
             ranked
         }
 
-        let report = RetrievalEval.evaluate(evalCases, search, topK: 5)
-        // 字符重合已经很接近关键词检索的下限；低于 60% 说明数据集本身出了问题
-        @Expect(report.recallAtK() >= 0.6f64, true)
+        let templated = ArrayList<EvalCase>()
+        let hard = ArrayList<EvalCase>()
+        for(item in evalCases){
+            if(item.isNegative()){
+                continue
+            }
+            if(item.topic == 'hard'){
+                hard.add(item)
+            }else{
+                templated.add(item)
+            }
+        }
+
+        let easy = RetrievalEval.evaluate(templated, search, topK: 5)
+        let tough = RetrievalEval.evaluate(hard, search, topK: 5)
+
+        // 模板化样本：字符重合就该几乎全中；掉下来说明数据集本身出了问题
+        @Expect(easy.recallAt1() >= 0.9f64, true)
+        @Expect(easy.recallAtK() >= 0.95f64, true)
+        // 难样本：字符重合只应该勉强命中——实测 recall@1 约 22%、recall@5 约 50%
+        @Expect(tough.recallAt1() <= 0.5f64, true)
+        @Expect(tough.recallAtK() <= 0.7f64, true)
+        // 两组必须拉开差距，否则「难样本」名不副实
+        @Expect(tough.recallAt1() < easy.recallAt1(), true)
     }
 
     /** cjpm test 的工作目录是模块根（f_llm/），兼容从上级目录跑的情况 */
