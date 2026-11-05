@@ -53,12 +53,17 @@
 
 `SvgColor.parse("none")` SHALL 失败（`none` 是画笔关键字而非颜色）；未知色名、空串、分量个数错误 SHALL 抛 `InvalidValue`。
 
-`toString` SHALL 在 `alpha == 1` 时输出 `#rrggbb`，否则输出 `rgba(r,g,b,a)` 且 alpha 取最短表示。
+`toString` SHALL 在 `alpha == 1` 时输出 `#rrggbb`；alpha 可由 `0..255` 的字节精确表示时输出 `#rrggbbaa`；其余情况输出 `rgba(r,g,b,a)` 且 alpha 取最短表示。
 
 #### Scenario: 十六进制与简写
 
 - **WHEN** 输入 `#f00`、`#FF0000`、`#ff000080`
 - **THEN** 前两者得到同一颜色，第三者 alpha 约为 `0.502`
+
+#### Scenario: 8 位十六进制精确往返
+
+- **WHEN** 对 `SvgColor.parse("#ff000080")` 执行 `toString` 后再 `parse`
+- **THEN** `toString` 输出 `#ff000080`，结果与原值相等
 
 #### Scenario: 函数式语法
 
@@ -81,7 +86,7 @@
 #### Scenario: 片段引用与回退
 
 - **WHEN** 输入 `url(#grad1)`、`url("#grad1") none`、`url(#grad1) red`
-- **THEN** 均解析为 `Reference`，`id` 为 `grad1`，回退分别为 `None`、`Some(None)`、`Some(Color(red))`
+- **THEN** 均解析为 `Reference`，`reference` 为 `#grad1`，回退分别为 `None`、`Some(None)`、`Some(Color(red))`
 
 #### Scenario: 拒绝外部引用
 
@@ -187,9 +192,16 @@
 
 定义了 `tryParse` 的类型（`SvgLength`、`SvgColor`、`SvgPathData`）SHALL 在失败时返回 `None` 且不抛错，安全类错误同样返回 `None`。
 
-所有值类型 SHALL 满足 `parse(toString(x)) == x`。
+所有值类型 SHALL 对其**规范形式可表示**的值满足 `parse(toString(x)) == x`。
+
+不保真边界 SHALL 明确记录：绝对值 `< 1e-6` 的非零值归零、超过 6 位小数的值被舍入；这些输入经 `toString` 后不保证与原值相等。
 
 #### Scenario: tryParse 不抛错
 
 - **WHEN** 对 `SvgLength.tryParse("10foo")`、`SvgColor.tryParse("nope")`、`SvgPathData.tryParse("M1")` 求值
 - **THEN** 均返回 `None`，不抛异常
+
+#### Scenario: 规范形式的精度边界
+
+- **WHEN** 解析 `1e-7` 与 `1.2345678`
+- **THEN** `SvgLength.toString` 分别输出 `0` 与 `1.234568`；再次 `parse` 不保证与原值相等

@@ -28,7 +28,7 @@
 - [x] 3.2 先写失败用例：`none`、未知色名、空串、分量个数错误
 - [x] 3.3 实现命名色表（CSS3 147 色 + `transparent`，静态数组 + 线性扫描 + 大小写归一）
 - [x] 3.4 实现 `SvgColor` 的 `parse` / `tryParse` / `fromRgb` / `fromHsl` / `toString`
-- [x] 3.5 补充 `parse(toString(x)) == x` 往返用例（跳过 alpha ≠ 1 的 hex 输入）
+- [x] 3.5 补充 `parse(toString(x)) == x` 往返用例（含 `#rrggbbaa` 精确往返与精度边界）
 
 ## 4. 画笔（M1.1）
 

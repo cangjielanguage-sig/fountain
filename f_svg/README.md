@@ -140,8 +140,11 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 
 ## 值类型
 
-所有值类型遵守 `parse(toString(x)) == x`；`parse` 失败抛 `SvgException`，
+所有值类型对**规范形式可表示**的值满足 `parse(toString(x)) == x`；`parse` 失败抛 `SvgException`，
 `SvgLength` / `SvgColor` / `SvgPathData` 另提供 `tryParse`（返回 `None`）。
+
+已知不保真边界：绝对值 `< 1e-6` 的非零值归零、超过 6 位小数的值被舍入。
+`SvgColor` 的 alpha 可由 `0..255` 字节精确表示时输出 `#rrggbbaa`（如 `#ff000080`），否则输出 `rgba()`。
 
 ```cangjie
 SvgLength.parse("1.5em")          // value = 1.5, unit = Em

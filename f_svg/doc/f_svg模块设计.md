@@ -184,7 +184,8 @@ SvgDocument
 所有值类型都遵守两条约定：
 
 1. **`parse` 抛 `SvgException`，`tryParse` 返回 `?T`**；
-2. **`toString` 输出规范形式**，且 `parse(toString(x)) == x`（往返自洽）。
+2. **`toString` 输出规范形式**，且对规范形式可表示的值满足 `parse(toString(x)) == x`（往返自洽）。
+   已知不保真边界：`|v| < 1e-6` 归零、超过 6 位小数被舍入。
 
 ### 3.1 `SvgLength`
 
@@ -282,7 +283,7 @@ public struct SvgColor <: Equatable<SvgColor> & ToString {
 
 - 命名色表以内置 `static` 数组存放，线性扫描 + 大小写归一；不引入 `HashMap` 初始化开销。
 - `parse("none")` **失败**：`none` 是画笔关键字，不是颜色（见 `SvgPaint`）。
-- `toString`：`alpha == 1` 输出 `#rrggbb`；否则输出 `rgba(r,g,b,a)`，`a` 保留最短表示。
+- `toString`：`alpha == 1` 输出 `#rrggbb`；alpha 可由 `0..255` 字节精确表示时输出 `#rrggbbaa`；其余输出 `rgba(r,g,b,a)`，`a` 保留最短表示。
 
 ### 3.3 `SvgPaint`
 
@@ -1129,7 +1130,7 @@ let text = writeSvgString(SvgDocument(svg), options: SvgWriteOptions(indent: Som
 4. **属性顺序稳定**：解析保持源顺序，构造保持定义顺序，序列化按该顺序输出。
 5. **默认宽松 + 安全移除**：非法值不炸整份文档，危险内容移除并告警。
 6. **安全上限硬失败**：元素数 / 深度 / 实体上限不可通过宽松模式绕过。
-7. **值类型往返自洽**：`parse(toString(x)) == x`。
+7. **值类型往返自洽**：对规范形式可表示的值，`parse(toString(x)) == x`。
 8. **变换合成顺序**：`A B C` = `A × B × C`，后写的先作用于坐标。
 9. **不发布 `src/` shim**：新模块不进入已冻结的聚合根。
 10. **模块版本跟随仓库**：当前 `1.3.17`，随统一发布流程升版。

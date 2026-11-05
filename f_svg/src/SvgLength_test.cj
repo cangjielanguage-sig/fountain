@@ -106,6 +106,20 @@ public class SvgLength_test {
         }
     }
 
+    /** 规范形式的边界：极小值归零、超过 6 位小数被舍入。 */
+    @TestCase
+    public func canonicalBoundaries(): Unit {
+        let tiny = SvgLength.parse("1e-7")
+        @Assert(tiny.toString() == "0")
+        @Assert(SvgLength.parse(tiny.toString()) == SvgLength(0.0))
+        @Assert(SvgLength.parse(tiny.toString()) != tiny)
+
+        let precise = SvgLength.parse("1.2345678")
+        @Assert(precise.toString() == "1.234568")
+        @Assert(SvgLength.parse(precise.toString()) != precise)
+        @Assert(SvgLength.parse(precise.toString()) == SvgLength(1.234568))
+    }
+
     /** 绝对单位判定：百分比与相对字体单位不是绝对单位。 */
     @TestCase
     public func absoluteUnits(): Unit {

@@ -191,6 +191,18 @@ public class SvgPathData_test {
         }
     }
 
+    /** 高精度坐标与极小值按 formatSvgNumber 归一，属已知不保真边界。 */
+    @TestCase
+    public func precisionBoundaries(): Unit {
+        let precise = SvgPathData.parse("M0.1234567 0")
+        @Assert(precise.toString() == "M 0.123457 0")
+        @Assert(!(SvgPathData.parse(precise.toString()) == precise))
+
+        let tiny = SvgPathData.parse("M1e-7 0")
+        @Assert(tiny.toString() == "M 0 0")
+        @Assert(!(SvgPathData.parse(tiny.toString()) == tiny))
+    }
+
     /** 弧参数结构。 */
     @TestCase
     public func arcParams(): Unit {

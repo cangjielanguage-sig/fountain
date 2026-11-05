@@ -142,8 +142,14 @@ lenient modes: `SvgException(kind: SvgErrorKind.Limit)`.
 
 ## Value types
 
-Every value type satisfies `parse(toString(x)) == x`. `parse` throws `SvgException`;
-`SvgLength`, `SvgColor` and `SvgPathData` also provide `tryParse` returning `None`.
+Every value type satisfies `parse(toString(x)) == x` for values representable in
+canonical form. `parse` throws `SvgException`; `SvgLength`, `SvgColor` and
+`SvgPathData` also provide `tryParse` returning `None`.
+
+Known lossy boundaries: non-zero values with `|v| < 1e-6` become `0`, and values
+with more than 6 fractional digits are rounded. `SvgColor` emits `#rrggbbaa`
+(e.g. `#ff000080`) when alpha is exactly representable by a `0..255` byte, and
+`rgba()` otherwise.
 
 ```cangjie
 SvgLength.parse("1.5em")             // value = 1.5, unit = Em

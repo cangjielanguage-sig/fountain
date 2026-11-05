@@ -118,25 +118,42 @@ public class SvgColor_test {
         }
     }
 
-    /** toString：不透明用 #rrggbb，否则用 rgba()。 */
+    /** toString：不透明用 #rrggbb；alpha 可按字节精确表示时用 #rrggbbaa。 */
     @TestCase
     public func toStringForms(): Unit {
         @Assert(SvgColor.fromRgb(255, 0, 0).toString() == "#ff0000")
         @Assert(SvgColor.fromRgb(0, 128, 255).toString() == "#0080ff")
         @Assert(SvgColor.fromRgb(255, 0, 0, alpha: 0.5).toString() == "rgba(255,0,0,0.5)")
-        @Assert(SvgColor.Transparent.toString() == "rgba(0,0,0,0)")
+        @Assert(SvgColor.Transparent.toString() == "#00000000")
+        @Assert(SvgColor.fromRgb(0, 255, 0, alpha: Float64(0x88) / 255.0).toString() == "#00ff0088")
     }
 
-    /** parse(toString(x)) == x；alpha 不是 1 的十六进制输入不参与。 */
+    /** #rrggbbaa 精确往返；6 位小数可表示的 alpha 不参与。 */
     @TestCase
-    public func roundTrip(): Unit {
+    public func hexAlphaRoundTrip(): Unit {
+        let samples = [
+            SvgColor.parse("#ff000080"),
+            SvgColor.fromRgb(0, 255, 0, alpha: Float64(0x88) / 255.0),
+            SvgColor.parse("#00000000"),
+            SvgColor.fromRgb(18, 52, 86, alpha: Float64(255) / 255.0)
+        ]
+        for (color in samples) {
+            let text = color.toString()
+            @Assert(text.startsWith("#"))
+            @Assert(SvgColor.parse(text) == color)
+        }
+        @Assert(SvgColor.parse("#ff000080").toString() == "#ff000080")
+    }
+
+    /** 不能由字节精确表示的 alpha 仍走 rgba() 并往返。 */
+    @TestCase
+    public func decimalAlphaRoundTrip(): Unit {
         let samples = [
             SvgColor.fromRgb(0, 0, 0),
             SvgColor.fromRgb(255, 255, 255),
             SvgColor.fromRgb(18, 52, 86),
             SvgColor.fromRgb(1, 2, 3, alpha: 0.5),
-            SvgColor.fromRgb(4, 5, 6, alpha: 0.25),
-            SvgColor.Transparent
+            SvgColor.fromRgb(4, 5, 6, alpha: 0.25)
         ]
         for (color in samples) {
             @Assert(SvgColor.parse(color.toString()) == color)

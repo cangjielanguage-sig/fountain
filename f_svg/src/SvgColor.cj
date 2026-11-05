@@ -136,10 +136,14 @@ public struct SvgColor <: Equatable<SvgColor> & ToString {
 
     public func toString(): String {
         if (this.alpha == 1.0) {
-            "#" + hexByte(this.red) + hexByte(this.green) + hexByte(this.blue)
-        } else {
-            "rgba(${this.red},${this.green},${this.blue},${formatSvgNumber(this.alpha)})"
+            return "#" + hexByte(this.red) + hexByte(this.green) + hexByte(this.blue)
         }
+        let alphaByte = Int64(round(this.alpha * 255.0))
+        if (alphaByte >= 0 && alphaByte <= 255 && Float64(alphaByte) / 255.0 == this.alpha) {
+            return "#" + hexByte(this.red) + hexByte(this.green) + hexByte(this.blue) +
+                hexByte(UInt8(alphaByte))
+        }
+        "rgba(${this.red},${this.green},${this.blue},${formatSvgNumber(this.alpha)})"
     }
 
     public operator func ==(that: SvgColor): Bool {
