@@ -404,19 +404,27 @@ private func colorMatrixFor(
     }
 }
 
-/** `feTile`：把输入当作 tile 周期平铺到指定尺寸。 */
+/** `feTile`：把输入的非透明内容当作 tile 周期平铺到滤镜区域。 */
 internal func tileFilterBuffer(
     input: SvgFilterBuffer,
     width: Int64,
     height: Int64
 ): SvgFilterBuffer {
     let output = SvgFilterBuffer(width, height)
+    let content = tileContentBounds(input)
+    if (content.size == 0) {
+        return output
+    }
+    let originX = content[0]
+    let originY = content[1]
+    let tileWidth = content[2]
+    let tileHeight = content[3]
     var y = 0
     while (y < height) {
         var x = 0
         while (x < width) {
-            let sourceX = x % input.width
-            let sourceY = y % input.height
+            let sourceX = originX + positiveMod(x - originX, tileWidth)
+            let sourceY = originY + positiveMod(y - originY, tileHeight)
             let sourceBase = (sourceY * input.width + sourceX) * 4
             let targetBase = (y * width + x) * 4
             output.pixels[targetBase] = input.pixels[sourceBase]
@@ -428,4 +436,50 @@ internal func tileFilterBuffer(
         y++
     }
     output
+}
+
+/** 输入缓冲中非透明内容的包围盒 `[x, y, width, height]`；全透明返回空数组。 */
+internal func tileContentBounds(input: SvgFilterBuffer): Array<Int64> {
+    var minimumX = input.width
+    var minimumY = input.height
+    var maximumX: Int64 = -1
+    var maximumY: Int64 = -1
+    var y = 0
+    while (y < input.height) {
+        var x = 0
+        while (x < input.width) {
+            if (input.pixels[(y * input.width + x) * 4 + 3] > 0) {
+                if (x < minimumX) {
+                    minimumX = x
+                }
+                if (x > maximumX) {
+                    maximumX = x
+                }
+                if (y < minimumY) {
+                    minimumY = y
+                }
+                if (y > maximumY) {
+                    maximumY = y
+                }
+            }
+            x++
+        }
+        y++
+    }
+    if (maximumX < 0 || maximumY < 0) {
+        return Array<Int64>()
+    }
+    [minimumX, minimumY, maximumX - minimumX + 1, maximumY - minimumY + 1]
+}
+
+private func positiveMod(value: Int64, modulus: Int64): Int64 {
+    if (modulus <= 0) {
+        return 0
+    }
+    let remainder = value % modulus
+    if (remainder < 0) {
+        remainder + modulus
+    } else {
+        remainder
+    }
 }

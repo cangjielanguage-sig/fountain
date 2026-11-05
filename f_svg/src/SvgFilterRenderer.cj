@@ -272,7 +272,12 @@ private func applyFilterPrimitive(
         case matrix: SvgFeColorMatrix =>
             colorMatrixFilterBuffer(input, matrix.matrixType, matrix.values, warnings)
         case tile: SvgFeTile =>
-            tileFilterBuffer(input, input.width, input.height)
+            if (tileContentBounds(input).size == 0) {
+                warnings.add("feTile 的输入为空，输出透明")
+                transparentBuffer(input.width, input.height)
+            } else {
+                tileFilterBuffer(input, input.width, input.height)
+            }
         case _ => input.copy()
     }
 }
