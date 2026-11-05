@@ -230,7 +230,8 @@ let bitmap = SvgRenderer(options: options).render(document)
 `<image>` 只接受两种来源：`data:image/png;base64,` 内联字节，或调用方注入的
 `SvgImageResourceProvider.resolve(href)`。库内不联网、不打开文件、不执行脚本；
 `preserveAspectRatio` 与 `image-rendering` 分别控制映射与最近邻 / 双线性取样。
-未注入 provider、返回 `None` 或解码失败时绘制占位并记 warning。
+未注入 provider、返回 `None` 或解码失败时绘制占位并记 warning；占位默认透明，
+设置 `SvgRenderOptions.background` 时按 M2 语义使用背景色填充。
 
 ### SVGZ
 
