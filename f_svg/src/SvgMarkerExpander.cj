@@ -50,68 +50,70 @@ public class SvgMarkerExpander {
     }
 
     public func expand(shape: SvgShape, style: SvgComputedStyle): Array<SvgMarkerInstance> {
-        let vertices = this.shapeVertices(shape)
-        if (vertices.size == 0) {
-            return Array<SvgMarkerInstance>()
-        }
-        let closed = (shape is SvgPolygon) ||
-            (vertices.size > 1 && sameSvgPoint(vertices[0], vertices[vertices.size - 1]))
-        let unique = if (closed && vertices.size > 1 &&
-            sameSvgPoint(vertices[0], vertices[vertices.size - 1])) {
-            vertices[0..vertices.size - 1]
-        } else {
-            vertices
-        }
-        if (unique.size == 0) {
-            return Array<SvgMarkerInstance>()
-        }
+        let contours = this.shapeContours(shape)
         let result = ArrayList<SvgMarkerInstance>()
-        this.appendMarkers(
-            result,
-            style.get("marker-start"),
-            [unique[0]],
-            [startAngle(unique)],
-            style,
-            shape,
-            true
-        )
-        let midPoints = ArrayList<SvgPoint>()
-        let midAngles = ArrayList<Float64>()
-        if (unique.size > 2) {
-            var index = 1
-            while (index < unique.size - 1) {
-                midPoints.add(unique[index])
-                midAngles.add(midAngle(unique, index, closed))
-                index++
+        for (contour in contours) {
+            if (contour.size == 0) {
+                continue
             }
-            if (closed) {
-                midPoints.add(unique[unique.size - 1])
-                midAngles.add(midAngle(unique, unique.size - 1, true))
+            let closed = (shape is SvgPolygon) ||
+                (contour.size > 1 && sameSvgPoint(contour[0], contour[contour.size - 1]))
+            let unique = if (closed && contour.size > 1 &&
+                sameSvgPoint(contour[0], contour[contour.size - 1])) {
+                contour[0..contour.size - 1]
+            } else {
+                contour
             }
+            if (unique.size == 0) {
+                continue
+            }
+            this.appendMarkers(
+                result,
+                style.get("marker-start"),
+                [unique[0]],
+                [startAngle(unique)],
+                style,
+                shape,
+                true
+            )
+            let midPoints = ArrayList<SvgPoint>()
+            let midAngles = ArrayList<Float64>()
+            if (unique.size > 2) {
+                var index = 1
+                while (index < unique.size - 1) {
+                    midPoints.add(unique[index])
+                    midAngles.add(midAngle(unique, index, closed))
+                    index++
+                }
+                if (closed) {
+                    midPoints.add(unique[unique.size - 1])
+                    midAngles.add(midAngle(unique, unique.size - 1, true))
+                }
+            }
+            this.appendMarkers(
+                result,
+                style.get("marker-mid"),
+                midPoints.toArray(),
+                midAngles.toArray(),
+                style,
+                shape,
+                false
+            )
+            let end = if (closed) {
+                unique[0]
+            } else {
+                unique[unique.size - 1]
+            }
+            this.appendMarkers(
+                result,
+                style.get("marker-end"),
+                [end],
+                [endAngle(unique, closed)],
+                style,
+                shape,
+                false
+            )
         }
-        this.appendMarkers(
-            result,
-            style.get("marker-mid"),
-            midPoints.toArray(),
-            midAngles.toArray(),
-            style,
-            shape,
-            false
-        )
-        let end = if (closed) {
-            unique[0]
-        } else {
-            unique[unique.size - 1]
-        }
-        this.appendMarkers(
-            result,
-            style.get("marker-end"),
-            [end],
-            [endAngle(unique, closed)],
-            style,
-            shape,
-            false
-        )
         result.toArray()
     }
 
@@ -213,37 +215,38 @@ public class SvgMarkerExpander {
         current
     }
 
-    private func shapeVertices(shape: SvgShape): Array<SvgPoint> {
+    private func shapeContours(shape: SvgShape): Array<Array<SvgPoint>> {
         match (shape) {
             case line: SvgLine =>
                 let x1 = (line.x1 ?? SvgLength(0.0)).value
                 let y1 = (line.y1 ?? SvgLength(0.0)).value
                 let x2 = (line.x2 ?? SvgLength(0.0)).value
                 let y2 = (line.y2 ?? SvgLength(0.0)).value
-                return [SvgPoint(x1, y1), SvgPoint(x2, y2)]
+                return [[SvgPoint(x1, y1), SvgPoint(x2, y2)]]
             case polyline: SvgPolyline =>
                 return match (polyline.points) {
-                    case Some(value) => value.points
-                    case None => Array<SvgPoint>()
+                    case Some(value) => [value.points]
+                    case None => Array<Array<SvgPoint>>()
                 }
             case polygon: SvgPolygon =>
                 return match (polygon.points) {
-                    case Some(value) => value.points
-                    case None => Array<SvgPoint>()
+                    case Some(value) => [value.points]
+                    case None => Array<Array<SvgPoint>>()
                 }
             case path: SvgPath =>
                 let data = match (path.d) {
                     case Some(value) => value
-                    case None => return Array<SvgPoint>()
+                    case None => return Array<Array<SvgPoint>>()
                 }
                 let contours = flattenPathData(data, SvgMatrix.identity, 0.25)
+                let result = ArrayList<Array<SvgPoint>>()
                 for (contour in contours) {
                     if (contour.size > 0) {
-                        return contour
+                        result.add(contour)
                     }
                 }
-                return Array<SvgPoint>()
-            case _ => return Array<SvgPoint>()
+                return result.toArray()
+            case _ => return Array<Array<SvgPoint>>()
         }
     }
 }

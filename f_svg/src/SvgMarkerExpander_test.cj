@@ -255,3 +255,27 @@ public class SvgMarkerClipM3_test {
         @Assert(bitmap.pixel(13, 10).alpha == 0.0)
     }
 }
+
+@Test
+public class SvgMarkerSubpathM3_test {
+    /** path 的每个子路径都参与 marker 派生。 */
+    @TestCase
+    public func multipleSubpathsDeriveMarkers(): Unit {
+        let document = markerDocument(
+            "<path d=\"M 0 0 L 10 0 M 20 0 L 30 0\" fill=\"none\" stroke=\"black\" " +
+            "marker-start=\"url(#m)\" marker-end=\"url(#m)\"/>"
+        )
+        let path = (document.root.child("path").getOrThrow() as SvgPath).getOrThrow()
+        let instances = SvgMarkerExpander(root: Some(document.root))
+            .expand(path, markerStyleOf(path))
+        @Assert(instances.size == 4)
+        let starts = ArrayList<Float64>()
+        for (instance in instances) {
+            starts.add(instance.matrix.apply(SvgPoint(0.0, 0.0)).x)
+        }
+        @Assert(starts.contains(0.0))
+        @Assert(starts.contains(10.0))
+        @Assert(starts.contains(20.0))
+        @Assert(starts.contains(30.0))
+    }
+}
