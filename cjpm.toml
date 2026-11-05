@@ -31,6 +31,7 @@
   "fountain::f_regex" = {path = "./f_regex"}
   "fountain::f_rx" = {path = "./f_rx"}
   "fountain::f_security" = {path = "./f_security"}
+  "fountain::f_svg" = {path = "./f_svg"}
   "fountain::f_ticktock" = {path = "./f_ticktock"}
   "fountain::f_time" = {path = "./f_time"}
   "fountain::f_util" = {path = "./f_util"}
