@@ -273,6 +273,63 @@ public class SvgPatternSampler_test {
         }
         @Assert(found)
     }
+
+    /** 同一 sampler 连续两次 sample：每次按本次 options.images 解析资源。 */
+    @TestCase
+    public func sampleUsesEachCallProvider(): Unit {
+        let document = m3KeepDoc(
+            "<defs><pattern id=\"p\" width=\"2\" height=\"2\" patternUnits=\"userSpaceOnUse\">" +
+            "<image href=\"mem://img\" width=\"2\" height=\"2\"/></pattern></defs>",
+            width: 10,
+            height: 10
+        )
+        let pattern = (document.root.child("defs").getOrThrow().child("pattern").getOrThrow() as
+            SvgPattern).getOrThrow()
+        let blue = SvgBitmap(2, 2)
+        blue.fill(SvgColor.fromRgb(0, 0, 255))
+        let redProvider = M3CountingProvider(m3RedPng(2, 2))
+        let blueProvider = M3CountingProvider(blue.toPngBytes())
+        let sampler = SvgPatternSampler(root: Some(document.root))
+        let bounds = SvgBounds(0.0, 0.0, 10.0, 10.0)
+        let first = sampler.sample(
+            pattern,
+            bounds,
+            SvgMatrix.identity,
+            SvgRenderOptions(samplesPerPixel: 1, images: Some(redProvider))
+        ).getOrThrow()
+        @Assert(colorNear(first.pixel(0, 0), SvgColor.fromRgb(255, 0, 0)))
+        let second = sampler.sample(
+            pattern,
+            bounds,
+            SvgMatrix.identity,
+            SvgRenderOptions(samplesPerPixel: 1, images: Some(blueProvider))
+        ).getOrThrow()
+        @Assert(colorNear(second.pixel(0, 0), SvgColor.fromRgb(0, 0, 255)))
+    }
+
+    /** 同一 provider 的同一 href 在一次 sample 内只解析一次。 */
+    @TestCase
+    public func sameProviderResolvesHrefOnce(): Unit {
+        let document = m3KeepDoc(
+            "<defs><pattern id=\"p\" width=\"4\" height=\"4\" patternUnits=\"userSpaceOnUse\">" +
+            "<image href=\"mem://img\" x=\"0\" y=\"0\" width=\"2\" height=\"2\"/>" +
+            "<image href=\"mem://img\" x=\"2\" y=\"2\" width=\"2\" height=\"2\"/>" +
+            "</pattern></defs>",
+            width: 10,
+            height: 10
+        )
+        let pattern = (document.root.child("defs").getOrThrow().child("pattern").getOrThrow() as
+            SvgPattern).getOrThrow()
+        let provider = M3CountingProvider(m3RedPng(2, 2))
+        let tile = SvgPatternSampler(root: Some(document.root)).sample(
+            pattern,
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.identity,
+            SvgRenderOptions(samplesPerPixel: 1, images: Some(provider))
+        ).getOrThrow()
+        @Assert(colorNear(tile.pixel(0, 0), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(provider.calls == 1)
+    }
 }
 
 @Test

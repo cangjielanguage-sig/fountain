@@ -83,6 +83,8 @@ private func clampPatternIndex(value: Int64, size: Int64): Int64 {
  * 图案取样器：解析 href 继承链、换算 tile 尺寸、渲染 tile 位图。
  *
  * 实例生命周期为一次 render；同一 pattern + 包围盒在实例内只渲染一次。
+ * 公开 `sample` 每次调用视为一次独立取样会话：按当次 `options.images` 重建资源并清空
+ * tile 缓存，避免跨调用复用首次 provider；渲染器内部通过 `attachSession` 共享同一会话。
  */
 public class SvgPatternSampler {
     public let warnings = ArrayList<String>()
@@ -91,6 +93,7 @@ public class SvgPatternSampler {
     private let cache = HashMap<String, SvgPatternTile>()
     private var guard: ?SvgRenderGuard = None
     private var images: ?SvgImageResource = None
+    private var sessionAttached = false
     private let viewportWidth: Float64
     private let viewportHeight: Float64
 
@@ -113,6 +116,7 @@ public class SvgPatternSampler {
     internal func attachSession(guard: SvgRenderGuard, images: SvgImageResource): Unit {
         this.guard = Some(guard)
         this.images = Some(images)
+        this.sessionAttached = true
     }
 
     /** 没有外部会话时自建守卫：公开 `sample` 入口也必须受跨嵌套引用保护。 */
@@ -147,6 +151,15 @@ public class SvgPatternSampler {
         transform: SvgMatrix,
         options: SvgRenderOptions
     ): ?SvgBitmap {
+        if (!this.sessionAttached) {
+            this.images = Some(
+                SvgImageResource(
+                    provider: options.images,
+                    budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
+                )
+            )
+            this.cache.clear()
+        }
         if (transform.invert().isNone()) {
             this.warnings.add("pattern 取样变换不可逆，跳过绘制")
             return None
