@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import fountain::f_base.*
 import fountain::f_xml.*
 
 /** 构建期间的可变状态。 */
@@ -228,6 +229,21 @@ private func isXmlnsDeclaration(name: QName): Bool {
     }
 }
 
+/** 取值可能带 `url(...)` 的属性：外部 URL 必须走统一引用检查。 */
+private let SVG_URL_ATTRIBUTES: Array<String> = [
+    "fill", "stroke", "filter", "clip-path", "mask",
+    "marker-start", "marker-mid", "marker-end", "cursor"
+]
+
+private func isSvgUrlAttribute(local: String): Bool {
+    for (name in SVG_URL_ATTRIBUTES) {
+        if (name == local) {
+            return true
+        }
+    }
+    false
+}
+
 private func shouldRemoveAttribute(attribute: XmlAttribute, path: String, context: SvgBuildContext): Bool {
     let local = attribute.name.local
     let security = context.options.security
@@ -237,10 +253,62 @@ private func shouldRemoveAttribute(attribute: XmlAttribute, path: String, contex
         }
         return applyUnsafePolicy("事件属性 ${local}", path, context)
     }
+    if (isSvgUrlAttribute(local)) {
+        match (externalUrlTarget(attribute.value)) {
+            case Some(target) =>
+                if (context.options.strict) {
+                    throw SvgException(
+                        "不允许外部引用「${target}」",
+                        0,
+                        0,
+                        kind: SvgErrorKind.Security,
+                        elementPath: Some(path)
+                    )
+                }
+                return applyUnsafePolicy("URL 属性「${local}」中的外部引用「${target}」", path, context)
+            case None => ()
+        }
+    }
     if (local == "href") {
         return handleHrefValue(attribute.value, path, context)
     }
     false
+}
+
+/** 扫描 `url(...)`；内容不是 `#` 开头时返回该目标。 */
+private func externalUrlTarget(value: String): ?String {
+    let lower = value.toAsciiLower()
+    let bytes = lower.unsafeBytes()
+    var index = 0
+    while (index + 4 <= bytes.size) {
+        if (bytes[index] == b'u' && bytes[index + 1] == b'r' && bytes[index + 2] == b'l' &&
+            bytes[index + 3] == b'(') {
+            let contentStart = index + 4
+            var close = contentStart
+            while (close < bytes.size && bytes[close] != b')') {
+                close++
+            }
+            var target = value[contentStart..close].trimAscii()
+            if (target.size >= 2) {
+                let first = target[0]
+                let last = target[target.size - 1]
+                if ((first == b'"' && last == b'"') || (first == b'\'' && last == b'\'')) {
+                    target = target[1..target.size - 1].trimAscii()
+                }
+            }
+            if (target.size > 0 && target[0] != b'#') {
+                return Some(target)
+            }
+            index = if (close < bytes.size) {
+                close + 1
+            } else {
+                close
+            }
+            continue
+        }
+        index++
+    }
+    None
 }
 
 private func handleHrefValue(value: String, path: String, context: SvgBuildContext): Bool {

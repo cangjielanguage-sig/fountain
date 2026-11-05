@@ -209,6 +209,65 @@ public class SvgSecurity_test {
         @Assert(allowed.root.children.size == 1)
     }
 
+    /** URL 型属性中的外部引用按 unsafePolicy 移除，片段引用保留。 */
+    @TestCase
+    public func urlAttributesFiltered(): Unit {
+        let text = "<svg><rect width=\"10\" height=\"10\" " +
+            "fill=\"url(https://evil/x.svg#p)\" stroke=\"url(http://evil/s.svg#s)\" " +
+            "filter=\"url(https://evil/f.svg#f)\" clip-path=\"url(http://evil/c.svg#c)\" " +
+            "mask=\"url(https://evil/m.svg#m)\" marker-start=\"url(http://evil/ms.svg#m)\" " +
+            "marker-mid=\"url(http://evil/mm.svg#m)\" marker-end=\"url(http://evil/me.svg#m)\" " +
+            "cursor=\"url(https://evil/cu.svg#c)\"/>" +
+            "<rect width=\"1\" height=\"1\" fill=\"url(#ok) red\"/></svg>"
+        let document = SvgParser.parse(text)
+        let rects = document.root.childrenOf("rect")
+        let blocked = [
+            "fill", "stroke", "filter", "clip-path", "mask",
+            "marker-start", "marker-mid", "marker-end", "cursor"
+        ]
+        for (name in blocked) {
+            @Assert(rects[0].attr(name).isNone())
+        }
+        @Assert(rects[1].attr("fill") == Some("url(#ok) red"))
+        @Assert(countWarnings(document, "外部引用") >= 9)
+    }
+
+    /** Reject：URL 型属性中的外部引用抛 Security。 */
+    @TestCase
+    public func urlAttributeRejectPolicy(): Unit {
+        let error = expectSvgException({=>
+            SvgParser.parse(
+                "<svg><rect width=\"1\" height=\"1\" fill=\"url(https://x/y#p)\"/></svg>",
+                options: SvgParseOptions(security: SvgSecurityOptions(unsafePolicy: SvgUnsafePolicy.Reject))
+            )
+        })
+        @Assert(error.kind == SvgErrorKind.Security)
+    }
+
+    /** 严格模式：URL 型属性中的外部引用抛 Security。 */
+    @TestCase
+    public func urlAttributeStrict(): Unit {
+        let error = expectSvgException({=>
+            SvgParser.parse(
+                "<svg><rect width=\"1\" height=\"1\" filter=\"url(http://x/f.svg#f)\"/></svg>",
+                options: SvgParseOptions(strict: true)
+            )
+        })
+        @Assert(error.kind == SvgErrorKind.Security)
+    }
+
+    /** Keep：URL 型属性原样保留。 */
+    @TestCase
+    public func urlAttributeKeep(): Unit {
+        let document = SvgParser.parse(
+            "<svg><rect width=\"1\" height=\"1\" fill=\"url(https://x/y#p)\"/></svg>",
+            options: SvgParseOptions(security: SvgSecurityOptions(unsafePolicy: SvgUnsafePolicy.Keep))
+        )
+        @Assert(
+            document.root.child("rect").getOrThrow().attr("fill") == Some("url(https://x/y#p)")
+        )
+    }
+
     /** 实体上限透传 f_xml：超限按 Syntax 包装。 */
     @TestCase
     public func entityLimitsPassthrough(): Unit {
