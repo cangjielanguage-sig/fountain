@@ -4,7 +4,9 @@
 > 对照实现：`f_svg/src/*.cj` 与全部 `*_test.cj`、`f_svg/testdata/render/*`。
 > 校验方式：只读静态核对 + 实际执行 `cjpm build` / `cjpm test`；未修改代码、未归档、未使用 ssh / opsx 技能。
 
-## 0. 结论摘要
+## 0. 结论摘要（初检基线）
+
+> 本节为第一轮只读校验的历史结论；后续修复与终验见 §6、§7 与 `verification-2.md`、`verify-report-3.md`。
 
 - `cjpm test`：**466 / 466 通过，0 skipped，0 error，0 failed**（与 `verification.md` 的 466 一致）。
 - `cjpm build`：成功；构建输出的 22 条 warning 全部来自 `f_xml` 等依赖模块，未发现 `f_svg/src` 自身 warning。
