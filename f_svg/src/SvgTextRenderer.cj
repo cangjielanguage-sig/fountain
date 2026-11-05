@@ -259,7 +259,11 @@ public class SvgTextRenderer {
                         for (warning in pathLayout.warnings) {
                             this.warnings.add("textPath：${warning}")
                         }
-                        placements = Some(placed)
+                        if (placed.size == 0 && count > 0) {
+                            this.warnings.add("textPath 的路径为空，降级为普通文本")
+                        } else {
+                            placements = Some(placed)
+                        }
                     case None =>
                         this.warnings.add("textPath 的路径缺失或为空，降级为普通文本")
                 }

@@ -269,3 +269,65 @@ public class SvgTextPathInteraction_test {
         @Assert(second > 0)
     }
 }
+
+@Test
+public class SvgTextPathEmptyM3_test {
+    /** 空 path 属性降级为普通水平文本。 */
+    @TestCase
+    public func emptyPathAttributeDegrades(): Unit {
+        let plain = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">AB</text>",
+                width: 40,
+                height: 40
+            )
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let degraded = renderer.render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">" +
+                "<textPath path=\"\">AB</textPath></text>",
+                width: 40,
+                height: 40
+            )
+        )
+        @Assert(degraded.pixels == plain.pixels)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("textPath") && warning.contains("降级")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
+    /** href 指向零长度路径同样降级。 */
+    @TestCase
+    public func zeroLengthPathDegrades(): Unit {
+        let plain = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">AB</text>",
+                width: 40,
+                height: 40
+            )
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let degraded = renderer.render(
+            svgDoc(
+                "<defs><path id=\"z\" d=\"M 10 10 L 10 10\"/></defs>" +
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">" +
+                "<textPath href=\"#z\">AB</textPath></text>",
+                width: 40,
+                height: 40
+            )
+        )
+        @Assert(degraded.pixels == plain.pixels)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("textPath") && warning.contains("降级")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+}
