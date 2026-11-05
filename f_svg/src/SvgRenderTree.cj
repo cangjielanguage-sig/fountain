@@ -216,7 +216,8 @@ public class SvgRenderTreeBuilder {
         width: Int64,
         height: Int64,
         matrix: SvgMatrix,
-        options: SvgRenderOptions
+        fonts: ?SvgFontRegistry,
+        root!: ?SvgElement = None
     ): SvgDisplayList {
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(container)
@@ -230,10 +231,10 @@ public class SvgRenderTreeBuilder {
             Float64(height),
             None,
             styles,
-            container,
+            root ?? container,
             0,
             Array<String>(),
-            options.fonts
+            fonts
         )
         this.walkChildren(container, context, commands)
         SvgDisplayList(commands.toArray(), container, width, height, Float64(width), Float64(height))
@@ -590,6 +591,41 @@ public class SvgRenderTreeBuilder {
                     filter: this.resolveUrlRef(style.get("filter"), context)
                 )
             )
+        }
+        this.addMarkers(shape, context, commands, style)
+    }
+
+    private func addMarkers(
+        shape: SvgShape,
+        context: SvgRenderTreeContext,
+        commands: ArrayList<SvgDisplayCommand>,
+        style: SvgComputedStyle
+    ): Unit {
+        if (style.get("marker-start").isNone() && style.get("marker-mid").isNone() &&
+            style.get("marker-end").isNone()) {
+            return
+        }
+        let expander = SvgMarkerExpander(root: Some(context.root))
+        let instances = expander.expand(shape, style)
+        for (warning in expander.warnings) {
+            this.warnings.add(warning)
+        }
+        if (instances.size == 0) {
+            return
+        }
+        let base = context.matrix.multiply(elementTransformMatrix(shape))
+        for (instance in instances) {
+            let list = this.buildContent(
+                instance.marker,
+                Int64(context.width),
+                Int64(context.height),
+                base.multiply(instance.matrix),
+                context.fonts,
+                root: Some(context.root)
+            )
+            for (command in list.commands) {
+                commands.add(command)
+            }
         }
     }
 

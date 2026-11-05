@@ -170,7 +170,8 @@ public class SvgPatternSampler {
                     pixelWidth,
                     pixelHeight,
                     contentMatrix,
-                    options
+                    options.fonts,
+                    root: this.root
                 )
                 if (builder.warnings.size > 0) {
                     for (warning in builder.warnings) {
