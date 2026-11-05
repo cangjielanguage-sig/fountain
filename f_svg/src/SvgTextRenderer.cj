@@ -71,6 +71,9 @@ private class SvgTextState {
     let style: String
     let letterSpacing: Float64
     let wordSpacing: Float64
+    let dominant: SvgDominantBaseline
+    let alignment: SvgAlignmentBaseline
+    let shift: SvgBaselineShift
 
     init(
         fontSize: Float64,
@@ -78,7 +81,10 @@ private class SvgTextState {
         weight: String,
         style: String,
         letterSpacing: Float64,
-        wordSpacing: Float64
+        wordSpacing: Float64,
+        dominant!: SvgDominantBaseline = SvgDominantBaseline.Auto,
+        alignment!: SvgAlignmentBaseline = SvgAlignmentBaseline.Auto,
+        shift!: SvgBaselineShift = SvgBaselineShift.Baseline
     ) {
         this.fontSize = fontSize
         this.family = family
@@ -86,6 +92,9 @@ private class SvgTextState {
         this.style = style
         this.letterSpacing = letterSpacing
         this.wordSpacing = wordSpacing
+        this.dominant = dominant
+        this.alignment = alignment
+        this.shift = shift
     }
 }
 
@@ -97,6 +106,11 @@ private class SvgTextChar {
     let style: String
     let letterSpacing: Float64
     let wordSpacing: Float64
+    let dominant: SvgDominantBaseline
+    let alignment: SvgAlignmentBaseline
+    let shift: SvgBaselineShift
+    let parentDominant: SvgDominantBaseline
+    let isRoot: Bool
     var xOverride: ?Float64 = None
     var yBase: Float64 = 0.0
     var dx: Float64 = 0.0
@@ -104,7 +118,12 @@ private class SvgTextChar {
     var xExplicit: Bool = false
     var yExplicit: Bool = false
 
-    init(codePoint: Int64, state: SvgTextState) {
+    init(
+        codePoint: Int64,
+        state: SvgTextState,
+        parentDominant!: SvgDominantBaseline = SvgDominantBaseline.Auto,
+        isRoot!: Bool = false
+    ) {
         this.codePoint = codePoint
         this.fontSize = state.fontSize
         this.family = state.family
@@ -112,6 +131,11 @@ private class SvgTextChar {
         this.style = state.style
         this.letterSpacing = state.letterSpacing
         this.wordSpacing = state.wordSpacing
+        this.dominant = state.dominant
+        this.alignment = state.alignment
+        this.shift = state.shift
+        this.parentDominant = parentDominant
+        this.isRoot = isRoot
     }
 }
 
@@ -151,15 +175,26 @@ public class SvgTextRenderer {
             style.fontWeight(),
             style.fontStyle(),
             style.letterSpacing().value,
-            style.wordSpacing().value
+            style.wordSpacing().value,
+            dominant: style.dominantBaseline(),
+            alignment: SvgAlignmentBaseline.Auto,
+            shift: style.baselineShift()
         )
         let chars = ArrayList<SvgTextChar>()
-        collectSvgTextChars(text, rootState, chars, this.warnings)
+        collectSvgTextChars(
+            text,
+            rootState,
+            chars,
+            this.warnings,
+            parentDominant: style.dominantBaseline(),
+            rootLevel: true
+        )
         applyRootTextAttributes(text, chars)
 
         let count = chars.size
         let advances = ArrayList<Float64>()
         let paths = ArrayList<?SvgPathData>()
+        let baselineOffsets = ArrayList<Float64>()
         var missingGlyph = false
         for (index in 0..count) {
             let char = chars[index]
@@ -172,11 +207,21 @@ public class SvgTextRenderer {
                         missingGlyph = true
                     }
                     paths.add(entry.path)
+                    baselineOffsets.add(
+                        baselineOffsetFor(
+                            char,
+                            charFontAscent(value, char),
+                            charFontDescent(value, char)
+                        )
+                    )
                 case None =>
                     missingGlyph = true
                     this.warnings.add("未找到字体「${char.family}」，使用占位字形")
                     advances.add(char.fontSize * 0.5)
                     paths.add(placeholderGlyph(char.fontSize, char.fontSize * 0.5))
+                    baselineOffsets.add(
+                        baselineOffsetFor(char, char.fontSize * 0.8, char.fontSize * 0.2)
+                    )
             }
         }
 
@@ -294,7 +339,7 @@ public class SvgTextRenderer {
                 }
             }
             var x = positions[index] + anchorOffset
-            var y = char.yBase + char.dy
+            var y = char.yBase + char.dy + baselineOffsets[index]
             var angle = rotations[index]
             match (placements) {
                 case Some(placed) =>
@@ -302,7 +347,7 @@ public class SvgTextRenderer {
                         continue
                     }
                     x = placed[index].originX
-                    y = placed[index].originY
+                    y = placed[index].originY + baselineOffsets[index]
                     angle = placed[index].angle + rotations[index]
                 case None => ()
             }
@@ -380,31 +425,110 @@ public class SvgTextRenderer {
     }
 }
 
+private func charFontAscent(font: SvgFont, char: SvgTextChar): Float64 {
+    if (font is SvgHersheyFont) {
+        return char.fontSize * 0.8
+    }
+    font.ascent(char.fontSize)
+}
+
+private func charFontDescent(font: SvgFont, char: SvgTextChar): Float64 {
+    if (font is SvgHersheyFont) {
+        return char.fontSize * 0.2
+    }
+    font.descent(char.fontSize)
+}
+
+private func baselineOffsetFor(
+    char: SvgTextChar,
+    ascent: Float64,
+    descent: Float64
+): Float64 {
+    let dominantOffset = SvgTextBaseline.offset(
+        char.dominant,
+        ascent,
+        descent,
+        char.fontSize
+    )
+    var alignmentOffset = 0.0
+    if (!char.isRoot) {
+        match (char.alignment) {
+            case Auto | Baseline => ()
+            case _ =>
+                alignmentOffset = SvgTextBaseline.offset(
+                    char.alignment,
+                    ascent,
+                    descent,
+                    char.fontSize
+                ) - SvgTextBaseline.offset(
+                    char.parentDominant,
+                    ascent,
+                    descent,
+                    char.fontSize
+                )
+        }
+    }
+    dominantOffset + alignmentOffset + SvgTextBaseline.shift(char.shift, char.fontSize)
+}
+
 private func collectSvgTextChars(
     element: SvgTextElement,
     state: SvgTextState,
     out: ArrayList<SvgTextChar>,
-    warnings: ArrayList<String>
+    warnings: ArrayList<String>,
+    parentDominant!: SvgDominantBaseline = SvgDominantBaseline.Auto,
+    rootLevel!: Bool = false
 ): Unit {
     for (node in element.children) {
         match (node) {
             case TextNode(text) =>
                 for (rune in text.runes()) {
-                    out.add(SvgTextChar(Int64(UInt32(rune)), state))
+                    out.add(
+                        SvgTextChar(
+                            Int64(UInt32(rune)),
+                            state,
+                            parentDominant: parentDominant,
+                            isRoot: rootLevel
+                        )
+                    )
                 }
             case ElementNode(child) =>
                 match (child) {
                     case span: SvgTextElement =>
+                        let nextDominant = match (span.attr("dominant-baseline")) {
+                            case Some(text) =>
+                                SvgDominantBaseline.fromName(text) ?? state.dominant
+                            case None => state.dominant
+                        }
+                        let nextAlignment = match (span.attr("alignment-baseline")) {
+                            case Some(text) =>
+                                SvgAlignmentBaseline.fromName(text) ?? SvgAlignmentBaseline.Auto
+                            case None => SvgAlignmentBaseline.Auto
+                        }
+                        let nextShift = match (span.attr("baseline-shift")) {
+                            case Some(text) => SvgBaselineShift.fromName(text) ?? state.shift
+                            case None => state.shift
+                        }
                         let next = SvgTextState(
                             span.fontSize?.value ?? state.fontSize,
                             span.fontFamily ?? state.family,
                             span.fontWeight ?? state.weight,
                             span.fontStyle ?? state.style,
                             span.letterSpacing?.value ?? state.letterSpacing,
-                            span.wordSpacing?.value ?? state.wordSpacing
+                            span.wordSpacing?.value ?? state.wordSpacing,
+                            dominant: nextDominant,
+                            alignment: nextAlignment,
+                            shift: nextShift
                         )
                         let start = out.size
-                        collectSvgTextChars(span, next, out, warnings)
+                        collectSvgTextChars(
+                            span,
+                            next,
+                            out,
+                            warnings,
+                            parentDominant: state.dominant,
+                            rootLevel: false
+                        )
                         if (out.size > start) {
                             let first = out[start]
                             match (span.dx) {
