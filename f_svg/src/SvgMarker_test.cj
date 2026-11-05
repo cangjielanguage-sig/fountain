@@ -33,13 +33,25 @@ public class SvgMarker_test {
         @Assert(marker.kind == SvgContainerKind.Marker)
         @Assert(marker.tag == "marker")
         @Assert(marker.markerUnits == SvgMarkerUnits.StrokeWidth)
-        @Assert(marker.refX == SvgLength(0.0))
-        @Assert(marker.refY == SvgLength(0.0))
-        @Assert(marker.markerWidth == SvgLength(3.0))
-        @Assert(marker.markerHeight == SvgLength(3.0))
+        @Assert(marker.refX.isNone())
+        @Assert(marker.refY.isNone())
+        @Assert(marker.markerWidth.isNone())
+        @Assert(marker.markerHeight.isNone())
         @Assert(marker.orient == SvgMarkerOrient.Angle(0.0))
         @Assert(marker.preserveAspectRatio == SvgPreserveAspectRatio.Default)
         @Assert(marker.viewBox.isNone())
+    }
+
+    /** 显式 0 与缺省可区分。 */
+    @TestCase
+    public func explicitZeroIsNotAbsent(): Unit {
+        let marker = SvgMarker()
+        marker.refX = Some(SvgLength(0.0))
+        marker.markerWidth = Some(SvgLength(0.0))
+        @Assert(marker.refX == Some(SvgLength(0.0)))
+        @Assert(marker.markerWidth == Some(SvgLength(0.0)))
+        marker.refX = None
+        @Assert(marker.refX.isNone())
     }
 
     /** 属性读写往返。 */
@@ -48,21 +60,38 @@ public class SvgMarker_test {
         let marker = SvgMarker()
         marker.markerUnits = SvgMarkerUnits.UserSpaceOnUse
         marker.orient = SvgMarkerOrient.Auto
-        marker.refX = SvgLength(5.0)
-        marker.refY = SvgLength(6.0)
-        marker.markerWidth = SvgLength(7.0)
-        marker.markerHeight = SvgLength(8.0)
+        marker.refX = Some(SvgLength(5.0))
+        marker.refY = Some(SvgLength(6.0))
+        marker.markerWidth = Some(SvgLength(7.0))
+        marker.markerHeight = Some(SvgLength(8.0))
         marker.viewBox = SvgViewBox(0.0, 0.0, 10.0, 10.0)
         marker.preserveAspectRatio = SvgPreserveAspectRatio(SvgAspectAlign.XMinYMin)
 
         @Assert(marker.markerUnits == SvgMarkerUnits.UserSpaceOnUse)
         @Assert(marker.orient == SvgMarkerOrient.Auto)
-        @Assert(marker.refX == SvgLength(5.0))
-        @Assert(marker.refY == SvgLength(6.0))
-        @Assert(marker.markerWidth == SvgLength(7.0))
-        @Assert(marker.markerHeight == SvgLength(8.0))
+        @Assert(marker.refX == Some(SvgLength(5.0)))
+        @Assert(marker.refY == Some(SvgLength(6.0)))
+        @Assert(marker.markerWidth == Some(SvgLength(7.0)))
+        @Assert(marker.markerHeight == Some(SvgLength(8.0)))
         @Assert(marker.viewBox == Some(SvgViewBox(0.0, 0.0, 10.0, 10.0)))
         @Assert(marker.preserveAspectRatio == SvgPreserveAspectRatio(SvgAspectAlign.XMinYMin))
+    }
+
+    /** 缺省 markerWidth / markerHeight 按 3×3 参与 viewBox 映射。 */
+    @TestCase
+    public func defaultSizeUsedByViewBox(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +
+            "<defs><marker id=\"m\" viewBox=\"0 0 6 6\">" +
+            "<rect width=\"6\" height=\"6\" fill=\"red\"/></marker></defs>" +
+            "<line x1=\"10\" y1=\"10\" x2=\"20\" y2=\"10\" marker-start=\"url(#m)\"/></svg>"
+        )
+        let line = (document.root.child("line").getOrThrow() as SvgLine).getOrThrow()
+        let noParent: ?SvgComputedStyle = None
+        let style = SvgStyleResolver().computeElement(line, noParent)
+        let instance = SvgMarkerExpander(root: Some(document.root)).expand(line, style)[0]
+        let corner = instance.matrix.apply(SvgPoint(6.0, 6.0))
+        @Assert(near(corner.x, 13.0) && near(corner.y, 13.0))
     }
 
     /** orient 三种形式。 */

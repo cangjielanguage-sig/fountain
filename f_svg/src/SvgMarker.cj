@@ -148,41 +148,39 @@ public class SvgMarker <: SvgContainer {
         }
     }
 
-    public mut prop refX: SvgLength {
+    public mut prop refX: ?SvgLength {
         get() {
-            this.refXCache.get(this.attributesVersion, {=> readLength(this, "refX")}) ?? SvgLength(0.0)
+            this.refXCache.get(this.attributesVersion, {=> readLength(this, "refX")})
         }
         set(value) {
-            writeLength(this, "refX", Some(value))
+            writeLength(this, "refX", value)
         }
     }
 
-    public mut prop refY: SvgLength {
+    public mut prop refY: ?SvgLength {
         get() {
-            this.refYCache.get(this.attributesVersion, {=> readLength(this, "refY")}) ?? SvgLength(0.0)
+            this.refYCache.get(this.attributesVersion, {=> readLength(this, "refY")})
         }
         set(value) {
-            writeLength(this, "refY", Some(value))
+            writeLength(this, "refY", value)
         }
     }
 
-    public mut prop markerWidth: SvgLength {
+    public mut prop markerWidth: ?SvgLength {
         get() {
-            this.widthCache.get(this.attributesVersion, {=> readLength(this, "markerWidth")}) ??
-                SvgLength(3.0)
+            this.widthCache.get(this.attributesVersion, {=> readLength(this, "markerWidth")})
         }
         set(value) {
-            writeLength(this, "markerWidth", Some(value))
+            writeLength(this, "markerWidth", value)
         }
     }
 
-    public mut prop markerHeight: SvgLength {
+    public mut prop markerHeight: ?SvgLength {
         get() {
-            this.heightCache.get(this.attributesVersion, {=> readLength(this, "markerHeight")}) ??
-                SvgLength(3.0)
+            this.heightCache.get(this.attributesVersion, {=> readLength(this, "markerHeight")})
         }
         set(value) {
-            writeLength(this, "markerHeight", Some(value))
+            writeLength(this, "markerHeight", value)
         }
     }
 

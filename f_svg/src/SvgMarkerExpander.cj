@@ -341,12 +341,16 @@ private func markerMatrix(
     }
     let content = match (marker.viewBox) {
         case Some(box) =>
-            marker.preserveAspectRatio.toMatrix(box, marker.markerWidth.value, marker.markerHeight.value)
+            let width = (marker.markerWidth ?? SvgLength(3.0)).value
+            let height = (marker.markerHeight ?? SvgLength(3.0)).value
+            marker.preserveAspectRatio.toMatrix(box, width, height)
         case None => SvgMatrix.identity
     }
+    let referenceX = (marker.refX ?? SvgLength(0.0)).value
+    let referenceY = (marker.refY ?? SvgLength(0.0)).value
     SvgMatrix.translate(vertex.x, vertex.y)
         .multiply(SvgMatrix.rotate(angle))
         .multiply(SvgMatrix.scale(unitScale, unitScale))
         .multiply(content)
-        .multiply(SvgMatrix.translate(-marker.refX.value, -marker.refY.value))
+        .multiply(SvgMatrix.translate(-referenceX, -referenceY))
 }
