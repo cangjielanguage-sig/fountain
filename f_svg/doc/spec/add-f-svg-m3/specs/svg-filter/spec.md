@@ -112,7 +112,7 @@
 
 ### Requirement: 合成与合并
 
-`SvgFeComposite` SHALL 提供 `in2`、`operator: SvgCompositeOperator` 与 `k1` / `k2` / `k3` / `k4`。
+`SvgFeComposite` SHALL 提供 `in2`、`operatorKind: SvgCompositeOperator`（对应 SVG 属性 `operator`）与 `k1` / `k2` / `k3` / `k4`。
 
 `over` / `in` / `out` / `atop` / `xor` SHALL 按 Porter-Duff 规则逐像素计算；`arithmetic` SHALL 按 `k1·i·j + k2·i + k3·j + k4` 计算并钳制到 `0..1`，其中 `i` / `j` 为两输入的非预乘颜色。
 

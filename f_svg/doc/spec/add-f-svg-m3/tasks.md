@@ -69,7 +69,7 @@
 - [ ] 6.4 先写 `image-rendering` 两档取样用例：`pixelated` 与 `auto`
 - [ ] 6.5 实现 `SvgImageResource`：data URI 解析、base64 解码、provider 调用与单次渲染缓存
 - [ ] 6.6 在渲染树中把 `<image>` 从占位改为「资源 → 解码 → 映射 → 绘制」，失败回退占位
-- [ ] 6.7 实现双线性 / 最近邻取样，确认 `opacity` / `clipPath` / `mask` / `filter` 生效
+- [x] 6.7 实现双线性 / 最近邻取样，确认 `opacity` / `clipPath` / `mask` / `filter` 生效（通用图层路径 + `SvgRenderer_test` 覆盖）
 - [ ] 6.8 先写缓存用例：同一 `href` 多次引用只解码一次，跨 `render` 不共享
 - [ ] 6.9 先写累计解码像素超限用例，确认抛 `Limit`
 

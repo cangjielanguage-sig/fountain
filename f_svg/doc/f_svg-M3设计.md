@@ -103,7 +103,7 @@ public class SvgFeBlend <: SvgFilterPrimitive {
 }
 public class SvgFeComposite <: SvgFilterPrimitive {
     public mut prop in2: ?String
-    public mut prop operator: SvgCompositeOperator  // over|in|out|atop|xor|arithmetic
+    public mut prop operatorKind: SvgCompositeOperator  // over|in|out|atop|xor|arithmetic（operator 为语言关键字）
     public mut prop k1: SvgNumber; public mut prop k2: SvgNumber
     public mut prop k3: SvgNumber; public mut prop k4: SvgNumber
 }
