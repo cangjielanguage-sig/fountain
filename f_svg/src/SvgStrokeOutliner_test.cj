@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.collection.*
 import std.math.*
 import std.unittest.*
 import std.unittest.testmacro.*

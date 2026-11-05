@@ -23,10 +23,6 @@ internal func geometryBounds(element: SvgElement): ?SvgBounds {
     SvgGeometry.bounds(element, style: style)
 }
 
-internal func lengthValue(value: Float64, unit!: SvgLengthUnit = SvgLengthUnit.Number): SvgLength {
-    SvgLength(value, unit: unit)
-}
-
 @Test
 public class SvgGeometry_test {
     /** rect / circle / ellipse / line / polyline / polygon 的精确包围盒。 */

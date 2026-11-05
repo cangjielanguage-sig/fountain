@@ -339,7 +339,33 @@ public class SvgStyleResolver <: ToString {
                     }
                     case None => return None
                 }
-            case "stroke-width" | "font-size" | "letter-spacing" | "word-spacing" | "stroke-dashoffset" =>
+            case "font-size" =>
+                match (SvgLength.tryParse(trimmed)) {
+                    case Some(length) =>
+                        match (length.unit) {
+                            case Em =>
+                                let base = match (parent) {
+                                    case Some(parentStyle) => parentStyle.fontSize().value
+                                    case None => 16.0
+                                }
+                                return Some(formatSvgNumber(base * length.value) + "px")
+                            case Ex =>
+                                let base = match (parent) {
+                                    case Some(parentStyle) => parentStyle.fontSize().value
+                                    case None => 16.0
+                                }
+                                return Some(formatSvgNumber(base * length.value / 2.0) + "px")
+                            case Percent =>
+                                let base = match (parent) {
+                                    case Some(parentStyle) => parentStyle.fontSize().value
+                                    case None => 16.0
+                                }
+                                return Some(formatSvgNumber(base * length.value / 100.0) + "px")
+                            case _ => return Some(length.toString())
+                        }
+                    case None => return None
+                }
+            case "stroke-width" | "letter-spacing" | "word-spacing" | "stroke-dashoffset" =>
                 if ((name == "letter-spacing" || name == "word-spacing") && lower == "normal") {
                     return Some("0")
                 }

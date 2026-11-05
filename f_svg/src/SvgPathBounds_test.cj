@@ -15,17 +15,11 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.collection.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
 internal func pathBounds(d: String): ?SvgBounds {
     let path = SvgPath(d: SvgPathData.parse(d))
-    let style = styleOf(computeTree(path), path)
-    SvgGeometry.bounds(path, style: style)
-}
-
-internal func pathBoundsOf(path: SvgPath): ?SvgBounds {
     let style = styleOf(computeTree(path), path)
     SvgGeometry.bounds(path, style: style)
 }

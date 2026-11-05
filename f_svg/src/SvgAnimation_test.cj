@@ -269,10 +269,7 @@ public class SvgAnimation_test {
             }
             case None => @Fail("快照缺少渐变")
         }
-        match (snapshot.root) {
-            case _: SvgRoot => ()
-            case _ => @Fail("根类型丢失")
-        }
+        @Assert(snapshot.root.tag == "svg")
     }
 
     /** 硬上限：values 10001、mpath 深度 64。 */

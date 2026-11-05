@@ -76,6 +76,32 @@ public class SvgRenderer_test {
         @Assert(bytes == topLevel)
     }
 
+    /** 高 DPI、无尺寸根元素与 visibility 覆盖。 */
+    @TestCase
+    public func viewportAndVisibility(): Unit {
+        let document = svgDoc('<rect width="5" height="5" fill="blue"/>', width: 10, height: 10)
+        let highDpi = SvgRenderer(
+            options: SvgRenderOptions(width: 10, height: 10, devicePixelRatio: 2.0)
+        ).render(document)
+        @Assert(highDpi.width == 20 && highDpi.height == 20)
+        @Assert(colorNear(highDpi.pixel(9, 9), SvgColor.fromRgb(0, 0, 255)))
+        @Assert(highDpi.pixel(12, 12).alpha == 0.0)
+
+        let noSize = SvgParser.parse(
+            '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" fill="red"/></svg>'
+        )
+        let defaultBitmap = SvgRenderer().render(noSize)
+        @Assert(defaultBitmap.width == 300 && defaultBitmap.height == 150)
+
+        let hidden = svgDoc(
+            '<g visibility="hidden"><rect width="10" height="10" visibility="visible" fill="red"/></g>',
+            width: 10,
+            height: 10
+        )
+        let hiddenBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(hidden)
+        @Assert(colorNear(hiddenBitmap.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
+    }
+
     /** 渐变、裁剪与文本在渲染管线中生效。 */
     @TestCase
     public func paintAndClipPipeline(): Unit {

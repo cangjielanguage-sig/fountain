@@ -222,10 +222,10 @@ private func outlineOne(points: Array<SvgPoint>, closed: Bool, style: SvgStrokeS
         }
         let first = cleaned[0]
         let second = cleaned[1]
-        addCap(result, first, second, half, style.lineCap, true)
+        addCap(result, first, second, half, style.lineCap)
         let last = cleaned[cleaned.size - 1]
         let previous = cleaned[cleaned.size - 2]
-        addCap(result, last, previous, half, style.lineCap, false)
+        addCap(result, last, previous, half, style.lineCap)
     }
     result.toArray()
 }
@@ -251,8 +251,7 @@ private func addCap(
     endpoint: SvgPoint,
     adjacent: SvgPoint,
     half: Float64,
-    cap: SvgLineCap,
-    isStart: Bool
+    cap: SvgLineCap
 ): Unit {
     if (cap == SvgLineCap.Butt) {
         return

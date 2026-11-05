@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.collection.*
 import std.io.{ByteBuffer, OutputStream}
 import stdx.compress.zlib.{CompressOutputStream, WrapType}
 import fountain::f_base.*

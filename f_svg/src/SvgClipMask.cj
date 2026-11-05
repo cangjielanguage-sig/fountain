@@ -364,10 +364,10 @@ private func maskRegion(
         width = objectBoxValue(mask.attr("width"), box.x, box.width, width, false)
         height = objectBoxValue(mask.attr("height"), box.y, box.height, height, false)
     } else {
-        x = userSpaceValue(mask.attr("x"), 0.0, contentMatrix)
-        y = userSpaceValue(mask.attr("y"), 0.0, contentMatrix)
-        width = userSpaceValue(mask.attr("width"), Float64(canvasWidth), contentMatrix)
-        height = userSpaceValue(mask.attr("height"), Float64(canvasHeight), contentMatrix)
+        x = userSpaceValue(mask.attr("x"), 0.0)
+        y = userSpaceValue(mask.attr("y"), 0.0)
+        width = userSpaceValue(mask.attr("width"), Float64(canvasWidth))
+        height = userSpaceValue(mask.attr("height"), Float64(canvasHeight))
     }
     let p0 = contentMatrix.apply(SvgPoint(x, y))
     let p1 = contentMatrix.apply(SvgPoint(x + width, y + height))
@@ -409,7 +409,7 @@ private func objectBoxValue(
     }
 }
 
-private func userSpaceValue(raw: ?String, fallback: Float64, matrix: SvgMatrix): Float64 {
+private func userSpaceValue(raw: ?String, fallback: Float64): Float64 {
     match (raw) {
         case Some(text) =>
             match (SvgLength.tryParse(text)) {

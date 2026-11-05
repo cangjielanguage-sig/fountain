@@ -1,9 +1,11 @@
 # f_svg
 
-**SVG 1.1 static documents**: value types, typed DOM, parser, writer and security filtering.
+**SVG 1.1 documents and rendering**: value types, typed DOM, parser/writer,
+security filtering, CSS cascade, CPU software rasterization, deterministic PNG
+and SMIL animation.
 
-This module only aims to "understand, edit and write back" an SVG document.
-It does **not** render, cascade CSS or animate. All XML work is delegated to
+M1 static-document behavior is unchanged; M2 adds "document to pixels" and
+"time to document" pipelines. All XML work is delegated to
 [`f_xml`](../f_xml/README_en.md); there is no second XML lexer here.
 
 > Design and trade-offs: [`doc/f_svg模块设计.md`](doc/f_svg模块设计.md) (Chinese).
@@ -28,7 +30,7 @@ The module is released with the fountain repository and follows its version
 
 When a central repository is configured, `"fountain::f_svg" = "1.3.17"` also works.
 
-## Capabilities (M1)
+## Capabilities (M2)
 
 | Capability | Entry point |
 |---|---|
@@ -38,6 +40,12 @@ When a central repository is configured, `"fountain::f_svg" = "1.3.17"` also wor
 | Write | `SvgWriter` / `writeSvgString`, via `XmlDocument` and `f_xml::XmlWriter` |
 | Security | Scripts, event attributes and external references removed by default; hard size limits |
 | Preservation | Unknown elements/attributes, comments, PIs, CDATA and DOCTYPE kept |
+| CSS | `CssStyleSheet`, `CssSelector`, `SvgStyleResolver`, `SvgComputedStyle` |
+| Geometry | `SvgBounds`, `SvgGeometry`, `SvgViewport` |
+| Rendering | `SvgBitmap`, `SvgRasterizer`, `SvgRenderer`, `renderToPng` |
+| PNG | `SvgPngEncoder`, `SvgBitmap.toPngBytes`, `writePng`, `savePng` |
+| Animation | `SvgTimeline`, `SvgInterpolator`, `SvgClock`, `SvgManualClock` |
+| Fonts | `SvgFont` interface, `SvgFontRegistry`, built-in `SvgHersheyFont` |
 
 ## Quick start
 
@@ -145,6 +153,31 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 Element count, depth and entity limits are **hard failures** in both strict and
 lenient modes: `SvgException(kind: SvgErrorKind.Limit)`.
 
+## M2: styles, rendering, PNG and animation
+
+```cangjie
+import fountain::f_svg.*
+import std.fs.Path
+
+let resolver = SvgStyleResolver(sheet: CssStyleSheet.parse("rect { fill: red }"))
+let styles = resolver.compute(document.root)
+
+let options = SvgRenderOptions(width: 128, height: 128, background: SvgColor.White)
+let bitmap = SvgRenderer(options: options).render(document)
+bitmap.savePng(Path("out.png"))
+
+let timeline = SvgTimeline(document)
+let frame = timeline.sample(0.5)          // original document is untouched
+let frameBitmap = SvgRenderer().render(frame)
+
+let fonts = SvgFontRegistry.defaultRegistry()  // Hershey built in
+let textOptions = SvgRenderOptions(fonts: fonts)
+```
+
+Output is RGBA8, non-premultiplied, row-major; same document plus same options
+produces byte-identical PNGs. `samplesPerPixel` accepts 1 / 2 / 4 and `maxPixels`
+defaults to 64M.
+
 ## Value types
 
 Every value type satisfies `parse(toString(x)) == x` for values representable in
@@ -212,15 +245,22 @@ cjpm test
 ```
 
 The large-sample smoke test uses `.assets/README/module-dependencies.svg` when it
-exists and is skipped otherwise. Performance reference values are recorded in
+exists and is skipped otherwise. M2 rendering scenes live in
+`testdata/render/*.svg` with `*.rgba` snapshots (64×64, per-pixel tolerance ≤ 1).
+Performance reference values are recorded in
 [`doc/perf-baseline.md`](doc/perf-baseline.md).
 
-## Non-goals for M1
+## Non-goals for M2
 
-- Rendering / rasterization, bounding boxes, fill-rule evaluation;
-- CSS parsing or cascade (`<style>` and `style=""` are preserved verbatim);
-- SMIL animation, filters, SVGZ, XHTML semantics inside `foreignObject`;
-- Font metrics and text layout.
+- Filters, XHTML inside `foreignObject`, `pattern`;
+- `<image>` decoding or any external resource access (a placeholder is drawn);
+- Full CSS3: pseudo-classes, attribute selectors, media queries, `@font-face`, CSS transitions;
+- Bidirectional text, ligatures, glyph substitution, built-in CJK fonts, TTF/OTF parsing;
+- `textPath` layout, text `rotate` lists, event-driven animation and scripts;
+- SVGZ, GPU/native raster backends.
+
+`textPath` and text `rotate` degrade to plain text with a warning; unknown
+elements are skipped during rendering.
 
 ## API notes
 

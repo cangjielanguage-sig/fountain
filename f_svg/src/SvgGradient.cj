@@ -424,12 +424,11 @@ public class SvgGradientSampler {
     private func resolveChain(gradient: SvgGradient): ArrayList<SvgGradient> {
         let chain = ArrayList<SvgGradient>()
         let visited = HashMap<String, Bool>()
-        var current: ?SvgGradient = Some(gradient)
+        var current = gradient
         var depth = 0
         while (true) {
-            match (current) {
-                case Some(node) =>
-                    match (node.attr("id")) {
+            let node = current
+            match (node.attr("id")) {
                         case Some(id) =>
                             if (visited.get(id).isSome()) {
                                 this.warnings.add("渐变 href 出现循环引用「${id}」")
@@ -451,7 +450,7 @@ public class SvgGradientSampler {
                             }
                             match (findGradientById(this.root, target)) {
                                 case Some(next) =>
-                                    current = Some(next)
+                                    current = next
                                     depth++
                                 case None =>
                                     this.warnings.add("渐变 href 目标「${target}」不存在")
@@ -459,8 +458,6 @@ public class SvgGradientSampler {
                             }
                         case None => break
                     }
-                case None => break
-            }
         }
         chain
     }

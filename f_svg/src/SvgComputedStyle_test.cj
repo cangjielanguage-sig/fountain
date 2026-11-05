@@ -164,6 +164,18 @@ public class SvgComputedStyle_test {
         unsetRect.style = "fill: unset; opacity: unset"
         unsetGroup.appendElement(unsetRect)
         unsetRoot.appendElement(unsetGroup)
+        let relativeRoot = SvgRoot()
+        let relativeGroup = SvgContainer(SvgContainerKind.Group)
+        relativeGroup.style = "font-size: 20px"
+        let relativeRect = SvgRect()
+        relativeRect.style = "font-size: 2em"
+        relativeGroup.appendElement(relativeRect)
+        relativeRoot.appendElement(relativeGroup)
+        @Assert(
+            styleOf(computeTree(relativeRoot), relativeRect).fontSize() ==
+            SvgLength(40.0, unit: SvgLengthUnit.Px)
+        )
+
         let unsetStyle = styleOf(computeTree(unsetRoot), unsetRect)
         @Assert(unsetStyle.get("fill") == Some("#ff0000"))
         @Assert(unsetStyle.get("opacity") == Some("1"))

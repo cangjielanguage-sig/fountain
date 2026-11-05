@@ -1,8 +1,9 @@
 # f_svg
 
-**SVG 1.1 静态文档**模块：值类型 + 类型化 DOM + 解析 + 生成 + 安全过滤。
+**SVG 1.1 文档与渲染**模块：值类型 + 类型化 DOM + 解析/生成 + 安全过滤 +
+CSS 级联 + CPU 软件光栅 + 确定性 PNG + SMIL 动画。
 
-只负责「把 SVG 文档讲清楚、改对、写回去」，**不渲染、不做 CSS 级联、不做动画**。
+M1 的静态文档能力保持不变；M2 增加「从文档到像素」与「从时间到文档」两条链路。
 底层 XML 全部复用 [`f_xml`](../f_xml/README.md)，模块内没有第二套 XML 词法器。
 
 > 设计、取舍与里程碑见 [`doc/f_svg模块设计.md`](doc/f_svg模块设计.md)。
@@ -27,7 +28,7 @@ f_svg
 或在已配置中心仓时使用 `"fountain::f_svg" = "1.3.17"`。同时需要在仓库根 `.modules` 中登记
 `f_svg`（本仓库已登记）。
 
-## 能力（M1）
+## 能力（M2）
 
 | 能力 | 入口 |
 |---|---|
@@ -36,9 +37,15 @@ f_svg
 | 类型化属性 | `SvgLength` / `SvgColor` / `SvgPaint` / `SvgTransform` / `SvgPathData` / `SvgViewBox` |
 | 生成 | `SvgWriter` / `writeSvgString`，内部经 `XmlDocument` 交给 `f_xml::XmlWriter` |
 | 安全 | 默认移除脚本、事件属性、外部引用；元素数与深度硬上限 |
+| CSS | `CssStyleSheet` / `CssSelector` / `SvgStyleResolver` / `SvgComputedStyle` |
+| 几何 | `SvgBounds` / `SvgGeometry` / `SvgViewport` |
+| 渲染 | `SvgBitmap` / `SvgRasterizer` / `SvgRenderer` / `renderToPng` |
+| PNG | `SvgPngEncoder` / `SvgBitmap.toPngBytes` / `writePng` / `savePng` |
+| 动画 | `SvgTimeline` / `SvgInterpolator` / `SvgClock` / `SvgManualClock` |
+| 字体 | `SvgFont` 接口 / `SvgFontRegistry` / 内置 `SvgHersheyFont` |
 | 无损保留 | 未知元素、未知属性、注释 / PI / CDATA、DOCTYPE |
 
-## 快速开始
+## 快速开始（M1 文档能力）
 
 ### 1. 解析与遍历
 
@@ -143,6 +150,35 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 规模上限（元素数 / 深度 / 实体）在严格与宽松模式下都**硬失败**，抛
 `SvgException(kind: SvgErrorKind.Limit)`。
 
+## M2：样式、渲染、PNG 与动画
+
+```cangjie
+import fountain::f_svg.*
+import std.fs.Path
+
+// 计算样式
+let resolver = SvgStyleResolver(sheet: CssStyleSheet.parse("rect { fill: red }"))
+let styles = resolver.compute(document.root)
+let style = styles.get(rect)
+
+// 渲染为位图 / PNG
+let options = SvgRenderOptions(width: 128, height: 128, background: SvgColor.White)
+let bitmap = SvgRenderer(options: options).render(document)
+bitmap.savePng(Path("out.png"))
+
+// 动画采样（不修改原文档）
+let timeline = SvgTimeline(document)
+let frame = timeline.sample(0.5)
+let frameBitmap = SvgRenderer().render(frame)
+
+// 字体注册：默认注册表内置 Hershey；也可注册外部 SvgFont
+let fonts = SvgFontRegistry.defaultRegistry()
+let textOptions = SvgRenderOptions(fonts: fonts)
+```
+
+渲染输出为 RGBA8、非预乘、行优先；同一文档 + 同一选项逐字节一致。
+`SvgRenderOptions.samplesPerPixel` 只允许 1 / 2 / 4，`maxPixels` 默认 64M。
+
 ## 值类型
 
 所有值类型对**规范形式可表示**的值满足 `parse(toString(x)) == x`；`parse` 失败抛 `SvgException`，
@@ -194,8 +230,9 @@ toUserUnits(SvgLength(50.0, unit: SvgLengthUnit.Percent), SvgLengthAxis.Horizont
 
 ## 样本与测试
 
-`testdata/` 提供六个小型样本：`basic-shapes.svg`、`text.svg`、`gradient.svg`、
-`namespaces.svg`、`comments.svg`、`unsafe.svg`。
+`testdata/` 提供 M1 小型样本（`basic-shapes.svg`、`text.svg`、`gradient.svg`、
+`namespaces.svg`、`comments.svg`、`unsafe.svg`）与 M2 渲染场景
+（`testdata/render/*.svg` + `*.rgba` 期望图）。场景快照按 64×64 逐像素比较，容差 ≤ 1。
 
 ```bash
 cd f_svg
@@ -205,12 +242,16 @@ cjpm test
 大样本冒烟使用仓库内 `.assets/README/module-dependencies.svg`（存在时执行，不存在时跳过）。
 性能参考值见 [`doc/perf-baseline.md`](doc/perf-baseline.md)。
 
-## M1 不做什么
+## M2 不做什么
 
-- 渲染 / 光栅化、路径包围盒、填充规则求值；
-- CSS 解析与级联（`<style>` 与 `style=""` 原样保留）；
-- SMIL 动画、滤镜、SVGZ、`foreignObject` 内部 XHTML 语义；
-- 字体度量与文本换行。
+- 滤镜、`foreignObject` 内部 XHTML、`pattern`；
+- `<image>` 位图解码与任何外部资源访问（渲染时只画占位矩形）；
+- 完整 CSS3：伪类、属性选择器、媒体查询、`@font-face`、CSS 动画/过渡；
+- 双向文本、连字、字形替换、内置 CJK 字体、TTF/OTF 解析；
+- `textPath` 排版、文本 `rotate` 列表、事件驱动动画与脚本；
+- SVGZ、GPU / native 光栅后端。
+
+`textPath` 与文本 `rotate` 在 M2 降级为普通文本并写 warning；未知元素在渲染时跳过。
 
 ## 已知 API 约定
 

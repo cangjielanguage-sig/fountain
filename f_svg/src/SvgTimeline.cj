@@ -192,7 +192,7 @@ public class SvgTimeline {
             if (!state.active) {
                 continue
             }
-            this.applyAnimation(snapshot, target, spec, state)
+            this.applyAnimation(target, spec, state)
         }
         snapshot
     }
@@ -202,7 +202,6 @@ public class SvgTimeline {
     }
 
     private func applyAnimation(
-        snapshot: SvgDocument,
         target: SvgElement,
         spec: SvgAnimationSpec,
         state: SvgAnimationState

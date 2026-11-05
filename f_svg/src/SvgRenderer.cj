@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
-import std.math.*
 
 private class SvgRenderFrame {
     let bitmap: SvgBitmap
@@ -121,8 +120,7 @@ public class SvgRenderer {
                         frame.clipPath,
                         frame.mask,
                         frame.matrix,
-                        frame.bounds,
-                        list
+                        frame.bounds
                     )
                     let target = if (frames.size > 0) {
                         frames[frames.size - 1].bitmap
@@ -147,8 +145,7 @@ public class SvgRenderer {
                             command.clipPath,
                             command.mask,
                             command.matrix,
-                            command.bounds,
-                            list
+                            command.bounds
                         )
                         SvgGroupCompositor.composite(target, layer, 1.0)
                     } else {
@@ -346,8 +343,7 @@ public class SvgRenderer {
         clipPath: ?SvgElement,
         maskElement: ?SvgElement,
         matrix: SvgMatrix,
-        bounds: ?SvgBounds,
-        list: SvgDisplayList
+        bounds: ?SvgBounds
     ): Unit {
         match (clipRect) {
             case Some(rect) => clipBitmapToRect(bitmap, rect)
