@@ -79,6 +79,15 @@ public class SvgTextRenderer_test {
         @Assert(near(listLayout.glyphs[0].y, 5.0))
         @Assert(near(listLayout.glyphs[1].y, 6.0))
 
+        let single = makeText("AB")
+        single.x = [SvgLength(7.0)]
+        single.y = [SvgLength(9.0)]
+        let singleLayout = renderer.layout(single, style: textStyleOf(single))
+        @Assert(near(singleLayout.glyphs[0].x, 7.0))
+        @Assert(near(singleLayout.glyphs[1].x, 7.0))
+        @Assert(near(singleLayout.glyphs[0].y, 9.0))
+        @Assert(near(singleLayout.glyphs[1].y, 9.0))
+
         let deltas = makeText("AB")
         deltas.dx = [SvgLength(1.0), SvgLength(2.0)]
         deltas.dy = [SvgLength(1.0), SvgLength(2.0)]

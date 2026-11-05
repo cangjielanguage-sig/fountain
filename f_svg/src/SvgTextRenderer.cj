@@ -355,9 +355,12 @@ private func applyRootTextAttributes(text: SvgTextElement, chars: ArrayList<SvgT
     for (index in 0..chars.size) {
         let char = chars[index]
         match (xValues) {
-            case Some(values) => if (index < values.size) {
-                char.xOverride = Some(values[index].value)
-            }
+            case Some(values) =>
+                if (index < values.size) {
+                    char.xOverride = Some(values[index].value)
+                } else if (values.size > 0) {
+                    char.xOverride = Some(values[values.size - 1].value)
+                }
             case None => ()
         }
         match (yValues) {
@@ -365,7 +368,7 @@ private func applyRootTextAttributes(text: SvgTextElement, chars: ArrayList<SvgT
                 if (index < values.size) {
                     char.yBase = values[index].value
                 } else if (values.size > 0) {
-                    char.yBase = values[0].value
+                    char.yBase = values[values.size - 1].value
                 }
             case None => ()
         }
