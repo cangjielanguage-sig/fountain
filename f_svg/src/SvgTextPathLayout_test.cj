@@ -331,3 +331,18 @@ public class SvgTextPathEmptyM3_test {
         @Assert(warned)
     }
 }
+
+@Test
+public class SvgTextRotatePartialM3_test {
+    /** rotate 列表部分非法时只忽略非法项。 */
+    @TestCase
+    public func partialInvalidRotate(): Unit {
+        let text = SvgText()
+        text.setAttr("rotate", "10 bogus 30")
+        let warnings = ArrayList<String>()
+        let values = resolveTextRotations(text, 3, warnings)
+        @Assert(near(values[0], 10.0) && near(values[1], 0.0) && near(values[2], 30.0))
+        @Assert(warnings.size >= 1)
+        @Assert(warnings[0].contains("rotate"))
+    }
+}

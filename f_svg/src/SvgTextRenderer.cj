@@ -544,22 +544,68 @@ internal func resolveTextRotations(
                 warnings.add("文本 rotate 列表为空，已忽略")
                 return result
             }
-            var index: Int64 = 0
-            while (index < count) {
-                let source = if (index < values.size) {
-                    index
-                } else {
-                    values.size - 1
-                }
-                result[index] = values[source]
-                index++
-            }
+            fillTextRotations(result, values)
         case None =>
-            if (text.attr("rotate").isSome()) {
-                warnings.add("文本 rotate 的值不合法，已忽略")
+            match (text.attr("rotate")) {
+                case Some(raw) =>
+                    let values = parseLenientRotateList(raw, warnings)
+                    if (values.size == 0) {
+                        warnings.add("文本 rotate 列表为空，已忽略")
+                        return result
+                    }
+                    fillTextRotations(result, values)
+                case None => ()
             }
     }
     result
+}
+
+private func fillTextRotations(result: Array<Float64>, values: Array<Float64>): Unit {
+    var index: Int64 = 0
+    while (index < result.size) {
+        let source = if (index < values.size) {
+            index
+        } else {
+            values.size - 1
+        }
+        result[index] = values[source]
+        index++
+    }
+}
+
+/** `rotate` 逐项解析：非法项记 warning 并按 0 处理，其余项仍生效。 */
+private func parseLenientRotateList(text: String, warnings: ArrayList<String>): Array<Float64> {
+    let bytes = text.unsafeBytes()
+    let values = ArrayList<Float64>()
+    var index = skipSvgSpaces(bytes, 0)
+    while (index < bytes.size) {
+        if (bytes[index] == b',') {
+            index = skipSvgSpaces(bytes, index + 1)
+            continue
+        }
+        match (scanSvgNumber(text, index)) {
+            case Some(token) =>
+                if (token.value.isNaN() || token.value.isInf()) {
+                    warnings.add("文本 rotate 含非法值，已按 0 处理")
+                    values.add(0.0)
+                } else {
+                    values.add(token.value)
+                }
+                index = skipSvgSpaces(bytes, token.end)
+            case None =>
+                warnings.add("文本 rotate 含非法值，已按 0 处理")
+                values.add(0.0)
+                var next = index
+                while (next < bytes.size && bytes[next] != b',' && !isSvgSpace(bytes[next])) {
+                    next++
+                }
+                if (next == index) {
+                    next++
+                }
+                index = skipSvgSpaces(bytes, next)
+        }
+    }
+    values.toArray()
 }
 
 /** 找到当前文本子树中的 textPath 元素（自身或直接子元素）。 */
