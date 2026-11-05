@@ -99,6 +99,14 @@ public class SvgRasterizer_test {
         let hard = filledBitmap(4, "M0 0 L4 4 L4 0 Z", SvgFillRule.Nonzero, samples: 1)
         let hardEdge = hard.pixel(0, 0)
         @Assert(hardEdge.alpha == 0.0 || hardEdge.alpha == 1.0)
+
+        let upper = filledBitmap(8, "M0 0 L8 8 L0 8 Z", SvgFillRule.Nonzero, samples: 4)
+        let lower = filledBitmap(8, "M0 0 L8 8 L8 0 Z", SvgFillRule.Nonzero, samples: 4)
+        let upperAlpha = upper.pixel(1, 1).alpha
+        let lowerAlpha = lower.pixel(1, 1).alpha
+        @Assert(upperAlpha > 0.0 && upperAlpha < 1.0)
+        @Assert(lowerAlpha > 0.0 && lowerAlpha < 1.0)
+        @Assert(abs(upperAlpha + lowerAlpha - 1.0) < 0.02)
     }
 
     /** 预乘 over：背景、两层半透明、无暗边。 */
@@ -160,7 +168,7 @@ public class SvgRasterizer_test {
                     best = distance
                 }
             }
-            @Assert(best <= 0.3)
+            @Assert(best <= 0.25)
         }
     }
 

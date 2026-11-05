@@ -56,6 +56,57 @@ public class SvgViewport_test {
         alignRoot.setAttr("preserveAspectRatio", "xMaxYMax meet")
         let maxMax = SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot)
         @Assert(pointNear(maxMax.apply(SvgPoint(0.0, 0.0)), SvgPoint(0.0, 100.0)))
+        alignRoot.setAttr("preserveAspectRatio", "xMinYMid meet")
+        @Assert(
+            pointNear(
+                SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot).apply(SvgPoint(0.0, 0.0)),
+                SvgPoint(0.0, 50.0)
+            )
+        )
+        alignRoot.setAttr("preserveAspectRatio", "xMinYMax meet")
+        @Assert(
+            pointNear(
+                SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot).apply(SvgPoint(0.0, 0.0)),
+                SvgPoint(0.0, 100.0)
+            )
+        )
+        alignRoot.setAttr("preserveAspectRatio", "xMidYMin meet")
+        @Assert(
+            pointNear(
+                SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot).apply(SvgPoint(0.0, 0.0)),
+                SvgPoint(0.0, 0.0)
+            )
+        )
+        alignRoot.setAttr("preserveAspectRatio", "xMidYMax meet")
+        @Assert(
+            pointNear(
+                SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot).apply(SvgPoint(0.0, 0.0)),
+                SvgPoint(0.0, 100.0)
+            )
+        )
+        alignRoot.setAttr("preserveAspectRatio", "xMaxYMin meet")
+        @Assert(
+            pointNear(
+                SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot).apply(SvgPoint(0.0, 0.0)),
+                SvgPoint(0.0, 0.0)
+            )
+        )
+        alignRoot.setAttr("preserveAspectRatio", "xMaxYMid meet")
+        @Assert(
+            pointNear(
+                SvgViewport.from(alignRoot, 300.0, 150.0).transform(alignRoot).apply(SvgPoint(0.0, 0.0)),
+                SvgPoint(0.0, 50.0)
+            )
+        )
+
+        let wideRoot = SvgRoot(width: SvgLength(200.0), height: SvgLength(200.0))
+        wideRoot.setAttr("viewBox", "0 0 50 100")
+        wideRoot.setAttr("preserveAspectRatio", "xMidYMid meet")
+        let wide = SvgViewport.from(wideRoot, 300.0, 150.0).transform(wideRoot)
+        @Assert(pointNear(wide.apply(SvgPoint(0.0, 0.0)), SvgPoint(50.0, 0.0)))
+        wideRoot.setAttr("preserveAspectRatio", "xMaxYMid meet")
+        let wideMax = SvgViewport.from(wideRoot, 300.0, 150.0).transform(wideRoot)
+        @Assert(pointNear(wideMax.apply(SvgPoint(0.0, 0.0)), SvgPoint(100.0, 0.0)))
     }
 
     /** 尺寸解析：绝对值、百分比、缺省 300×150 与非法值。 */

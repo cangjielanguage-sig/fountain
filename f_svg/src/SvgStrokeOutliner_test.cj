@@ -187,7 +187,7 @@ public class SvgStrokeOutliner_test {
             SvgFillRule.Nonzero,
             1.0
         )
-        @Assert(alphaNear(bitmapAnalytic, bitmapGeneric, tolerance: 3))
+        @Assert(alphaNear(bitmapAnalytic, bitmapGeneric, tolerance: 1))
 
         let line = SvgLine(
             x1: SvgLength(2.0),
