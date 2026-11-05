@@ -197,7 +197,7 @@ private func parseTransformArgs(content: String): Array<Float64> {
     values.toArray()
 }
 
-private func isNumberStart(byte: Byte): Bool {
+internal func isNumberStart(byte: Byte): Bool {
     isSvgDigit(byte) || byte == b'+' || byte == b'-' || byte == b'.'
 }
 
