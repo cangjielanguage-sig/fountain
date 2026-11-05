@@ -2,6 +2,34 @@
 
 这份文档只记「本机怎么把依赖跑起来、踩过哪些坑」，不描述 f_llm 的功能。
 
+## 驱动与 STDX
+
+`postgres_driver` / `mysql_driver` 是 `[test-dependencies]`，只在测试里用到，但它们的 `bin-dependencies` 依赖 STDX 动态库路径：
+
+```bash
+export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+```
+
+不设置时驱动加载失败，真库用例会打印 SKIP（而不是报编译错误）。
+
+## PostgreSQL
+
+集成用例里的连接串是**硬编码**的：
+
+```
+postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test
+```
+
+准备：
+
+```bash
+sudo -u postgres psql -c "CREATE USER fllm_test WITH PASSWORD 'fllm_test' CREATEDB;"
+sudo -u postgres psql -c "CREATE DATABASE fllm_test OWNER fllm_test;"
+sudo -u postgres psql -d fllm_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+`vector` 扩展缺失时建表会失败，用例打印 SKIP 并跳过——需要先装 pgvector。
+
 ## MySQL
 
 本机的 MySQL 不是 apt 装的，是二进制包解压在 `/opt/mysql97`（9.7.4）：
@@ -81,7 +109,7 @@ export cjHeapSize=4gb      # 默认只有几百 MB
 cd f_llm && cjpm test
 ```
 
-典型需要加堆的场景：`f_store` 压缩/合并用例、大向量检索用例。加到 4GB 后本机全量 424 条稳定通过。
+典型需要加堆的场景：`f_store` 压缩/合并用例、大向量检索用例。加到 4GB 后本机全量用例稳定通过。
 
 ## 常用命令
 

@@ -621,10 +621,10 @@ println(outcome.report)
 
 ```bash
 cjpm test                 # 单元测试，不依赖外部服务
-FLLM_DB_TEST=1 cjpm test  # 额外跑 postgres / mysql 真库集成用例
+cjpm test                 # 真库用例连得上就跑，连不上打印 SKIP 自行跳过
 ```
 
-真库用例按环境变量判断可达性，不可达时自动跳过（不算失败）。
+真库用例探测连接（`postgresReady()` / `mySqlReady()`）：连不上打印 `SKIP …` 后跳过，不算失败；连上了断言失败照常报错。准备 PostgreSQL / MySQL 见 `doc/dev-env.md`。
 
 ---
 

@@ -611,7 +611,7 @@ Legacy keys `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` / `l
 
 ```bash
 cjpm test                 # unit tests, no external services
-FLLM_DB_TEST=1 cjpm test  # also run postgres / mysql integration tests
+cjpm test                 # DB-backed cases run when reachable, otherwise print SKIP
 ```
 
 Integration tests probe connectivity and skip themselves when the database is unreachable.
