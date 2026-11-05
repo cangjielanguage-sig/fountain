@@ -602,3 +602,32 @@ CRITICAL=0
 - 结论：本轮范围内 **CRITICAL = 0，选定 WARNING = 0**。
 
 CRITICAL=0
+
+## 8. 修复结果（第三轮）
+
+> 依据 `verification-3.md` 与 `fix-plan-3.md`：只处理 NEW-W1、NEW-W3、NEW-W4；第 2 节记录不改项（W6、W8、W15/W16、W18、SUGGESTION）未触碰；M1/M2 公开 API 语义与逐字节基线保持不变。
+> 每项按 Red → Green 执行，并独立提交；分支 `feature/f_svg`。
+
+| 编号 | 状态 | 修复内容 | 验证用例 | 提交 |
+|---|---|---|---|---|
+| NEW-W1 | 已修复 | 为五角星 nonzero / evenodd 与甜甜圈补上同一扁平化几何的 64× 参考图逐像素比较，最大通道差 ≤ 2/255；原面积断言保留 | `SvgAnalyticComplexM3_test.selfIntersectionNonzeroMatchesDenseReference` / `selfIntersectionEvenoddMatchesDenseReference` / `donutMatchesContourReference` | `0309d4e2` |
+| NEW-W3 | 已修复 | `SvgRenderGuard.enter` 改为接收引用标签：循环 warning 与深度超限消息均带 `#id` 与 `/svg[1]/...` 元素路径；pattern / marker 展开均传入定位信息 | `SvgContentCycleM3_test.patternCycleWarningHasElementLocation` / `markerCycleWarningHasElementLocation` / `patternDepthLimitMessageHasLocation` | `fdaaef6f` |
+| NEW-W4 | 已修复 | 公开 `SvgPatternSampler.sample` 每次调用重建 `SvgImageResource` 并清空 tile 缓存，按当次 `options.images` 解析；渲染器内部经 `attachSession` 仍共享同一会话，同一调用内按 `href` 去重 | `SvgPatternSampler_test.sampleUsesEachCallProvider` / `sameProviderResolvesHrefOnce` | `be88fc15` |
+
+补充说明：
+
+- NEW-W1 的 Red 结果为“新用例在现有实现上直接通过”：确认该项是规格判据与测试覆盖缺口，而非算法缺陷（与 `verification-3.md` §2 的判定一致），因此只增测试、不改生产代码。此前 `selfIntersectionRules` / `selfIntersectionAreaDiffers` 只比较中心像素与总面积，现补上逐像素证据。
+- NEW-W3 的循环 / 超深消息形如 `pattern「#p」（元素「/svg[1]/defs[1]/pattern[1]」）存在内容自引用循环，已停止展开`；深度超限消息使用同一前缀。
+- NEW-W4 保持公开 `sample` 签名不变；每次 `sample` 视为一次独立取样会话，跨调用不再复用 provider，tile 缓存仅服务会话内去重。渲染主路径通过 `attachSession` 绑定会话，不受影响。
+- `SvgMarkerExpander` 自身的 marker href 循环 warning 不在 NEW-W3 的 guard 范围内，本轮未改动。
+
+### 8.1 最终数据
+
+- `cjpm test`：**533 / 533 通过，0 skipped，0 error，0 failed**（第二轮 525 条 + NEW-W1 3 条 + NEW-W3 3 条 + NEW-W4 2 条）。
+- `cjpm build`：成功；`f_svg/src` 自身 warning 数为 **0**（22 条 warning 全部来自 `f_xml` 等依赖模块）。
+- M1/M2 逐字节基线：`SvgSceneByteBaseline_test` 的 `basicExact` / `gradientExact` / `strokeExact` / `clipExact` / `textExact` / `animationExact` 6 个场景以容差 0 全部通过，未改写快照。
+- 未修改 `openspec/specs`、M1/M2 快照与第 2 节记录不改项；未执行任何归档或 worktree 写操作。
+- 结论：本轮范围内 **CRITICAL = 0，选定 WARNING = 0**。
+
+CRITICAL=0
+
