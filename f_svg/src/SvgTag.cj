@@ -48,6 +48,21 @@ public class SvgTag {
             case "feMergeNode" => Some(SvgFeMergeNode())
             case "feColorMatrix" => Some(SvgFeColorMatrix())
             case "feTile" => Some(SvgFeTile())
+            case "feComponentTransfer" => Some(SvgFeComponentTransfer())
+            case "feFuncR" => Some(SvgFeFuncR())
+            case "feFuncG" => Some(SvgFeFuncG())
+            case "feFuncB" => Some(SvgFeFuncB())
+            case "feFuncA" => Some(SvgFeFuncA())
+            case "feMorphology" => Some(SvgFeMorphology())
+            case "feConvolveMatrix" => Some(SvgFeConvolveMatrix())
+            case "feTurbulence" => Some(SvgFeTurbulence())
+            case "feDisplacementMap" => Some(SvgFeDisplacementMap())
+            case "feImage" => Some(SvgFeImage())
+            case "feDiffuseLighting" => Some(SvgFeDiffuseLighting())
+            case "feSpecularLighting" => Some(SvgFeSpecularLighting())
+            case "feDistantLight" => Some(SvgFeDistantLight())
+            case "fePointLight" => Some(SvgFePointLight())
+            case "feSpotLight" => Some(SvgFeSpotLight())
             case "style" | "title" | "desc" | "metadata" => Some(SvgElement(tag))
             case "g" | "defs" | "symbol" | "clipPath" | "mask" | "switch" | "a" |
                 "foreignObject" =>
@@ -67,7 +82,10 @@ public class SvgTag {
                 "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" |
                 "filter" | "pattern" | "marker" | "feGaussianBlur" | "feOffset" | "feFlood" |
                 "feBlend" | "feComposite" | "feMerge" | "feMergeNode" | "feColorMatrix" |
-                "feTile" => true
+                "feTile" | "feComponentTransfer" | "feFuncR" | "feFuncG" | "feFuncB" |
+                "feFuncA" | "feMorphology" | "feConvolveMatrix" | "feTurbulence" |
+                "feDisplacementMap" | "feImage" | "feDiffuseLighting" | "feSpecularLighting" |
+                "feDistantLight" | "fePointLight" | "feSpotLight" => true
             case _ => false
         }
     }

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.math.*
 
 /** `feFunc*` 的传递函数类型。 */
 public enum SvgTransferFunctionType <: Equatable<SvgTransferFunctionType> & ToString {
@@ -286,3 +287,519 @@ public enum SvgTurbulenceType <: Equatable<SvgTurbulenceType> & ToString {
 }
 
 // 原语实现与元素模型在后续任务中补齐。
+
+internal func readSvgNumberList(element: SvgElement, name: String): ?SvgNumberList {
+    match (element.attr(name)) {
+        case Some(text) =>
+            try {
+                Some(SvgNumberList.parse(text))
+            } catch (_: SvgException) {
+                None
+            }
+        case None => None
+    }
+}
+
+internal func writeSvgNumberList(element: SvgElement, name: String, value: ?SvgNumberList): Unit {
+    match (value) {
+        case Some(list) => element.setAttr(name, list.toString())
+        case None => element.removeAttr(name)
+    }
+}
+
+internal func readSvgNumberArray(element: SvgElement, name: String): Array<Float64> {
+    match (readSvgNumberList(element, name)) {
+        case Some(list) => list.values
+        case None => Array<Float64>()
+    }
+}
+
+internal func writeSvgNumberArray(element: SvgElement, name: String, value: Array<Float64>): Unit {
+    element.setAttr(name, SvgNumberList(value).toString())
+}
+
+/** `feFunc*` 公用的传递函数参数。 */
+public abstract class SvgFeFunc <: SvgElement {
+    private let typeCache = SvgValueCache<SvgTransferFunctionType>()
+    private let tableCache = SvgValueCache<SvgNumberList>()
+    private let slopeCache = SvgValueCache<Float64>()
+    private let interceptCache = SvgValueCache<Float64>()
+    private let amplitudeCache = SvgValueCache<Float64>()
+    private let exponentCache = SvgValueCache<Float64>()
+    private let offsetCache = SvgValueCache<Float64>()
+
+    protected init(tag: String) {
+        super(tag)
+    }
+
+    /** `type` 属性；`type` 在部分上下文为关键字，故命名 `functionType`。 */
+    public mut prop functionType: SvgTransferFunctionType {
+        get() {
+            this.typeCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("type")) {
+                        case Some(text) => SvgTransferFunctionType.fromName(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgTransferFunctionType.Identity
+        }
+        set(value) {
+            this.setAttr("type", value.toString())
+        }
+    }
+
+    public mut prop tableValues: Array<Float64> {
+        get() {
+            match (this.tableCache.get(this.attributesVersion, {=> readSvgNumberList(this, "tableValues")})) {
+                case Some(list) => list.values
+                case None => Array<Float64>()
+            }
+        }
+        set(value) {
+            writeSvgNumberArray(this, "tableValues", value)
+        }
+    }
+
+    public mut prop slope: Float64 {
+        get() {
+            this.slopeCache.get(this.attributesVersion, {=> readFloat(this, "slope")}) ?? 1.0
+        }
+        set(value) {
+            writeFloat(this, "slope", Some(value))
+        }
+    }
+
+    public mut prop intercept: Float64 {
+        get() {
+            this.interceptCache.get(this.attributesVersion, {=> readFloat(this, "intercept")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "intercept", Some(value))
+        }
+    }
+
+    public mut prop amplitude: Float64 {
+        get() {
+            this.amplitudeCache.get(this.attributesVersion, {=> readFloat(this, "amplitude")}) ?? 1.0
+        }
+        set(value) {
+            writeFloat(this, "amplitude", Some(value))
+        }
+    }
+
+    public mut prop exponent: Float64 {
+        get() {
+            this.exponentCache.get(this.attributesVersion, {=> readFloat(this, "exponent")}) ?? 1.0
+        }
+        set(value) {
+            writeFloat(this, "exponent", Some(value))
+        }
+    }
+
+    public mut prop offset: Float64 {
+        get() {
+            this.offsetCache.get(this.attributesVersion, {=> readFloat(this, "offset")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "offset", Some(value))
+        }
+    }
+}
+
+public class SvgFeFuncR <: SvgFeFunc {
+    public init() {
+        super("feFuncR")
+    }
+}
+
+public class SvgFeFuncG <: SvgFeFunc {
+    public init() {
+        super("feFuncG")
+    }
+}
+
+public class SvgFeFuncB <: SvgFeFunc {
+    public init() {
+        super("feFuncB")
+    }
+}
+
+public class SvgFeFuncA <: SvgFeFunc {
+    public init() {
+        super("feFuncA")
+    }
+}
+
+/** `feComponentTransfer`：四个通道函数子元素。 */
+public class SvgFeComponentTransfer <: SvgFilterPrimitive {
+    public init() {
+        super("feComponentTransfer")
+    }
+
+    /** 指定通道的函数；缺失返回 `None`。 */
+    public func functionFor(channel: SvgChannelSelector): ?SvgFeFunc {
+        let tag = match (channel) {
+            case R => "feFuncR"
+            case G => "feFuncG"
+            case B => "feFuncB"
+            case A => "feFuncA"
+        }
+        for (node in this.children) {
+            match (node) {
+                case ElementNode(element) =>
+                    match (element) {
+                        case fn: SvgFeFunc => if (fn.tag == tag) {
+                            return Some(fn)
+                        }
+                        case _ => ()
+                    }
+                case _ => ()
+            }
+        }
+        None
+    }
+}
+
+/** `feMorphology`。 */
+public class SvgFeMorphology <: SvgFilterPrimitive {
+    private let operatorCache = SvgValueCache<SvgMorphologyOperator>()
+    private let radiusCache = SvgValueCache<SvgNumberList>()
+
+    public init() {
+        super("feMorphology")
+    }
+
+    public mut prop operatorKind: SvgMorphologyOperator {
+        get() {
+            this.operatorCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("operator")) {
+                        case Some(text) => SvgMorphologyOperator.fromName(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgMorphologyOperator.Erode
+        }
+        set(value) {
+            this.setAttr("operator", value.toString())
+        }
+    }
+
+    public mut prop radius: SvgNumberList {
+        get() {
+            this.radiusCache.get(this.attributesVersion, {=> readSvgNumberList(this, "radius")}) ??
+                SvgNumberList(Array<Float64>())
+        }
+        set(value) {
+            writeSvgNumberList(this, "radius", Some(value))
+        }
+    }
+}
+
+/** `feConvolveMatrix`。 */
+public class SvgFeConvolveMatrix <: SvgFilterPrimitive {
+    private let orderCache = SvgValueCache<SvgNumberList>()
+    private let kernelCache = SvgValueCache<SvgNumberList>()
+    private let divisorCache = SvgValueCache<Float64>()
+    private let biasCache = SvgValueCache<Float64>()
+    private let targetXCache = SvgValueCache<Float64>()
+    private let targetYCache = SvgValueCache<Float64>()
+    private let edgeModeCache = SvgValueCache<SvgEdgeMode>()
+    private let preserveAlphaCache = SvgValueCache<Bool>()
+
+    public init() {
+        super("feConvolveMatrix")
+    }
+
+    public mut prop order: SvgNumberList {
+        get() {
+            this.orderCache.get(this.attributesVersion, {=> readSvgNumberList(this, "order")}) ??
+                SvgNumberList([3.0])
+        }
+        set(value) {
+            writeSvgNumberList(this, "order", Some(value))
+        }
+    }
+
+    public mut prop kernelMatrix: Array<Float64> {
+        get() {
+            match (this.kernelCache.get(this.attributesVersion, {=> readSvgNumberList(this, "kernelMatrix")})) {
+                case Some(list) => list.values
+                case None => Array<Float64>()
+            }
+        }
+        set(value) {
+            writeSvgNumberArray(this, "kernelMatrix", value)
+        }
+    }
+
+    public mut prop divisor: ?Float64 {
+        get() {
+            this.divisorCache.get(this.attributesVersion, {=> readFloat(this, "divisor")})
+        }
+        set(value) {
+            writeFloat(this, "divisor", value)
+        }
+    }
+
+    public mut prop bias: Float64 {
+        get() {
+            this.biasCache.get(this.attributesVersion, {=> readFloat(this, "bias")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "bias", Some(value))
+        }
+    }
+
+    public mut prop targetX: ?Int64 {
+        get() {
+            match (this.targetXCache.get(this.attributesVersion, {=> readFloat(this, "targetX")})) {
+                case Some(value) => Some(Int64(round(value)))
+                case None => None
+            }
+        }
+        set(value) {
+            match (value) {
+                case Some(number) => writeFloat(this, "targetX", Some(Float64(number)))
+                case None => writeFloat(this, "targetX", None)
+            }
+        }
+    }
+
+    public mut prop targetY: ?Int64 {
+        get() {
+            match (this.targetYCache.get(this.attributesVersion, {=> readFloat(this, "targetY")})) {
+                case Some(value) => Some(Int64(round(value)))
+                case None => None
+            }
+        }
+        set(value) {
+            match (value) {
+                case Some(number) => writeFloat(this, "targetY", Some(Float64(number)))
+                case None => writeFloat(this, "targetY", None)
+            }
+        }
+    }
+
+    public mut prop edgeMode: SvgEdgeMode {
+        get() {
+            this.edgeModeCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("edgeMode")) {
+                        case Some(text) => SvgEdgeMode.fromName(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgEdgeMode.Duplicate
+        }
+        set(value) {
+            this.setAttr("edgeMode", value.toString())
+        }
+    }
+
+    public mut prop preserveAlpha: Bool {
+        get() {
+            this.preserveAlphaCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("preserveAlpha")) {
+                        case Some(text) =>
+                            let lower = text.trimAscii().toAsciiLower()
+                            Some(lower == "true" || lower == "1")
+                        case None => None
+                    }
+                }
+            ) ?? false
+        }
+        set(value) {
+            this.setAttr("preserveAlpha", if (value) { "true" } else { "false" })
+        }
+    }
+}
+
+/** `feTurbulence`。 */
+public class SvgFeTurbulence <: SvgFilterPrimitive {
+    private let typeCache = SvgValueCache<SvgTurbulenceType>()
+    private let frequencyCache = SvgValueCache<SvgNumberList>()
+    private let octavesCache = SvgValueCache<Int64>()
+    private let seedCache = SvgValueCache<Float64>()
+    private let stitchCache = SvgValueCache<Bool>()
+
+    public init() {
+        super("feTurbulence")
+    }
+
+    public mut prop turbulenceType: SvgTurbulenceType {
+        get() {
+            this.typeCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("type")) {
+                        case Some(text) => SvgTurbulenceType.fromName(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgTurbulenceType.Turbulence
+        }
+        set(value) {
+            this.setAttr("type", value.toString())
+        }
+    }
+
+    public mut prop baseFrequency: SvgNumberList {
+        get() {
+            this.frequencyCache.get(
+                this.attributesVersion,
+                {=> readSvgNumberList(this, "baseFrequency")}
+            ) ?? SvgNumberList(Array<Float64>())
+        }
+        set(value) {
+            writeSvgNumberList(this, "baseFrequency", Some(value))
+        }
+    }
+
+    public mut prop numOctaves: Int64 {
+        get() {
+            this.octavesCache.get(
+                this.attributesVersion,
+                {=>
+                    match (readFloat(this, "numOctaves")) {
+                        case Some(value) => Some(Int64(round(value)))
+                        case None => None
+                    }
+                }
+            ) ?? 1
+        }
+        set(value) {
+            writeFloat(this, "numOctaves", Some(Float64(value)))
+        }
+    }
+
+    public mut prop seed: Float64 {
+        get() {
+            this.seedCache.get(this.attributesVersion, {=> readFloat(this, "seed")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "seed", Some(value))
+        }
+    }
+
+    public mut prop stitchTiles: Bool {
+        get() {
+            this.stitchCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("stitchTiles")) {
+                        case Some(text) => Some(text.trimAscii().toAsciiLower() == "stitch")
+                        case None => None
+                    }
+                }
+            ) ?? false
+        }
+        set(value) {
+            this.setAttr("stitchTiles", if (value) { "stitch" } else { "noStitch" })
+        }
+    }
+}
+
+/** `feDisplacementMap`。 */
+public class SvgFeDisplacementMap <: SvgFilterPrimitive {
+    private let scaleCache = SvgValueCache<Float64>()
+    private let xCache = SvgValueCache<SvgChannelSelector>()
+    private let yCache = SvgValueCache<SvgChannelSelector>()
+
+    public init() {
+        super("feDisplacementMap")
+    }
+
+    public mut prop in2: ?String {
+        get() {
+            this.attr("in2")
+        }
+        set(value) {
+            this.writeOptionalAttribute("in2", value)
+        }
+    }
+
+    public mut prop scale: Float64 {
+        get() {
+            this.scaleCache.get(this.attributesVersion, {=> readFloat(this, "scale")}) ?? 0.0
+        }
+        set(value) {
+            writeFloat(this, "scale", Some(value))
+        }
+    }
+
+    public mut prop xChannelSelector: SvgChannelSelector {
+        get() {
+            this.xCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("xChannelSelector")) {
+                        case Some(text) => SvgChannelSelector.fromName(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgChannelSelector.A
+        }
+        set(value) {
+            this.setAttr("xChannelSelector", value.toString())
+        }
+    }
+
+    public mut prop yChannelSelector: SvgChannelSelector {
+        get() {
+            this.yCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("yChannelSelector")) {
+                        case Some(text) => SvgChannelSelector.fromName(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgChannelSelector.A
+        }
+        set(value) {
+            this.setAttr("yChannelSelector", value.toString())
+        }
+    }
+}
+
+/** `feImage`。 */
+public class SvgFeImage <: SvgFilterPrimitive {
+    private let aspectCache = SvgValueCache<SvgPreserveAspectRatio>()
+
+    public init() {
+        super("feImage")
+    }
+
+    public mut prop href: ?String {
+        get() {
+            readSvgHref(this)
+        }
+        set(value) {
+            writeSvgHref(this, value)
+        }
+    }
+
+    public mut prop preserveAspectRatio: SvgPreserveAspectRatio {
+        get() {
+            this.aspectCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("preserveAspectRatio")) {
+                        case Some(text) => tryParseSvgPreserveAspectRatio(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgPreserveAspectRatio.Default
+        }
+        set(value) {
+            this.setAttr("preserveAspectRatio", value.toString())
+        }
+    }
+}

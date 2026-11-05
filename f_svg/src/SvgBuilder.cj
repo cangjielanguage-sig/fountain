@@ -207,6 +207,31 @@ private func buildSvgOne(
             }
         }
     }
+    match (element) {
+        case lighting: SvgLightingPrimitive =>
+            if (lighting.lightSources().size > 1) {
+                context.warnings.add(
+                    "元素「${path}」的光照原语包含多个光源，仅使用第一个"
+                )
+            }
+        case transfer: SvgFeComponentTransfer =>
+            for (node in transfer.children) {
+                match (node) {
+                    case ElementNode(child) =>
+                        if (!(child is SvgFeFunc)) {
+                            context.warnings.add(
+                                "元素「${path}」的 feComponentTransfer 内出现非 feFunc 子元素「${child.tag}」，已忽略"
+                            )
+                        }
+                    case _ => ()
+                }
+            }
+        case image: SvgFeImage =>
+            if (readSvgHref(image).isNone()) {
+                context.warnings.add("元素「${path}」的 feImage 缺少 href，输出透明")
+            }
+        case _ => ()
+    }
     Some(element)
 }
 
@@ -529,11 +554,38 @@ private func isValidSvgAttribute(tag: String, local: String, value: String): Boo
         case "markerUnits" => SvgMarkerUnits.fromName(value.trimAscii()).isSome()
         case "orient" => SvgMarkerOrient.fromName(value.trimAscii()).isSome()
         case "mode" => SvgBlendMode.fromName(value.trimAscii()).isSome()
-        case "operator" => SvgCompositeOperator.fromName(value.trimAscii()).isSome()
+        case "operator" =>
+            if (tag == "feMorphology") {
+                SvgMorphologyOperator.fromName(value).isSome()
+            } else {
+                SvgCompositeOperator.fromName(value.trimAscii()).isSome()
+            }
+        case "edgeMode" => SvgEdgeMode.fromName(value).isSome()
+        case "xChannelSelector" | "yChannelSelector" => SvgChannelSelector.fromName(value).isSome()
+        case "radius" | "order" | "kernelMatrix" | "tableValues" | "baseFrequency" =>
+            tryParseSvgNumberArray(value).isSome()
+        case "divisor" | "bias" | "surfaceScale" | "diffuseConstant" | "specularConstant" |
+            "specularExponent" | "azimuth" | "elevation" | "pointsAtX" | "pointsAtY" |
+            "pointsAtZ" | "numOctaves" | "seed" | "limitingConeAngle" =>
+            tryParseSvgFloat(value).isSome()
+        case "preserveAlpha" =>
+            match (value.trimAscii().toAsciiLower()) {
+                case "true" | "false" | "1" | "0" => true
+                case _ => false
+            }
+        case "stitchTiles" =>
+            match (value.trimAscii().toAsciiLower()) {
+                case "stitch" | "nostitch" => true
+                case _ => false
+            }
         case "image-rendering" => SvgImageRendering.fromName(value).isSome()
         case "type" =>
             if (tag == "feColorMatrix") {
                 SvgColorMatrixType.fromName(value.trimAscii()).isSome()
+            } else if (tag == "feTurbulence") {
+                SvgTurbulenceType.fromName(value).isSome()
+            } else if (tag == "feFuncR" || tag == "feFuncG" || tag == "feFuncB" || tag == "feFuncA") {
+                SvgTransferFunctionType.fromName(value).isSome()
             } else {
                 true
             }
