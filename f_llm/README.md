@@ -8,6 +8,7 @@
 | 存储（内容族 / 元数据族 / 演进族） | `fountain::f_llm.store.Stores` |
 | 记忆、知识、技能、人格、提示词 | `MemoryStore` / `KnowledgeStore` / `MetaStore` |
 | loom 编排（文本 → 流程 → 执行） | `fountain::f_llm.loom.LoomWiring` |
+| 流程路由（一段描述 → 选中并执行流程） | `fountain::f_llm.loom.Supervisor` |
 | 技能演进（经验 → 技能，带 A/B 门禁） | `fountain::f_llm.loom.SkillEvolutionJob` |
 | 检索质量评测 | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
@@ -25,7 +26,7 @@ src/
 ├── embedding/      BGE-M3 向量化：Embedding 门面、HTTP 传输、三路编码
 ├── store/          存储契约与实现（f_store / f_hydra / fhydra / postgres / mysql / inMemory）
 ├── dao/            SQL 语句（postgres / mysql）
-├── loom/           流程编排、存储网关、技能演进、检索评测
+├── loom/           流程编排、Supervisor 路由、存储网关、技能演进、检索评测
 ├── memory/         记忆摘要与提炼（FaithfulMemory / ExperienceExtractor / IndividualityExtractor）
 ├── search/         联网搜索（DeepSeek 等 Provider）
 ├── tool/           工具：函数调用框架与内置工具（读文件、写文件、命令行、联网、todo…）
@@ -485,26 +486,52 @@ JIT 步骤在任务里执行时由 `JitTicktockTask` 承接。`LoomSchedules` �
 
 ### 流程路由（Supervisor）
 
-流程多了以后，调用方不必再记「该找哪个流程」：打开 `llm_supervisor`，已编译流程自动登记成路由目标，
-一段描述交给模型判定落在哪条流程上。
+流程多了以后，调用方不必再记「该找哪个流程」：打开 `llm_supervisor`，流程编译成功即自动登记成路由目标，
+一段描述交给模型判定落在哪条流程上，再把描述作为事件投递进去。
 
 ```bash
 export llm_supervisor=true        # 打开路由；每个流程对应唯一事件 sv/<流程名>
-export llm_loomOnNoUsable=true    # 可选：没有可用流程时自动编排一条并执行
+export llm_loomOnNoUsable=true    # 可选：没有可用流程时自动编排一条并执行（默认关）
 ```
 
 ```cangjie
-// 描述 → 选路 → 派发（描述作为事件数据，经 {start.output} 进入首步）
-let outcome = Supervisor.current().getOrThrow().dispatch('把今天的提交汇总一下')
-println(outcome.kind)   // dispatched | created | noUsableFlow | clarifying
-println(outcome.flow)   // 命中的流程名（created 时是新建的 auto-<时间戳>）
+// LoomWiring.wire 按开关自动装配：路由表用已编译流程播种，重启后从流程库重建
+let service = LoomWiring.wire(chat, plannerModel: 'deepseek-flash')
+
+// 派发：描述 → 选路 → 执行；描述就是起始事件的 data，经 {start.output} 进入首步
+let supervisor = Supervisor.current().getOrThrow()
+let outcome = supervisor.dispatch('把今天的提交汇总一下')
+println(outcome.kind)     // dispatched | created | noUsableFlow | clarifying
+println(outcome.flow)     // 命中的流程名（created 时是新建的 auto-<秒级时间戳>）
+println(outcome.event)    // 实际使用的 Supervisor 事件名 sv/<流程名>
+println(outcome.message)  // 无可用流程时的固定文案
+```
+
+| `outcome.kind` | 含义 | `result` |
+|---|---|---|
+| `dispatched` | 命中已有流程并执行完 | `Some(Event)` |
+| `created` | 自动新建流程、登记并执行完 | `Some(Event)` |
+| `clarifying` | 自动新建时编排要求补充信息 | `None`（问题已落流程库） |
+| `noUsableFlow` | 没有可用流程（含选路输出不可用） | `None` |
+
+路由表运行期可随时增删：
+
+```cangjie
+supervisor.routes()          // 全部路由：名称 / 描述 / 事件名 / 状态
+supervisor.routable()        // 只有 compiled，可被选路命中
+supervisor.eventOf('daily')  // Some("sv/daily")
+
+let _ = supervisor.register('adhoc', '临时流程', status: LoomStatus.COMPILED)  // 手动加一条
+let _ = supervisor.unregister('adhoc')                                        // 手动摘掉
 ```
 
 | 行为 | 说明 |
 |---|---|
-| 登记 | `execute` / `confirmFlow` 落库后自动登记；`delete` 自动摘除；重启时按流程库重建 |
+| 登记 | `execute` / `confirmFlow` 落库后自动登记；`delete` 自动摘除；`clarifying` 不登记（无源码不可执行） |
 | 选路 | 只把 `compiled` 流程的名称/描述/事件名发给模型；非 JSON、空名、不在表内一律按无可用处理 |
+| 事件名 | `sv/<流程名>`，与内部 tag `loom/<name>#<seq>` 区分 |
 | 无可用 | `llm_loomOnNoUsable=false` → 返回「没有可完成此工作的流程」；`true` → 自动编排、登记并执行 |
+| 存储不可用 | 启动不中断：`LoomBootstrap.startup(...)` 返回 `restoreFailed=true`，路由表为空但流程服务可用 |
 | 关闭态 | 零开销：不注册、不选路、不产生额外模型调用 |
 
 ---
@@ -666,6 +693,7 @@ cjpm test                 # 真库用例连得上就跑，连不上打印 SKIP �
 | `doc/known-limitations.md` | 已知限制（配置只读、并发、成本等） |
 | `doc/dev-env.md` | 开发环境与依赖 |
 | `doc/todo.md` | 未实现项 |
+| `doc/spec/add-loom-supervisor/` | 流程路由的规格副本（proposal / spec / design / tasks） |
 
 ---
 

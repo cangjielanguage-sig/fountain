@@ -8,6 +8,7 @@ A large-model engineering library for Cangjie, part of the [fountain](../) repos
 | Storage (content / metadata / evolution families) | `fountain::f_llm.store.Stores` |
 | Memory, knowledge, skills, personas, prompts | `MemoryStore` / `KnowledgeStore` / `MetaStore` |
 | loom orchestration (text → flow → execution) | `fountain::f_llm.loom.LoomWiring` |
+| Flow routing (a description → the flow that handles it) | `fountain::f_llm.loom.Supervisor` |
 | Skill evolution (experience → skill, with A/B gate) | `fountain::f_llm.loom.SkillEvolutionJob` |
 | Retrieval quality evaluation | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
@@ -25,7 +26,7 @@ src/
 ├── embedding/      BGE-M3 embeddings: Embedding facade, HTTP transports, three-way encoding
 ├── store/          store contracts and implementations (f_store / f_hydra / fhydra / postgres / mysql / inMemory)
 ├── dao/            SQL statements (postgres / mysql)
-├── loom/           flow orchestration, store gateway, skill evolution, retrieval evaluation
+├── loom/           flow orchestration, Supervisor routing, store gateway, skill evolution, retrieval evaluation
 ├── memory/         memory summaries and extraction (FaithfulMemory / ExperienceExtractor / IndividualityExtractor)
 ├── search/         web search providers
 ├── tool/           function-calling framework and built-in tools
@@ -476,25 +477,51 @@ Flows registered by `scheduleCreate` run through `LoomScheduler` (`TicktockSched
 
 ### Flow routing (Supervisor)
 
-Once there are many flows, callers no longer need to remember which one handles what: turn on `llm_supervisor` and compiled flows register as routing targets, with a model deciding which flow a description belongs to.
+Once there are many flows, callers no longer need to remember which one handles what: turn on `llm_supervisor` and every flow that compiles becomes a routing target, with a model deciding which flow a description belongs to.
 
 ```bash
 export llm_supervisor=true        # enable routing; each flow maps to a unique event sv/<flow-name>
-export llm_loomOnNoUsable=true    # optional: auto-build and run a new flow when none fits
+export llm_loomOnNoUsable=true    # optional: auto-build and run a new flow when none fits (default off)
 ```
 
 ```cangjie
-// description → routing → dispatch (the description becomes event data, reaching the first step as {start.output})
-let outcome = Supervisor.current().getOrThrow().dispatch('summarise today's commits')
-println(outcome.kind)   // dispatched | created | noUsableFlow | clarifying
-println(outcome.flow)   // chosen flow (for created: the generated auto-<timestamp>)
+// LoomWiring.wire assembles it when the switch is on: routes seeded from compiled flows, rebuilt from the store on restart
+let service = LoomWiring.wire(chat, plannerModel: 'deepseek-flash')
+
+// dispatch: description → routing → execution (the description is the start event data, reaching the first step as {start.output})
+let supervisor = Supervisor.current().getOrThrow()
+let outcome = supervisor.dispatch('summarise today's commits')
+println(outcome.kind)     // dispatched | created | noUsableFlow | clarifying
+println(outcome.flow)     // chosen flow (for created: the generated auto-<seconds>)
+println(outcome.event)    // the Supervisor event actually used: sv/<flow-name>
+println(outcome.message)  // fixed message when nothing can handle it
+```
+
+| `outcome.kind` | Meaning | `result` |
+|---|---|---|
+| `dispatched` | An existing flow matched and finished | `Some(Event)` |
+| `created` | A new flow was built, registered and finished | `Some(Event)` |
+| `clarifying` | The auto-built flow needs more information | `None` (questions are stored) |
+| `noUsableFlow` | Nothing usable (including unusable routing output) | `None` |
+
+The route table can be changed at runtime:
+
+```cangjie
+supervisor.routes()          // every route: name / description / event / status
+supervisor.routable()        // only compiled ones, i.e. what routing may pick
+supervisor.eventOf('daily')  // Some("sv/daily")
+
+let _ = supervisor.register('adhoc', 'temporary flow', status: LoomStatus.COMPILED)
+let _ = supervisor.unregister('adhoc')
 ```
 
 | Behaviour | Notes |
 |---|---|
-| Registration | `execute` / `confirmFlow` register on commit; `delete` unregisters; rebuilt from the flow store on startup |
+| Registration | `execute` / `confirmFlow` register on commit; `delete` unregisters; `clarifying` is skipped (no source, cannot run) |
 | Routing | Only `compiled` flows (name/description/event) go to the model; non-JSON, blank or unknown names count as "no usable flow" |
+| Event name | `sv/<flow-name>`, kept apart from the internal tag `loom/<name>#<seq>` |
 | No usable flow | `llm_loomOnNoUsable=false` → returns "没有可完成此工作的流程"; `true` → plan, register and run a new flow |
+| Store unavailable | Startup continues: `LoomBootstrap.startup(...)` reports `restoreFailed=true`, routes are empty but the flow service still works |
 | Disabled | Zero overhead: no registration, no routing, no extra model calls |
 
 ---
@@ -655,6 +682,7 @@ Integration tests probe connectivity and skip themselves when the database is un
 | `doc/known-limitations.md` | Known limitations |
 | `doc/dev-env.md` | Development environment |
 | `doc/todo.md` | Open items |
+| `doc/spec/add-loom-supervisor/` | Spec copies for flow routing (proposal / spec / design / tasks) |
 
 ---
 
