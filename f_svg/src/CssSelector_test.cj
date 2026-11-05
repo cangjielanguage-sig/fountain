@@ -74,6 +74,18 @@ public class CssSelector_test {
         @Assert(selectorMatches(".inner rect", rect))
         @Assert(!selectorMatches(".other rect", rect))
         @Assert(!selectorMatches("g > circle", rect))
+
+        let chain = CssSelector.parse("svg > g rect.a")
+        @Assert(chain.parts.size == 3)
+        @Assert(chain.parts[0].combinator.isNone())
+        match (chain.parts[1].combinator) {
+            case Some(value) => @Assert(value == CssCombinator.Child)
+            case None => @Fail("第二个选择器部分应记录子代组合符")
+        }
+        match (chain.parts[2].combinator) {
+            case Some(value) => @Assert(value == CssCombinator.Descendant)
+            case None => @Fail("第三个选择器部分应记录后代组合符")
+        }
     }
 
     /** 特异性累加与 `*` 不计。 */

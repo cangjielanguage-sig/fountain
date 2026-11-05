@@ -44,11 +44,13 @@ public struct CssSelectorPart <: ToString {
     public let typeName: ?String
     public let id: ?String
     public let classes: Array<String>
+    public let combinator: ?CssCombinator
 
-    init(typeName: ?String, id: ?String, classes: Array<String>) {
+    init(typeName: ?String, id: ?String, classes: Array<String>, combinator: ?CssCombinator) {
         this.typeName = typeName
         this.id = id
         this.classes = classes
+        this.combinator = combinator
     }
 
     public func toString(): String {
@@ -178,7 +180,14 @@ public class CssSelector <: ToString {
             if (i == startIndex) {
                 throw invalidValue("无法解析选择器「${text}」")
             }
-            parts.add(buildCssSelectorPart(trimmed, startIndex, i))
+            parts.add(
+                buildCssSelectorPart(
+                    trimmed,
+                    startIndex,
+                    i,
+                    if (parts.size == 0) { None } else { Some(combinators[parts.size - 1]) }
+                )
+            )
             sawWhitespace = false
             let afterPart = i
             i = skipCssSpaces(bytes, i)
@@ -284,7 +293,12 @@ private func parseCssSelectorPart(bytes: Array<Byte>, start: Int64): Int64 {
     i
 }
 
-private func buildCssSelectorPart(text: String, start: Int64, end: Int64): CssSelectorPart {
+private func buildCssSelectorPart(
+    text: String,
+    start: Int64,
+    end: Int64,
+    combinator: ?CssCombinator
+): CssSelectorPart {
     let bytes = text.unsafeBytes()
     var i = start
     var typeName: ?String = None
@@ -313,7 +327,7 @@ private func buildCssSelectorPart(text: String, start: Int64, end: Int64): CssSe
             classes.add(name)
         }
     }
-    CssSelectorPart(typeName, id, classes.toArray())
+    CssSelectorPart(typeName, id, classes.toArray(), combinator)
 }
 
 /** 复合选择器与单个元素匹配：类型、id、全部 class 词。 */
