@@ -434,7 +434,15 @@ public class SvgStyleResolver <: ToString {
                     return Some("none")
                 }
                 match (parseSvgLengthList(trimmed)) {
-                    case Some(list) => return Some(formatSvgLengthList(list))
+                    case Some(list) =>
+                        let out = StringBuilder()
+                        for (index in 0..list.size) {
+                            if (index > 0) {
+                                out.append(",")
+                            }
+                            out.append(resolveFontRelativeLength(list[index], fontSizePx))
+                        }
+                        return Some(out.toString())
                     case None => return None
                 }
             case "clip-path" | "mask" =>

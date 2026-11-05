@@ -301,6 +301,16 @@ public class SvgComputedStyle_test {
             }
         }
         @Assert(fontWarning)
+
+        let dash = SvgRect()
+        dash.style = "font-size: 16px; stroke-dasharray: 2em 1ex"
+        let dashStyle = styleOf(computeTree(dash), dash)
+        let dashRaw = dashStyle.get("stroke-dasharray") ?? ""
+        @Assert(dashRaw != "2em,1ex")
+        let dashValues = dashStyle.strokeDashArray()
+        @Assert(dashValues.size == 2)
+        @Assert(near(dashValues[0].value, 32.0))
+        @Assert(near(dashValues[1].value, 8.0))
     }
 
     /** `<style>` 收集、外部样式表合并顺序与计算不修改文档。 */
