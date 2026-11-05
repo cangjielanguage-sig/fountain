@@ -565,3 +565,38 @@ CRITICAL=7
 - 结论：本轮范围内 **CRITICAL = 0，选定 WARNING = 0**；剩余已知限制见第 3 节与上文 §2.2/§2.3。
 
 CRITICAL=0
+
+## 7. 修复结果（第二轮）
+
+> 依据 `fix-plan-2.md`：每项先写失败用例（Red），确认失败原因后写最小实现（Green），全量通过后独立提交。
+> 分支 `feature/f_svg`；第 3 节记录不改项（W6、W8、W15、W16、W18 与 S1–S6）未改动。
+
+| 编号 | 状态 | 修复内容 | 验证用例 | 提交 |
+|---|---|---|---|---|
+| C4 | 已修复 | `SvgPatternSampler.sample` / `SvgRenderTreeBuilder.build` 在无外部会话时自建守卫；pattern 子内容与 marker 展开复用同一 `SvgRenderGuard` 与解码预算 | `SvgContentCycleM3_test.publicSamplerContentCycle` / `publicSamplerDepthLimit` / `publicBuilderContentCycle` / `publicBuilderDepthLimit` | `43445824` |
+| C6 | 已修复 | 删除 32 条固定子扫描线；按行内顶点 / 交点事件分割子区间，逐像素列积分 `∫(clip(xRight)-clip(xLeft))dy`，nonzero / evenodd 独立判定；参考图改为同一几何的 64× 超采样 | `SvgAnalyticRasterizer_test.diagonalCoverageConservation` / `thinFeatureCoverage` / `circleMatchesSupersampling`；`SvgAnalyticComplexM3_test.donutMatchesDenseReference` / `selfIntersectionAreaDiffers` | `3d10e0c9` |
+| N1 | 已修复 | `SvgTextPathLayout.pathEmpty` 区分“路径为空”与“有效路径全截断”；后者保持空排版，不回退水平文本；文本警告在空 outline 时也会上报 | `SvgTextPathEmptyM3_test.shortValidPathDrawsNothing` / `startOffsetAtEndDrawsNothing` | `c9e42e48` |
+| N2 | 已修复 | pattern / marker 的 `enter` 全部配对 `try { … } finally { leave() }`；同一 renderer 触发 `Limit` 后可继续正常渲染 | `SvgContentCycleM3_test.guardRecoversAfterLimit` | `d4e7ab87` |
+| N3 | 已修复 | `feTile` 以输入缓冲完整宽高为 tile 周期（含透明 padding），不再按非透明内容包围盒定周期 | `SvgFilterTileChainM3_test.fullBufferIsTilePeriod` / `tileRepeatsAcrossRegion` | `2db715ef` |
+| N4 | 已修复 | 渲染阶段文本改用 `SvgGeometry.renderBounds`：缺字时仍返回占位字形布局包围盒；公开 `SvgGeometry.bounds` 缺字返回 `None` 的契约不变 | `SvgElementFilterM3_test.missingGlyphTextSurvivesFilter` | `f440e3a8` |
+| W2 | 已修复 | objectBoundingBox / userSpaceOnUse 原语量在包围盒尺寸之外再乘 CTM 缩放分量，修正 dpr / viewBox 下的模糊半径与偏移 | `SvgFilterPrimitiveUnitsM3_test.primitiveUnitsMultiplyCtmScale` | `7e5952f9` |
+| W14 | 已修复 | M3 delta 的 image 占位语义与实现 / README 对齐：未注入资源绘制透明占位，设置 `background` 时按 M2 用背景色填充 | 文档（`specs/svg-render-pipeline/spec.md`） | `ff5f0773` |
+| W17 | 已修复 | `tasks.md` 13.1 / 15.7 改为按 §2.2 判定列记录；`verification.md` §2.1 / §2.2 / §5 更新为本轮实测（0 失败），同时消除 §2.2 与第 6 节的旧结论冲突（N5） | 文档 | `7cf7a8fdd` |
+| W19 | 已修复 | `userSpaceOnUse` 百分比改用逆变换得到的用户空间视口尺寸求值，再统一应用 CTM，dpr / viewBox 下不再二次缩放 | `SvgFilterPercentRegionM3_test.userSpacePercentUsesUserViewport` | `a43f0c75` |
+| W21 | 已修复 | textPath 缺失 / 空路径降级 warning 补齐 `${location}` 元素路径 | `SvgTextWarningLocationM3_test.missingHrefWarningContainsLocation` | `cfaca91d` |
+
+补充说明：
+
+- C6 的验收基准由 4× 点采样改为同一扁平化几何的 64× 参考图；4× 采样自身量化误差可达约 15/255，不能作为 2/255 判据。规格 `specs/svg-rasterization/spec.md` 的 Scenario 文字已同步。
+- N1 同时修正了文本 outline 为空时警告被提前 `return` 丢弃的问题；正常文本输出未受影响。
+- W14 / W17 为文档项，无代码变更；其余每项均为独立提交。
+
+### 7.1 最终数据
+
+- `cjpm test`：**525 / 525 通过，0 skipped，0 error，0 failed**。
+- `cjpm build`：成功；`f_svg/src` 自身 warning 数为 **0**（22 条 warning 全部来自依赖模块）。
+- M1/M2 逐字节基线：`SvgSceneByteBaseline_test` 6 个场景以容差 0 全部通过，未改写快照。
+- 覆盖判定：`verification.md` §2.2 更新为 113 条映射中 99 通过 / 14 部分覆盖（已知限制）/ 0 失败。
+- 结论：本轮范围内 **CRITICAL = 0，选定 WARNING = 0**。
+
+CRITICAL=0
