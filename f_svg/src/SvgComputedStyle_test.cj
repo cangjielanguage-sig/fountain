@@ -250,6 +250,13 @@ public class SvgComputedStyle_test {
         let inheritedStyle = styleOf(inherited.compute(root), child)
         @Assert(inheritedStyle.get("fill") == Some("#ff0000"))
         @Assert(inheritedStyle.opacity() == 1.0)
+        var located = false
+        for (warning in inherited.warnings) {
+            if (warning.contains("/svg[1]/g[1]/rect[1]") && warning.contains("fill")) {
+                located = true
+            }
+        }
+        @Assert(located)
     }
 
     /** `<style>` 收集、外部样式表合并顺序与计算不修改文档。 */

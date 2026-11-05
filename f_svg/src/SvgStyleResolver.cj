@@ -175,6 +175,7 @@ public class SvgStyleResolver <: ToString {
 
     private func cascade(element: SvgElement, parent: ?SvgComputedStyle): SvgComputedStyle {
         let best = HashMap<String, CssCandidate>()
+        let elementPath = element.elementPath()
         this.considerPresentation(element, best)
         this.considerSheet(element, best)
         this.considerInline(element, best)
@@ -203,7 +204,7 @@ public class SvgStyleResolver <: ToString {
                     }
             }
             raw = resolveCssKeyword(raw, spec, parent)
-            var normalized = this.normalizeValue(name, raw, parent)
+            var normalized = this.normalizeValue(name, raw, parent, elementPath)
             match (normalized) {
                 case Some(_) => ()
                 case None =>
@@ -216,11 +217,11 @@ public class SvgStyleResolver <: ToString {
                     } else {
                         raw = spec.initial
                     }
-                    normalized = this.normalizeValue(name, raw, parent)
+                    normalized = this.normalizeValue(name, raw, parent, elementPath)
                     if (normalized.isNone()) {
-                        normalized = this.normalizeValue(name, spec.initial, parent)
+                        normalized = this.normalizeValue(name, spec.initial, parent, elementPath)
                     }
-                    this.warnings.add("属性「${name}」的值「${original}」不合法，已回退")
+                    this.warnings.add("元素「${elementPath}」属性「${name}」的值「${original}」不合法，已回退")
             }
             values[name] = normalized ?? spec.initial
             sources[name] = source
@@ -316,14 +317,19 @@ public class SvgStyleResolver <: ToString {
         }
     }
 
-    private func normalizeValue(name: String, raw: String, parent: ?SvgComputedStyle): ?String {
+    private func normalizeValue(
+        name: String,
+        raw: String,
+        parent: ?SvgComputedStyle,
+        elementPath: String
+    ): ?String {
         let trimmed = raw.trimAscii()
         if (trimmed.size == 0) {
             return None
         }
         let lower = trimmed.toAsciiLower()
         match (name) {
-            case "fill" | "stroke" => return this.normalizePaint(name, trimmed)
+            case "fill" | "stroke" => return this.normalizePaint(name, trimmed, elementPath)
             case "color" =>
                 if (lower == "currentcolor") {
                     match (parent) {
@@ -441,12 +447,12 @@ public class SvgStyleResolver <: ToString {
         }
     }
 
-    private func normalizePaint(name: String, text: String): ?String {
+    private func normalizePaint(name: String, text: String, elementPath: String): ?String {
         try {
             Some(SvgPaint.parse(text).toString())
         } catch (error: SvgException) {
             if (error.kind == SvgErrorKind.Security) {
-                this.warnings.add("属性「${name}」的外部画笔引用已按 none 处理：${text}")
+                this.warnings.add("元素「${elementPath}」属性「${name}」的外部画笔引用已按 none 处理：${text}")
                 Some("none")
             } else {
                 None
