@@ -236,6 +236,20 @@ public class SvgComputedStyle_test {
         @Assert(fragmentStyle.fill().kind == SvgPaintKind.Reference)
         @Assert(fragmentStyle.fill().reference == Some("#grad"))
         @Assert(fragment.warnings.size == 0)
+
+        let root = SvgRoot()
+        let parent = SvgElement("g")
+        parent.setAttr("fill", "red")
+        parent.setAttr("opacity", "0.5")
+        let child = SvgRect()
+        parent.appendElement(child)
+        root.appendElement(parent)
+        let inherited = SvgStyleResolver(sheet: CssStyleSheet.parse(
+            "rect { fill: bogus; opacity: nope }"
+        ))
+        let inheritedStyle = styleOf(inherited.compute(root), child)
+        @Assert(inheritedStyle.get("fill") == Some("#ff0000"))
+        @Assert(inheritedStyle.opacity() == 1.0)
     }
 
     /** `<style>` 收集、外部样式表合并顺序与计算不修改文档。 */

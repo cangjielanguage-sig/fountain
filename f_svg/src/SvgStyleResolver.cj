@@ -207,8 +207,20 @@ public class SvgStyleResolver <: ToString {
             match (normalized) {
                 case Some(_) => ()
                 case None =>
-                    normalized = this.normalizeValue(name, spec.initial, parent)
-                    this.warnings.add("属性「${name}」的值「${raw}」不合法，已回退初始值")
+                    let original = raw
+                    if (spec.inherited) {
+                        match (parent) {
+                            case Some(parentStyle) => raw = parentStyle.get(name) ?? spec.initial
+                            case None => raw = spec.initial
+                        }
+                    } else {
+                        raw = spec.initial
+                    }
+                    normalized = this.normalizeValue(name, raw, parent)
+                    if (normalized.isNone()) {
+                        normalized = this.normalizeValue(name, spec.initial, parent)
+                    }
+                    this.warnings.add("属性「${name}」的值「${original}」不合法，已回退")
             }
             values[name] = normalized ?? spec.initial
             sources[name] = source
