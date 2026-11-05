@@ -187,7 +187,7 @@ public class SvgTimeline {
 
     public func sample(time: Float64): SvgDocument {
         let snapshot = cloneSvgDocument(this.document)
-        for (spec in this.specs) {
+        for (spec in sortedAnimationSpecsByBegin(this.specs)) {
             let target = match (this.resolveTarget(snapshot, spec)) {
                 case Some(value) => value
                 case None => continue
@@ -986,6 +986,27 @@ private func distanceBetween(first: SvgPoint, second: SvgPoint): Float64 {
     let dx = second.x - first.x
     let dy = second.y - first.y
     sqrt(dx * dx + dy * dy)
+}
+
+/** 稳定升序：`begin` 相等时保持文档顺序，保证后开始者最后应用。 */
+private func sortedAnimationSpecsByBegin(specs: Array<SvgAnimationSpec>): Array<SvgAnimationSpec> {
+    let count = specs.size
+    let used = Array<Bool>(count, repeat: false)
+    let result = ArrayList<SvgAnimationSpec>()
+    for (_ in 0..count) {
+        var best = -1
+        for (index in 0..count) {
+            if (used[index]) {
+                continue
+            }
+            if (best < 0 || specs[index].begin < specs[best].begin) {
+                best = index
+            }
+        }
+        used[best] = true
+        result.add(specs[best])
+    }
+    result.toArray()
 }
 
 private func maxFloat(first: Float64, second: Float64): Float64 {

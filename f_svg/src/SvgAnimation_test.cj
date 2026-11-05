@@ -357,6 +357,26 @@ public class SvgAnimation_test {
         @Assert(near(parseNumericAttribute(siblingRects[1].attr("x")), 5.0))
     }
 
+    /** 同一元素多个动画按 begin 升序应用，后开始者覆盖先开始者。 */
+    @TestCase
+    public func beginOrdering(): Unit {
+        let document = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" from="0" to="100" begin="1s" dur="2s"/>' +
+            '<animate attributeName="x" from="0" to="10" begin="0s" dur="2s"/>' +
+            '</rect>'
+        )
+        @Assert(near(parseNumericAttribute(Some(sampleAttribute(document, 1.5, "r", "x"))), 25.0))
+
+        let sameBegin = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" from="0" to="10" dur="1s"/>' +
+            '<animate attributeName="x" from="0" to="20" dur="1s"/>' +
+            '</rect>'
+        )
+        @Assert(near(parseNumericAttribute(Some(sampleAttribute(sameBegin, 0.5, "r", "x"))), 10.0))
+    }
+
     /** 数值列表插值、by、additive、accumulate 与长度不等补齐。 */
     @TestCase
     public func numericListInterpolation(): Unit {
