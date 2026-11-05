@@ -33,6 +33,10 @@ internal func sampleAttribute(document: SvgDocument, time: Float64, id: String, 
     }
 }
 
+internal func numericListOf(text: String): Array<Float64> {
+    tryParseSvgNumberArray(text.replace(",", " ")) ?? Array<Float64>()
+}
+
 internal func sampleTransformMatrix(document: SvgDocument, time: Float64, id: String): SvgMatrix {
     let text = sampleAttribute(document, time, id, "transform")
     if (text == "<missing>" || text == "<missing-element>") {
@@ -351,6 +355,52 @@ public class SvgAnimation_test {
         @Assert(siblingRects.size == 2)
         @Assert(siblingRects[0].attr("x").isNone())
         @Assert(near(parseNumericAttribute(siblingRects[1].attr("x")), 5.0))
+    }
+
+    /** 数值列表插值、by、additive、accumulate 与长度不等补齐。 */
+    @TestCase
+    public func numericListInterpolation(): Unit {
+        let document = animationDoc(
+            '<rect id="r" points="0 0" width="10" height="10">' +
+            '<animate attributeName="points" from="0 0" to="10 20" dur="1s" fill="freeze"/></rect>'
+        )
+        let middle = numericListOf(sampleAttribute(document, 0.5, "r", "points"))
+        @Assert(middle.size == 2)
+        @Assert(near(middle[0], 5.0) && near(middle[1], 10.0))
+
+        let byDocument = animationDoc(
+            '<rect id="r" points="10 20" width="10" height="10">' +
+            '<animate attributeName="points" by="1 2" dur="2s" fill="freeze"/></rect>'
+        )
+        let byResult = numericListOf(sampleAttribute(byDocument, 2.0, "r", "points"))
+        @Assert(byResult.size == 2)
+        @Assert(near(byResult[0], 11.0) && near(byResult[1], 22.0))
+
+        let additiveDocument = animationDoc(
+            '<rect id="r" points="10 20" width="10" height="10">' +
+            '<animate attributeName="points" from="0 0" to="10 20" dur="2s" additive="sum" fill="freeze"/>' +
+            '</rect>'
+        )
+        let additiveResult = numericListOf(sampleAttribute(additiveDocument, 2.0, "r", "points"))
+        @Assert(additiveResult.size == 2)
+        @Assert(near(additiveResult[0], 20.0) && near(additiveResult[1], 40.0))
+
+        let accumulateDocument = animationDoc(
+            '<rect id="r" points="0 0" width="10" height="10">' +
+            '<animate attributeName="points" from="0 0" to="10 20" dur="1s" repeatCount="2" ' +
+            'accumulate="sum" fill="freeze"/></rect>'
+        )
+        let accumulateResult = numericListOf(sampleAttribute(accumulateDocument, 1.5, "r", "points"))
+        @Assert(accumulateResult.size == 2)
+        @Assert(near(accumulateResult[0], 15.0) && near(accumulateResult[1], 30.0))
+
+        let unevenDocument = animationDoc(
+            '<rect id="r" points="0" width="10" height="10">' +
+            '<animate attributeName="points" from="0 0" to="10 20 30" dur="1s" fill="freeze"/></rect>'
+        )
+        let uneven = numericListOf(sampleAttribute(unevenDocument, 0.5, "r", "points"))
+        @Assert(uneven.size == 3)
+        @Assert(near(uneven[0], 5.0) && near(uneven[1], 10.0) && near(uneven[2], 15.0))
     }
 
     /** 深拷贝保留具体子类、elementById 可用，原文档不变。 */

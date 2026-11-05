@@ -38,10 +38,10 @@ public class SvgInterpolator_test {
         @Assert(near(same[0], 5.0) && near(same[1], 15.0))
         let mixed = SvgInterpolator.numericList([0.0], [10.0, 20.0], 0.5)
         @Assert(mixed.size == 2)
-        @Assert(near(mixed[0], 5.0) && near(mixed[1], 20.0))
+        @Assert(near(mixed[0], 5.0) && near(mixed[1], 10.0))
         let reversed = SvgInterpolator.numericList([10.0, 20.0], [0.0], 0.5)
         @Assert(reversed.size == 2)
-        @Assert(near(reversed[0], 5.0) && near(reversed[1], 20.0))
+        @Assert(near(reversed[0], 5.0) && near(reversed[1], 10.0))
     }
 
     /** 颜色插值与路径结构一致 / 不一致。 */

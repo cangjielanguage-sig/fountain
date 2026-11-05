@@ -267,18 +267,15 @@ public class SvgTimeline {
         var value = evaluateKeyframeValue(spec, state.progress, base, this.warnings)
         if (spec.accumulate && state.iteration > 0) {
             let frames = effectiveFrames(spec, base)
-            match ((tryParseSvgFloat(value), tryParseSvgFloat(frames[0]), tryParseSvgFloat(frames[frames.size - 1]))) {
-                case (Some(current), Some(first), Some(last)) =>
-                    value = formatSvgNumber(current + (last - first) * Float64(state.iteration))
-                case _ => ()
-            }
+            value = accumulateAnimationValue(
+                value,
+                frames[0],
+                frames[frames.size - 1],
+                state.iteration
+            ) ?? value
         }
         if (spec.additive) {
-            match ((tryParseSvgFloat(value), tryParseSvgFloat(base))) {
-                case (Some(current), Some(baseNumber)) =>
-                    value = formatSvgNumber(current + baseNumber)
-                case _ => ()
-            }
+            value = addAnimationNumberLists(value, base) ?? value
         }
         target.setAttr(spec.attributeName, value)
     }
@@ -668,14 +665,71 @@ private func effectiveFrames(spec: SvgAnimationSpec, base: String): Array<String
         case Some(value) => value
         case None => match (spec.element.attr("by")) {
             case Some(byValue) =>
-                match ((tryParseSvgFloat(from), tryParseSvgFloat(byValue))) {
-                    case (Some(fromNumber), Some(byNumber)) => formatSvgNumber(fromNumber + byNumber)
-                    case _ => from
-                }
+                addAnimationNumberLists(from, byValue) ?? from
             case None => from
         }
     }
     [from, to]
+}
+
+/** 数值列表按“较短列表用末值补齐”的规则逐项相加。 */
+private func addAnimationNumberLists(first: String, second: String): ?String {
+    match ((tryParseSvgNumberArray(first), tryParseSvgNumberArray(second))) {
+        case (Some(left), Some(right)) =>
+            let count = if (left.size > right.size) { left.size } else { right.size }
+            let result = Array<Float64>(count, repeat: 0.0)
+            for (index in 0..count) {
+                result[index] = paddedAnimationNumber(left, index) + paddedAnimationNumber(right, index)
+            }
+            Some(formatAnimationNumberList(result))
+        case _ => None
+    }
+}
+
+/** `accumulate` 的列表叠加：当前值 +（末帧 - 首帧）× 轮次。 */
+private func accumulateAnimationValue(
+    value: String,
+    first: String,
+    last: String,
+    iteration: Int64
+): ?String {
+    match ((tryParseSvgNumberArray(value), tryParseSvgNumberArray(first), tryParseSvgNumberArray(last))) {
+        case (Some(current), Some(start), Some(end)) =>
+            let count = maxAnimationNumberSize(current.size, maxAnimationNumberSize(start.size, end.size))
+            let result = Array<Float64>(count, repeat: 0.0)
+            for (index in 0..count) {
+                result[index] = paddedAnimationNumber(current, index) +
+                    (paddedAnimationNumber(end, index) - paddedAnimationNumber(start, index)) *
+                        Float64(iteration)
+            }
+            Some(formatAnimationNumberList(result))
+        case _ => None
+    }
+}
+
+private func paddedAnimationNumber(values: Array<Float64>, index: Int64): Float64 {
+    if (index < values.size) {
+        return values[index]
+    }
+    if (values.size > 0) {
+        return values[values.size - 1]
+    }
+    0.0
+}
+
+private func maxAnimationNumberSize(first: Int64, second: Int64): Int64 {
+    if (first > second) { first } else { second }
+}
+
+private func formatAnimationNumberList(values: Array<Float64>): String {
+    let out = StringBuilder()
+    for (index in 0..values.size) {
+        if (index > 0) {
+            out.append(" ")
+        }
+        out.append(formatSvgNumber(values[index]))
+    }
+    out.toString()
 }
 
 private func effectiveKeyTimes(
@@ -786,6 +840,11 @@ private func interpolateAnimationValue(
     match ((tryParseSvgFloat(from), tryParseSvgFloat(to))) {
         case (Some(first), Some(second)) =>
             return formatSvgNumber(SvgInterpolator.numeric(first, second, local, mode: mode))
+        case _ => ()
+    }
+    match ((tryParseSvgNumberArray(from), tryParseSvgNumberArray(to))) {
+        case (Some(first), Some(second)) =>
+            return formatAnimationNumberList(SvgInterpolator.numericList(first, second, local, mode: mode))
         case _ => ()
     }
     match ((SvgColor.tryParse(from), SvgColor.tryParse(to))) {

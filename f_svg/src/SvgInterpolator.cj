@@ -72,12 +72,15 @@ public class SvgInterpolator {
     ): Array<Float64> {
         let count = if (from.size > to.size) { from.size } else { to.size }
         let result = Array<Float64>(count, repeat: 0.0)
-        let common = if (from.size < to.size) { from.size } else { to.size }
-        for (index in 0..common) {
-            result[index] = numeric(from[index], to[index], t, mode: mode)
+        if (count == 0) {
+            return result
         }
-        for (index in common..count) {
-            result[index] = if (from.size > to.size) { from[index] } else { to[index] }
+        let fromLast = if (from.size > 0) { from[from.size - 1] } else { 0.0 }
+        let toLast = if (to.size > 0) { to[to.size - 1] } else { 0.0 }
+        for (index in 0..count) {
+            let first = if (index < from.size) { from[index] } else { fromLast }
+            let second = if (index < to.size) { to[index] } else { toLast }
+            result[index] = numeric(first, second, t, mode: mode)
         }
         result
     }
