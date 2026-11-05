@@ -550,6 +550,12 @@ CRITICAL=7
 | W21 | 已修复 | 文本 rotate 与 textPath 类 warning 附带 `/svg[i]/...` 元素路径 | `SvgTextWarningLocationM3_test` |
 | W22 | 已修复 | README provider 示例说明 `mem://` 需 `unsafePolicy: Keep` | 文档（中英文） |
 
+补充说明：
+
+- C6 的逐像素 `2/255` 校验使用 128×128 高密度参考覆盖率。4×4 点采样自身在圆边界可达约 15/255 的量化误差，不能作为 `2/255` 的判据；解析算法的正确性仍以同一几何的高密度参考为准。
+- W3 的分配顺序改动没有可观测的 API 差异，`SvgFilterRegionOrderM3_test` 作为 Limit 行为回归用例保留。
+- W4 的 warning 由 `SvgComputedStyle` 属性校验路径产生，本轮只补测试锁定行为，未改实现。
+
 ### 6.1 复验数据
 
 - `cjpm test`：**512 / 512 通过，0 skipped，0 error，0 failed**。
