@@ -22,6 +22,7 @@
 | M1 范围    | 值类型、模型、解析、生成、安全过滤、往返一致性                                        |
 | M2 范围    | CSS 解析与级联、几何包围盒与视口、CPU 软件光栅、描边 / 渐变 / 裁剪 / 蒙版、文本、PNG、SMIL 动画   |
 | M3 范围    | 滤镜与 `fe*` 原语、图案、PNG 解码与 `<image>`、SVGZ、`textPath` / rotate、marker、解析覆盖率 AA |
+| M4 范围    | `clip` / `overflow` / `vector-effect`、剩余滤镜原语与光照、`pattern` 视口、基线 / 装饰 / 竖排 / TTF、`view` / `switch` / 锚点、路径长度与 CTM API |
 
 ---
 
