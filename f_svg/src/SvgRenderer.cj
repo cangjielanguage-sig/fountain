@@ -57,13 +57,29 @@ private class SvgRenderFrame {
 public class SvgRenderer {
     public let options: SvgRenderOptions
     public let warnings = ArrayList<String>()
+    private let sessionImages: ?SvgImageResource
+    private let sessionGuard: SvgRenderGuard
 
     public init(options!: SvgRenderOptions = SvgRenderOptions()) {
         this.options = options
+        this.sessionImages = None
+        this.sessionGuard = SvgRenderGuard()
+    }
+
+    /** 嵌套渲染（pattern tile / marker 内容）复用外层会话预算与引用守卫。 */
+    internal init(
+        options!: SvgRenderOptions,
+        sessionImages!: SvgImageResource,
+        sessionGuard!: SvgRenderGuard
+    ) {
+        this.options = options
+        this.sessionImages = Some(sessionImages)
+        this.sessionGuard = sessionGuard
     }
 
     public func render(document: SvgDocument): SvgBitmap {
         let builder = SvgRenderTreeBuilder()
+        builder.attachGuard(this.sessionGuard)
         let list = builder.build(document, options: this.options)
         for (warning in builder.warnings) {
             this.warnings.add(warning)
@@ -73,6 +89,7 @@ public class SvgRenderer {
 
     public func render(element: SvgElement, width!: Int64, height!: Int64): SvgBitmap {
         let builder = SvgRenderTreeBuilder()
+        builder.attachGuard(this.sessionGuard)
         let list = builder.buildElement(element, width, height, options: this.options)
         for (warning in builder.warnings) {
             this.warnings.add(warning)
@@ -97,11 +114,15 @@ public class SvgRenderer {
             case Some(value) => value
             case None => SvgFontRegistry.defaultRegistry()
         }
-        let images = SvgImageResource(
-            provider: this.options.images,
-            budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
-        )
+        let images = match (this.sessionImages) {
+            case Some(value) => value
+            case None => SvgImageResource(
+                provider: this.options.images,
+                budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
+            )
+        }
         let patterns = SvgPatternSampler(registry: this.options.fonts, root: Some(list.root))
+        patterns.attachSession(this.sessionGuard, images)
         let filters = SvgFilterRenderer(registry: this.options.fonts)
         for (command in list.commands) {
             match (command.kind) {

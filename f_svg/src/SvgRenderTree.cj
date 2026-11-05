@@ -171,6 +171,11 @@ private class SvgRenderTreeContext {
  */
 public class SvgRenderTreeBuilder {
     public let warnings = ArrayList<String>()
+    internal var guard: ?SvgRenderGuard = None
+
+    internal func attachGuard(value: SvgRenderGuard): Unit {
+        this.guard = Some(value)
+    }
 
     public func build(document: SvgDocument, options!: SvgRenderOptions = SvgRenderOptions()): SvgDisplayList {
         let root = document.root
@@ -237,7 +242,14 @@ public class SvgRenderTreeBuilder {
             fonts
         )
         this.walkChildren(container, context, commands)
-        SvgDisplayList(commands.toArray(), container, width, height, Float64(width), Float64(height))
+        SvgDisplayList(
+            commands.toArray(),
+            root ?? container,
+            width,
+            height,
+            Float64(width),
+            Float64(height)
+        )
     }
 
     public func buildElement(
@@ -690,6 +702,17 @@ public class SvgRenderTreeBuilder {
         }
         let base = context.matrix.multiply(elementTransformMatrix(shape))
         for (instance in instances) {
+            let active = match (this.guard) {
+                case Some(guard) => guard.enter(
+                    instance.marker.identity,
+                    "marker",
+                    this.warnings
+                )
+                case None => true
+            }
+            if (!active) {
+                continue
+            }
             let list = this.buildContent(
                 instance.marker,
                 Int64(context.width),
@@ -698,6 +721,10 @@ public class SvgRenderTreeBuilder {
                 context.fonts,
                 root: Some(context.root)
             )
+            match (this.guard) {
+                case Some(guard) => guard.leave()
+                case None => ()
+            }
             for (command in list.commands) {
                 commands.add(command)
             }

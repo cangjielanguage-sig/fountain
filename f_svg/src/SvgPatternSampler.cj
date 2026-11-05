@@ -89,10 +89,18 @@ public class SvgPatternSampler {
     private let registry: ?SvgFontRegistry
     private let root: ?SvgElement
     private let cache = HashMap<String, SvgPatternTile>()
+    private var guard: ?SvgRenderGuard = None
+    private var images: ?SvgImageResource = None
 
     public init(registry!: ?SvgFontRegistry = None, root!: ?SvgElement = None) {
         this.registry = registry
         this.root = root
+    }
+
+    /** 绑定一次渲染内的共享守卫与解码预算（不扩大公开 API）。 */
+    internal func attachSession(guard: SvgRenderGuard, images: SvgImageResource): Unit {
+        this.guard = Some(guard)
+        this.images = Some(images)
     }
 
     /** 返回可平铺 tile 位图；不合法时返回 `None`。 */
@@ -122,6 +130,27 @@ public class SvgPatternSampler {
             case Some(tile) => return Some(tile)
             case None => ()
         }
+        let active = match (this.guard) {
+            case Some(value) => value.enter(pattern.identity, "pattern", this.warnings)
+            case None => true
+        }
+        if (!active) {
+            return None
+        }
+        let result = this.sampleTileUncached(pattern, objectBounds, options, key)
+        match (this.guard) {
+            case Some(value) => value.leave()
+            case None => ()
+        }
+        result
+    }
+
+    private func sampleTileUncached(
+        pattern: SvgPattern,
+        objectBounds: SvgBounds,
+        options: SvgRenderOptions,
+        key: String
+    ): ?SvgPatternTile {
         let chain = this.resolveChain(pattern)
         if (chain.size == 0) {
             return None
@@ -191,7 +220,15 @@ public class SvgPatternSampler {
                     }
                     return None
                 }
-                let tileRenderer = SvgRenderer(options: options)
+                let tileRenderer = match ((this.images, this.guard)) {
+                    case (Some(imageResource), Some(sessionGuard)) =>
+                        SvgRenderer(
+                            options: options,
+                            sessionImages: imageResource,
+                            sessionGuard: sessionGuard
+                        )
+                    case _ => SvgRenderer(options: options)
+                }
                 let rendered = tileRenderer.renderDisplayList(list)
                 if (tileRenderer.warnings.size > 0) {
                     for (warning in tileRenderer.warnings) {
