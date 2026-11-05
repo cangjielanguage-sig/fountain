@@ -82,7 +82,7 @@ public class SvgRenderer {
         this.render(document).toPngBytes()
     }
 
-    private func renderDisplayList(list: SvgDisplayList): SvgBitmap {
+    internal func renderDisplayList(list: SvgDisplayList): SvgBitmap {
         this.options.validatePixels(list.width, list.height)
         let output = SvgBitmap(list.width, list.height)
         match (this.options.background) {
@@ -98,6 +98,7 @@ public class SvgRenderer {
             provider: this.options.images,
             budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
         )
+        let patterns = SvgPatternSampler(registry: this.options.fonts, root: Some(list.root))
         for (command in list.commands) {
             match (command.kind) {
                 case GroupBegin =>
@@ -144,7 +145,7 @@ public class SvgRenderer {
                         command.mask.isSome()
                     if (needsLayer) {
                         let layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
-                        this.renderCommand(layer, command, list, registry, images)
+                        this.renderCommand(layer, command, list, registry, images, patterns)
                         this.applyEffects(
                             layer,
                             command.clipRect,
@@ -156,9 +157,12 @@ public class SvgRenderer {
                         )
                         SvgGroupCompositor.composite(target, layer, 1.0)
                     } else {
-                        this.renderCommand(target, command, list, registry, images)
+                        this.renderCommand(target, command, list, registry, images, patterns)
                     }
             }
+        }
+        for (warning in patterns.warnings) {
+            this.warnings.add(warning)
         }
         output
     }
@@ -168,7 +172,8 @@ public class SvgRenderer {
         command: SvgDisplayCommand,
         list: SvgDisplayList,
         registry: SvgFontRegistry,
-        images: SvgImageResource
+        images: SvgImageResource,
+        patterns: SvgPatternSampler
     ): Unit {
         let style = match (command.style) {
             case Some(value) => value
@@ -176,9 +181,9 @@ public class SvgRenderer {
         }
         match (command.kind) {
             case FillPath =>
-                this.drawFill(bitmap, command, list, style)
+                this.drawFill(bitmap, command, list, style, patterns)
             case StrokePath =>
-                this.drawStroke(bitmap, command, list, style)
+                this.drawStroke(bitmap, command, list, style, patterns)
             case Text =>
                 let text = match (command.textElement) {
                     case Some(value) => value
@@ -201,8 +206,8 @@ public class SvgRenderer {
                     bounds: command.bounds,
                     opacity: command.opacity
                 )
-                this.drawFill(bitmap, textCommand, list, style)
-                this.drawStroke(bitmap, textCommand, list, style)
+                this.drawFill(bitmap, textCommand, list, style, patterns)
+                this.drawStroke(bitmap, textCommand, list, style, patterns)
             case Image =>
                 let box = match (command.bounds) {
                     case Some(value) => value
@@ -247,7 +252,8 @@ public class SvgRenderer {
         bitmap: SvgBitmap,
         command: SvgDisplayCommand,
         list: SvgDisplayList,
-        style: SvgComputedStyle
+        style: SvgComputedStyle,
+        patterns: SvgPatternSampler
     ): Unit {
         let path = match (command.path) {
             case Some(value) => value
@@ -255,14 +261,15 @@ public class SvgRenderer {
         }
         let paint = style.fill()
         let opacity = command.opacity * style.fillOpacity()
-        this.drawPaint(bitmap, command, list, style, path, paint, opacity, false)
+        this.drawPaint(bitmap, command, list, style, path, paint, opacity, false, patterns)
     }
 
     private func drawStroke(
         bitmap: SvgBitmap,
         command: SvgDisplayCommand,
         list: SvgDisplayList,
-        style: SvgComputedStyle
+        style: SvgComputedStyle,
+        patterns: SvgPatternSampler
     ): Unit {
         let path = match (command.path) {
             case Some(value) => value
@@ -270,7 +277,7 @@ public class SvgRenderer {
         }
         let paint = style.stroke()
         let opacity = command.opacity * style.strokeOpacity()
-        this.drawPaint(bitmap, command, list, style, path, paint, opacity, true)
+        this.drawPaint(bitmap, command, list, style, path, paint, opacity, true, patterns)
     }
 
     private func drawPaint(
@@ -281,7 +288,8 @@ public class SvgRenderer {
         path: SvgPathData,
         paint: SvgPaint,
         opacity: Float64,
-        isStroke: Bool
+        isStroke: Bool,
+        patterns: SvgPatternSampler
     ): Unit {
         if (opacity <= 0.0) {
             return
@@ -329,11 +337,64 @@ public class SvgRenderer {
                             )
                         }
                         return
+                    case None => ()
+                }
+                let pattern = findPatternById(Some(list.root), id)
+                match (pattern) {
+                    case Some(found) =>
+                        let box = command.bounds ?? SvgBounds.empty()
+                        let tile = match (patterns.sampleTile(found, box, this.options)) {
+                            case Some(value) => value
+                            case None => return
+                        }
+                        let raster = SvgRasterizer(
+                            bitmap,
+                            samplesPerPixel: this.options.samplesPerPixel
+                        )
+                        let inverse = match (command.matrix.invert()) {
+                            case Some(value) => value
+                            case None => SvgMatrix.identity
+                        }
+                        let shader = { x: Int64, y: Int64 =>
+                            tile.colorAt(inverse.apply(SvgPoint(Float64(x) + 0.5, Float64(y) + 0.5)))
+                        }
+                        if (isStroke) {
+                            let userContours = flattenPathData(path, SvgMatrix.identity, 0.25)
+                            let strokeStyle = SvgStrokeStyle(
+                                style.strokeWidth().value,
+                                lineCap: style.strokeLineCap(),
+                                lineJoin: style.strokeLineJoin(),
+                                miterLimit: style.strokeMiterLimit(),
+                                dashArray: strokeDashValues(style),
+                                dashOffset: style.strokeDashOffset().value
+                            )
+                            let outlines = SvgStrokeOutliner.outlineContours(userContours, strokeStyle)
+                            let transformed = ArrayList<Array<SvgPoint>>()
+                            for (contour in outlines) {
+                                let points = ArrayList<SvgPoint>()
+                                for (point in contour) {
+                                    points.add(command.matrix.apply(point))
+                                }
+                                transformed.add(points.toArray())
+                            }
+                            raster.fillContoursShader(
+                                transformed.toArray(),
+                                SvgFillRule.Nonzero,
+                                opacity,
+                                shader
+                            )
+                        } else {
+                            let contours = flattenPathData(path, command.matrix, 0.25)
+                            raster.fillContoursShader(contours, style.fillRule(), opacity, shader)
+                        }
+                        return
                     case None =>
                         this.warnings.add("画笔引用「#${id}」不存在")
                         match (paint.fallback) {
                             case Some(fallback) =>
-                                this.drawPaint(bitmap, command, list, style, path, fallback, opacity, isStroke)
+                                this.drawPaint(
+                                    bitmap, command, list, style, path, fallback, opacity, isStroke, patterns
+                                )
                                 return
                             case None => return
                         }

@@ -206,6 +206,35 @@ public class SvgRenderTreeBuilder {
         SvgDisplayList(commands.toArray(), root, outputWidth, outputHeight, logicalWidth, logicalHeight)
     }
 
+    /** 以给定初始矩阵渲染容器子内容（pattern tile 等内部复用）。 */
+    internal func buildContent(
+        container: SvgElement,
+        width: Int64,
+        height: Int64,
+        matrix: SvgMatrix,
+        options: SvgRenderOptions
+    ): SvgDisplayList {
+        let resolver = SvgStyleResolver()
+        let styles = resolver.compute(container)
+        for (warning in resolver.warnings) {
+            this.warnings.add(warning)
+        }
+        let commands = ArrayList<SvgDisplayCommand>()
+        let context = SvgRenderTreeContext(
+            matrix,
+            Float64(width),
+            Float64(height),
+            None,
+            styles,
+            container,
+            0,
+            Array<String>(),
+            options.fonts
+        )
+        this.walkChildren(container, context, commands)
+        SvgDisplayList(commands.toArray(), container, width, height, Float64(width), Float64(height))
+    }
+
     public func buildElement(
         element: SvgElement,
         width: Int64,
