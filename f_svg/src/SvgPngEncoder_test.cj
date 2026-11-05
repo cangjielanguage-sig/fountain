@@ -171,6 +171,26 @@ public class SvgPngEncoder_test {
         @Assert(bitmap.toPngBytes() == first)
     }
 
+    /** 每个 chunk 的存储 CRC 与重新计算结果一致。 */
+    @TestCase
+    public func chunkChecksums(): Unit {
+        let bytes = SvgPngEncoder.encode(rgba8Bitmap())
+        var offset = 8
+        var chunks = 0
+        while (offset + 12 <= bytes.size) {
+            let length = readU32BE(bytes, offset)
+            let dataEnd = offset + 8 + length
+            if (dataEnd + 4 > bytes.size) {
+                break
+            }
+            let stored = readU32BE(bytes, dataEnd)
+            @Assert(SvgCrc32.checksum(bytes[offset + 4..dataEnd]) == stored)
+            chunks++
+            offset = dataEnd + 4
+        }
+        @Assert(chunks == 3)
+    }
+
     /** 文件输出：正常保存与目录不存在抛 InvalidValue。 */
     @TestCase
     public func fileOutput(): Unit {
@@ -178,7 +198,7 @@ public class SvgPngEncoder_test {
         let path = Path("/tmp/f_svg_m2_png_test.png")
         bitmap.savePng(path)
         @Assert(exists(path))
-        @Assert(File.readFrom(path).size == bitmap.toPngBytes().size)
+        @Assert(File.readFrom(path) == bitmap.toPngBytes())
 
         let error = expectSvgException({=> bitmap.savePng(Path("/f_svg_no_such_dir_123/out.png"))})
         @Assert(error.kind == SvgErrorKind.InvalidValue)
