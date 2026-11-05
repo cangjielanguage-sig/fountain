@@ -23,6 +23,8 @@ import fountain::f_base.*
 internal let SVG_MAX_IMAGE_PIXELS: Int64 = 16 * 1024 * 1024
 /** 单次渲染累计解码像素上限。 */
 internal let SVG_MAX_RENDER_DECODE_PIXELS: Int64 = 64 * 1024 * 1024
+/** `decode(stream)` 读取的 PNG 字节总量上限。 */
+internal let SVG_MAX_PNG_STREAM_BYTES: Int64 = 64 * 1024 * 1024
 
 /** 单次渲染共享的解码像素预算；在分配位图前扣减。 */
 internal class SvgDecodeBudget {
@@ -63,8 +65,16 @@ public class SvgPngDecoder {
     public static func decode(stream: InputStream): SvgBitmap {
         let out = ByteBuffer()
         let buffer = Array<Byte>(8192, repeat: 0)
+        var total: Int64 = 0
         var count = stream.read(buffer)
         while (count > 0) {
+            total += count
+            if (total > SVG_MAX_PNG_STREAM_BYTES) {
+                throw SvgException(
+                    "PNG 流超过字节上限 ${SVG_MAX_PNG_STREAM_BYTES}",
+                    kind: SvgErrorKind.Limit
+                )
+            }
             out.write(buffer[0..count])
             count = stream.read(buffer)
         }

@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
-import std.io.ByteBuffer
+import std.io.{ByteBuffer, InputStream}
 import std.unittest.*
 import std.unittest.testmacro.*
 import stdx.compress.zlib.{CompressOutputStream, WrapType}
@@ -541,5 +541,39 @@ public class SvgPngStructureM3_test {
             expectSvgException({=> SvgPngDecoder.decode(missingPalette)}).kind ==
                 SvgErrorKind.Syntax
         )
+    }
+}
+
+internal class SvgEndlessZeroStream <: InputStream {
+    private var remaining: Int64
+
+    init(remaining: Int64) {
+        this.remaining = remaining
+    }
+
+    public func read(buffer: Array<Byte>): Int64 {
+        if (this.remaining <= 0) {
+            return 0
+        }
+        var count = this.remaining
+        if (count > buffer.size) {
+            count = buffer.size
+        }
+        for (index in 0..count) {
+            buffer[index] = 0
+        }
+        this.remaining -= count
+        count
+    }
+}
+
+@Test
+public class SvgPngStreamLimitM3_test {
+    /** decode(stream) 读取总量超过上限时抛 Limit。 */
+    @TestCase
+    public func streamByteLimit(): Unit {
+        let stream = SvgEndlessZeroStream(SVG_MAX_PNG_STREAM_BYTES + 1)
+        let error = expectSvgException({=> SvgPngDecoder.decode(stream)})
+        @Assert(error.kind == SvgErrorKind.Limit)
     }
 }
