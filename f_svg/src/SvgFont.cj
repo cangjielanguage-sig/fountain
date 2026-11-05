@@ -59,7 +59,13 @@ public class SvgFontRegistry {
 
     /** 每次返回新实例，避免调用方注册污染其他渲染。 */
     public static func defaultRegistry(): SvgFontRegistry {
-        SvgFontRegistry()
+        let registry = SvgFontRegistry()
+        let font = SvgHersheyFont()
+        registry.register("Hershey", font)
+        registry.register("serif", font)
+        registry.register("sans-serif", font)
+        registry.register("monospace", font)
+        registry
     }
 
     private static func key(family: String, weight: String, style: String): String {
