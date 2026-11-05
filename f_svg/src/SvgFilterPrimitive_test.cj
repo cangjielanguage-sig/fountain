@@ -360,3 +360,54 @@ public class SvgFilterPrimitiveUnitsM3_test {
         @Assert(objectOutput.pixel(10, 5).alpha < userOutput.pixel(10, 5).alpha)
     }
 }
+
+@Test
+public class SvgColorMatrixValidationM3_test {
+    /** feColorMatrix 的 type 非法值在解析期记 warning。 */
+    @TestCase
+    public func invalidTypeWarns(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\"><feColorMatrix type=\"bogus\"/></filter></defs></svg>"
+        )
+        var found = false
+        for (warning in document.warnings) {
+            if (warning.contains("type") || warning.contains("feColorMatrix")) {
+                found = true
+            }
+        }
+        @Assert(found)
+        let matrix = (document.root.child("defs").getOrThrow().child("filter").getOrThrow()
+            .child("feColorMatrix").getOrThrow() as SvgFeColorMatrix).getOrThrow()
+        @Assert(matrix.matrixType == SvgColorMatrixType.Matrix)
+    }
+
+    /** saturate 非有限值记 warning 并直通。 */
+    @TestCase
+    public func saturateNonFiniteFallsBack(): Unit {
+        let input = solidBuffer(1, 1, SvgColor.fromRgb(10, 20, 30))
+        let warnings = ArrayList<String>()
+        let output = colorMatrixFilterBuffer(
+            input,
+            SvgColorMatrixType.Saturate,
+            [Float64.NaN],
+            warnings
+        )
+        @Assert(output.pixels == input.pixels)
+        @Assert(warnings.size >= 1)
+    }
+
+    /** hueRotate 非有限值记 warning 并直通。 */
+    @TestCase
+    public func hueRotateNonFiniteFallsBack(): Unit {
+        let input = solidBuffer(1, 1, SvgColor.fromRgb(10, 20, 30))
+        let warnings = ArrayList<String>()
+        let output = colorMatrixFilterBuffer(
+            input,
+            SvgColorMatrixType.HueRotate,
+            [Float64.Inf],
+            warnings
+        )
+        @Assert(output.pixels == input.pixels)
+        @Assert(warnings.size >= 1)
+    }
+}

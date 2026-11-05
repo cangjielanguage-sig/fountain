@@ -261,7 +261,7 @@ private func fillSvgAttributes(
             continue
         }
         if (validate && isSvgNamespaceAttribute(attribute.name)) {
-            validateSvgAttribute(attribute, path, context)
+            validateSvgAttribute(xml.name.local, attribute, path, context)
             if (attribute.name.local == "offset") {
                 warnOffsetIfClamped(attribute.value, path, context)
             }
@@ -480,8 +480,13 @@ private func warnOffsetIfClamped(value: String, path: String, context: SvgBuildC
     }
 }
 
-private func validateSvgAttribute(attribute: XmlAttribute, path: String, context: SvgBuildContext): Unit {
-    if (isValidSvgAttribute(attribute.name.local, attribute.value)) {
+private func validateSvgAttribute(
+    tag: String,
+    attribute: XmlAttribute,
+    path: String,
+    context: SvgBuildContext
+): Unit {
+    if (isValidSvgAttribute(tag, attribute.name.local, attribute.value)) {
         return
     }
     let message = "属性「${attribute.name.local}」的值「${attribute.value}」不合法"
@@ -491,7 +496,7 @@ private func validateSvgAttribute(attribute: XmlAttribute, path: String, context
     context.warnings.add("${message}（${path}）")
 }
 
-private func isValidSvgAttribute(local: String, value: String): Bool {
+private func isValidSvgAttribute(tag: String, local: String, value: String): Bool {
     match (local) {
         case "fill" | "stroke" => tryParseSvgPaint(value).isSome()
         case "color" | "stop-color" =>
@@ -526,6 +531,12 @@ private func isValidSvgAttribute(local: String, value: String): Bool {
         case "mode" => SvgBlendMode.fromName(value.trimAscii()).isSome()
         case "operator" => SvgCompositeOperator.fromName(value.trimAscii()).isSome()
         case "image-rendering" => SvgImageRendering.fromName(value).isSome()
+        case "type" =>
+            if (tag == "feColorMatrix") {
+                SvgColorMatrixType.fromName(value.trimAscii()).isSome()
+            } else {
+                true
+            }
         case "path" => SvgPathData.tryParse(value).isSome()
         case _ => true
     }

@@ -365,6 +365,10 @@ private func colorMatrixFor(
                 return Array<Float64>()
             }
             let s = values[0]
+            if (s.isNaN() || s.isInf()) {
+                warnings.add("feColorMatrix type=saturate 含非有限值，按直通处理")
+                return Array<Float64>()
+            }
             [
                 0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0.0, 0.0,
                 0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0.0, 0.0,
@@ -374,6 +378,10 @@ private func colorMatrixFor(
         case HueRotate =>
             if (values.size != 1) {
                 warnings.add("feColorMatrix type=hueRotate 需要 1 个值，按直通处理")
+                return Array<Float64>()
+            }
+            if (values[0].isNaN() || values[0].isInf()) {
+                warnings.add("feColorMatrix type=hueRotate 含非有限值，按直通处理")
                 return Array<Float64>()
             }
             let radians = values[0] * 3.141592653589793 / 180.0
