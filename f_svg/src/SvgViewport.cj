@@ -32,6 +32,9 @@ public struct SvgViewport {
 
     /** 解析根尺寸：绝对长度直接换算，百分比与缺省用 fallback。 */
     public static func from(root: SvgRoot, fallbackWidth: Float64, fallbackHeight: Float64): SvgViewport {
+        if (fallbackWidth <= 0.0 && fallbackHeight <= 0.0) {
+            throw invalidValue("视口 fallback 宽高不能同时为非正数")
+        }
         SvgViewport(
             resolveViewportLength(root.width, SvgLengthAxis.Horizontal, fallbackWidth),
             resolveViewportLength(root.height, SvgLengthAxis.Vertical, fallbackHeight)

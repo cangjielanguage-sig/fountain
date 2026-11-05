@@ -88,6 +88,9 @@ public class SvgViewport_test {
         let inchViewport = SvgViewport.from(inches, 300.0, 150.0)
         @Assert(near(inchViewport.width, 96.0))
         @Assert(near(inchViewport.height, 96.0))
+
+        let fallbackError = expectSvgException({=> SvgViewport.from(SvgRoot(), 0.0, 0.0)})
+        @Assert(fallbackError.kind == SvgErrorKind.InvalidValue)
     }
 
     /** 嵌套 svg：外层 × 内层矩阵、x/y 平移与裁剪尺寸。 */
