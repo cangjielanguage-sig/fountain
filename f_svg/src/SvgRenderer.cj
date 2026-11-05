@@ -209,7 +209,7 @@ public class SvgRenderer {
                     case None => return
                 }
                 let textRenderer = SvgTextRenderer(registry: registry)
-                let outline = match (textRenderer.outline(text, style: style)) {
+                let outline = match (textRenderer.outline(text, style: style, root: Some(list.root))) {
                     case Some(value) => value
                     case None => return
                 }

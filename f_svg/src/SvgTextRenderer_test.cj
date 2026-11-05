@@ -158,7 +158,7 @@ public class SvgTextRenderer_test {
         @Assert(near(layout.glyphs[3].y, 5.0))
     }
 
-    /** 缺字占位、无字体注册、textPath 降级与 rotate 忽略。 */
+    /** 缺字占位、无字体注册、无路径 textPath 降级与 rotate 生效。 */
     @TestCase
     public func degradations(): Unit {
         let emptyRegistry = SvgTextRenderer(registry: SvgFontRegistry())
@@ -181,8 +181,9 @@ public class SvgTextRenderer_test {
         let rotated = makeText("A")
         rotated.rotate = [15.0]
         let rotateRenderer = SvgTextRenderer()
-        rotateRenderer.layout(rotated, style: textStyleOf(rotated))
-        @Assert(rotateRenderer.warnings.size >= 1)
+        let rotateLayout = rotateRenderer.layout(rotated, style: textStyleOf(rotated))
+        @Assert(rotateLayout.glyphs.size == 1)
+        @Assert(near(rotateLayout.glyphs[0].angle, 15.0))
     }
 
     /** tspan 显式 x/y 不被外层 tspan 与根 text 覆盖。 */

@@ -26,6 +26,8 @@ public class SvgTextGlyph {
     public let advance: Float64
     public let fontSize: Float64
     public let path: ?SvgPathData
+    /** 字形旋转角（度），由 textPath 切线与 rotate 列表叠加。 */
+    public let angle: Float64
 
     internal init(
         codePoint: Int64,
@@ -33,7 +35,8 @@ public class SvgTextGlyph {
         y: Float64,
         advance: Float64,
         fontSize: Float64,
-        path: ?SvgPathData
+        path: ?SvgPathData,
+        angle!: Float64 = 0.0
     ) {
         this.codePoint = codePoint
         this.x = x
@@ -41,6 +44,7 @@ public class SvgTextGlyph {
         this.advance = advance
         this.fontSize = fontSize
         this.path = path
+        this.angle = angle
     }
 }
 
@@ -136,7 +140,11 @@ public class SvgTextRenderer {
         this.registry = registry
     }
 
-    public func layout(text: SvgTextElement, style!: SvgComputedStyle): SvgTextLayout {
+    public func layout(
+        text: SvgTextElement,
+        style!: SvgComputedStyle,
+        root!: ?SvgElement = None
+    ): SvgTextLayout {
         let rootState = SvgTextState(
             style.fontSize().value,
             style.fontFamily(),
@@ -221,6 +229,43 @@ public class SvgTextRenderer {
             case SvgTextAnchor.End => -total
         }
 
+        var placements: ?Array<SvgTextPlacement> = None
+        let textPathElement = findTextPathElement(text)
+        let rotationSource = match (textPathElement) {
+            case Some(pathElement) =>
+                if (pathElement.attr("rotate").isSome()) {
+                    pathElement
+                } else {
+                    text
+                }
+            case None => text
+        }
+        let rotations = resolveTextRotations(rotationSource, count, this.warnings)
+        match (textPathElement) {
+            case Some(pathElement) =>
+                match (resolveTextPathData(pathElement, root)) {
+                    case Some(pathData) =>
+                        let advanceArray = Array<Float64>(count, repeat: 0.0)
+                        for (index in 0..count) {
+                            advanceArray[index] = advances[index] * scaleX
+                        }
+                        let pathLayout = SvgTextPathLayout()
+                        let placed = pathLayout.place(
+                            advanceArray,
+                            pathData,
+                            pathElement.startOffset ?? SvgLength(0.0),
+                            style.textAnchor()
+                        )
+                        for (warning in pathLayout.warnings) {
+                            this.warnings.add("textPath：${warning}")
+                        }
+                        placements = Some(placed)
+                    case None =>
+                        this.warnings.add("textPath 的路径缺失或为空，降级为普通文本")
+                }
+            case None => ()
+        }
+
         let glyphs = ArrayList<SvgTextGlyph>()
         var bounds = SvgBounds.empty()
         var hasBounds = false
@@ -233,8 +278,19 @@ public class SvgTextRenderer {
                     case None => None
                 }
             }
-            let x = positions[index] + anchorOffset
-            let y = char.yBase + char.dy
+            var x = positions[index] + anchorOffset
+            var y = char.yBase + char.dy
+            var angle = rotations[index]
+            match (placements) {
+                case Some(placed) =>
+                    if (index >= placed.size) {
+                        continue
+                    }
+                    x = placed[index].originX
+                    y = placed[index].originY
+                    angle = placed[index].angle + rotations[index]
+                case None => ()
+            }
             glyphs.add(
                 SvgTextGlyph(
                     char.codePoint,
@@ -242,7 +298,8 @@ public class SvgTextRenderer {
                     y,
                     advances[index] * scaleX,
                     char.fontSize,
-                    path
+                    path,
+                    angle: angle
                 )
             )
             match (path) {
@@ -263,14 +320,20 @@ public class SvgTextRenderer {
     }
 
     /** 合并所有字形路径，供光栅器与形状共用填充 / 描边 / 渐变管线。 */
-    public func outline(text: SvgTextElement, style!: SvgComputedStyle): ?SvgPathData {
-        let layout = this.layout(text, style: style)
+    public func outline(
+        text: SvgTextElement,
+        style!: SvgComputedStyle,
+        root!: ?SvgElement = None
+    ): ?SvgPathData {
+        let layout = this.layout(text, style: style, root: root)
         let commands = ArrayList<SvgPathCommand>()
         for (glyph in layout.glyphs) {
             match (glyph.path) {
                 case Some(path) =>
+                    let matrix = SvgMatrix.translate(glyph.x, glyph.y)
+                        .multiply(SvgMatrix.rotate(glyph.angle))
                     for (command in path.commands) {
-                        commands.add(translateCommand(command, glyph.x, glyph.y))
+                        commands.add(transformTextCommand(command, matrix))
                     }
                 case None => ()
             }
@@ -308,15 +371,6 @@ private func collectSvgTextChars(
     out: ArrayList<SvgTextChar>,
     warnings: ArrayList<String>
 ): Unit {
-    match (element.rotate) {
-        case Some(values) => if (values.size > 0) {
-            warnings.add("文本 rotate 列表在 M2 忽略")
-        }
-        case None => ()
-    }
-    if (element.tag == "textPath") {
-        warnings.add("textPath 在 M2 降级为普通文本")
-    }
     for (node in element.children) {
         match (node) {
             case TextNode(text) =>
@@ -469,14 +523,116 @@ private func scalePathX(path: SvgPathData, factor: Float64): SvgPathData {
     SvgPathData(commands.toArray())
 }
 
-private func translateCommand(command: SvgPathCommand, dx: Float64, dy: Float64): SvgPathCommand {
+
+/** 每个字形的旋转列表；单值作用于全部，短列表复用末值，长列表多余忽略。 */
+internal func resolveTextRotations(
+    text: SvgTextElement,
+    count: Int64,
+    warnings: ArrayList<String>
+): Array<Float64> {
+    let result = Array<Float64>(count, repeat: 0.0)
+    if (count == 0) {
+        return result
+    }
+    match (text.rotate) {
+        case Some(values) =>
+            if (values.size == 0) {
+                warnings.add("文本 rotate 列表为空，已忽略")
+                return result
+            }
+            var index: Int64 = 0
+            while (index < count) {
+                let source = if (index < values.size) {
+                    index
+                } else {
+                    values.size - 1
+                }
+                result[index] = values[source]
+                index++
+            }
+        case None =>
+            if (text.attr("rotate").isSome()) {
+                warnings.add("文本 rotate 的值不合法，已忽略")
+            }
+    }
+    result
+}
+
+/** 找到当前文本子树中的 textPath 元素（自身或直接子元素）。 */
+private func findTextPathElement(text: SvgTextElement): ?SvgTextPath {
+    match (text) {
+        case path: SvgTextPath => return Some(path)
+        case _ => ()
+    }
+    for (node in text.children) {
+        match (node) {
+            case ElementNode(element) =>
+                match (element) {
+                    case path: SvgTextPath => return Some(path)
+                    case _ => ()
+                }
+            case _ => ()
+        }
+    }
+    None
+}
+
+/** 解析 textPath 的 `path` 属性或 `href="#id"` 指向的 path。 */
+private func resolveTextPathData(pathElement: SvgTextPath, root: ?SvgElement): ?SvgPathData {
+    match (pathElement.path) {
+        case Some(value) => return Some(value)
+        case None => ()
+    }
+    match (readSvgHref(pathElement)) {
+        case Some(href) =>
+            let id = stripSvgHash(href)
+            match (findSvgElementById(root, id)) {
+                case Some(element) =>
+                    match (element) {
+                        case path: SvgPath => path.d
+                        case _ => None
+                    }
+                case None => None
+            }
+        case None => None
+    }
+}
+
+/** 对绝对坐标命令应用仿射矩阵；相对命令与 ClosePath 原样保留。 */
+private func transformTextCommand(command: SvgPathCommand, matrix: SvgMatrix): SvgPathCommand {
+    if (command.relative) {
+        return command
+    }
     match (command.kind) {
         case MoveTo | LineTo =>
+            let point = matrix.apply(SvgPoint(command.values[0], command.values[1]))
+            SvgPathCommand(command.kind, false, [point.x, point.y])
+        case CurveTo =>
+            let first = matrix.apply(SvgPoint(command.values[0], command.values[1]))
+            let second = matrix.apply(SvgPoint(command.values[2], command.values[3]))
+            let end = matrix.apply(SvgPoint(command.values[4], command.values[5]))
             SvgPathCommand(
                 command.kind,
                 false,
-                [command.values[0] + dx, command.values[1] + dy]
+                [first.x, first.y, second.x, second.y, end.x, end.y]
             )
-        case _ => command
+        case SmoothCurveTo | QuadraticBezierTo =>
+            let control = matrix.apply(SvgPoint(command.values[0], command.values[1]))
+            let end = matrix.apply(SvgPoint(command.values[2], command.values[3]))
+            SvgPathCommand(command.kind, false, [control.x, control.y, end.x, end.y])
+        case SmoothQuadraticBezierTo =>
+            let end = matrix.apply(SvgPoint(command.values[0], command.values[1]))
+            SvgPathCommand(command.kind, false, [end.x, end.y])
+        case ArcTo =>
+            let end = matrix.apply(SvgPoint(command.values[5], command.values[6]))
+            SvgPathCommand(
+                command.kind,
+                false,
+                [
+                    command.values[0], command.values[1], command.values[2],
+                    command.values[3], command.values[4], end.x, end.y
+                ]
+            )
+        case HorizontalLineTo | VerticalLineTo | ClosePath => command
     }
 }
