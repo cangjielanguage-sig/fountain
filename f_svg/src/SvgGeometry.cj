@@ -89,6 +89,29 @@ public class SvgGeometry {
         }
         Some(base.transform(ancestorTransform(element)))
     }
+
+    /**
+     * 渲染阶段使用的包围盒。
+     *
+     * 与公开 `bounds` 的唯一区别：文本缺字时仍返回占位字形布局的包围盒，
+     * 避免滤镜 / 蒙版区域退化为空导致整段文本消失。公开 `bounds` 的契约不变。
+     */
+    internal static func renderBounds(
+        element: SvgElement,
+        style!: SvgComputedStyle,
+        fonts!: ?SvgFontRegistry = None,
+        root!: ?SvgElement = None
+    ): ?SvgBounds {
+        match (element) {
+            case text: SvgTextElement =>
+                let registry = match (fonts) {
+                    case Some(value) => value
+                    case None => SvgFontRegistry.defaultRegistry()
+                }
+                SvgTextRenderer(registry: registry).layout(text, style: style, root: root).bounds
+            case _ => bounds(element, style: style, fonts: fonts)
+        }
+    }
 }
 
 private func rectBounds(rect: SvgRect): ?SvgBounds {

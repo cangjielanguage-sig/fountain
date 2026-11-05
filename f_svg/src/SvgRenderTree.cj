@@ -343,7 +343,12 @@ public class SvgRenderTreeBuilder {
                     return
                 }
                 let matrix = context.matrix.multiply(elementTransformMatrix(text))
-                let bounds = SvgGeometry.bounds(text, style: style, fonts: context.fonts)
+                let bounds = SvgGeometry.renderBounds(
+                    text,
+                    style: style,
+                    fonts: context.fonts,
+                    root: Some(context.root)
+                )
                 let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
                 let maskElement = this.resolveUrlRef(style.get("mask"), context)
                 let filterElement = this.resolveUrlRef(style.get("filter"), context)

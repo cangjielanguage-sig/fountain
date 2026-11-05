@@ -101,4 +101,31 @@ public class SvgElementFilterM3_test {
         @Assert(colorNear(bitmap.pixel(23, 15), SvgColor.fromRgb(255, 0, 0)))
         @Assert(bitmap.pixel(14, 15).alpha == 0.0)
     }
+
+    /** 缺字文本带 filter 时仍按占位字形绘制，不因包围盒为空整段消失。 */
+    @TestCase
+    public func missingGlyphTextSurvivesFilter(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Single", SingleGlyphFont())
+        let renderer = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, fonts: Some(registry))
+        )
+        let bitmap = renderer.render(
+            SvgParser.parse(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"60\" height=\"40\">" +
+                "<defs><filter id=\"f\"><feOffset dx=\"2\" dy=\"0\"/></filter></defs>" +
+                "<text x=\"5\" y=\"20\" font-family=\"Single\" font-size=\"12\" " +
+                "fill=\"black\" filter=\"url(#f)\">AB</text></svg>"
+            )
+        )
+        var visible = false
+        var index = 0
+        while (index < bitmap.width * bitmap.height) {
+            if (bitmap.pixels[index * 4 + 3] > 0) {
+                visible = true
+            }
+            index++
+        }
+        @Assert(visible)
+    }
 }
