@@ -349,13 +349,29 @@ private func collectSvgTextChars(
                             }
                             match (span.x) {
                                 case Some(values) => if (values.size > 0) {
-                                    first.xOverride = Some(values[0].value)
+                                    for (index in start..out.size) {
+                                        let offset = index - start
+                                        let valueIndex = if (offset < values.size) {
+                                            offset
+                                        } else {
+                                            values.size - 1
+                                        }
+                                        out[index].xOverride = Some(values[valueIndex].value)
+                                    }
                                 }
                                 case None => ()
                             }
                             match (span.y) {
                                 case Some(values) => if (values.size > 0) {
-                                    first.yBase = values[0].value
+                                    for (index in start..out.size) {
+                                        let offset = index - start
+                                        let valueIndex = if (offset < values.size) {
+                                            offset
+                                        } else {
+                                            values.size - 1
+                                        }
+                                        out[index].yBase = values[valueIndex].value
+                                    }
                                 }
                                 case None => ()
                             }

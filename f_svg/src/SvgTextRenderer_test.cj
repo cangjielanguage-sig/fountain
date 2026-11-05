@@ -139,6 +139,25 @@ public class SvgTextRenderer_test {
         @Assert(near(shiftedLayout.glyphs[2].x, shiftedLayout.glyphs[1].x + shiftedLayout.glyphs[1].advance))
     }
 
+    /** tspan 的 x/y 列表逐字符消费，短列表复用末值。 */
+    @TestCase
+    public func tspanPositionLists(): Unit {
+        let text = makeText("A")
+        let span = SvgTspan()
+        span.x = [SvgLength(10.0), SvgLength(20.0)]
+        span.y = [SvgLength(5.0)]
+        span.appendText("ABC")
+        text.appendElement(span)
+        let layout = SvgTextRenderer().layout(text, style: textStyleOf(text))
+        @Assert(layout.glyphs.size == 4)
+        @Assert(near(layout.glyphs[1].x, 10.0))
+        @Assert(near(layout.glyphs[2].x, 20.0))
+        @Assert(near(layout.glyphs[3].x, 20.0))
+        @Assert(near(layout.glyphs[1].y, 5.0))
+        @Assert(near(layout.glyphs[2].y, 5.0))
+        @Assert(near(layout.glyphs[3].y, 5.0))
+    }
+
     /** 缺字占位、无字体注册、textPath 降级与 rotate 忽略。 */
     @TestCase
     public func degradations(): Unit {
