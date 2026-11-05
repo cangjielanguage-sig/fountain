@@ -183,6 +183,25 @@ public class SvgStyleResolver <: ToString {
         let values = HashMap<String, String>()
         let sources = HashMap<String, CssStyleSource>()
         var overall = CssStyleSource.Default
+        let fontSpec = SvgPropertySpec("font-size", true, "16px")
+        var fontSizeRaw = "16px"
+        match (best.get("font-size")) {
+            case Some(candidate) => fontSizeRaw = candidate.value
+            case None =>
+                match (parent) {
+                    case Some(parentStyle) => fontSizeRaw = parentStyle.get("font-size") ?? "16px"
+                    case None => ()
+                }
+        }
+        fontSizeRaw = resolveCssKeyword(fontSizeRaw, fontSpec, parent)
+        let normalizedFontSize = this.normalizeValue(
+            "font-size",
+            fontSizeRaw,
+            parent,
+            elementPath,
+            16.0
+        ) ?? "16px"
+        let fontSizePx = (SvgLength.tryParse(normalizedFontSize) ?? SvgLength(16.0)).value
         for (spec in SVG_PROPERTY_TABLE) {
             let name = spec.name
             var raw = spec.initial
@@ -204,7 +223,11 @@ public class SvgStyleResolver <: ToString {
                     }
             }
             raw = resolveCssKeyword(raw, spec, parent)
-            var normalized = this.normalizeValue(name, raw, parent, elementPath)
+            var normalized = if (name == "font-size") {
+                Some(normalizedFontSize)
+            } else {
+                this.normalizeValue(name, raw, parent, elementPath, fontSizePx)
+            }
             match (normalized) {
                 case Some(_) => ()
                 case None =>
@@ -217,9 +240,9 @@ public class SvgStyleResolver <: ToString {
                     } else {
                         raw = spec.initial
                     }
-                    normalized = this.normalizeValue(name, raw, parent, elementPath)
+                    normalized = this.normalizeValue(name, raw, parent, elementPath, fontSizePx)
                     if (normalized.isNone()) {
-                        normalized = this.normalizeValue(name, spec.initial, parent, elementPath)
+                        normalized = this.normalizeValue(name, spec.initial, parent, elementPath, fontSizePx)
                     }
                     this.warnings.add("元素「${elementPath}」属性「${name}」的值「${original}」不合法，已回退")
             }
@@ -321,7 +344,8 @@ public class SvgStyleResolver <: ToString {
         name: String,
         raw: String,
         parent: ?SvgComputedStyle,
-        elementPath: String
+        elementPath: String,
+        fontSizePx: Float64
     ): ?String {
         let trimmed = raw.trimAscii()
         if (trimmed.size == 0) {
@@ -388,7 +412,8 @@ public class SvgStyleResolver <: ToString {
                     return Some("0")
                 }
                 match (SvgLength.tryParse(trimmed)) {
-                    case Some(length) => return Some(length.toString())
+                    case Some(length) =>
+                        return Some(resolveFontRelativeLength(length, fontSizePx))
                     case None => return None
                 }
             case "stroke-dasharray" =>
@@ -473,6 +498,14 @@ public class SvgStyleResolver <: ToString {
             case Some(color) => Some(color.toString())
             case None => None
         }
+    }
+}
+
+private func resolveFontRelativeLength(length: SvgLength, fontSizePx: Float64): String {
+    match (length.unit) {
+        case Em => formatSvgNumber(length.value * fontSizePx) + "px"
+        case Ex => formatSvgNumber(length.value * fontSizePx / 2.0) + "px"
+        case _ => length.toString()
     }
 }
 

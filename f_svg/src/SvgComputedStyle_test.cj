@@ -274,6 +274,15 @@ public class SvgComputedStyle_test {
         let referencedStyle = styleOf(computeTree(referenced), referenced)
         @Assert(referencedStyle.get("clip-path") == Some("url(#c)"))
         @Assert(referencedStyle.get("mask") == Some("url(#m)"))
+
+        let relative = SvgRect()
+        relative.style = "font-size: 16px; stroke-width: 2em; letter-spacing: 1ex; " +
+            "word-spacing: 1.5em; stroke-dashoffset: 0.5em"
+        let relativeStyle = styleOf(computeTree(relative), relative)
+        @Assert(near(relativeStyle.strokeWidth().value, 32.0))
+        @Assert(near(relativeStyle.letterSpacing().value, 8.0))
+        @Assert(near(relativeStyle.wordSpacing().value, 24.0))
+        @Assert(near(relativeStyle.strokeDashOffset().value, 8.0))
     }
 
     /** `<style>` 收集、外部样式表合并顺序与计算不修改文档。 */
