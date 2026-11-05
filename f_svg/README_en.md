@@ -178,7 +178,10 @@ toUserUnits(SvgLength(50.0, unit: SvgLengthUnit.Percent), SvgLengthAxis.Horizont
   Empty-element style, quotes, indentation and the XML declaration may differ.
 - **Byte-stable compact output**: writing a compact document twice yields identical bytes.
 - `href` is read from both `href` and `xlink:href`; the written form follows
-  `SvgWriteOptions.xlink` (default `true` → `xlink:href`).
+  `SvgWriteOptions.xlink` (default `true` → `xlink:href`). If an element carries
+  both forms, only the first is kept.
+- `writeSvgString` accepts UTF-8 only; for other charsets write bytes through
+  `SvgWriter`. The string helper throws `SvgException(kind: InvalidValue)`.
 
 ## Error locations
 
@@ -214,4 +217,6 @@ exists and is skipped otherwise. Performance reference values are recorded in
 ## API notes
 
 - The paint reference factory is `referencing(id, fallback:)` (the field is `reference`).
+  `id` may be written with or without `#` and is stored as `#id`; an empty id throws
+  `InvalidValue`.
 - The "no alignment" value of `SvgAspectAlign` is `NoAlign` (serialized as `none`).

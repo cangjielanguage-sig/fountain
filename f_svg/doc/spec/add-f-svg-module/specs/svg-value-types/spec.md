@@ -83,6 +83,8 @@
 
 `SvgPaint.parse` SHALL 不发起任何 I/O。
 
+工厂 `referencing(id, fallback:)` SHALL 接受带或不带 `#` 的 id，并统一存为 `#id`；空 id 或单独的 `#` SHALL 抛 `InvalidValue`。
+
 #### Scenario: 片段引用与回退
 
 - **WHEN** 输入 `url(#grad1)`、`url("#grad1") none`、`url(#grad1) red`
@@ -92,6 +94,11 @@
 
 - **WHEN** 输入 `url("http://example.com/x.svg#g")`
 - **THEN** 抛 `SvgException(kind: Security)`
+
+#### Scenario: 引用工厂补齐片段前缀
+
+- **WHEN** 构造 `SvgPaint.referencing("grad1")`
+- **THEN** `reference` 为 `#grad1`，`toString` 为 `url(#grad1)`，可被 `parse` 重新解析为相等值
 
 ### Requirement: 矩阵与变换
 

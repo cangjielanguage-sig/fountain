@@ -169,7 +169,11 @@ public struct SvgPreserveAspectRatio <: Equatable<SvgPreserveAspectRatio> & ToSt
 
     public func toString(): String {
         if (this.align == SvgAspectAlign.NoAlign) {
-            "none"
+            if (this.slice) {
+                "none slice"
+            } else {
+                "none"
+            }
         } else if (this.slice) {
             this.align.toString() + " slice"
         } else {

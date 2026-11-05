@@ -244,6 +244,45 @@ public class SvgWriter_test {
         }
     }
 
+    /** 同时含 href 与 xlink:href 时只写一个引用。 */
+    @TestCase
+    public func duplicateHrefCollapsed(): Unit {
+        let text = "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
+            "xmlns:xlink=\"http://www.w3.org/1999/xlink\">" +
+            "<use href=\"#a\" xlink:href=\"#b\"/></svg>"
+        let document = SvgParser.parse(text)
+        @Assert(document.root.child("use").getOrThrow().attributes.size == 2)
+
+        let written = writeSvgString(document)
+        @Assert(written.split("href=").size == 2)
+        @Assert(written.contains("xlink:href=\"#a\""))
+        @Assert(!written.contains("#b"))
+        @Assert(writeSvgString(SvgParser.parse(written)) == written)
+
+        let bare = writeSvgString(document, options: SvgWriteOptions(xlink: false))
+        @Assert(bare.split("href=").size == 2)
+        @Assert(bare.contains("href=\"#a\""))
+        @Assert(!bare.contains("xlink:href"))
+    }
+
+    /** 声明的 encoding 跟随写入 charset，其余字段保留。 */
+    @TestCase
+    public func declarationFollowsCharset(): Unit {
+        let document = SvgParser.parse(
+            "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"yes\"?>" +
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+        )
+        let text = writeSvgString(document, options: SvgWriteOptions(charset: Charsets.UTF8))
+        @Assert(text.contains("encoding=\"UTF-8\""))
+        @Assert(!text.contains("ISO-8859-1"))
+        @Assert(text.contains("standalone=\"yes\""))
+
+        let error = expectSvgException({=>
+            writeSvgString(document, options: SvgWriteOptions(charset: Charsets.GBK))
+        })
+        @Assert(error.kind == SvgErrorKind.InvalidValue)
+    }
+
     /** 元素写入省略 XML 声明以外的前后杂项。 */
     @TestCase
     public func writeSingleElement(): Unit {

@@ -83,11 +83,7 @@ public class SvgWriter {
         this.normalizeHrefs(Some(xmlElement))
         let document = XmlDocument()
         document.root = Some(xmlElement)
-        document.declaration = if (this.options.xmlDeclaration) {
-            Some(XmlDeclaration("1.0"))
-        } else {
-            None
-        }
+        document.declaration = this.elementDeclaration()
         this.writer.write(document)
         this.finish()
     }
@@ -112,10 +108,21 @@ public class SvgWriter {
         if (!this.options.xmlDeclaration) {
             return None
         }
-        match (document.declaration) {
-            case Some(declaration) => Some(declaration)
-            case None => Some(XmlDeclaration("1.0"))
+        let source = document.declaration ?? XmlDeclaration("1.0")
+        Some(
+            XmlDeclaration(
+                source.version,
+                encoding: Some(this.options.charset.toString()),
+                standalone: source.standalone
+            )
+        )
+    }
+
+    private func elementDeclaration(): ?XmlDeclaration {
+        if (!this.options.xmlDeclaration) {
+            return None
         }
+        Some(XmlDeclaration("1.0", encoding: Some(this.options.charset.toString())))
     }
 
     private func normalizeHrefs(root: ?XmlElement): Unit {
@@ -125,25 +132,31 @@ public class SvgWriter {
         }
     }
 
+    /**
+     * 同一元素上 `href` / `xlink:href` 只保留第一个，再按 `xlink` 选项统一形式，
+     * 避免两种写法并存时写出重复的展开名。
+     */
     private func normalizeElementHrefs(element: XmlElement): Unit {
-        let referencing = match (element.name.local) {
-            case "use" | "image" | "textPath" | "linearGradient" | "radialGradient" => true
-            case _ => false
-        }
-        for (index in 0..element.attributes.size) {
-            let attribute = element.attributes[index]
-            if (attribute.name.local != "href") {
-                continue
+        let referencing = isSvgReferencingElement(element)
+        let first = firstHrefIndex(element)
+        if (first >= 0) {
+            var index = element.attributes.size - 1
+            while (index > first) {
+                if (isHrefSlot(element.attributes[index].name)) {
+                    element.attributes.remove(at: index)
+                }
+                index--
             }
+            let attribute = element.attributes[first]
             if (this.options.xlink) {
                 if (referencing && attribute.name.uri.isNone()) {
-                    element.attributes[index] = XmlAttribute(
+                    element.attributes[first] = XmlAttribute(
                         QName("href", prefix: Some("xlink"), uri: Some(SvgNamespaces.XLINK)),
                         attribute.value
                     )
                 }
-            } else {
-                element.attributes[index] = XmlAttribute(QName("href"), attribute.value)
+            } else if (isFoldableHref(element, attribute.name)) {
+                element.attributes[first] = XmlAttribute(QName("href"), attribute.value)
             }
         }
         for (node in element.children) {
@@ -155,11 +168,58 @@ public class SvgWriter {
     }
 }
 
-/** 便捷函数：写出为字符串（UTF-8）。 */
+private func isHrefSlot(name: QName): Bool {
+    if (name.local != "href") {
+        return false
+    }
+    match (name.uri) {
+        case Some(uri) => uri == SvgNamespaces.XLINK
+        case None => true
+    }
+}
+
+private func firstHrefIndex(element: XmlElement): Int64 {
+    for (index in 0..element.attributes.size) {
+        if (isHrefSlot(element.attributes[index].name)) {
+            return index
+        }
+    }
+    -1
+}
+
+private func isSvgReferencingElement(element: XmlElement): Bool {
+    let isSvg = match (element.name.uri) {
+        case Some(uri) => uri == SvgNamespaces.SVG
+        case None => false
+    }
+    if (!isSvg) {
+        return false
+    }
+    match (element.name.local) {
+        case "use" | "image" | "textPath" | "linearGradient" | "radialGradient" => true
+        case _ => false
+    }
+}
+
+/** `xlink=false` 只折叠 SVG / XLink 命名空间下的 `href`。 */
+private func isFoldableHref(element: XmlElement, name: QName): Bool {
+    match (name.uri) {
+        case Some(uri) => uri == SvgNamespaces.XLINK || uri == SvgNamespaces.SVG
+        case None => match (element.name.uri) {
+            case Some(uri) => uri == SvgNamespaces.SVG
+            case None => false
+        }
+    }
+}
+
+/** 便捷函数：写出为字符串（仅 UTF-8）。 */
 public func writeSvgString(
     document: SvgDocument,
     options!: SvgWriteOptions = SvgWriteOptions()
 ): String {
+    if (options.charset != Charsets.UTF8) {
+        throw invalidValue("writeSvgString 只支持 UTF-8，实际为 ${options.charset.toString()}")
+    }
     let buffer = ByteBuffer()
     let writer = SvgWriter(buffer, options: options)
     writer.write(document)

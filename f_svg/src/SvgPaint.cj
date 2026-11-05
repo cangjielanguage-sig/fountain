@@ -92,7 +92,16 @@ public struct SvgPaint <: Equatable<SvgPaint> & ToString {
     }
 
     public static func referencing(id: String, fallback!: ?SvgPaint = SVG_NO_PAINT): SvgPaint {
-        make(SvgPaintKind.Reference, reference: Some(id), fallback: fallback)
+        let trimmed = id.trimAscii()
+        if (trimmed.size == 0 || trimmed == "#") {
+            throw invalidValue("画笔引用的 id 不能为空")
+        }
+        let normalized = if (trimmed[0] == b'#') {
+            trimmed
+        } else {
+            "#" + trimmed
+        }
+        make(SvgPaintKind.Reference, reference: Some(normalized), fallback: fallback)
     }
 
     public static func parse(text: String): SvgPaint {

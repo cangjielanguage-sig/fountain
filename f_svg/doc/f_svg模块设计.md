@@ -322,6 +322,8 @@ public struct SvgPaintServerRef {   // 解析 url(#id) 的中间结果
 **契约**：`url()` 内只接受**同文档片段**（`#id`）。外部 URL 由解析选项决定拒绝或剥离；  
 `SvgPaint.parse` 本身不发起任何 I/O。
 
+工厂 `referencing(id, fallback:)` 接受带或不带 `#` 的 id，统一存为 `#id`；空 id 抛 `InvalidValue`。
+
 ### 3.4 `SvgMatrix` 与 `SvgTransform`
 
 ```cangjie
@@ -496,7 +498,8 @@ tx / ty 按 XMin/XMid/XMax、YMin/YMid/YMax 计算剩余空间
 ```
 
 - `width/height` 或 `viewBox` 宽高为 0 / 负数 ⇒ 抛 `SvgException`（`InvalidValue`）；
-- `parse` 接受 `none`、`xMidYMid`、`xMinYMax slice` 等；未知值抛错。
+- `parse` 接受 `none`、`xMidYMid`、`xMinYMax slice` 等；未知值抛错；
+- `none slice` 保留 `slice` 语义，`toString` 输出 `"none slice"`，保证往返。
 
 ### 3.7 数值与列表
 
@@ -749,6 +752,7 @@ public class SvgImage <: SvgElement {
 
 
 - `href` 读取时同时接受 `href` 与 `xlink:href`，写入时按 `SvgWriteOptions.xlink` 决定；
+  两种写法同时存在时只保留第一个，避免重复展开名；
 - `offset` 支持 `0.5` / `50%`，统一归一为 `0..1`，越界钳制并记 warning；
 - `SvgStop` 的 `stop-color` 可读 `currentColor` 之外的 `SvgColor`；`currentColor` 保留为 `None` + 原始字符串。
 
@@ -944,6 +948,10 @@ public class SvgWriter {
 ```cangjie
 public func writeSvgString(document: SvgDocument, options!: SvgWriteOptions = SvgWriteOptions()): String
 ```
+
+`writeSvgString` 只支持 UTF-8；非 UTF-8 `charset` 抛 `InvalidValue`，需要其他编码时直接用
+`SvgWriter` 写 `OutputStream`。写出声明的 `encoding` 总是跟随 `SvgWriteOptions.charset`，
+保留源声明的 `version` / `standalone`。
 
 ### 6.2 序列化流程
 

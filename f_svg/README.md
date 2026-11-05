@@ -172,7 +172,9 @@ toUserUnits(SvgLength(50.0, unit: SvgLengthUnit.Percent), SvgLengthAxis.Horizont
   注释 / PI / CDATA 一致；空元素写法、引号、缩进与 XML 声明不要求字节一致。
 - **紧凑字节稳定**：连续两次紧凑写入结果相同。
 - `href` 读取同时接受 `href` 与 `xlink:href`；写入形式由 `SvgWriteOptions.xlink` 决定
-  （默认 `true` 写 `xlink:href`）。
+  （默认 `true` 写 `xlink:href`）。同一元素同时带两种写法时只保留第一个，避免重复属性。
+- `writeSvgString` 只接受 UTF-8；其他 `charset` 请直接用 `SvgWriter` 写字节流，
+  字符串便捷函数会抛 `SvgException(kind: InvalidValue)`。
 
 ## 错误定位
 
@@ -205,5 +207,6 @@ cjpm test
 
 ## 已知 API 约定
 
-- `SvgPaint` 的引用工厂方法名为 `referencing(id, fallback:)`（与字段 `reference` 区分）。
+- `SvgPaint` 的引用工厂方法名为 `referencing(id, fallback:)`（与字段 `reference` 区分）；
+  `id` 可带或不带 `#`，统一存为 `#id`，空 id 抛 `InvalidValue`。
 - `SvgAspectAlign` 的无对齐取值名为 `NoAlign`（序列化为 `none`）。

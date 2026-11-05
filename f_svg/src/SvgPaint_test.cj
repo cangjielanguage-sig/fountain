@@ -122,6 +122,21 @@ public class SvgPaint_test {
         }
     }
 
+    /** 引用工厂统一补 `#`，保证 toString 可被 parse 接受。 */
+    @TestCase
+    public func referencingNormalizesFragment(): Unit {
+        let paint = SvgPaint.referencing("grad1")
+        @Assert(paint.reference == Some("#grad1"))
+        @Assert(paint.toString() == "url(#grad1)")
+        @Assert(SvgPaint.parse(paint.toString()) == paint)
+        @Assert(SvgPaint.referencing("#grad1").reference == Some("#grad1"))
+
+        let empty = expectSvgException({=> SvgPaint.referencing("")})
+        @Assert(empty.kind == SvgErrorKind.InvalidValue)
+        let hashOnly = expectSvgException({=> SvgPaint.referencing("#")})
+        @Assert(hashOnly.kind == SvgErrorKind.InvalidValue)
+    }
+
     /** 引用解析的中间结果结构。 */
     @TestCase
     public func serverReference(): Unit {

@@ -61,6 +61,20 @@ public class SvgPreserveAspectRatio_test {
         }
     }
 
+    /** `none slice` 的 slice 修饰必须保留并参与往返。 */
+    @TestCase
+    public func noneSliceRoundTrip(): Unit {
+        let slice = SvgPreserveAspectRatio.parse("none slice")
+        @Assert(slice.align == SvgAspectAlign.NoAlign && slice.slice)
+        @Assert(slice.toString() == "none slice")
+        @Assert(SvgPreserveAspectRatio.parse(slice.toString()) == slice)
+
+        let meet = SvgPreserveAspectRatio.parse("none meet")
+        @Assert(!meet.slice)
+        @Assert(meet.toString() == "none")
+        @Assert(SvgPreserveAspectRatio.parse(meet.toString()) == meet)
+    }
+
     /** meet 取较小缩放并垂直居中。 */
     @TestCase
     public func meetMatrix(): Unit {
