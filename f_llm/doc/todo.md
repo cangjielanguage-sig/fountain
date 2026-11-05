@@ -1,120 +1,36 @@
-## todo
-```cj
-package fountain::f_llm.finder
-public interface TodoFinder {
-    /**
-     * 保存待办
-     * @param task 待办任务名称
-     * @param todos 当前task的待办列表
-     */
-    func save(task: String, todos: ArrayList<Todo>): Unit
-    /**
-     * 列出待办
-     * @param task 待办任务名称
-     * @return 待办列表
-     */
-    func list(task: String): ArrayList<Todo>
-    /**
-     * 更新待办状态
-     * @param task 待办任务名称
-     * @param id 待办ID
-     * @param status 待办状态
-     * @return 更新的待办数量，如果返回的值不是1表示参数错了，或者待办不存在
-     */
-    func updateStatus(task: String, id: Int64, status: String): Int64
-}
-```
+# 未实现项
 
-```cj
-package fountain::f_llm.tool
-@DataAssist[props fields]
-public class TodoSavingParam {
-    @JsonStringSchema[description:'流程下一步骤的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'任务名称']
-    private var task: String = ''
-    @JsonArraySchema[description:'待办列表']
-    private var todos: ArrayList<TodoSaving> = ArrayList<TodoSaving>()
-}
-@DataAssist[props fields]
-public class TodoSaving {
-    @JsonStringSchema[description:'待办标题']
-    private var title: String = ''
-    @JsonStringSchema[description:'待办详述']
-    private var content: String = ''
-    @JsonStringSchema[description:'待办状态']
-    private var status: String = TODO_STATUS_PENDING
-    @JsonArraySchema[description:'前置待办ID列表']
-    private var predecessor: ArrayList<Int64> = ArrayList<Int64>()
-}
-@DataAssist[props fields]
-public class TodoListParam{
-    @JsonStringSchema[description:'流程下一步骤的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'任务名称']
-    private var task: String = ''
-}
-@DataAssist[props fields]
-public class TodoStatusParam{
-    @JsonStringSchema[description:'流程下一步骤的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'任务名称']
-    private var task: String = ''
-    @JsonStringSchema[description:'待办ID']
-    private var id: Int64 = 0
-    @JsonStringSchema[description:'新的待办状态']
-    private var status: String = ''
-}
-```
+> 只列**当前没有实现**的能力，以及为什么暂不实现。限制类问题见 `doc/known-limitations.md`。
 
-```cj
-package fountain::f_llm.tool
-@ToolCall
-public class TodoFunction {
-    @FunctionDefinition[
-        name: 'addTodo',
-        description: '添加待办'
-    ]
-    public func addTodo(param: TodoSavingParam): FunctionResult 
-
-    @FunctionDefinition[
-        name: 'todoList',
-        description: '查询全部待办'
-    ]
-    public func todoList(param: TodoListParam): FunctionResult 
-    @FunctionDefinition[
-        name: 'updateTodoStatus',
-        description: '更新待办状态'
-    ]
-    public func updateStatus(param: TodoStatusParam): FunctionResult 
-}
-```
-
----
-
-## 待办：暂不实现（2026-11-01 记录）
-
-以下项**不在当前实现范围**，先登记，避免被误认为遗漏。loom 单独排期（见 `f_llm-memory-design.md` §9）。
-
-### B. 占位实现
+## 1. 占位实现
 
 | 项 | 位置 | 现状 |
 |---|---|---|
-| 余额查询 zhipu / siliconflow / aliyun | `balance/BalanceQueriers.cj` | 调用抛 `BalanceUnsupportedException`；见 `known-limitations.md` §7 |
+| 余额查询 zhipu / siliconflow / aliyun | `src/balance/BalanceQueriers.cj` | `query()` 抛 `BalanceUnsupportedException`；接口形态待确认，详见 `known-limitations.md` §7 |
 
-### C. 单一实现 / 降级路径
+## 2. 单一实现 / 降级路径
 
 | 项 | 现状 |
 |---|---|
-| 联网搜索 provider | 只有 `DeepSeekSearchProvider`；Bing/Google/百度等需外部凭据，未实现（§9） |
-| OpenAI 兼容端点的 sparse / colbert | `LlmEmbeddingTransport` 只有 dense，用它会 `degraded=true`；三路需 `BgeM3Transport`（§2） |
+| 联网搜索 provider | 只有 `DeepSeekSearchProvider`；Bing / Google / 百度等需外部凭据，未实现 |
+| OpenAI 兼容端点的 sparse / colbert | `LlmEmbeddingTransport` 只有 dense，用它检索结果标 `degraded=true`；三路需 `BgeM3Transport` |
+| `listByKind` 的 SQL 下推 | 接口默认实现是「取一页再过滤」；`postgres` / `mysql` 的内存仓储覆盖成精确版，但 SQL 条件尚未下推到仓储层 |
+| 分级相关性标注 | 评测用二值相关（命中 / 未命中），没有「很相关 / 部分相关」的标注与 nDCG 分级增益 |
 
-### D. 外部 / 设计约束
+## 3. 外部 / 设计约束
 
 | 项 | 说明 |
 |---|---|
-| 运行期修改配置 | 永久不支持，必须重启（§0） |
-| HTTP 连接级超时 | `stdx.net.http` 无 `connectTimeout`（§1） |
+| 运行期修改配置 | 永久不支持，必须重启（`known-limitations.md` §0） |
+| HTTP 建连超时 | `stdx.net.http` 无 `connectTimeout`（§1） |
 | MySQL 向量索引 | 依赖 MyVector 组件 + 手工 `myvector_index_build`（§3） |
-| f_store 单实例、无事务 | 外部组件语义，靠 `repair()` 兜底（§4） |
-| 历史数据重建 sparse/colbert | 需显式调用重建工具（§5） |
+| f_store 单实例、无事务 | 组件语义，靠启动修补兜底（§4） |
+| 换 Embedder 后重建 | 需显式调用重建工具（§5） |
+
+## 4. 尚未设计的扩展
+
+| 项 | 说明 |
+|---|---|
+| 跨进程编排互斥 | 编排与流程执行只在进程内串联；多副本下同一流程可能被多个进程同时执行。技能演进有每日租约，编排没有 |
+| 演进重建的原子性 | 重建倒排中途崩溃会留下部分重建状态；下次启动按「配置已变」重扫，可自愈但没有进度记录 |
+| `processedKnowledge` 的分页 | 全量读取受实现上限约束，目前只用于运维查看；去重已走 `processedAmong`，无上限 |
