@@ -91,10 +91,22 @@ public class SvgPatternSampler {
     private let cache = HashMap<String, SvgPatternTile>()
     private var guard: ?SvgRenderGuard = None
     private var images: ?SvgImageResource = None
+    private let viewportWidth: Float64
+    private let viewportHeight: Float64
 
     public init(registry!: ?SvgFontRegistry = None, root!: ?SvgElement = None) {
         this.registry = registry
         this.root = root
+        let viewport = match (root) {
+            case Some(element) =>
+                match (element) {
+                    case svgRoot: SvgRoot => SvgViewport.from(svgRoot, 300.0, 150.0)
+                    case _ => SvgViewport(300.0, 150.0)
+                }
+            case None => SvgViewport(300.0, 150.0)
+        }
+        this.viewportWidth = viewport.width
+        this.viewportHeight = viewport.height
     }
 
     /** 绑定一次渲染内的共享守卫与解码预算（不扩大公开 API）。 */
@@ -160,8 +172,12 @@ public class SvgPatternSampler {
         let unitsText = this.effectiveAttr(chain, "patternUnits") ?? "objectBoundingBox"
         let objectUnits = (SvgCoordinateUnits.fromName(unitsText.trimAscii()) ?? 
             SvgCoordinateUnits.ObjectBoundingBox) == SvgCoordinateUnits.ObjectBoundingBox
-        let tileWidth = this.resolveAxis(chain, "width", boxWidth, objectUnits)
-        let tileHeight = this.resolveAxis(chain, "height", boxHeight, objectUnits)
+        let tileWidth = this.resolveAxis(
+            chain, "width", boxWidth, objectUnits, this.viewportWidth
+        )
+        let tileHeight = this.resolveAxis(
+            chain, "height", boxHeight, objectUnits, this.viewportHeight
+        )
         if (tileWidth <= 0.0 || tileHeight <= 0.0) {
             this.warnings.add(
                 "pattern「${pattern.attr("id") ?? ""}」的 tile 尺寸为空（${tileWidth}×${tileHeight}），不绘制"
@@ -184,8 +200,12 @@ public class SvgPatternSampler {
                 kind: SvgErrorKind.Limit
             )
         }
-        let originX = this.resolveOrigin(chain, "x", objectBounds.x, boxWidth, objectUnits)
-        let originY = this.resolveOrigin(chain, "y", objectBounds.y, boxHeight, objectUnits)
+        let originX = this.resolveOrigin(
+            chain, "x", objectBounds.x, boxWidth, objectUnits, this.viewportWidth
+        )
+        let originY = this.resolveOrigin(
+            chain, "y", objectBounds.y, boxHeight, objectUnits, this.viewportHeight
+        )
 
         var contentSource: ?SvgElement = None
         for (element in chain) {
@@ -201,7 +221,10 @@ public class SvgPatternSampler {
                 let contentObject = (SvgCoordinateUnits.fromName(contentUnitsText.trimAscii()) ??
                     SvgCoordinateUnits.UserSpaceOnUse) == SvgCoordinateUnits.ObjectBoundingBox
                 let contentMatrix = if (contentObject) {
-                    SvgMatrix.scale(boxWidth, boxHeight)
+                    SvgMatrix.translate(
+                        objectBounds.x - originX,
+                        objectBounds.y - originY
+                    ).multiply(SvgMatrix.scale(boxWidth, boxHeight))
                 } else {
                     SvgMatrix.identity
                 }
@@ -319,16 +342,19 @@ public class SvgPatternSampler {
         chain: ArrayList<SvgElement>,
         name: String,
         base: Float64,
-        objectUnits: Bool
+        objectUnits: Bool,
+        viewportExtent: Float64
     ): Float64 {
         let length = this.resolveLength(chain, name) ?? SvgLength(0.0)
-        let raw = if (length.unit == SvgLengthUnit.Percent) {
-            length.value / 100.0
-        } else {
-            length.value
-        }
         if (objectUnits) {
+            let raw = if (length.unit == SvgLengthUnit.Percent) {
+                length.value / 100.0
+            } else {
+                length.value
+            }
             raw * base
+        } else if (length.unit == SvgLengthUnit.Percent) {
+            length.value / 100.0 * viewportExtent
         } else {
             length.value
         }
@@ -339,16 +365,19 @@ public class SvgPatternSampler {
         name: String,
         base: Float64,
         extent: Float64,
-        objectUnits: Bool
+        objectUnits: Bool,
+        viewportExtent: Float64
     ): Float64 {
         let length = this.resolveLength(chain, name) ?? SvgLength(0.0)
-        let raw = if (length.unit == SvgLengthUnit.Percent) {
-            length.value / 100.0
-        } else {
-            length.value
-        }
         if (objectUnits) {
+            let raw = if (length.unit == SvgLengthUnit.Percent) {
+                length.value / 100.0
+            } else {
+                length.value
+            }
             base + raw * extent
+        } else if (length.unit == SvgLengthUnit.Percent) {
+            length.value / 100.0 * viewportExtent
         } else {
             length.value
         }

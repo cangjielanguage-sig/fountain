@@ -274,3 +274,40 @@ public class SvgPatternSampler_test {
         @Assert(found)
     }
 }
+
+@Test
+public class SvgPatternUnitsM3_test {
+    /** patternContentUnits=objectBoundingBox 时内容平移到包围盒原点。 */
+    @TestCase
+    public func contentOriginShifted(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\">" +
+            "<defs><pattern id=\"p\" x=\"0.25\" y=\"0\" width=\"0.5\" height=\"0.5\" " +
+            "patternContentUnits=\"objectBoundingBox\">" +
+            "<rect x=\"0.25\" y=\"0\" width=\"0.5\" height=\"1\" fill=\"red\"/>" +
+            "</pattern></defs></svg>"
+        )
+        let pattern = (document.root.child("defs").getOrThrow().child("pattern")
+            .getOrThrow() as SvgPattern).getOrThrow()
+        let tile = SvgPatternSampler(root: Some(document.root))
+            .sampleTile(pattern, SvgBounds(10.0, 5.0, 20.0, 10.0), SvgRenderOptions())
+            .getOrThrow()
+        @Assert(colorNear(tile.bitmap.pixel(2, 2), SvgColor.fromRgb(255, 0, 0)))
+    }
+
+    /** userSpaceOnUse 的百分比按视口尺寸解释。 */
+    @TestCase
+    public func userSpacePercentUsesViewport(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"100\">" +
+            "<defs><pattern id=\"p\" width=\"10%\" height=\"10%\" " +
+            "patternUnits=\"userSpaceOnUse\"/></defs></svg>"
+        )
+        let pattern = (document.root.child("defs").getOrThrow().child("pattern")
+            .getOrThrow() as SvgPattern).getOrThrow()
+        let tile = SvgPatternSampler(root: Some(document.root))
+            .sampleTile(pattern, SvgBounds(0.0, 0.0, 100.0, 100.0), SvgRenderOptions())
+            .getOrThrow()
+        @Assert(tile.tileWidth == 20.0 && tile.tileHeight == 10.0)
+    }
+}
