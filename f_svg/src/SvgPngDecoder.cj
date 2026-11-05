@@ -47,12 +47,6 @@ internal class SvgDecodeBudget {
         }
         this.remaining -= pixels
     }
-
-    prop left: Int64 {
-        get() {
-            this.remaining
-        }
-    }
 }
 
 /**

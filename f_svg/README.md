@@ -28,7 +28,7 @@ f_svg
 或在已配置中心仓时使用 `"fountain::f_svg" = "1.3.17"`。同时需要在仓库根 `.modules` 中登记
 `f_svg`（本仓库已登记）。
 
-## 能力（M2）
+## 能力（M3）
 
 | 能力 | 入口 |
 |---|---|
@@ -43,6 +43,13 @@ f_svg
 | PNG | `SvgPngEncoder` / `SvgBitmap.toPngBytes` / `writePng` / `savePng` |
 | 动画 | `SvgTimeline` / `SvgInterpolator` / `SvgClock` / `SvgManualClock` |
 | 字体 | `SvgFont` 接口 / `SvgFontRegistry` / 内置 `SvgHersheyFont` |
+| 滤镜 | `SvgFilter` / `SvgFilterRenderer` / `SvgFilterBuffer`，八个 `fe*` 原语 |
+| 图案 | `SvgPattern` / `SvgPatternSampler`，`href` 继承与 `patternTransform` |
+| 位图 | `SvgPngDecoder` / `SvgImageResourceProvider` / `SvgRenderOptions.images` |
+| SVGZ | `SvgParser.parseAuto` / `parseGzip` / `writeGzip` |
+| 文本路径 | `SvgTextPathLayout` / `rotate` 列表 |
+| marker | `SvgMarker` / `SvgMarkerExpander` |
+| 解析 AA | `SvgAntiAliasMode.Analytic` / `SvgRenderOptions.antiAlias` |
 | 无损保留 | 未知元素、未知属性、注释 / PI / CDATA、DOCTYPE |
 
 ## 快速开始（M1 文档能力）
@@ -178,6 +185,77 @@ let textOptions = SvgRenderOptions(fonts: fonts)
 
 渲染输出为 RGBA8、非预乘、行优先；同一文档 + 同一选项逐字节一致。
 `SvgRenderOptions.samplesPerPixel` 只允许 1 / 2 / 4，`maxPixels` 默认 64M。
+
+## M3：滤镜、图案、位图与 SVGZ
+
+M3 只新增带默认值的选项，默认渲染输出与 M2 逐字节一致；唯一例外是合法
+`data:image/png` 由占位变为真实绘制，以及显式开启 `antiAlias = Analytic` 时覆盖率来源改变。
+
+### 滤镜
+
+`<filter>` 与 `feGaussianBlur` / `feOffset` / `feFlood` / `feBlend` / `feComposite` /
+`feMerge` / `feColorMatrix` / `feTile` 全部类型化；区域按 `filterUnits` 换算并裁剪到画布，
+超过 `SvgRenderOptions.maxPixels` 时在分配缓冲前抛 `SvgException(kind: Limit)`。
+
+```cangjie
+let filter = SvgFilter()
+filter.filterUnits = SvgCoordinateUnits.UserSpaceOnUse
+filter.width = SvgLength(200.0)
+let blur = SvgFeGaussianBlur()
+blur.stdDeviation = SvgNumberList([2.0])
+filter.appendElement(blur)
+```
+
+### 图案
+
+`fill="url(#p)"` 与描边都支持 `<pattern>`：`patternUnits` / `patternContentUnits` 换算 tile，
+`patternTransform` 在取样前作用于 tile，`href` 逐属性继承，循环引用只记 warning。
+
+### 位图与资源边界
+
+```cangjie
+class MemoryImages <: SvgImageResourceProvider {
+    public func resolve(href: String): ?Array<Byte> {
+        if (href == "mem://logo") {
+            return Some(pngBytes)
+        }
+        None
+    }
+}
+
+let options = SvgRenderOptions(images: Some(MemoryImages()))
+let bitmap = SvgRenderer(options: options).render(document)
+```
+
+`<image>` 只接受两种来源：`data:image/png;base64,` 内联字节，或调用方注入的
+`SvgImageResourceProvider.resolve(href)`。库内不联网、不打开文件、不执行脚本；
+`preserveAspectRatio` 与 `image-rendering` 分别控制映射与最近邻 / 双线性取样。
+未注入 provider、返回 `None` 或解码失败时绘制占位并记 warning。
+
+### SVGZ
+
+```cangjie
+let document = SvgParser.parseAuto(bytes)   // 1F 8B 魔数命中时自动解压
+let document2 = SvgParser.parseGzip(bytes)  // 强制 gzip
+let compressed = writeGzip(document)        // mtime 固定 0，同文档同字节
+```
+
+解压输出超过 `SvgSecurityOptions.maxDecompressedBytes`（默认 64 MiB）抛 `Limit`。
+
+### textPath、marker 与解析 AA
+
+- `<textPath href="#path">` 按弧长排版，支持 `startOffset`（长度 / 百分比）、`text-anchor`、
+  路径不足时截断 warning；`rotate` 单值 / 列表按字形消费，并与切线角叠加。
+- `marker-start` / `marker-mid` / `marker-end` 支持 `markerUnits`、`orient`、`refX` / `refY`
+  与 `viewBox`；每个元素最多 1024 个，超出 warning 截断。
+- `SvgRenderOptions(antiAlias: SvgAntiAliasMode.Analytic)` 使用解析覆盖率；
+  默认仍为 `Supersample`，`samplesPerPixel` 语义与 M2 完全一致。
+
+### M3 安全上限
+
+单张解码图像素 16 × 1024 × 1024、单次渲染累计解码 64 × 1024 × 1024、base64 文本 32 MiB、
+gzip 解压输出 64 MiB、滤镜区域同 `maxPixels`、pattern tile 4 × 1024 × 1024、
+pattern / marker 引用深度 64；所有检查都发生在分配大缓冲之前。
 
 ## 值类型
 

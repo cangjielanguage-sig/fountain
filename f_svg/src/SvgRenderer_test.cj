@@ -416,3 +416,27 @@ public class SvgFilterRenderM3_test {
         @Assert(plain.pixels == filtered.pixels)
     }
 }
+
+
+@Test
+public class SvgRenderReadOnlyM3_test {
+    /** 渲染 pattern / marker / filter 两次不修改文档。 */
+    @TestCase
+    public func documentReadOnly(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +
+            "<defs><pattern id=\"p\" width=\"6\" height=\"6\" patternUnits=\"userSpaceOnUse\">" +
+            "<rect width=\"6\" height=\"6\" fill=\"red\"/></pattern>" +
+            "<filter id=\"f\"><feOffset dx=\"1\" dy=\"1\"/></filter>" +
+            "<marker id=\"m\" markerWidth=\"4\" markerHeight=\"4\">" +
+            "<rect width=\"4\" height=\"4\" fill=\"blue\"/></marker></defs>" +
+            "<line x1=\"2\" y1=\"2\" x2=\"20\" y2=\"2\" stroke=\"url(#p)\" " +
+            "marker-end=\"url(#m)\" filter=\"url(#f)\"/></svg>"
+        )
+        let before = documentSnapshot(document)
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(document)
+        renderer.render(document)
+        @Assert(documentSnapshot(document) == before)
+    }
+}

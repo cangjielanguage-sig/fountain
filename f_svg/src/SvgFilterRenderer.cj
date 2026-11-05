@@ -38,8 +38,7 @@ public class SvgFilterRenderer {
         filter: SvgFilter,
         objectBounds: SvgBounds,
         transform: SvgMatrix,
-        source: SvgBitmap,
-        options: SvgRenderOptions
+        source: SvgBitmap
     ): SvgBounds {
         let objectUnits = filter.filterUnits == SvgCoordinateUnits.ObjectBoundingBox
         let x = filter.x ?? SvgLength(-10.0, unit: SvgLengthUnit.Percent)
@@ -79,7 +78,7 @@ public class SvgFilterRenderer {
             }
             return output
         }
-        let area = this.region(filter, objectBounds, transform, source, options)
+        let area = this.region(filter, objectBounds, transform, source)
         let left = Int64(floor(area.x))
         let top = Int64(floor(area.y))
         let right = Int64(ceil(area.x + area.width))

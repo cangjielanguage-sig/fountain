@@ -247,3 +247,78 @@ public class SvgFilterPrimitive_test {
         @Assert(bitmap.pixel(19, 19).alpha == 0.0)
     }
 }
+
+
+@Test
+public class SvgFilterChainM3_test {
+    /** 单值 stdDeviation 同时作用于 x / y。 */
+    @TestCase
+    public func singleDeviation(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" x=\"0\" y=\"0\" width=\"9\" height=\"9\" " +
+            "filterUnits=\"userSpaceOnUse\"><feGaussianBlur stdDeviation=\"1\"/></filter></defs></svg>"
+        )
+        let filter = filterOf(document)
+        let source = SvgBitmap(9, 9)
+        source.pixels[(4 * 9 + 4) * 4 + 3] = 255
+        let output = SvgFilterRenderer().apply(
+            filter,
+            source,
+            SvgBounds(0.0, 0.0, 9.0, 9.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        @Assert(output.pixels[(4 * 9 + 3) * 4 + 3] == output.pixels[(3 * 9 + 4) * 4 + 3])
+        @Assert(output.pixels[(4 * 9 + 3) * 4 + 3] > 0)
+    }
+
+    /** 负 stdDeviation 记 warning 并按 0 处理。 */
+    @TestCase
+    public func negativeDeviation(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" x=\"0\" y=\"0\" width=\"4\" height=\"4\" " +
+            "filterUnits=\"userSpaceOnUse\"><feGaussianBlur stdDeviation=\"-1\"/></filter></defs></svg>"
+        )
+        let filter = filterOf(document)
+        let source = filledBitmap(4, 4, SvgColor.fromRgb(10, 20, 30))
+        let renderer = SvgFilterRenderer()
+        let output = renderer.apply(
+            filter,
+            source,
+            SvgBounds(0.0, 0.0, 4.0, 4.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        @Assert(output.pixels == source.pixels)
+        var found = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("stdDeviation")) {
+                found = true
+            }
+        }
+        @Assert(found)
+    }
+
+    /** 隐式图连接：后续原语缺省继承前一个 result。 */
+    @TestCase
+    public func implicitChaining(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" x=\"0\" y=\"0\" width=\"10\" height=\"10\" " +
+            "filterUnits=\"userSpaceOnUse\">" +
+            "<feFlood flood-color=\"red\" result=\"a\"/>" +
+            "<feOffset dx=\"2\" dy=\"0\"/></filter></defs></svg>"
+        )
+        let filter = filterOf(document)
+        let source = SvgBitmap(10, 10)
+        let output = SvgFilterRenderer().apply(
+            filter,
+            source,
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        @Assert(output.pixel(5, 5).alpha > 0.9)
+        @Assert(colorNear(output.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(output.pixel(1, 5).alpha == 0.0)
+    }
+}

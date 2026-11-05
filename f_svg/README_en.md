@@ -30,7 +30,7 @@ The module is released with the fountain repository and follows its version
 
 When a central repository is configured, `"fountain::f_svg" = "1.3.17"` also works.
 
-## Capabilities (M2)
+## Capabilities (M3)
 
 | Capability | Entry point |
 |---|---|
@@ -46,6 +46,13 @@ When a central repository is configured, `"fountain::f_svg" = "1.3.17"` also wor
 | PNG | `SvgPngEncoder`, `SvgBitmap.toPngBytes`, `writePng`, `savePng` |
 | Animation | `SvgTimeline`, `SvgInterpolator`, `SvgClock`, `SvgManualClock` |
 | Fonts | `SvgFont` interface, `SvgFontRegistry`, built-in `SvgHersheyFont` |
+| Filters | `SvgFilter`, `SvgFilterRenderer`, `SvgFilterBuffer`, eight `fe*` primitives |
+| Patterns | `SvgPattern`, `SvgPatternSampler`, `href` inheritance and `patternTransform` |
+| Bitmaps | `SvgPngDecoder`, `SvgImageResourceProvider`, `SvgRenderOptions.images` |
+| SVGZ | `SvgParser.parseAuto`, `parseGzip`, `writeGzip` |
+| Text path | `SvgTextPathLayout`, `rotate` lists |
+| Markers | `SvgMarker`, `SvgMarkerExpander` |
+| Analytic AA | `SvgAntiAliasMode.Analytic`, `SvgRenderOptions.antiAlias` |
 
 ## Quick start
 
@@ -177,6 +184,72 @@ let textOptions = SvgRenderOptions(fonts: fonts)
 Output is RGBA8, non-premultiplied, row-major; same document plus same options
 produces byte-identical PNGs. `samplesPerPixel` accepts 1 / 2 / 4 and `maxPixels`
 defaults to 64M.
+
+## M3: filters, patterns, bitmaps and SVGZ
+
+M3 only adds options with defaults. Default rendering output stays byte-identical to M2, except:
+a valid `data:image/png` is now drawn instead of using a placeholder, and explicitly setting
+`antiAlias = Analytic` changes the coverage source.
+
+### Filters
+
+`<filter>` and all eight `fe*` primitives are typed. The filter region is resolved from
+`filterUnits`, intersected with the canvas, and rejected with `SvgException(kind: Limit)`
+before allocating a buffer when it exceeds `SvgRenderOptions.maxPixels`.
+
+### Patterns
+
+`fill="url(#p)"` and strokes support `<pattern>`: `patternUnits` / `patternContentUnits`
+size the tile, `patternTransform` is applied before sampling, `href` is inherited per property,
+and cycles only produce warnings.
+
+### Bitmaps and resource boundary
+
+```cangjie
+class MemoryImages <: SvgImageResourceProvider {
+    public func resolve(href: String): ?Array<Byte> {
+        if (href == "mem://logo") {
+            return Some(pngBytes)
+        }
+        None
+    }
+}
+
+let options = SvgRenderOptions(images: Some(MemoryImages()))
+let bitmap = SvgRenderer(options: options).render(document)
+```
+
+`<image>` accepts exactly two sources: inline `data:image/png;base64,` bytes, or bytes returned
+by a caller-supplied `SvgImageResourceProvider.resolve(href)`. The library never opens network
+connections or files and never executes scripts. Missing providers, `None` results and decode
+failures fall back to a placeholder with a warning.
+
+### SVGZ
+
+```cangjie
+let document = SvgParser.parseAuto(bytes)   // gzip when the 1F 8B magic matches
+let document2 = SvgParser.parseGzip(bytes)  // force gzip
+let compressed = writeGzip(document)        // mtime pinned to 0, deterministic bytes
+```
+
+Decompressed output above `SvgSecurityOptions.maxDecompressedBytes` (64 MiB by default)
+raises `Limit`.
+
+### textPath, markers and analytic AA
+
+- `<textPath href="#path">` lays glyphs out by arc length, honouring `startOffset`
+  (length or percentage), `text-anchor` and per-glyph `rotate`; short paths truncate with a warning.
+- `marker-start` / `marker-mid` / `marker-end` honour `markerUnits`, `orient`, `refX` / `refY`
+  and `viewBox`; at most 1024 markers per element, excess is truncated with a warning.
+- `SvgRenderOptions(antiAlias: SvgAntiAliasMode.Analytic)` enables analytic coverage.
+  The default remains `Supersample`, with the exact M2 `samplesPerPixel` semantics.
+
+### M3 limits
+
+Single decoded image 16 × 1024 × 1024 px, decoded pixels per render 64 × 1024 × 1024,
+base64 text 32 MiB, gzip output 64 MiB, filter region bounded by `maxPixels`,
+pattern tile 4 × 1024 × 1024, pattern/marker reference depth 64. Every check happens
+before large buffers are allocated.
 
 ## Value types
 

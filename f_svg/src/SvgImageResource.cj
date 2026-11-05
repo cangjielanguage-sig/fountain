@@ -98,6 +98,16 @@ internal class SvgImageResource {
             case Some(_) => return None
             case None => ()
         }
+        let lower = href.toAsciiLower()
+        if (lower.size > SVG_DATA_PNG_PREFIX.size &&
+            lower[0..SVG_DATA_PNG_PREFIX.size] == SVG_DATA_PNG_PREFIX) {
+            match (this.loadDataUri(href)) {
+                case Some(bitmap) => return Some(bitmap)
+                case None =>
+                    this.missing[href] = true
+                    return None
+            }
+        }
         let bytes = match (this.resourceBytes(href)) {
             case Some(value) => value
             case None =>
@@ -151,18 +161,6 @@ internal class SvgImageResource {
     }
 
     private func resourceBytes(href: String): ?Array<Byte> {
-        let lower = href.toAsciiLower()
-        if (lower.size > SVG_DATA_PNG_PREFIX.size &&
-            lower[0..SVG_DATA_PNG_PREFIX.size] == SVG_DATA_PNG_PREFIX) {
-            let payload = href[SVG_DATA_PNG_PREFIX.size..].trimAscii()
-            if (Int64(payload.size) > SVG_MAX_BASE64_LENGTH) {
-                throw SvgException(
-                    "data URI base64 长度 ${payload.size} 超过上限 ${SVG_MAX_BASE64_LENGTH}",
-                    kind: SvgErrorKind.Limit
-                )
-            }
-            return fromBase64String(payload)
-        }
         match (this.provider) {
             case Some(value) => value.resolve(href)
             case None => None

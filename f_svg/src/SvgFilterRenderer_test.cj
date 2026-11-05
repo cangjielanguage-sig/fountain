@@ -75,8 +75,7 @@ public class SvgFilterRenderer_test {
             filter,
             SvgBounds(100.0, 100.0, 200.0, 100.0),
             SvgMatrix.identity,
-            SvgBitmap(400, 400),
-            SvgRenderOptions(maxPixels: 400 * 400)
+            SvgBitmap(400, 400)
         )
         @Assert(near(region.x, 80.0) && near(region.y, 90.0))
         @Assert(near(region.width, 240.0) && near(region.height, 120.0))
@@ -95,8 +94,7 @@ public class SvgFilterRenderer_test {
             filter,
             SvgBounds(100.0, 100.0, 200.0, 100.0),
             SvgMatrix.identity,
-            SvgBitmap(400, 400),
-            SvgRenderOptions()
+            SvgBitmap(400, 400)
         )
         @Assert(near(region.x, 0.0) && near(region.y, 0.0))
         @Assert(near(region.width, 50.0) && near(region.height, 50.0))
@@ -114,8 +112,7 @@ public class SvgFilterRenderer_test {
             filter,
             SvgBounds(0.0, 0.0, 10.0, 10.0),
             SvgMatrix.identity,
-            SvgBitmap(50, 50),
-            SvgRenderOptions()
+            SvgBitmap(50, 50)
         )
         @Assert(near(region.x, 0.0) && near(region.y, 0.0))
         @Assert(near(region.width, 50.0) && near(region.height, 50.0))

@@ -235,3 +235,23 @@ public class SvgMarkerRender_test {
         @Assert(colorNear(bitmap.pixel(25, 5), SvgColor.fromRgb(255, 0, 0)))
     }
 }
+
+
+@Test
+public class SvgMarkerClipM3_test {
+    /** marker 内容引用 clipPath 时正常裁剪。 */
+    @TestCase
+    public func markerContentClipped(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +
+            "<defs><clipPath id=\"c\"><rect x=\"0\" y=\"0\" width=\"2\" height=\"4\"/></clipPath>" +
+            "<marker id=\"m\" markerWidth=\"4\" markerHeight=\"4\">" +
+            "<rect width=\"4\" height=\"4\" fill=\"red\" clip-path=\"url(#c)\"/></marker></defs>" +
+            "<line x1=\"10\" y1=\"10\" x2=\"25\" y2=\"10\" stroke=\"black\" " +
+            "marker-start=\"url(#m)\"/></svg>"
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(colorNear(bitmap.pixel(10, 10), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(bitmap.pixel(13, 10).alpha == 0.0)
+    }
+}

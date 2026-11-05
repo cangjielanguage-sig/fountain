@@ -102,6 +102,10 @@ public class SvgPatternSampler {
         transform: SvgMatrix,
         options: SvgRenderOptions
     ): ?SvgBitmap {
+        if (transform.invert().isNone()) {
+            this.warnings.add("pattern 取样变换不可逆，跳过绘制")
+            return None
+        }
         match (this.sampleTile(pattern, objectBounds, options)) {
             case Some(tile) => Some(tile.bitmap)
             case None => None
@@ -213,15 +217,10 @@ public class SvgPatternSampler {
     private func resolveChain(pattern: SvgPattern): ArrayList<SvgElement> {
         let chain = ArrayList<SvgElement>()
         let visited = ArrayList<Int64>()
-        var current: ?SvgElement = Some(pattern)
+        var current: SvgElement = pattern
         var stop = false
         while (!stop) {
-            let element = match (current) {
-                case Some(value) => value
-                case None =>
-                    stop = true
-                    continue
-            }
+            let element = current
             var repeated = false
             for (identity in visited) {
                 if (identity == element.identity) {
@@ -247,7 +246,7 @@ public class SvgPatternSampler {
                     match (findSvgElementById(this.root, id)) {
                         case Some(next) =>
                             if (next is SvgPattern) {
-                                current = Some(next)
+                                current = next
                             } else {
                                 stop = true
                             }
