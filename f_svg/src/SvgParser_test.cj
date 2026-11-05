@@ -51,8 +51,33 @@ internal class TestSvgInputStream <: InputStream {
 private let SVG_SAMPLE = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"50\">" +
     "<g><rect x=\"1\" y=\"2\" width=\"10\" height=\"20\"/></g></svg>"
 
+/** 含声明、DOCTYPE、注释、PI 与实体的样本，用于完整快照比较。 */
+private let SVG_PROLOG_SAMPLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+    "<!DOCTYPE svg [<!ENTITY greet \"hi\">]>" +
+    "<!--before--><?pi target?>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>&greet;</text><!--inside--></svg>" +
+    "<!--after-->"
+
 private func parserSnapshot(document: SvgDocument): String {
-    document.root.toString() + "|warnings=" + document.warnings.size.toString()
+    let declaration = match (document.declaration) {
+        case Some(value) => value.toString()
+        case None => "-"
+    }
+    let doctype = match (document.doctype) {
+        case Some(value) => value.toString()
+        case None => "-"
+    }
+    let prolog = StringBuilder()
+    for (node in document.prolog) {
+        prolog.append(node.toString())
+    }
+    let epilog = StringBuilder()
+    for (node in document.epilog) {
+        epilog.append(node.toString())
+    }
+    declaration + "|" + doctype + "|" + prolog.toString() + "|" +
+        document.root.toString() + "|" + epilog.toString() +
+        "|warnings=" + document.warnings.size.toString()
 }
 
 @Test
@@ -91,6 +116,21 @@ public class SvgParser_test {
         file.close()
         let fromPath = SvgParser.parse(path)
         @Assert(parserSnapshot(fromPath) == expected)
+    }
+
+    /** 五个入口结构等价（含声明、DOCTYPE、注释、PI、实体与尾部节点）。 */
+    @TestCase
+    public func fiveEntriesEquivalentWithProlog(): Unit {
+        let expected = parserSnapshot(SvgParser.parse(SVG_PROLOG_SAMPLE))
+        @Assert(parserSnapshot(SvgParser.parse(SVG_PROLOG_SAMPLE.toArray())) == expected)
+        @Assert(parserSnapshot(SvgParser.parse(TestSvgInputStream(SVG_PROLOG_SAMPLE.toArray()))) == expected)
+        @Assert(parserSnapshot(SvgParser.parse(XmlParser.parse(SVG_PROLOG_SAMPLE))) == expected)
+
+        let path = Path("target/f_svg_parser_equivalence_prolog.svg")
+        let file = File(path, OpenMode.Write)
+        file.write(SVG_PROLOG_SAMPLE.toArray())
+        file.close()
+        @Assert(parserSnapshot(SvgParser.parse(path)) == expected)
     }
 
     /** 任意前缀按 URI 归属。 */

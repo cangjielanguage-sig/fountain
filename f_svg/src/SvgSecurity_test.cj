@@ -332,6 +332,26 @@ public class SvgSecurity_test {
         })
         @Assert(error.kind == SvgErrorKind.Syntax)
     }
+
+    /** 外部实体：声明可识别，引用即报错，永不加载。 */
+    @TestCase
+    public func externalEntityReferenceRejected(): Unit {
+        let text = "<?xml version=\"1.0\"?>" +
+            "<!DOCTYPE svg [<!ENTITY x SYSTEM \"file:///etc/passwd\">]>" +
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>"
+        let error = expectSvgException({=> SvgParser.parse(text)})
+        @Assert(error.kind == SvgErrorKind.Syntax)
+    }
+
+    /** 外部 DTD 子集不加载：不联网、不打开文件，文档仍可解析。 */
+    @TestCase
+    public func externalDtdSubsetNotLoaded(): Unit {
+        let text = "<?xml version=\"1.0\"?>" +
+            "<!DOCTYPE svg SYSTEM \"https://example.invalid/svg.dtd\">" +
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"1\" height=\"1\"/></svg>"
+        let document = SvgParser.parse(text)
+        @Assert(document.root.child("rect").isSome())
+    }
 }
 
 private func nestedGroups(levels: Int64): String {

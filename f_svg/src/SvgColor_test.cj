@@ -145,6 +145,15 @@ public class SvgColor_test {
         @Assert(SvgColor.parse("#ff000080").toString() == "#ff000080")
     }
 
+    /** 非有限 alpha 在序列化时按 InvalidValue 拒绝，不做字节转换。 */
+    @TestCase
+    public func nonFiniteAlphaRejected(): Unit {
+        let nanError = expectSvgException({=> SvgColor(0, 0, 0, alpha: Float64.NaN)})
+        @Assert(nanError.kind == SvgErrorKind.InvalidValue)
+        let infError = expectSvgException({=> SvgColor(0, 0, 0, alpha: Float64.Inf)})
+        @Assert(infError.kind == SvgErrorKind.InvalidValue)
+    }
+
     /** 不能由字节精确表示的 alpha 仍走 rgba() 并往返。 */
     @TestCase
     public func decimalAlphaRoundTrip(): Unit {

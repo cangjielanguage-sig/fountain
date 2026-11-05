@@ -358,6 +358,9 @@ private func clampUnit(value: Float64): Float64 {
 }
 
 private func clampAlpha(value: Float64): Float64 {
+    if (value.isNaN() || value.isInf()) {
+        throw invalidValue("颜色 alpha 必须是有限数")
+    }
     clampSvg(value, 0.0, 1.0)
 }
 
