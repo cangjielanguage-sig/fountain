@@ -94,6 +94,10 @@ public class SvgBitmap <: ToString {
         if (width <= 0 || height <= 0) {
             throw invalidValue("位图尺寸必须为正，实际 ${width}×${height}")
         }
+        if (width > 0x7FFFFFFF || height > 0x7FFFFFFF ||
+            width > 2305843009213693951 / height) {
+            throw SvgException("位图像素数超出可分配上限", kind: SvgErrorKind.Limit)
+        }
         this.width = width
         this.height = height
         this.pixels = Array<Byte>(width * height * 4, repeat: 0)

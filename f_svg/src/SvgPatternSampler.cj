@@ -139,9 +139,17 @@ public class SvgPatternSampler {
             )
             return None
         }
+        if (!isFiniteSvgNumber(tileWidth) || !isFiniteSvgNumber(tileHeight) ||
+            tileWidth > Float64(SVG_MAX_PATTERN_TILE_PIXELS) ||
+            tileHeight > Float64(SVG_MAX_PATTERN_TILE_PIXELS)) {
+            throw SvgException(
+                "pattern tile 像素数超过上限 ${SVG_MAX_PATTERN_TILE_PIXELS}",
+                kind: SvgErrorKind.Limit
+            )
+        }
         let pixelWidth = maxInt64Pattern(1, Int64(ceil(tileWidth)))
         let pixelHeight = maxInt64Pattern(1, Int64(ceil(tileHeight)))
-        if (pixelWidth * pixelHeight > SVG_MAX_PATTERN_TILE_PIXELS) {
+        if (pixelWidth > SVG_MAX_PATTERN_TILE_PIXELS / pixelHeight) {
             throw SvgException(
                 "pattern tile 像素数超过上限 ${SVG_MAX_PATTERN_TILE_PIXELS}",
                 kind: SvgErrorKind.Limit

@@ -73,6 +73,14 @@ public class SvgPngDecoder {
 
     internal static func decode(bytes: Array<Byte>, budget!: ?SvgDecodeBudget): SvgBitmap {
         let header = readHeaderChunks(bytes)
+        // 宽高来自 32 位无符号整数，先用除法判断，避免 width * height 溢出。
+        if (header.width > 0x7FFFFFFF || header.height > 0x7FFFFFFF ||
+            header.width > SVG_MAX_IMAGE_PIXELS / header.height) {
+            throw SvgException(
+                "PNG 像素数超过单图上限 ${SVG_MAX_IMAGE_PIXELS}",
+                kind: SvgErrorKind.Limit
+            )
+        }
         let pixels = header.width * header.height
         if (pixels > SVG_MAX_IMAGE_PIXELS) {
             throw SvgException(
