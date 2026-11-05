@@ -57,6 +57,9 @@ public open class SvgElement <: ToString {
 
     private var transformCache: ?SvgValueCache<SvgTransform> = None
 
+    /** 原始限定名；未知元素用它保留前缀。 */
+    internal var rawQName: ?QName = None
+
     /** 元素身份：用于 `==` 与 `elementPath()` 的兄弟定位。 */
     internal let identity: Int64
 
@@ -248,7 +251,10 @@ public open class SvgElement <: ToString {
         } else {
             Some(this.namespace)
         }
-        let element = XmlElement(QName(this.tag, uri: uri))
+        let element = match (this.rawQName) {
+            case Some(qname) => XmlElement(qname)
+            case None => XmlElement(QName(this.tag, uri: uri))
+        }
         for (attribute in this.attributes) {
             element.attributes.add(XmlAttribute(attribute.name, attribute.value))
         }
@@ -266,9 +272,13 @@ public open class SvgElement <: ToString {
 
     /** 紧凑序列化，不输出命名空间声明；完整输出走 `SvgWriter`。 */
     public func toString(): String {
+        let literalName = match (this.rawQName) {
+            case Some(qname) => qname.toString()
+            case None => this.tag
+        }
         let out = StringBuilder()
         out.append("<")
-        out.append(this.tag)
+        out.append(literalName)
         for (attribute in this.attributes) {
             out.append(" ")
             out.append(attribute.name.toString())
@@ -290,7 +300,7 @@ public open class SvgElement <: ToString {
                 }
             }
             out.append("</")
-            out.append(this.tag)
+            out.append(literalName)
             out.append(">")
         }
         out.toString()

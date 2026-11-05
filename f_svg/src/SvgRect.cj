@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import fountain::f_base.*
 
 /** `rect` 元素。 */
 public class SvgRect <: SvgShape {

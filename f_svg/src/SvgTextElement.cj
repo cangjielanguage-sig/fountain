@@ -15,8 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.collection.*
-import fountain::f_base.*
 
 /** 文本锚点。 */
 public enum SvgTextAnchor <: Equatable<SvgTextAnchor> & ToString {

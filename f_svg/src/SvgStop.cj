@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import fountain::f_base.*
 
 /** 渐变色标。`offset` 归一为 0..1，越界钳制。 */
 public class SvgStop <: SvgElement {

@@ -17,7 +17,6 @@ package fountain::f_svg
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import std.math.*
 
 internal func expectSvgException(action: () -> Unit): SvgException {
     try {

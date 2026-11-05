@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.math.*
 
 /** `linearGradient` 元素。 */
 public class SvgLinearGradient <: SvgGradient {

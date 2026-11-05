@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
-import std.math.*
 import fountain::f_base.*
 
 /** 线段端点样式。 */

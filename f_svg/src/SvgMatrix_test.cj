@@ -17,7 +17,6 @@ package fountain::f_svg
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import std.math.*
 
 internal func matrixNear(actual: SvgMatrix, expected: SvgMatrix): Bool {
     near(actual.a, expected.a) && near(actual.b, expected.b) && near(actual.c, expected.c) &&

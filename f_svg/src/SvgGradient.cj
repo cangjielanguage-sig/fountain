@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.math.*
 
 /** 渐变坐标单位。 */
 public enum SvgCoordinateUnits <: Equatable<SvgCoordinateUnits> & ToString {
