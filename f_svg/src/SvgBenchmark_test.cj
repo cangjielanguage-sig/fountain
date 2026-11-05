@@ -83,3 +83,57 @@ public class SvgBenchmark_test {
         println("1000 段路径 bounds: ${elapsed.toNanoseconds() / 1000000} ms")
     }
 }
+
+@Test
+public class SvgBenchmarkM3Blur_test {
+    @TestCase
+    public func blur(): Unit {
+        let document = SvgParser.parse(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">' +
+            '<defs><filter id="f"><feGaussianBlur stdDeviation="8"/></filter></defs>' +
+            '<rect width="512" height="512" fill="#3366cc" filter="url(#f)"/></svg>'
+        )
+        let start = MonoTime.now()
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        let elapsed = MonoTime.now() - start
+        @Assert(bitmap.width == 512)
+        println("512×512 高斯模糊 σ=8: ${elapsed.toNanoseconds() / 1000000} ms")
+    }
+}
+
+@Test
+public class SvgBenchmarkM3Pattern_test {
+    @TestCase
+    public func pattern(): Unit {
+        let document = SvgParser.parse(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">' +
+            '<defs><pattern id="p" width="32" height="32" patternUnits="userSpaceOnUse">' +
+            '<rect width="32" height="32" fill="#f2e6c8"/>' +
+            '<rect width="12" height="12" fill="#c84b31"/></pattern></defs>' +
+            '<rect width="512" height="512" fill="url(#p)"/></svg>'
+        )
+        let start = MonoTime.now()
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        let elapsed = MonoTime.now() - start
+        @Assert(bitmap.width == 512)
+        println("512×512 图案平铺: ${elapsed.toNanoseconds() / 1000000} ms")
+    }
+}
+
+@Test
+public class SvgBenchmarkM3Analytic_test {
+    @TestCase
+    public func analyticCircle(): Unit {
+        let document = SvgParser.parse(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">' +
+            '<circle cx="512" cy="512" r="480" fill="#2d6a4f"/></svg>'
+        )
+        let start = MonoTime.now()
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(document)
+        let elapsed = MonoTime.now() - start
+        @Assert(bitmap.width == 1024)
+        println("1024×1024 解析 AA 圆: ${elapsed.toNanoseconds() / 1000000} ms")
+    }
+}

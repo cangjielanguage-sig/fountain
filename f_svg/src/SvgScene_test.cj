@@ -91,3 +91,31 @@ public class SvgScene_test {
         compareScene(renderer.render(timeline.sample(1.0)), "animation-1")
     }
 }
+
+@Test
+public class SvgSceneM3_test {
+    @TestCase
+    public func m3Filter(): Unit {
+        compareScene(SvgRenderer().render(loadScene("m3-filter")), "m3-filter")
+    }
+
+    @TestCase
+    public func m3Pattern(): Unit {
+        compareScene(SvgRenderer().render(loadScene("m3-pattern")), "m3-pattern")
+    }
+
+    @TestCase
+    public func m3Image(): Unit {
+        compareScene(SvgRenderer().render(loadScene("m3-image")), "m3-image")
+    }
+
+    @TestCase
+    public func m3TextPath(): Unit {
+        compareScene(SvgRenderer().render(loadScene("m3-textpath")), "m3-textpath")
+    }
+
+    @TestCase
+    public func m3Marker(): Unit {
+        compareScene(SvgRenderer().render(loadScene("m3-marker")), "m3-marker")
+    }
+}

@@ -126,7 +126,8 @@ public class SvgFilterRenderer_test {
     public func regionLimit(): Unit {
         let document = SvgParser.parse(
             "<svg><defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" " +
-            "x=\"0\" y=\"0\" width=\"100\" height=\"100\"/></defs></svg>"
+            "x=\"0\" y=\"0\" width=\"100\" height=\"100\">" +
+            "<feOffset dx=\"0\" dy=\"0\"/></filter></defs></svg>"
         )
         let filter = filterOf(document)
         let error = expectSvgException(

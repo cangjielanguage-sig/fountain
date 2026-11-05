@@ -50,3 +50,18 @@
 
 > 以上 M2 数值均为参考、非门禁；每次复验后应更新本文件，而不是把实测值写成硬断言。
 
+
+## M3 效果与解析 AA（参考值，非门禁）
+
+- 环境：Linux x86_64，Cangjie SDK 1.3.0，`cjpm test`，`-O2`，单次运行、含噪声。
+- 口径：`cjpm test --skip-build --filter <基准类>` 的整轮 wall clock，减去同环境空跑约 1.2 s 的进程启动后约值；只用于回归对比，不作 CI 门禁。
+- 基准测试：`SvgBenchmark_test.cj` 的 `SvgBenchmarkM3Blur_test` / `SvgBenchmarkM3Pattern_test` / `SvgBenchmarkM3Analytic_test`。
+
+| 场景 | 参数 | 整轮 wall | 约净耗时 |
+|---|---|---|---|
+| 512×512 高斯模糊 | `stdDeviation=8`，`samplesPerPixel=1` | 1.7 s | ~0.5 s |
+| 512×512 图案平铺 | 32×32 tile，`samplesPerPixel=1` | 1.4 s | ~0.2 s |
+| 1024×1024 解析 AA 圆 | `antiAlias=Analytic` | 4.2 s | ~3.0 s |
+
+- 解析 AA 走逐像素精确裁剪（复杂自交路径退化为固定 8×8 子采样），1024 画布下是 M3 的主要耗时项；如后续需要提速，优先在像素完全位于多边形内部时跳过裁剪。
+- 同一环境的全量 `cjpm test --skip-build` 约 9.4 s（461 条用例）。
