@@ -572,7 +572,7 @@ private func evaluateKeyframeValue(spec: SvgAnimationSpec, progress: Float64, ba
     if (frames.size == 1) {
         return frames[0]
     }
-    let times = effectiveKeyTimes(spec, frames.size)
+    let times = effectiveKeyTimesForFrames(spec, frames)
     if (spec.calcMode == SvgCalcMode.Discrete) {
         var index = 0
         for (position in 0..times.size) {
@@ -628,6 +628,68 @@ private func effectiveKeyTimes(spec: SvgAnimationSpec, count: Int64): Array<Floa
     times
 }
 
+/** `paced` 按相邻关键帧的数值距离生成时间分布，其余模式沿用 keyTimes。 */
+private func effectiveKeyTimesForFrames(spec: SvgAnimationSpec, frames: Array<String>): Array<Float64> {
+    if (spec.calcMode == SvgCalcMode.Paced && frames.size > 1) {
+        return pacedKeyTimes(frames)
+    }
+    effectiveKeyTimes(spec, frames.size)
+}
+
+private func pacedKeyTimes(frames: Array<String>): Array<Float64> {
+    let count = frames.size
+    let distances = Array<Float64>(count - 1, repeat: 0.0)
+    var total = 0.0
+    for (index in 1..count) {
+        let distance = animationValueDistance(frames[index - 1], frames[index])
+        distances[index - 1] = distance
+        total += distance
+    }
+    let times = Array<Float64>(count, repeat: 0.0)
+    if (total <= 0.0) {
+        for (index in 0..count) {
+            times[index] = Float64(index) / Float64(count - 1)
+        }
+        return times
+    }
+    var walked = 0.0
+    for (index in 1..count) {
+        walked += distances[index - 1]
+        times[index] = walked / total
+    }
+    times[count - 1] = 1.0
+    times
+}
+
+private func animationValueDistance(first: String, second: String): Float64 {
+    match ((tryParseSvgFloat(first), tryParseSvgFloat(second))) {
+        case (Some(left), Some(right)) => return abs(right - left)
+        case _ => ()
+    }
+    let firstList = tryParseSvgNumberArray(first.replace(",", " "))
+    let secondList = tryParseSvgNumberArray(second.replace(",", " "))
+    match ((firstList, secondList)) {
+        case (Some(left), Some(right)) =>
+            let common = if (left.size < right.size) { left.size } else { right.size }
+            var total = 0.0
+            for (index in 0..common) {
+                total += abs(right[index] - left[index])
+            }
+            return total
+        case _ => ()
+    }
+    match ((SvgColor.tryParse(first), SvgColor.tryParse(second))) {
+        case (Some(left), Some(right)) =>
+            let dr = Float64(right.red) - Float64(left.red)
+            let dg = Float64(right.green) - Float64(left.green)
+            let db = Float64(right.blue) - Float64(left.blue)
+            let da = (right.alpha - left.alpha) * 255.0
+            return sqrt(dr * dr + dg * dg + db * db + da * da)
+        case _ => ()
+    }
+    if (first == second) { 0.0 } else { 1.0 }
+}
+
 private func interpolateAnimationValue(
     from: String,
     to: String,
@@ -670,7 +732,7 @@ private func evaluateTransformValue(spec: SvgAnimationSpec, progress: Float64): 
     if (frames.size == 1) {
         return parseAnimationTransform(spec, frames[0])
     }
-    let times = effectiveKeyTimes(spec, frames.size)
+    let times = effectiveKeyTimesForFrames(spec, frames)
     var segment = 0
     for (position in 0..times.size - 1) {
         if (progress >= times[position]) {

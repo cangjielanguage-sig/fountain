@@ -212,6 +212,28 @@ public class SvgAnimation_test {
         @Assert(near(fixedMatrix.b, 1.0))
     }
 
+    /** calcMode=paced 按数值距离分配时间。 */
+    @TestCase
+    public func pacedInterpolation(): Unit {
+        let middle = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" values="0;10;0" calcMode="paced" dur="1s" fill="freeze"/></rect>'
+        )
+        @Assert(near(parseNumericAttribute(Some(sampleAttribute(middle, 0.5, "r", "x"))), 10.0))
+
+        let uneven = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" values="0;2;10" calcMode="paced" dur="1s" fill="freeze"/></rect>'
+        )
+        @Assert(near(parseNumericAttribute(Some(sampleAttribute(uneven, 0.5, "r", "x"))), 5.0))
+
+        let linear = animationDoc(
+            '<rect id="r" width="10" height="10">' +
+            '<animate attributeName="x" values="0;2;10" dur="1s" fill="freeze"/></rect>'
+        )
+        @Assert(near(parseNumericAttribute(Some(sampleAttribute(linear, 0.5, "r", "x"))), 2.0))
+    }
+
     /** duration / animations / 同元素多动画 / by / additive / accumulate。 */
     @TestCase
     public func timelineSemantics(): Unit {
