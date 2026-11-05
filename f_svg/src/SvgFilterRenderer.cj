@@ -107,8 +107,14 @@ public class SvgFilterRenderer {
             sourceBuffer
         }
         let primitiveObjectUnits = filter.primitiveUnits == SvgCoordinateUnits.ObjectBoundingBox
-        let primitiveScaleX = if (primitiveObjectUnits) { objectBounds.width } else { 1.0 }
-        let primitiveScaleY = if (primitiveObjectUnits) { objectBounds.height } else { 1.0 }
+        // 原语坐标与滤镜区域一样是用户空间量：objectBoundingBox 先乘包围盒尺寸，
+        // 再统一乘元素 / 视口 CTM 的缩放分量，换算到设备像素缓冲。
+        let ctmScaleX = sqrt(transform.a * transform.a + transform.b * transform.b)
+        let ctmScaleY = sqrt(transform.c * transform.c + transform.d * transform.d)
+        let primitiveScaleX = (if (primitiveObjectUnits) { objectBounds.width } else { 1.0 }) *
+            ctmScaleX
+        let primitiveScaleY = (if (primitiveObjectUnits) { objectBounds.height } else { 1.0 }) *
+            ctmScaleY
         let result = this.runChain(filter, working, primitiveScaleX, primitiveScaleY)
         let final = if (linear) {
             toSrgb(result)

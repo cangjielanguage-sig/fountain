@@ -359,6 +359,38 @@ public class SvgFilterPrimitiveUnitsM3_test {
         @Assert(userOutput.pixel(14, 5).alpha == 0.0)
         @Assert(objectOutput.pixel(10, 5).alpha < userOutput.pixel(10, 5).alpha)
     }
+
+    /** primitiveUnits 的偏移量乘以元素 / 视口 CTM 的缩放分量。 */
+    @TestCase
+    public func primitiveUnitsMultiplyCtmScale(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" primitiveUnits=\"objectBoundingBox\" " +
+            "filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"40\" height=\"40\">" +
+            "<feOffset dx=\"0.1\" dy=\"0\"/>" +
+            "</filter></defs></svg>"
+        )
+        let source = SvgBitmap(40, 40)
+        source.setPixel(10, 10, SvgColor.fromRgb(255, 255, 255))
+        let identity = SvgFilterRenderer().apply(
+            filterOf(document),
+            source,
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        @Assert(identity.pixel(11, 10).alpha > 0.0)
+        @Assert(identity.pixel(12, 10).alpha == 0.0)
+
+        let scaled = SvgFilterRenderer().apply(
+            filterOf(document),
+            source,
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.scale(2.0, 2.0),
+            SvgRenderOptions()
+        )
+        @Assert(scaled.pixel(12, 10).alpha > 0.0)
+        @Assert(scaled.pixel(11, 10).alpha == 0.0)
+    }
 }
 
 @Test
