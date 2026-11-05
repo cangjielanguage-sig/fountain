@@ -1761,9 +1761,91 @@ conf.auth = '<key>'
 
 ---
 
-## loom：文本 → 流程编排
+## loom 用法
 
-把一句自然语言变成可执行的流程（`fountain::f_llm.loom`，详见 `doc/loom.md`）：
+> 本节是使用指南；实现细节、状态机与边界见 `doc/loom.md`。
+
+### 5 分钟上手
+
+```cj
+import fountain::f_egraph.base.*
+import fountain::f_llm.loom.*
+
+// 1) 装配：存储网关、宿主、记忆策略、技能目录、演进表/状态/租约 一次性就位
+let chat = { model: String, system: String, input: String => yourLlmCall(model, system, input) }
+let service = LoomWiring.wire(chat, plannerModel: 'deepseek-flash')
+
+// 2) 预览：Planner + CodeGen，落库 pending，不编译
+let preview = service.execute(LoomRequest(
+    name: 'daily-report',
+    description: '每天汇总昨日提交与 issue，写成日报发给团队'))
+println(preview.status)          // pending | clarifying
+println(preview.flowSource)      // 生成的流程源码（可读、可改）
+println(preview.stepSources)     // 每个步骤的源码
+
+// 3) 确认：编译步骤闭包，成功后状态变 compiled
+let _ = service.confirmFlow('daily-report')
+
+// 4) 执行：需要一个宿主（模型通道 + 工具通道）
+let host = DefaultLoomHost(chat)
+let _ = service.executeNow('daily-report', host,
+    StartEvent(category: 'loom', tag: 'daily-report', name: 'start', data: '{}'))
+
+// 5) 其它入口
+service.status('daily-report')   // 当前状态
+service.delete('daily-report')   // 删除
+```
+
+| 阶段 | 做了什么 | 失败时 |
+|---|---|---|
+| `execute(confirm=false)` | Planner 产出计划 → CodeGen 产出源码 → 落 `pending` | 描述有歧义 → 落 `clarifying`，返回 `questions` |
+| `confirmFlow(name)` | 编译步骤闭包 | 保持 `pending` 并抛错（源码仍可读、可改） |
+| `executeNow(name, …)` | 要求状态为 `compiled` | 未编译直接抛错 |
+
+不传 `chat` 时用 `LoomWiring.wire(plannerModel: '…')`，内部走 `LoomDefaults.chat`（需要配置好 `LLMConf`）。
+
+### 两条使用路径
+
+**A. 自然语言编排** —— 上面那套 `LoomRequest` + `LoomService`。
+
+**B. 手工定义流程** —— 跳过 Planner，直接构造 `FlowPlan`，适合自己写死流程或先验证执行链：
+
+```cj
+let plan = FlowPlan('weekly-report')
+let fetch = StepPlan('fetch', 'tool')
+fetch.tool = 'webSearch'
+fetch.args = '{"query":"仓颉 本周发布"}'
+let sum = StepPlan('sum', 'llm')
+sum.model = 'deepseek-flash'
+sum.system = '你是技术编辑'
+sum.input = '本周动态：{fetch.output}'      // 引用上游步骤的输出
+plan.steps.add(fetch)
+plan.steps.add(sum)
+plan.edges.add(EdgePlan('fetch', 'sum'))
+
+let _ = LoomRunner().run(plan, host,
+    StartEvent(category: 'loom', tag: 'weekly-report', name: 'start', data: ''))
+```
+
+### 步骤类型与执行语义
+
+| kind | 用途 | 关键字段 |
+|---|---|---|
+| `tool` | 调已注册工具 / MCP | `tool`、`args` |
+| `llm` | 调模型 | `model`、`system`、`input` |
+| `jit` | 任意 Cangjie 片段，可调 `loomStore` | `input` 是源码，需产出 `let <id>_result = …` |
+
+| 规则 | 说明 |
+|---|---|
+| 执行顺序 | 按 `edges` 拓扑序；没有入边的步骤先跑 |
+| 取值 | 模板 `{stepId.output}` 替换成该步骤的输出，`{start.output}` 是进入本步骤的事件数据 |
+| JIT 变量不跨步骤 | 每个 JIT 步骤独立编译，只能通过 `{id.output}` 传值 |
+| 并发 | 默认同步；`StepPlan.async` 或 `run(parallel: true)`（计划里 `parallel` 同理）才真并发 |
+| 校验 | `plan.validate()`：重复 id、悬空边、缺 kind 都会抛错 |
+
+### 链路
+
+把一句自然语言变成可执行的流程（`fountain::f_llm.loom`）：
 
 ```
 自然语言描述
@@ -1806,6 +1888,49 @@ loomStore(kind, op, payload)          // 读写六类存储
 | `character` | `get` / `set` / `reset` | `characterKey` 必须是预定义值（或 `custom`） |
 | `evolution` | `list` / `by_skill` | **只读**：报告由后台演进任务写，模型不该改审计记录 |
 
+payload 都是 JSON **字符串**，常用组合：
+
+```cj
+// 记忆：列举（kind 先过滤再分页）、检索（返回里带正文）、按 id 取、写入
+let mem  = loomStore("memory", "list",
+    "{\"userId\":7,\"namespace\":\"work\",\"kind\":\"note\",\"offset\":0,\"limit\":20}")
+let hits = loomStore("memory", "search",
+    "{\"userId\":7,\"namespace\":\"work\",\"text\":\"发布流程\",\"topK\":5}")
+let one  = loomStore("memory", "get", "{\"userId\":7,\"id\":42}")
+let id   = loomStore("memory", "add",
+    "{\"userId\":7,\"namespace\":\"work\",\"title\":\"发布结论\",\"content\":\"先灰度 5%\",\"kind\":\"note\"}")
+
+// 经验：memory 的别名，写入本质是 kind=experience
+let exp = loomStore("experience", "search",
+    "{\"userId\":7,\"namespace\":\"work\",\"text\":\"灰度\",\"topK\":5}")
+
+// 知识
+loomStore("knowledge", "upsert", "{\"docId\":\"k1\",\"title\":\"发布规范\",\"content\":\"先灰度 5%\"}")
+let doc  = loomStore("knowledge", "get", "{\"docId\":\"k1\"}")
+let docs = loomStore("knowledge", "search", "{\"text\":\"灰度\",\"limit\":5}")
+
+// 技能 / 提示词 / 人格
+let skill = loomStore("skill", "load", "{\"title\":\"日报助手\"}")
+let all   = loomStore("skill", "list", "{}")
+let prm   = loomStore("prompt", "get", "{\"name\":\"reviewer\",\"version\":1}")
+let ch    = loomStore("character", "get", "{\"userId\":7}")
+
+// 演进报告（只读）
+let history = loomStore("evolution", "by_skill", "{\"skill\":\"日报助手\",\"limit\":5}")
+```
+
+把检索结果喂给模型，就在下一个 LLM 步骤里用模板引用：
+
+```cj
+let ask = StepPlan('ask', 'llm')
+ask.model = 'deepseek-flash'
+ask.system = 'BASE'
+ask.input = '参考资料：{mem.output}\n问题：{start.output}'   // 多路引用
+```
+
+写操作也可以放在流程里：`memory.add` / `knowledge.upsert` 执行后，存储侧立即生效，
+流程结束的自动提炼仍会另写一条 `note` 与 `experience`。
+
 ### 人格与角色
 
 `FlowPlan.persona` 与 `character` 最终都汇成 system 前缀，解析是**三级回落**：
@@ -1820,6 +1945,27 @@ loomStore(kind, op, payload)          // 读写六类存储
 `character.prompts` 作为**用户级附加要求**（语言、篇幅等）追加在人格正文之后。
 角色记录按 `LoomMemoryPolicy.userId` 取（`userId<=0` 时跳过，不查库）。
 
+四种指定方式，按优先级从高到低：
+
+```cj
+// 1) 提示词库里的条目（最高优先级）：把名字写进 persona
+loomStore("prompt", "put", "{\"name\":\"reviewer\",\"content\":\"你是严格评审员\"}")
+plan.persona = 'reviewer'
+
+// 2) 预定义人格 key：库里没有同名提示词时用内置正文（13 个之一）
+plan.persona = 'rigorous'        // default/rigorous/friendly/blunt/…
+
+// 3) 字面文本：库里查不到、也不是预定义 key，就当正文
+plan.persona = '只挑错，不夸奖'
+
+// 4) 什么都不写：回落到该用户的 character 记录（风格 + 附加要求）
+loomStore("character", "set",
+    "{\"userId\":7,\"characterKey\":\"rigorous\",\"prompts\":\"回答不超过 300 字，用中文\"}")
+plan.persona = ''
+```
+
+`custom` 的正文只来自 `character.prompts`；两者都空就等于不设置人格（不会注入 `custom` 这个词）。
+
 ### 技能注入
 
 | 方式 | 用法 | 说明 |
@@ -1830,6 +1976,20 @@ loomStore(kind, op, payload)          // 读写六类存储
 `SkillCatalog` 两种模式：装了编码器走向量余弦（向量按 `标题#版本` 缓存），否则/失败退关键词
 （词面包含、字符命中比例、标题覆盖比例）。**编码失败会静默降级**，排障读
 `SkillCatalog.embedFailureDetail()`——返回 `(query 侧失败数, 技能侧失败数)`。
+
+```cj
+// 显式：按标题加载，顺序固定
+LoomRunner().run(plan, host, start, skills: ['日报助手'])
+
+// 自动：不传 skills，用「计划备注 + 起始输入」检索
+let policy = LoomMemoryPolicy(autoSkills: true, skillTopK: 3, skillMinScore: 0.2f64)
+LoomWiring.wire(chat, memoryPolicy: policy,
+                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))   // 装了才走向量
+LoomRunner().run(plan, host, start)
+
+// 排障：确认到底走了哪条路（>0 说明已静默降级为关键词）
+let (queryFails, skillFails) = SkillCatalog.embedFailureDetail()
+```
 
 ### 流程结束的提炼
 
@@ -1845,6 +2005,29 @@ loomStore(kind, op, payload)          // 读写六类存储
 
 > 这套提炼属于 **loom 链路**，与上文「提取记忆」章节（`Memory` + 摘要模型那条老链路）是两套独立机制：
 > 老链路面向智能体对话，loom 链路面向流程执行，两者写的是同一份记忆存储。
+
+开关都在 `LoomMemoryPolicy`（构造参数）：
+
+| 参数 | 默认 | 作用 |
+|---|---|---|
+| `enabled` | `true` | 关掉后连临时上下文都不记，也不写记忆/经验 |
+| `userId` / `namespace` | `0` / `'loom'` | 写到哪个用户、哪个命名空间；也决定读哪个 character |
+| `maxTurns` | `20` | 上下文摘要最多取最近多少轮 |
+| `summarize` / `model` | `false` / `''` | 用模型提炼（返回 `{memory, experience}`），否则按规则截断 |
+| `writeKnowledge` | `false` | 把记忆内容再写一份知识文档 `loom:<流程>:<序号>` |
+
+### 常见坑
+
+| 现象 | 原因与处理 |
+|---|---|
+| input 里原样出现 `{fetch.output}` | 语法是 `{stepId.output}`，`stepId` 必须与 `StepPlan` 的 id 完全一致 |
+| JIT 里引用上一步变量报未定义 | JIT 变量不跨步骤，用 `{id.output}` 传值 |
+| 流程跑完没写经验 | 本次一次模型都没调（`turns` 为空）；纯工具流程不产生记忆 |
+| system 开头是 `rigorous` 这种单词 | 该名字既不是库里的提示词、也不是预定义 key；检查 `prompt` 库是否有同名条目 |
+| 检索明显像关键词而不是语义 | 编码器失败已静默降级，读 `SkillCatalog.embedFailureDetail()`；常见原因是 `embeddingEncoder` 依赖 `LLMConfs` 平台配置 |
+| `unsupported evolution.save` | 报告在流程内只读，写入口只有后台演进任务 |
+| 分叉没有并行 | 默认同步；`run(parallel: true)` 或计划里 `parallel=true` |
+| `loom flow is not compiled` | 执行前先 `confirmFlow(name)` |
 
 ## 经验 → 技能演进
 

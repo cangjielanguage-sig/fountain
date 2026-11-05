@@ -1770,9 +1770,92 @@ Model normalisation: `ModelNames.normalize('deepseek/deepseek-flash') == MODEL_N
 
 ---
 
-## loom: text to flow
+## loom usage
 
-Turn a natural-language request into an executable flow (`fountain::f_llm.loom`, details in `doc/loom.md`):
+> A usage guide; implementation details, state machine and limits live in `doc/loom.md`.
+
+### Five-minute quickstart
+
+```cj
+import fountain::f_egraph.base.*
+import fountain::f_llm.loom.*
+
+// 1) Wire once: store gateway, host, memory policy, skill catalog, evolution tables/state/lease
+let chat = { model: String, system: String, input: String => yourLlmCall(model, system, input) }
+let service = LoomWiring.wire(chat, plannerModel: 'deepseek-flash')
+
+// 2) Preview: Planner + CodeGen, stored as pending, not compiled
+let preview = service.execute(LoomRequest(
+    name: 'daily-report',
+    description: 'Summarise yesterday commits and issues into a daily report'))
+println(preview.status)          // pending | clarifying
+println(preview.flowSource)      // generated flow source (readable, editable)
+println(preview.stepSources)     // per-step source
+
+// 3) Confirm: compile the step closures, status becomes compiled
+let _ = service.confirmFlow('daily-report')
+
+// 4) Execute: needs a host (model channel + tool channel)
+let host = DefaultLoomHost(chat)
+let _ = service.executeNow('daily-report', host,
+    StartEvent(category: 'loom', tag: 'daily-report', name: 'start', data: '{}'))
+
+// 5) Other entry points
+service.status('daily-report')
+service.delete('daily-report')
+```
+
+| Stage | What happens | On failure |
+|---|---|---|
+| `execute(confirm=false)` | Planner → plan, CodeGen → sources, stored as `pending` | ambiguous description → `clarifying` with `questions` |
+| `confirmFlow(name)` | compile step closures | stays `pending` and throws (sources are still readable) |
+| `executeNow(name, …)` | requires `compiled` | throws when not compiled |
+
+Without a `chat` argument use `LoomWiring.wire(plannerModel: '…')`, which falls back to `LoomDefaults.chat`
+(requires configured `LLMConf`).
+
+### Two usage paths
+
+**A. Natural-language orchestration** — the `LoomRequest` + `LoomService` flow above.
+
+**B. Hand-written flow** — skip the Planner and build a `FlowPlan` directly:
+
+```cj
+let plan = FlowPlan('weekly-report')
+let fetch = StepPlan('fetch', 'tool')
+fetch.tool = 'webSearch'
+fetch.args = '{"query":"release notes this week"}'
+let sum = StepPlan('sum', 'llm')
+sum.model = 'deepseek-flash'
+sum.system = 'You are a technical editor'
+sum.input = 'This week: {fetch.output}'      // reference an upstream step output
+plan.steps.add(fetch)
+plan.steps.add(sum)
+plan.edges.add(EdgePlan('fetch', 'sum'))
+
+let _ = LoomRunner().run(plan, host,
+    StartEvent(category: 'loom', tag: 'weekly-report', name: 'start', data: ''))
+```
+
+### Step kinds and execution semantics
+
+| kind | Purpose | Key fields |
+|---|---|---|
+| `tool` | call a registered tool / MCP | `tool`, `args` |
+| `llm` | call the model | `model`, `system`, `input` |
+| `jit` | arbitrary Cangjie snippet, may call `loomStore` | `input` is source; must produce `let <id>_result = …` |
+
+| Rule | Notes |
+|---|---|
+| Order | topological over `edges`; steps without incoming edges run first |
+| Placeholders | `{stepId.output}` is replaced with that step's output; `{start.output}` is the incoming event data |
+| JIT scope | each JIT step compiles on its own — pass values with `{id.output}` |
+| Parallelism | synchronous by default; `StepPlan.async` or `run(parallel: true)` (or plan `parallel`) enables it |
+| Validation | `plan.validate()` rejects duplicate ids, dangling edges and missing kinds |
+
+### Chain
+
+Turn a natural-language request into an executable flow (`fountain::f_llm.loom`):
 
 ```
 natural language
@@ -1816,6 +1899,49 @@ loomStore(kind, op, payload)          // read/write the six stores
 | `character` | `get` / `set` / `reset` | `characterKey` must be predefined (or `custom`) |
 | `evolution` | `list` / `by_skill` | **Read-only**: reports are written by the background job |
 
+Every payload is a JSON **string**; typical combinations:
+
+```cj
+// Memory: list (kind filter before paging), search (returns content), get by id, add
+let mem  = loomStore("memory", "list",
+    "{\"userId\":7,\"namespace\":\"work\",\"kind\":\"note\",\"offset\":0,\"limit\":20}")
+let hits = loomStore("memory", "search",
+    "{\"userId\":7,\"namespace\":\"work\",\"text\":\"release process\",\"topK\":5}")
+let one  = loomStore("memory", "get", "{\"userId\":7,\"id\":42}")
+let id   = loomStore("memory", "add",
+    "{\"userId\":7,\"namespace\":\"work\",\"title\":\"release decision\",\"content\":\"canary 5% first\",\"kind\":\"note\"}")
+
+// Experience: alias of memory that forces kind=experience
+let exp = loomStore("experience", "search",
+    "{\"userId\":7,\"namespace\":\"work\",\"text\":\"canary\",\"topK\":5}")
+
+// Knowledge
+loomStore("knowledge", "upsert", "{\"docId\":\"k1\",\"title\":\"release policy\",\"content\":\"canary 5% first\"}")
+let doc  = loomStore("knowledge", "get", "{\"docId\":\"k1\"}")
+let docs = loomStore("knowledge", "search", "{\"text\":\"canary\",\"limit\":5}")
+
+// Skill / prompt / character
+let skill = loomStore("skill", "load", "{\"title\":\"daily-report-helper\"}")
+let all   = loomStore("skill", "list", "{}")
+let prm   = loomStore("prompt", "get", "{\"name\":\"reviewer\",\"version\":1}")
+let ch    = loomStore("character", "get", "{\"userId\":7}")
+
+// Evolution reports (read-only)
+let history = loomStore("evolution", "by_skill", "{\"skill\":\"daily-report-helper\",\"limit\":5}")
+```
+
+Feed retrieved material to the model by referencing it in the next LLM step:
+
+```cj
+let ask = StepPlan('ask', 'llm')
+ask.model = 'deepseek-flash'
+ask.system = 'BASE'
+ask.input = 'Reference: {mem.output}\nQuestion: {start.output}'   // multiple references
+```
+
+Writes work inside a flow too: `memory.add` / `knowledge.upsert` take effect immediately, and the
+end-of-flow extraction still adds its own `note` and `experience` records.
+
 ### Persona and character
 
 `FlowPlan.persona` and the user's `character` both end up as the system prefix, resolved in three levels:
@@ -1830,6 +1956,28 @@ loomStore(kind, op, payload)          // read/write the six stores
 `character.prompts` is appended to the persona text as user-level extra instructions (language, length, …).
 The character record is resolved by `LoomMemoryPolicy.userId` (skipped when `userId <= 0`).
 
+Four ways to specify it, highest priority first:
+
+```cj
+// 1) Prompt-store entry (highest): put the name into persona
+loomStore("prompt", "put", "{\"name\":\"reviewer\",\"content\":\"You are a strict reviewer\"}")
+plan.persona = 'reviewer'
+
+// 2) Predefined persona key: built-in body when no same-named prompt exists
+plan.persona = 'rigorous'        // default/rigorous/friendly/blunt/…
+
+// 3) Literal text: neither a prompt nor a known key
+plan.persona = 'Point out mistakes only, no praise'
+
+// 4) Omit it: fall back to the user's character record (style + extras)
+loomStore("character", "set",
+    "{\"userId\":7,\"characterKey\":\"rigorous\",\"prompts\":\"Answer in at most 300 characters\"}")
+plan.persona = ''
+```
+
+For `custom` the body comes only from `character.prompts`; when both are empty no persona is injected
+(the literal word `custom` is never used).
+
 ### Skill injection
 
 | Mode | Usage | Notes |
@@ -1841,6 +1989,20 @@ The character record is resolved by `LoomMemoryPolicy.userId` (skipped when `use
 `title#version`), otherwise keyword fallback (substring, character-overlap ratio, title coverage).
 **Encoder failures degrade silently**, so use `SkillCatalog.embedFailureDetail()` — returns
 `(query-side failures, skill-side failures)` — when diagnosing.
+
+```cj
+// Explicit: loaded by title, fixed order
+LoomRunner().run(plan, host, start, skills: ['daily-report-helper'])
+
+// Automatic: omit skills, search with plan notes + start input
+let policy = LoomMemoryPolicy(autoSkills: true, skillTopK: 3, skillMinScore: 0.2f64)
+LoomWiring.wire(chat, memoryPolicy: policy,
+                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))   // vectors only when installed
+LoomRunner().run(plan, host, start)
+
+// Diagnose: confirm which path actually ran (>0 means a silent keyword fallback)
+let (queryFails, skillFails) = SkillCatalog.embedFailureDetail()
+```
 
 ### Extraction at flow end
 
@@ -1857,6 +2019,29 @@ rule-based extraction.
 
 > This belongs to the **loom** path and is independent of the "Extracting memory" section above
 > (`Memory` + summarising model, used by the agent path). Both write to the same memory store.
+
+Switches live in `LoomMemoryPolicy` (constructor parameters):
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `enabled` | `true` | When false, not even the transient context is recorded |
+| `userId` / `namespace` | `0` / `'loom'` | Where to write; also selects the character record |
+| `maxTurns` | `20` | How many recent turns the digest keeps |
+| `summarize` / `model` | `false` / `''` | Model-based extraction returning `{memory, experience}`, otherwise rule-based |
+| `writeKnowledge` | `false` | Also write a knowledge document `loom:<flow>:<seq>` |
+
+### Common pitfalls
+
+| Symptom | Cause and fix |
+|---|---|
+| `{fetch.output}` appears verbatim in the input | The syntax is `{stepId.output}`; the id must match `StepPlan` exactly |
+| JIT step cannot see a previous step's variable | JIT variables do not cross steps; pass values via `{id.output}` |
+| No experience was written | The flow made no model call at all (`turns` empty); tool-only flows produce no memory |
+| The system prefix is a word like `rigorous` | That name is neither a prompt nor a predefined key; check the prompt store |
+| Retrieval looks like keywords, not semantics | The encoder failed and fell back silently; read `SkillCatalog.embedFailureDetail()` |
+| `unsupported evolution.save` | Reports are read-only inside flows; only the background job writes them |
+| Branches do not run in parallel | Synchronous by default; use `run(parallel: true)` or `parallel=true` in the plan |
+| `loom flow is not compiled` | Call `confirmFlow(name)` before executing |
 
 ## Experience → skill evolution
 
