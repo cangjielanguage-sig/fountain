@@ -256,13 +256,20 @@ public class SvgPatternSampler {
                 break
             }
         }
-        let bitmap = match (contentSource) {
-            case Some(source) =>
+        let viewBox = this.effectiveViewBox(chain)
+        let contentMatrix = match (viewBox) {
+            case Some(box) =>
+                this.effectiveAspect(chain).toMatrix(
+                    box,
+                    Float64(pixelWidth),
+                    Float64(pixelHeight)
+                )
+            case None =>
                 let contentUnitsText = this.effectiveAttr(chain, "patternContentUnits") ??
                     "userSpaceOnUse"
                 let contentObject = (SvgCoordinateUnits.fromName(contentUnitsText.trimAscii()) ??
                     SvgCoordinateUnits.UserSpaceOnUse) == SvgCoordinateUnits.ObjectBoundingBox
-                let contentMatrix = if (contentObject) {
+                if (contentObject) {
                     SvgMatrix.translate(
                         objectBounds.x - originX,
                         objectBounds.y - originY
@@ -270,6 +277,9 @@ public class SvgPatternSampler {
                 } else {
                     SvgMatrix.identity
                 }
+        }
+        let bitmap = match (contentSource) {
+            case Some(source) =>
                 let builder = SvgRenderTreeBuilder()
                 builder.attachGuard(this.ensureGuard())
                 let list = builder.buildContent(
@@ -448,6 +458,33 @@ public class SvgPatternSampler {
             }
         }
         None
+    }
+    private func effectiveViewBox(chain: ArrayList<SvgElement>): ?SvgViewBox {
+        for (element in chain) {
+            match (element.attr("viewBox")) {
+                case Some(text) =>
+                    match (tryParseSvgViewBox(text)) {
+                        case Some(value) => return Some(value)
+                        case None => ()
+                    }
+                case None => ()
+            }
+        }
+        None
+    }
+
+    private func effectiveAspect(chain: ArrayList<SvgElement>): SvgPreserveAspectRatio {
+        for (element in chain) {
+            match (element.attr("preserveAspectRatio")) {
+                case Some(text) =>
+                    match (tryParseSvgPreserveAspectRatio(text)) {
+                        case Some(value) => return value
+                        case None => ()
+                    }
+                case None => ()
+            }
+        }
+        SvgPreserveAspectRatio.Default
     }
 }
 

@@ -28,6 +28,8 @@ public class SvgPattern <: SvgContainer {
     private let unitsCache = SvgValueCache<SvgCoordinateUnits>()
     private let contentUnitsCache = SvgValueCache<SvgCoordinateUnits>()
     private let transformCache = SvgValueCache<SvgTransform>()
+    private let viewBoxCache = SvgValueCache<SvgViewBox>()
+    private let aspectCache = SvgValueCache<SvgPreserveAspectRatio>()
 
     public init() {
         super(SvgContainerKind.Pattern)
@@ -129,6 +131,44 @@ public class SvgPattern <: SvgContainer {
         }
         set(value) {
             writeSvgHref(this, value)
+        }
+    }
+
+    /** tile 内容坐标系；声明后 `patternContentUnits` 被忽略。 */
+    public mut prop viewBox: ?SvgViewBox {
+        get() {
+            this.viewBoxCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("viewBox")) {
+                        case Some(text) => tryParseSvgViewBox(text)
+                        case None => None
+                    }
+                }
+            )
+        }
+        set(value) {
+            match (value) {
+                case Some(box) => this.setAttr("viewBox", box.toString())
+                case None => this.removeAttr("viewBox")
+            }
+        }
+    }
+
+    public mut prop preserveAspectRatio: SvgPreserveAspectRatio {
+        get() {
+            this.aspectCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("preserveAspectRatio")) {
+                        case Some(text) => tryParseSvgPreserveAspectRatio(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgPreserveAspectRatio.Default
+        }
+        set(value) {
+            this.setAttr("preserveAspectRatio", value.toString())
         }
     }
 }
