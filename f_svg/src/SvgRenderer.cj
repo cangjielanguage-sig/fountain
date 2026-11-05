@@ -127,6 +127,7 @@ public class SvgRenderer {
         let patterns = SvgPatternSampler(registry: this.options.fonts, root: Some(list.root))
         patterns.attachSession(this.sessionGuard, images)
         let filters = SvgFilterRenderer(registry: this.options.fonts)
+        filters.attachImages(images)
         for (command in list.commands) {
             match (command.kind) {
                 case GroupBegin =>

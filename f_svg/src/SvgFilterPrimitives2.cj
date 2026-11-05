@@ -803,3 +803,597 @@ public class SvgFeImage <: SvgFilterPrimitive {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// 新原语实现：每个原语读取输入缓冲并返回新缓冲，不原地修改。
+// ---------------------------------------------------------------------------
+
+internal func componentTransferFilterBuffer(
+    input: SvgFilterBuffer,
+    transfer: SvgFeComponentTransfer,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    let functions: Array<?SvgFeFunc> = [
+        transfer.functionFor(SvgChannelSelector.R),
+        transfer.functionFor(SvgChannelSelector.G),
+        transfer.functionFor(SvgChannelSelector.B),
+        transfer.functionFor(SvgChannelSelector.A)
+    ]
+    let output = SvgFilterBuffer(input.width, input.height)
+    var index = 0
+    while (index < input.pixels.size) {
+        var channel = 0
+        while (channel < 4) {
+            let source = Float64(input.pixels[index + channel]) / 255.0
+            let mapped = transferChannel(source, functions[channel], warnings, channel)
+            output.pixels[index + channel] = UInt8(Int64(round(clampSvgUnit(mapped) * 255.0)))
+            channel++
+        }
+        index += 4
+    }
+    output
+}
+
+private func transferChannel(
+    value: Float64,
+    function: ?SvgFeFunc,
+    warnings: ArrayList<String>,
+    channel: Int64
+): Float64 {
+    let fn = match (function) {
+        case Some(value) => value
+        case None => return value
+    }
+    match (fn.functionType) {
+        case Identity => value
+        case Table =>
+            let values = fn.tableValues
+            if (values.size == 0) {
+                warnings.add("feFunc 通道 ${channel} 的 tableValues 为空，按 identity 处理")
+                return value
+            }
+            if (values.size == 1) {
+                return values[0]
+            }
+            let scaled = clampSvgUnit(value) * Float64(values.size - 1)
+            let lower = Int64(floor(scaled))
+            let upper = if (lower + 1 < values.size) { lower + 1 } else { lower }
+            let fraction = scaled - Float64(lower)
+            values[lower] * (1.0 - fraction) + values[upper] * fraction
+        case Discrete =>
+            let values = fn.tableValues
+            if (values.size == 0) {
+                warnings.add("feFunc 通道 ${channel} 的 tableValues 为空，按 identity 处理")
+                return value
+            }
+            var category = Int64(floor(clampSvgUnit(value) * Float64(values.size)))
+            if (category >= values.size) {
+                category = values.size - 1
+            }
+            values[category]
+        case Linear =>
+            let slope = fn.slope
+            let intercept = fn.intercept
+            if (!isFiniteSvgNumber(slope) || !isFiniteSvgNumber(intercept)) {
+                warnings.add("feFunc 通道 ${channel} 的 linear 参数非有限，按 identity 处理")
+                value
+            } else {
+                slope * value + intercept
+            }
+        case Gamma =>
+            let amplitude = fn.amplitude
+            let exponent = fn.exponent
+            let offset = fn.offset
+            if (!isFiniteSvgNumber(amplitude) || !isFiniteSvgNumber(exponent) ||
+                !isFiniteSvgNumber(offset)) {
+                warnings.add("feFunc 通道 ${channel} 的 gamma 参数非有限，按 identity 处理")
+                value
+            } else {
+                let base = if (value > 0.0) { value } else { 0.0 }
+                amplitude * pow(base, exponent) + offset
+            }
+    }
+}
+
+internal func morphologyFilterBuffer(
+    input: SvgFilterBuffer,
+    morphology: SvgFeMorphology,
+    scaleX: Float64,
+    scaleY: Float64,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    let values = morphology.radius.values
+    var radiusX = if (values.size > 0) { values[0] } else { 0.0 }
+    var radiusY = if (values.size > 1) { values[1] } else { radiusX }
+    if (!isFiniteSvgNumber(radiusX) || !isFiniteSvgNumber(radiusY)) {
+        warnings.add("feMorphology 的 radius 非有限，按 0 处理")
+        radiusX = 0.0
+        radiusY = 0.0
+    }
+    if (radiusX < 0.0 || radiusY < 0.0) {
+        warnings.add("feMorphology 的 radius 含负值，按 0 处理")
+        radiusX = if (radiusX > 0.0) { radiusX } else { 0.0 }
+        radiusY = if (radiusY > 0.0) { radiusY } else { 0.0 }
+    }
+    let pixelRadiusX = Int64(round(radiusX * scaleX))
+    let pixelRadiusY = Int64(round(radiusY * scaleY))
+    if (pixelRadiusX <= 0 && pixelRadiusY <= 0) {
+        return input.copy()
+    }
+    let erode = morphology.operatorKind == SvgMorphologyOperator.Erode
+    let output = SvgFilterBuffer(input.width, input.height)
+    var y = 0
+    while (y < input.height) {
+        var x = 0
+        while (x < input.width) {
+            var channel = 0
+            while (channel < 4) {
+                var extreme: Int64 = if (erode) { 255 } else { 0 }
+                var offsetY = -pixelRadiusY
+                while (offsetY <= pixelRadiusY) {
+                    let sampleY = y + offsetY
+                    if (sampleY >= 0 && sampleY < input.height) {
+                        var offsetX = -pixelRadiusX
+                        while (offsetX <= pixelRadiusX) {
+                            let sampleX = x + offsetX
+                            if (sampleX >= 0 && sampleX < input.width) {
+                                let value = Int64(
+                                    input.pixels[(sampleY * input.width + sampleX) * 4 + channel]
+                                )
+                                if (erode) {
+                                    if (value < extreme) {
+                                        extreme = value
+                                    }
+                                } else {
+                                    if (value > extreme) {
+                                        extreme = value
+                                    }
+                                }
+                            }
+                            offsetX++
+                        }
+                    }
+                    offsetY++
+                }
+                output.pixels[(y * input.width + x) * 4 + channel] = UInt8(extreme)
+                channel++
+            }
+            x++
+        }
+        y++
+    }
+    output
+}
+
+internal func convolveFilterBuffer(
+    input: SvgFilterBuffer,
+    convolve: SvgFeConvolveMatrix,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    let orderValues = convolve.order.values
+    var orderX: Int64 = 3
+    var orderY: Int64 = 3
+    if (orderValues.size == 1) {
+        orderX = Int64(round(orderValues[0]))
+        orderY = orderX
+    } else if (orderValues.size >= 2) {
+        orderX = Int64(round(orderValues[0]))
+        orderY = Int64(round(orderValues[1]))
+    }
+    if (orderX <= 0 || orderY <= 0) {
+        warnings.add("feConvolveMatrix 的 order 非正整数，按直通处理")
+        return input.copy()
+    }
+    // 上限在分配任何缓冲之前检查。
+    if (orderX > 9 || orderY > 9) {
+        throw SvgException(
+            "feConvolveMatrix 的 order 超过 9×9 上限，实际 ${orderX}×${orderY}",
+            kind: SvgErrorKind.Limit
+        )
+    }
+    let kernel = convolve.kernelMatrix
+    if (Int64(kernel.size) != orderX * orderY) {
+        warnings.add(
+            "feConvolveMatrix 的 kernelMatrix 长度 ${kernel.size} 与 order ${orderX}×${orderY} 不符，按直通处理"
+        )
+        return input.copy()
+    }
+    for (value in kernel) {
+        if (!isFiniteSvgNumber(value)) {
+            warnings.add("feConvolveMatrix 的 kernelMatrix 含非有限值，按直通处理")
+            return input.copy()
+        }
+    }
+    var divisor = match (convolve.divisor) {
+        case Some(value) => value
+        case None =>
+            var sum = 0.0
+            for (value in kernel) {
+                sum += value
+            }
+            sum
+    }
+    if (!isFiniteSvgNumber(divisor) || divisor == 0.0) {
+        divisor = 1.0
+    }
+    var bias = convolve.bias
+    if (!isFiniteSvgNumber(bias)) {
+        warnings.add("feConvolveMatrix 的 bias 非有限，按 0 处理")
+        bias = 0.0
+    }
+    var targetX = match (convolve.targetX) {
+        case Some(value) => value
+        case None => orderX / 2
+    }
+    var targetY = match (convolve.targetY) {
+        case Some(value) => value
+        case None => orderY / 2
+    }
+    if (targetX < 0 || targetX >= orderX) {
+        targetX = orderX / 2
+    }
+    if (targetY < 0 || targetY >= orderY) {
+        targetY = orderY / 2
+    }
+    let preserveAlpha = convolve.preserveAlpha
+    let output = SvgFilterBuffer(input.width, input.height)
+    var y = 0
+    while (y < input.height) {
+        var x = 0
+        while (x < input.width) {
+            let channelLimit = if (preserveAlpha) { 3 } else { 4 }
+            var channel = 0
+            while (channel < channelLimit) {
+                var sum = 0.0
+                var kernelY = 0
+                while (kernelY < orderY) {
+                    var kernelX = 0
+                    while (kernelX < orderX) {
+                        let sampleX = x - targetX + kernelX
+                        let sampleY = y - targetY + kernelY
+                        let sample = convolveSample(input, sampleX, sampleY, channel, convolve.edgeMode)
+                        sum += sample * kernel[kernelY * orderX + kernelX]
+                        kernelX++
+                    }
+                    kernelY++
+                }
+                let value = sum / divisor + bias * 255.0
+                output.pixels[(y * input.width + x) * 4 + channel] = UInt8(
+                    Int64(round(clampSvgUnit(value / 255.0) * 255.0))
+                )
+                channel++
+            }
+            if (preserveAlpha) {
+                let base = (y * input.width + x) * 4
+                output.pixels[base + 3] = input.pixels[base + 3]
+            }
+            x++
+        }
+        y++
+    }
+    output
+}
+
+private func convolveSample(
+    input: SvgFilterBuffer,
+    x: Int64,
+    y: Int64,
+    channel: Int64,
+    edgeMode: SvgEdgeMode
+): Float64 {
+    var sampleX = x
+    var sampleY = y
+    if (sampleX < 0 || sampleX >= input.width || sampleY < 0 || sampleY >= input.height) {
+        if (edgeMode == SvgEdgeMode.NoEdge) {
+            return 0.0
+        }
+        if (edgeMode == SvgEdgeMode.Wrap) {
+            sampleX = positiveSvgMod(sampleX, input.width)
+            sampleY = positiveSvgMod(sampleY, input.height)
+        } else {
+            sampleX = clampSvgIndex(sampleX, input.width)
+            sampleY = clampSvgIndex(sampleY, input.height)
+        }
+    }
+    Float64(input.pixels[(sampleY * input.width + sampleX) * 4 + channel])
+}
+
+private func positiveSvgMod(value: Int64, modulus: Int64): Int64 {
+    let remainder = value % modulus
+    if (remainder < 0) {
+        remainder + modulus
+    } else {
+        remainder
+    }
+}
+
+private func clampSvgIndex(value: Int64, size: Int64): Int64 {
+    if (value < 0) {
+        return 0
+    }
+    if (value >= size) {
+        return size - 1
+    }
+    value
+}
+
+internal func turbulenceFilterBuffer(
+    input: SvgFilterBuffer,
+    turbulence: SvgFeTurbulence,
+    scaleX: Float64,
+    scaleY: Float64,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    var octaves = turbulence.numOctaves
+    if (octaves > 8) {
+        throw SvgException(
+            "feTurbulence 的 numOctaves 超过 8 上限，实际 ${octaves}",
+            kind: SvgErrorKind.Limit
+        )
+    }
+    if (octaves < 1) {
+        warnings.add("feTurbulence 的 numOctaves 小于 1，按 1 处理")
+        octaves = 1
+    }
+    let frequencyValues = turbulence.baseFrequency.values
+    var frequencyX = if (frequencyValues.size > 0) { frequencyValues[0] } else { 0.0 }
+    var frequencyY = if (frequencyValues.size > 1) { frequencyValues[1] } else { frequencyX }
+    if (!isFiniteSvgNumber(frequencyX) || !isFiniteSvgNumber(frequencyY) ||
+        frequencyX < 0.0 || frequencyY < 0.0) {
+        warnings.add("feTurbulence 的 baseFrequency 非法，按 0 处理")
+        frequencyX = 0.0
+        frequencyY = 0.0
+    }
+    let seedValue = turbulence.seed
+    let seed = if (isFiniteSvgNumber(seedValue)) { Int64(round(seedValue)) } else { 0 }
+    let fractal = turbulence.turbulenceType == SvgTurbulenceType.FractalNoise
+    let output = SvgFilterBuffer(input.width, input.height)
+    var y = 0
+    while (y < input.height) {
+        var x = 0
+        while (x < input.width) {
+            var value = 0.0
+            var totalAmplitude = 0.0
+            var amplitude = 1.0
+            var octaveFrequencyX = frequencyX / scaleX
+            var octaveFrequencyY = frequencyY / scaleY
+            var octave: Int64 = 0
+            while (octave < octaves) {
+                let noise = perlinSvgNoise(
+                    Float64(x) * octaveFrequencyX,
+                    Float64(y) * octaveFrequencyY,
+                    seed + octave * 1013
+                )
+                if (fractal) {
+                    value += noise * amplitude
+                } else {
+                    value += abs(noise) * amplitude
+                }
+                totalAmplitude += amplitude
+                amplitude *= 0.5
+                octaveFrequencyX *= 2.0
+                octaveFrequencyY *= 2.0
+                octave++
+            }
+            if (totalAmplitude > 0.0) {
+                value = value / totalAmplitude
+            }
+            if (fractal) {
+                value = 0.5 + 0.5 * value
+            }
+            let channel = UInt8(Int64(round(clampSvgUnit(value) * 255.0)))
+            let base = (y * input.width + x) * 4
+            output.pixels[base] = channel
+            output.pixels[base + 1] = channel
+            output.pixels[base + 2] = channel
+            output.pixels[base + 3] = 255
+            x++
+        }
+        y++
+    }
+    output
+}
+
+private func perlinSvgNoise(x: Float64, y: Float64, seed: Int64): Float64 {
+    let x0 = Int64(floor(x))
+    let y0 = Int64(floor(y))
+    let fractionX = x - Float64(x0)
+    let fractionY = y - Float64(y0)
+    let smoothX = fractionX * fractionX * (3.0 - 2.0 * fractionX)
+    let smoothY = fractionY * fractionY * (3.0 - 2.0 * fractionY)
+    let n00 = svgGradientDot(x0, y0, fractionX, fractionY, seed)
+    let n10 = svgGradientDot(x0 + 1, y0, fractionX - 1.0, fractionY, seed)
+    let n01 = svgGradientDot(x0, y0 + 1, fractionX, fractionY - 1.0, seed)
+    let n11 = svgGradientDot(x0 + 1, y0 + 1, fractionX - 1.0, fractionY - 1.0, seed)
+    let lower = n00 * (1.0 - smoothX) + n10 * smoothX
+    let upper = n01 * (1.0 - smoothX) + n11 * smoothX
+    lower * (1.0 - smoothY) + upper * smoothY
+}
+
+private func svgGradientDot(
+    x: Int64,
+    y: Int64,
+    offsetX: Float64,
+    offsetY: Float64,
+    seed: Int64
+): Float64 {
+    let hash = svgNoiseHash(x, y, seed)
+    let angle = Float64(hash & 0xFFFF) / 65536.0 * 2.0 * 3.141592653589793
+    let gradientX = cos(angle)
+    let gradientY = sin(angle)
+    gradientX * offsetX + gradientY * offsetY
+}
+
+private func svgNoiseHash(x: Int64, y: Int64, seed: Int64): Int64 {
+    var hash = x * 374761393 + y * 668265263 + seed * 69069
+    hash = (hash ^ (hash >> 13)) * 1274126177
+    hash ^ (hash >> 16)
+}
+
+internal func displacementFilterBuffer(
+    input: SvgFilterBuffer,
+    input2: SvgFilterBuffer,
+    displacement: SvgFeDisplacementMap,
+    scaleX: Float64,
+    scaleY: Float64,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    var scale = displacement.scale
+    if (!isFiniteSvgNumber(scale)) {
+        warnings.add("feDisplacementMap 的 scale 非有限，按 0 处理")
+        scale = 0.0
+    }
+    if (scale == 0.0) {
+        return input.copy()
+    }
+    let xChannel = displacement.xChannelSelector.channelIndex()
+    let yChannel = displacement.yChannelSelector.channelIndex()
+    let output = SvgFilterBuffer(input.width, input.height)
+    var y = 0
+    while (y < input.height) {
+        var x = 0
+        while (x < input.width) {
+            let mapBase = (y * input2.width + x) * 4
+            let xValue = Float64(input2.pixels[mapBase + xChannel]) / 255.0 - 0.5
+            let yValue = Float64(input2.pixels[mapBase + yChannel]) / 255.0 - 0.5
+            let offsetX = scale * xValue * scaleX
+            let offsetY = scale * yValue * scaleY
+            let sample = bilinearSvgSample(input, Float64(x) - offsetX, Float64(y) - offsetY)
+            let base = (y * input.width + x) * 4
+            output.pixels[base] = sample[0]
+            output.pixels[base + 1] = sample[1]
+            output.pixels[base + 2] = sample[2]
+            output.pixels[base + 3] = sample[3]
+            x++
+        }
+        y++
+    }
+    output
+}
+
+/** 非预乘双线性采样；越界权重按透明。 */
+private func bilinearSvgSample(input: SvgFilterBuffer, x: Float64, y: Float64): Array<Byte> {
+    let result = Array<Byte>(4, repeat: 0)
+    let centerX = x - 0.5
+    let centerY = y - 0.5
+    let left = Int64(floor(centerX))
+    let top = Int64(floor(centerY))
+    let fractionX = centerX - Float64(left)
+    let fractionY = centerY - Float64(top)
+    let columns: Array<Int64> = [left, left + 1, left, left + 1]
+    let rows: Array<Int64> = [top, top, top + 1, top + 1]
+    let weights: Array<Float64> = [
+        (1.0 - fractionX) * (1.0 - fractionY),
+        fractionX * (1.0 - fractionY),
+        (1.0 - fractionX) * fractionY,
+        fractionX * fractionY
+    ]
+    var alpha = 0.0
+    var red = 0.0
+    var green = 0.0
+    var blue = 0.0
+    for (index in 0..4) {
+        let column = columns[index]
+        let row = rows[index]
+        if (column < 0 || row < 0 || column >= input.width || row >= input.height) {
+            continue
+        }
+        let base = (row * input.width + column) * 4
+        let weight = weights[index]
+        let sampleAlpha = Float64(input.pixels[base + 3]) / 255.0
+        alpha += sampleAlpha * weight
+        red += Float64(input.pixels[base]) * sampleAlpha * weight
+        green += Float64(input.pixels[base + 1]) * sampleAlpha * weight
+        blue += Float64(input.pixels[base + 2]) * sampleAlpha * weight
+    }
+    if (alpha <= 0.0) {
+        return result
+    }
+    result[0] = UInt8(Int64(round(clampSvgUnit(red / alpha))))
+    result[1] = UInt8(Int64(round(clampSvgUnit(green / alpha))))
+    result[2] = UInt8(Int64(round(clampSvgUnit(blue / alpha))))
+    result[3] = UInt8(Int64(round(clampSvgUnit(alpha) * 255.0)))
+    result
+}
+
+internal func feImageFilterBuffer(
+    input: SvgFilterBuffer,
+    image: SvgFeImage,
+    images: ?SvgImageResource,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    let output = SvgFilterBuffer(input.width, input.height)
+    let href = match (image.href) {
+        case Some(value) => value
+        case None =>
+            warnings.add("feImage 缺少 href，输出透明")
+            return output
+    }
+    let resource = match (images) {
+        case Some(value) => value
+        case None =>
+            warnings.add("feImage 没有可用的图像资源提供者，输出透明（href=${href}）")
+            return output
+    }
+    let source = match (resource.load(href)) {
+        case Some(value) => value
+        case None =>
+            warnings.add("feImage 的资源不可用，输出透明（href=${href}）")
+            return output
+    }
+    let aspect = image.preserveAspectRatio
+    let targetWidth = Float64(input.width)
+    let targetHeight = Float64(input.height)
+    let sourceWidth = Float64(source.width)
+    let sourceHeight = Float64(source.height)
+    var scale = 1.0
+    var offsetX = 0.0
+    var offsetY = 0.0
+    if (aspect.align == SvgAspectAlign.NoAlign) {
+        scale = 1.0
+        offsetX = 0.0
+        offsetY = 0.0
+    } else {
+        let scaleX = targetWidth / sourceWidth
+        let scaleY = targetHeight / sourceHeight
+        scale = if (aspect.slice) { max(scaleX, scaleY) } else { min(scaleX, scaleY) }
+        let contentWidth = sourceWidth * scale
+        let contentHeight = sourceHeight * scale
+        let factorX = if (aspect.align.isXMin()) { 0.0 } else if (aspect.align.isXMax()) { 1.0 } else { 0.5 }
+        let factorY = if (aspect.align.isYMin()) { 0.0 } else if (aspect.align.isYMax()) { 1.0 } else { 0.5 }
+        offsetX = (targetWidth - contentWidth) * factorX
+        offsetY = (targetHeight - contentHeight) * factorY
+    }
+    var y = 0
+    while (y < input.height) {
+        var x = 0
+        while (x < input.width) {
+            let localX = Float64(x) + 0.5 - offsetX
+            let localY = Float64(y) + 0.5 - offsetY
+            let sourceX = if (aspect.align == SvgAspectAlign.NoAlign) {
+                localX / (targetWidth / sourceWidth)
+            } else {
+                localX / scale
+            }
+            let sourceY = if (aspect.align == SvgAspectAlign.NoAlign) {
+                localY / (targetHeight / sourceHeight)
+            } else {
+                localY / scale
+            }
+            if (sourceX >= 0.0 && sourceY >= 0.0 &&
+                sourceX < sourceWidth && sourceY < sourceHeight) {
+                let column = clampSvgIndex(Int64(floor(sourceX)), source.width)
+                let row = clampSvgIndex(Int64(floor(sourceY)), source.height)
+                let sourceBase = (row * source.width + column) * 4
+                let targetBase = (y * input.width + x) * 4
+                output.pixels[targetBase] = source.pixels[sourceBase]
+                output.pixels[targetBase + 1] = source.pixels[sourceBase + 1]
+                output.pixels[targetBase + 2] = source.pixels[sourceBase + 2]
+                output.pixels[targetBase + 3] = source.pixels[sourceBase + 3]
+            }
+            x++
+        }
+        y++
+    }
+    output
+}

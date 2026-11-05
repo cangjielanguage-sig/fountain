@@ -28,9 +28,15 @@ import fountain::f_base.*
 public class SvgFilterRenderer {
     public let warnings = ArrayList<String>()
     private let registry: ?SvgFontRegistry
+    private var images: ?SvgImageResource = None
 
     public init(registry!: ?SvgFontRegistry = None) {
         this.registry = registry
+    }
+
+    /** 绑定本次渲染共享的图像解码资源（与 `<image>` 共用预算）。 */
+    internal func attachImages(value: SvgImageResource): Unit {
+        this.images = Some(value)
     }
 
     /** 计算设备空间滤镜区域并裁剪到画布。 */
@@ -221,7 +227,8 @@ public class SvgFilterRenderer {
                     input2,
                     this.warnings,
                     primitiveScaleX,
-                    primitiveScaleY
+                    primitiveScaleY,
+                    this.images
                 )
             }
             let name = primitive.result ?? "result${index}"
@@ -258,6 +265,7 @@ private func primitiveSecondInput(primitive: SvgFilterPrimitive): ?String {
     match (primitive) {
         case blend: SvgFeBlend => blend.in2
         case composite: SvgFeComposite => composite.in2
+        case displacement: SvgFeDisplacementMap => displacement.in2
         case _ => None
     }
 }
@@ -273,7 +281,8 @@ private func applyFilterPrimitive(
     input2: SvgFilterBuffer,
     warnings: ArrayList<String>,
     scaleX: Float64,
-    scaleY: Float64
+    scaleY: Float64,
+    images: ?SvgImageResource
 ): SvgFilterBuffer {
     match (primitive) {
         case blur: SvgFeGaussianBlur =>
@@ -326,6 +335,22 @@ private func applyFilterPrimitive(
             } else {
                 tileFilterBuffer(input, input.width, input.height)
             }
+        case transfer: SvgFeComponentTransfer =>
+            componentTransferFilterBuffer(input, transfer, warnings)
+        case morphology: SvgFeMorphology =>
+            morphologyFilterBuffer(input, morphology, scaleX, scaleY, warnings)
+        case convolve: SvgFeConvolveMatrix =>
+            convolveFilterBuffer(input, convolve, warnings)
+        case turbulence: SvgFeTurbulence =>
+            turbulenceFilterBuffer(input, turbulence, scaleX, scaleY, warnings)
+        case displacement: SvgFeDisplacementMap =>
+            displacementFilterBuffer(input, input2, displacement, scaleX, scaleY, warnings)
+        case image: SvgFeImage =>
+            feImageFilterBuffer(input, image, images, warnings)
+        case diffuse: SvgFeDiffuseLighting =>
+            lightingFilterBuffer(input, diffuse, false, scaleX, scaleY, warnings)
+        case specular: SvgFeSpecularLighting =>
+            lightingFilterBuffer(input, specular, true, scaleX, scaleY, warnings)
         case _ => input.copy()
     }
 }
