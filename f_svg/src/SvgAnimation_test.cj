@@ -328,6 +328,31 @@ public class SvgAnimation_test {
         @Assert(near(parseNumericAttribute(Some(sampleAttribute(accumulateDocument, 1.5, "r", "x"))), 15.0))
     }
 
+    /** 无 id 的动画目标按结构路径定位，同名兄弟按序号区分。 */
+    @TestCase
+    public func targetWithoutId(): Unit {
+        let document = animationDoc(
+            '<rect width="10" height="10">' +
+            '<animate attributeName="x" from="0" to="10" dur="1s"/></rect>'
+        )
+        let snapshot = SvgTimeline(document).sample(0.5)
+        let rects = snapshot.elementsByTag("rect")
+        @Assert(rects.size == 1)
+        @Assert(near(parseNumericAttribute(rects[0].attr("x")), 5.0))
+        @Assert(document.elementsByTag("rect")[0].attr("x").isNone())
+
+        let siblings = animationDoc(
+            '<rect width="1" height="1"/>' +
+            '<rect width="10" height="10">' +
+            '<animate attributeName="x" from="0" to="10" dur="1s"/></rect>'
+        )
+        let siblingSnapshot = SvgTimeline(siblings).sample(0.5)
+        let siblingRects = siblingSnapshot.elementsByTag("rect")
+        @Assert(siblingRects.size == 2)
+        @Assert(siblingRects[0].attr("x").isNone())
+        @Assert(near(parseNumericAttribute(siblingRects[1].attr("x")), 5.0))
+    }
+
     /** 深拷贝保留具体子类、elementById 可用，原文档不变。 */
     @TestCase
     public func deepCloneAndNoMutation(): Unit {

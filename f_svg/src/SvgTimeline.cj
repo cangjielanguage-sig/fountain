@@ -26,6 +26,7 @@ private class SvgAnimationSpec {
     let kind: SvgAnimationKind
     let target: ?SvgElement
     let targetId: ?String
+    let targetPath: ?String
     let attributeName: String
     let beginRaw: ?String
     let endRaw: ?String
@@ -73,6 +74,10 @@ private class SvgAnimationSpec {
         this.target = target
         this.targetId = match (target) {
             case Some(value) => value.attr("id")
+            case None => None
+        }
+        this.targetPath = match (target) {
+            case Some(value) => Some(value.elementPath())
             case None => None
         }
         this.attributeName = attributeName
@@ -183,11 +188,7 @@ public class SvgTimeline {
     public func sample(time: Float64): SvgDocument {
         let snapshot = cloneSvgDocument(this.document)
         for (spec in this.specs) {
-            let targetId = match (spec.targetId) {
-                case Some(value) => value
-                case None => continue
-            }
-            let target = match (snapshot.elementById(targetId)) {
+            let target = match (this.resolveTarget(snapshot, spec)) {
                 case Some(value) => value
                 case None => continue
             }
@@ -198,6 +199,22 @@ public class SvgTimeline {
             this.applyAnimation(target, spec, state)
         }
         snapshot
+    }
+
+    /** `id` 命中优先，否则按结构路径兜底。 */
+    private func resolveTarget(snapshot: SvgDocument, spec: SvgAnimationSpec): ?SvgElement {
+        match (spec.targetId) {
+            case Some(id) =>
+                match (snapshot.elementById(id)) {
+                    case Some(value) => return Some(value)
+                    case None => ()
+                }
+            case None => ()
+        }
+        match (spec.targetPath) {
+            case Some(path) => findSvgElementByPath(snapshot.root, path)
+            case None => None
+        }
     }
 
     public func sampleCurrent(): SvgDocument {
@@ -914,6 +931,50 @@ private func distanceBetween(first: SvgPoint, second: SvgPoint): Float64 {
 
 private func maxFloat(first: Float64, second: Float64): Float64 {
     if (first > second) { first } else { second }
+}
+
+/** 按 `elementPath()` 的 `tag[index]` 段定位；序号是同名兄弟中的 1-based 位置。 */
+private func findSvgElementByPath(root: SvgElement, path: String): ?SvgElement {
+    var current = root
+    var first = true
+    for (segment in path.split("/")) {
+        if (segment.size == 0) {
+            continue
+        }
+        let open = indexOfSvgByte(segment, b'[')
+        if (open <= 0 || segment[segment.size - 1] != b']') {
+            return None
+        }
+        let tag = segment[0..open]
+        let wanted = Int64(tryParseSvgFloat(segment[open + 1..segment.size - 1]) ?? 0.0)
+        if (first) {
+            if (current.tag != tag || wanted != 1) {
+                return None
+            }
+            first = false
+            continue
+        }
+        var position = 0
+        var next: ?SvgElement = None
+        for (node in current.children) {
+            match (node) {
+                case ElementNode(child) =>
+                    if (child.tag == tag) {
+                        position++
+                        if (position == wanted) {
+                            next = Some(child)
+                            break
+                        }
+                    }
+                case _ => ()
+            }
+        }
+        match (next) {
+            case Some(child) => current = child
+            case None => return None
+        }
+    }
+    Some(current)
 }
 
 private func cloneSvgDocument(source: SvgDocument): SvgDocument {
