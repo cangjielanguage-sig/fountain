@@ -128,6 +128,64 @@ public class SvgGeometry_test {
         @Assert(boundsNear(geometry ?? SvgBounds.empty(), layout.bounds ?? SvgBounds.empty()))
         @Assert((geometry ?? SvgBounds.empty()).width > 20.0)
     }
+
+    /** 缺字时包盒为 None；渲染仍输出占位路径。 */
+    @TestCase
+    public func textBoundsRequireAllGlyphs(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Single", SingleGlyphFont())
+        let partial = SvgText()
+        partial.appendText("AB")
+        partial.fontFamily = "Single"
+        partial.fontSize = SvgLength(10.0)
+        @Assert(SvgGeometry.bounds(partial, style: textStyleOf(partial), fonts: Some(registry)).isNone())
+        let layout = SvgTextRenderer(registry: registry).layout(partial, style: textStyleOf(partial))
+        @Assert(layout.glyphs.size == 2)
+        @Assert(layout.glyphs[1].path.isSome())
+
+        let full = SvgText()
+        full.appendText("AA")
+        full.fontFamily = "Single"
+        full.fontSize = SvgLength(10.0)
+        @Assert(SvgGeometry.bounds(full, style: textStyleOf(full), fonts: Some(registry)).isSome())
+    }
+}
+
+internal class SingleGlyphFont <: SvgFont {
+    public func glyphPath(codePoint: Int64, fontSize: Float64): ?SvgPathData {
+        if (codePoint != 65) {
+            return None
+        }
+        let scale = fontSize / 10.0
+        Some(
+            SvgPathData([
+                SvgPathCommand(SvgPathCommandKind.MoveTo, false, [0.0, -8.0 * scale]),
+                SvgPathCommand(SvgPathCommandKind.LineTo, false, [10.0 * scale, -8.0 * scale]),
+                SvgPathCommand(SvgPathCommandKind.LineTo, false, [10.0 * scale, 0.0]),
+                SvgPathCommand(SvgPathCommandKind.LineTo, false, [0.0, 0.0]),
+                SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>())
+            ])
+        )
+    }
+
+    public func advance(codePoint: Int64, fontSize: Float64): Float64 {
+        fontSize
+    }
+
+    public func ascent(fontSize: Float64): Float64 {
+        fontSize * 0.8
+    }
+
+    public func descent(fontSize: Float64): Float64 {
+        fontSize * 0.2
+    }
+
+    public func glyphBounds(codePoint: Int64, fontSize: Float64): ?SvgBounds {
+        if (codePoint != 65) {
+            return None
+        }
+        Some(SvgBounds(0.0, -fontSize * 0.8, fontSize, fontSize * 0.8))
+    }
 }
 
 internal class FixedBBoxFont <: SvgFont {

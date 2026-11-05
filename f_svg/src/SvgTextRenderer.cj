@@ -49,11 +49,14 @@ public class SvgTextLayout {
     public let glyphs: Array<SvgTextGlyph>
     public let advance: Float64
     public let bounds: ?SvgBounds
+    /** 任一非空白字符缺少字形；占位框仍会生成，供渲染降级使用。 */
+    internal let missingGlyph: Bool
 
-    internal init(glyphs: Array<SvgTextGlyph>, advance: Float64, bounds: ?SvgBounds) {
+    internal init(glyphs: Array<SvgTextGlyph>, advance: Float64, bounds: ?SvgBounds, missingGlyph: Bool) {
         this.glyphs = glyphs
         this.advance = advance
         this.bounds = bounds
+        this.missingGlyph = missingGlyph
     }
 }
 
@@ -106,6 +109,16 @@ private class SvgTextChar {
     }
 }
 
+private class SvgGlyphEntry {
+    let path: ?SvgPathData
+    let missing: Bool
+
+    init(path: ?SvgPathData, missing: Bool) {
+        this.path = path
+        this.missing = missing
+    }
+}
+
 /**
  * 文本布局与字形路径输出。
  *
@@ -115,7 +128,7 @@ private class SvgTextChar {
 public class SvgTextRenderer {
     public let warnings = ArrayList<String>()
     private let registry: SvgFontRegistry
-    private let glyphCache = HashMap<String, ?SvgPathData>()
+    private let glyphCache = HashMap<String, SvgGlyphEntry>()
 
     public init(registry!: SvgFontRegistry = SvgFontRegistry.defaultRegistry()) {
         this.registry = registry
@@ -137,13 +150,18 @@ public class SvgTextRenderer {
         let count = chars.size
         let advances = ArrayList<Float64>()
         let paths = ArrayList<?SvgPathData>()
+        var missingGlyph = false
         for (index in 0..count) {
             let char = chars[index]
             let font = this.registry.resolve(char.family, char.weight, char.style)
             match (font) {
                 case Some(value) =>
                     advances.add(value.advance(char.codePoint, char.fontSize))
-                    paths.add(this.glyphPath(value, char))
+                    let entry = this.glyphEntry(value, char)
+                    if (entry.missing) {
+                        missingGlyph = true
+                    }
+                    paths.add(entry.path)
                 case None =>
                     this.warnings.add("未找到字体「${char.family}」，使用占位字形")
                     advances.add(char.fontSize * 0.5)
@@ -238,7 +256,7 @@ public class SvgTextRenderer {
             }
         }
         let resultBounds: ?SvgBounds = if (hasBounds) { Some(bounds) } else { None }
-        SvgTextLayout(glyphs.toArray(), total, resultBounds)
+        SvgTextLayout(glyphs.toArray(), total, resultBounds, missingGlyph)
     }
 
     /** 合并所有字形路径，供光栅器与形状共用填充 / 描边 / 渐变管线。 */
@@ -261,21 +279,23 @@ public class SvgTextRenderer {
         }
     }
 
-    private func glyphPath(font: SvgFont, char: SvgTextChar): ?SvgPathData {
+    private func glyphEntry(font: SvgFont, char: SvgTextChar): SvgGlyphEntry {
         let key = "${char.family}|${char.weight}|${char.style}|${formatSvgNumber(char.fontSize)}|${char.codePoint}"
         match (this.glyphCache.get(key)) {
-            case Some(path) => return path
+            case Some(entry) => return entry
             case None => ()
         }
         let path = font.glyphPath(char.codePoint, char.fontSize)
         if (path.isNone() && char.codePoint != 32) {
             this.warnings.add("字体「${char.family}」缺少字形 ${char.codePoint}，使用占位方框")
             let placeholder = placeholderGlyph(char.fontSize, font.advance(char.codePoint, char.fontSize))
-            this.glyphCache[key] = placeholder
-            return placeholder
+            let entry = SvgGlyphEntry(placeholder, true)
+            this.glyphCache[key] = entry
+            return entry
         }
-        this.glyphCache[key] = path
-        path
+        let entry = SvgGlyphEntry(path, false)
+        this.glyphCache[key] = entry
+        entry
     }
 }
 

@@ -774,5 +774,9 @@ private func textElementBounds(
     if (registry.resolve(style.fontFamily(), style.fontWeight(), style.fontStyle()).isNone()) {
         return None
     }
-    SvgTextRenderer(registry: registry).layout(text, style: style).bounds
+    let layout = SvgTextRenderer(registry: registry).layout(text, style: style)
+    if (layout.missingGlyph) {
+        return None
+    }
+    layout.bounds
 }
