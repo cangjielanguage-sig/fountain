@@ -114,19 +114,73 @@ class LoomPersona_test {
         }
     }
 
-    /** persona 为空时回落到该用户 character 记录的 key */
+    /** persona 为空时回落到该用户 character 记录的 key（第二级：prompt 库优先） */
     @TestCase
     func testPersonaFallsBackToCharacterKey(): Unit {
         let meta = InMemoryMetaStore()
-        meta.characters.set(Character(9, 'strict', '{}'))
-        meta.prompts.put(PromptEntry('strict', 1, '严格模式正文'))
+        meta.characters.set(Character(9, 'rigorous', ''))
+        meta.prompts.put(PromptEntry('rigorous', 1, '严格模式正文'))
         let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
         LoomHostApi.installStore(gateway.call)
         LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: 9))
         try{
             let host = PersonaHost()
             LoomRunner().run(plan(''), host, start())
+            // 库里同名提示词优先于内置正文
             @Expect(host.lastSystem.contains('严格模式正文'), true)
+            @Expect(host.lastSystem.contains('严谨的技术专家'), false)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
+    /** 库里没有同名提示词：用内置角色正文，而不是把 key 当正文 */
+    @TestCase
+    func testBuiltinCharacterBodyUsed(): Unit {
+        LoomHostApi.resetStore()
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan('rigorous'), host, start())
+            @Expect(host.lastSystem.contains('严谨的技术专家'), true)
+            @Expect(host.lastSystem.contains('rigorous\n'), false)
+        }finally{
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
+    /** 未知 key：仍按字面文本处理（第三级），不报错 */
+    @TestCase
+    func testUnknownKeyFallsBackToLiteral(): Unit {
+        LoomHostApi.resetStore()
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan('只挑错不夸奖'), host, start())
+            @Expect(host.lastSystem.contains('只挑错不夸奖'), true)
+        }finally{
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
+    /** character.prompts 作为附加要求追加在人格正文之后 */
+    @TestCase
+    func testCharacterPromptsAppended(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.characters.set(Character(5, 'rigorous', '回答不超过 300 字，用中文'))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: 5))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan(''), host, start())
+            @Expect(host.lastSystem.contains('严谨的技术专家'), true)
+            @Expect(host.lastSystem.contains('回答不超过 300 字，用中文'), true)
+            @Expect(host.lastSystem.contains('BASE'), true)
         }finally{
             LoomHostApi.resetStore()
             LoomMemoryPolicy.reset()

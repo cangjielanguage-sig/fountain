@@ -22,6 +22,8 @@ import fountain::f_data.*
 
 import fountain::f_egraph.base.*
 
+import fountain::f_llm.store.*
+
 /** 记录最后一个步骤的输出（多线程下用锁保护） */
 class LastEventBox {
     private let mutex = Mutex()
@@ -155,11 +157,25 @@ public class LoomRunner {
         // 计划指定的「人格/提示词」：先按提示词名查库，查不到就当字面文本；
         // persona 为空时回落到该用户 character 里记录的 key
         let userId = LoomMemoryPolicy.effective().userId
+        let character = characterOf(userId)
         var personaKey = plan.persona
         if(personaKey.trimAscii().isEmpty()){
-            personaKey = characterKeyOf(userId)
+            // 计划没指定风格 → 用该用户 character 里选的预定义人格
+            personaKey = match(character){
+                case Some(record) => record.characterKey
+                case None => ''
+            }
         }
-        let persona = resolvePersona(personaKey)
+        // 三级解析：prompt 库 → 内置角色正文 → 字面文本
+        var persona = resolvePersona(personaKey)
+        // character.prompts 是用户级附加要求（语言、篇幅等），与本次风格无关，非空就追加
+        let extra = match(character){
+            case Some(record) => record.prompts.trimAscii()
+            case None => ''
+        }
+        if(!extra.isEmpty()){
+            persona = if(persona.isEmpty()){ extra }else{ '${persona}\n\n${extra}' }
+        }
         if(!persona.isEmpty()){
             LoomHostApi.setPersona(persona)
         }
@@ -371,26 +387,35 @@ public class LoomRunner {
         }catch(error: Exception){
             ()
         }
+        // 第二级：predefined 角色正文。命中就返回，避免把 key 当成正文塞进 system
+        let builtin = PredefinedCharacters.bodyOf(value)
+        if(!builtin.isEmpty()){
+            return builtin
+        }
+        // 第三级：字面文本（调用方写的就是提示词正文）
         value
     }
 
-    /** 用户当前配置的人格 key（character 库为空时返回空串） */
-    private static func characterKeyOf(userId: Int64): String {
+    /** 用户当前的人格记录（未设置或未装配商店时返回 None） */
+    private static func characterOf(userId: Int64): ?Character {
         if(userId <= 0){
-            return ''
+            return None
         }
         try{
             let raw = LoomHostApi.callStore('character', 'get', '{"userId":${userId}}')
-            if(!raw.trimAscii().isEmpty()){
-                match(JsonValue.fromStr(raw) as JsonObject){
-                    case Some(json) => return fieldOf(json, 'characterKey')
-                    case None => ()
-                }
+            if(raw.trimAscii().isEmpty()){
+                return None
+            }
+            match(JsonValue.fromStr(raw) as JsonObject){
+                case Some(json) =>
+                    return Some(Character(userId, fieldOf(json, 'characterKey'),
+                                          fieldOf(json, 'prompts')))
+                case None => return None
             }
         }catch(error: Exception){
             ()
         }
-        ''
+        None
     }
 
     /** 自动挑技能用的任务文本：计划备注 + 起始输入 */

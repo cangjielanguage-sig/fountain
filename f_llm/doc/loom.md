@@ -280,14 +280,29 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | 字面文本（如 `只挑错，不夸奖`） | 查不到就按原文使用 |
 | 空 | 回落到该用户 `character.get(userId)` 的 `characterKey`，再按提示词名解析 |
 
-解析结果通过 `LoomHostApi.setPersona` 挂到本次执行上，`callLlm` 时拼在 system 前面：
+**解析是三级回落**（`LoomRunner.resolvePersona`）：
 
 ```
-<人格/提示词正文>
+1. prompt 库：prompt.latest(name) 命中 → 用它
+2. 内置角色正文：PredefinedCharacters.bodyOf(name) 非空 → 用它
+3. 字面文本：以上都没有 → 把入参当正文
+```
+
+第 2 级是必须的：`characterKey` 是 `rigorous` 这类**预定义 key**，设计里每个 key 都配了正文。
+没有这一级时，库里找不到同名提示词就会把 `rigorous` 这个单词直接塞进 system——比不设置更糟。
+
+**`character.prompts` 作为附加要求追加**（如「回答不超过 300 字，用中文」），与本次风格无关，
+只要该用户有 character 记录且 `prompts` 非空就拼在人格正文之后：
+
+```
+<人格正文（三级解析结果）>
+
+<character.prompts>
+
 <步骤自己的 system>
 ```
 
-执行结束 `clearPersona()` 复位。
+解析结果通过 `LoomHostApi.setPersona` 挂到本次执行上；执行结束 `clearPersona()` 复位。
 
 ## 技能注入
 
