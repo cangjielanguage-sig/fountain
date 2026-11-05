@@ -517,3 +517,45 @@
 - 若按本报告的严格口径，建议在归档前至少修复 C1–C7，并补齐 §2.3 中标为“缺失”的负向用例与 W1 的 M2 字节基线。
 
 CRITICAL=7
+
+## 6. 修复结果（本轮）
+
+> 执行顺序：每项先写失败用例并确认失败原因，再写最小实现；全绿后独立提交。
+> 本节编号沿用 `fix-plan.md` 约定，作为上面同名章节的追加复验结果。
+
+| 编号 | 状态 | 修复内容 | 验证用例 |
+|---|---|---|---|
+| C1 | 已修复 | 渲染树把 fill/stroke/marker/组子内容包成元素级图层，滤镜在裁剪/蒙版/透明度前执行一次 | `SvgElementFilterM3_test`（组滤镜、fill+stroke、marker、组/子滤镜叠加） |
+| C2 | 已修复 | `feTile` 按输入非透明内容尺寸平铺到滤镜区域；空输入透明 + warning | `SvgFilterTileChainM3_test` |
+| C3 | 已修复 | PNG/位图/pattern 上限改为除法判定，32 位边界溢出不再绕过 `Limit` | `SvgOverflowM3_test` |
+| C4 | 已修复 | 新增渲染会话级 `SvgRenderGuard`，嵌套渲染共享引用栈与解码预算；循环 warning，深度 65 抛 `Limit` | `SvgContentCycleM3_test`、`SvgNestedDecodeBudgetM3_test` |
+| C5 | 已修复 | 空 / 零长度 textPath 路径降级为普通水平文本并 warning | `SvgTextPathEmptyM3_test` |
+| C6 | 已修复 | 解析 AA 统一为逐扫描线按像素列累加覆盖，移除 8×8 子采样分支；nonzero/evenodd 独立判定 | `SvgAnalyticComplexM3_test`、`SvgAnalyticRasterizer_test` |
+| C7 | 已修复 | `refX` / `refY` / `markerWidth` / `markerHeight` 改为 `?SvgLength`，使用处按 0/0/3/3 兜底 | `SvgMarker_test` |
+| W1 | 已修复 | 增加 M1/M2 逐字节基线（容差 0）；快照缺失直接失败 | `SvgSceneByteBaseline_test` |
+| W2 | 已修复 | `primitiveUnits=objectBoundingBox` 时缩放 stdDeviation / dx / dy | `SvgFilterPrimitiveUnitsM3_test` |
+| W3 | 已修复 | 滤镜区域上限检查移到输出位图与区域缓冲分配之前 | `SvgFilterRegionOrderM3_test` |
+| W4 | 已验证 | 空 / 非 `url()` 的 filter 值跳过并 warning（由属性校验路径提供） | `SvgFilterAttributeM3_test` |
+| W5 | 已修复 | feColorMatrix 的 type 非法值解析期 warning；saturate/hueRotate 非有限值 warning + 直通 | `SvgColorMatrixValidationM3_test` |
+| W7 | 已修复 | pattern tile / marker 嵌套渲染共享外层解码像素预算 | `SvgNestedDecodeBudgetM3_test` |
+| W9 | 已修复 | marker 按 path 每个子路径的顶点派生 | `SvgMarkerSubpathM3_test` |
+| W10 | 已修复 | rotate 列表逐项解析，非法项按 0 处理，其余项生效 | `SvgTextRotatePartialM3_test` |
+| W11 | 已修复 | PNG 未知关键 chunk 归入 `Syntax` | `SvgPngChunkErrorM3_test` |
+| W12 | 已修复 | 校验 tRNS 长度与颜色类型；补充重复 IHDR、空 PLTE、缺 PLTE 用例 | `SvgPngStructureM3_test` |
+| W13 | 已修复 | patternContentUnits 内容平移到包围盒原点；userSpaceOnUse 百分比按视口解释 | `SvgPatternUnitsM3_test` |
+| W14 | 已修复 | 规格与 README 统一 image 占位在设置 background 时使用背景色 | 文档（未改实现） |
+| W17 | 已修复 | 补齐 gzip maxDepth、image/marker mask+filter、真实 marker 组合用例；修正 tasks/perf 口径 | `SvgGzipDepthM3_test`、`SvgImageEffectsM3_test`、`SvgMarkerEffectsM3_test`、`SvgAnalyticRasterizer_test.combinedDeterminism` |
+| W19 | 已修复 | userSpaceOnUse 滤镜区域百分比按视口尺寸解释 | `SvgFilterPercentRegionM3_test` |
+| W20 | 已修复 | `decode(stream)` 增加字节上限（默认 64 MiB），超限抛 `Limit` | `SvgPngStreamLimitM3_test` |
+| W21 | 已修复 | 文本 rotate 与 textPath 类 warning 附带 `/svg[i]/...` 元素路径 | `SvgTextWarningLocationM3_test` |
+| W22 | 已修复 | README provider 示例说明 `mem://` 需 `unsafePolicy: Keep` | 文档（中英文） |
+
+### 6.1 复验数据
+
+- `cjpm test`：**512 / 512 通过，0 skipped，0 error，0 failed**。
+- `cjpm build`：成功；`f_svg/src` 自身 warning 数为 **0**（其余 warning 来自依赖模块）。
+- 默认输出：`SvgSceneByteBaseline_test` 6 个 M1/M2 场景与既有 `.rgba` **逐字节一致**。
+- 第 3 节记录不改项（W6、W8、W15、W16、W18 与 S1–S6 中未处理部分）**未改动**。
+- 结论：本轮范围内 **CRITICAL = 0，选定 WARNING = 0**；剩余已知限制见第 3 节与上文 §2.2/§2.3。
+
+CRITICAL=0
