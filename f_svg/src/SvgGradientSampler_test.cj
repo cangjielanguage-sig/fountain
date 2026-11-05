@@ -72,6 +72,17 @@ public class SvgGradientSampler_test {
         addStop(degenerate, 1.0, SvgColor.fromRgb(0, 0, 255))
         @Assert(colorNear(sampler.sample(degenerate, SvgPoint(3.0, 0.0), box, SvgColor.Black), SvgColor.fromRgb(0, 0, 255)))
 
+        let degenerateRepeat = linearGradientForTest(5.0, 5.0)
+        degenerateRepeat.setAttr("spreadMethod", "repeat")
+        addStop(degenerateRepeat, 0.0, SvgColor.fromRgb(255, 0, 0))
+        addStop(degenerateRepeat, 1.0, SvgColor.fromRgb(0, 0, 255))
+        @Assert(
+            colorNear(
+                sampler.sample(degenerateRepeat, SvgPoint(3.0, 0.0), box, SvgColor.Black),
+                SvgColor.fromRgb(0, 0, 255)
+            )
+        )
+
         let objectBox = linearGradientForTest(0.0, 1.0, units: "objectBoundingBox")
         addStop(objectBox, 0.0, SvgColor.fromRgb(255, 0, 0))
         addStop(objectBox, 1.0, SvgColor.fromRgb(0, 0, 255))

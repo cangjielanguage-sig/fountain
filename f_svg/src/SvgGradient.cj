@@ -250,7 +250,10 @@ public class SvgGradientSampler {
             case None => ()
         }
         let t = if (gradient.tag == "linearGradient") {
-            this.linearT(chain, gradientPoint, boundingBox, isObject)
+            match (this.linearT(chain, gradientPoint, boundingBox, isObject)) {
+                case Some(value) => value
+                case None => return stops[stops.size - 1].color
+            }
         } else {
             this.radialT(chain, gradientPoint, boundingBox, isObject)
         }
@@ -265,7 +268,7 @@ public class SvgGradientSampler {
         point: SvgPoint,
         box: SvgBounds,
         isObject: Bool
-    ): Float64 {
+    ): ?Float64 {
         let x1 = this.coordinate(chain, "x1", SvgLengthAxis.Horizontal, if (isObject) { 0.0 } else { box.x }, isObject, box)
         let y1 = this.coordinate(chain, "y1", SvgLengthAxis.Vertical, if (isObject) { 0.0 } else { box.y }, isObject, box)
         let x2 = this.coordinate(
@@ -288,9 +291,9 @@ public class SvgGradientSampler {
         let dy = y2 - y1
         let denominator = dx * dx + dy * dy
         if (denominator < 1e-12) {
-            return 1.0
+            return None
         }
-        ((point.x - x1) * dx + (point.y - y1) * dy) / denominator
+        Some(((point.x - x1) * dx + (point.y - y1) * dy) / denominator)
     }
 
     private func radialT(
