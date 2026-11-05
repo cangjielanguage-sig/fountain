@@ -257,6 +257,23 @@ public class SvgComputedStyle_test {
             }
         }
         @Assert(located)
+
+        let metadataRoot = SvgRoot()
+        let metadataParent = SvgElement("g")
+        metadataParent.setAttr("stop-color", "red")
+        metadataParent.setAttr("stop-opacity", "0.5")
+        let metadataChild = SvgRect()
+        metadataParent.appendElement(metadataChild)
+        metadataRoot.appendElement(metadataParent)
+        let metadata = styleOf(computeTree(metadataRoot), metadataChild)
+        @Assert(metadata.get("stop-color") == Some("#000000"))
+        @Assert(metadata.get("stop-opacity") == Some("1"))
+
+        let referenced = SvgRect()
+        referenced.style = "clip-path: url(#c); mask: url(#m)"
+        let referencedStyle = styleOf(computeTree(referenced), referenced)
+        @Assert(referencedStyle.get("clip-path") == Some("url(#c)"))
+        @Assert(referencedStyle.get("mask") == Some("url(#m)"))
     }
 
     /** `<style>` 收集、外部样式表合并顺序与计算不修改文档。 */

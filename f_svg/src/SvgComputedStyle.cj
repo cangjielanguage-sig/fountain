@@ -95,9 +95,11 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("word-spacing", true, "0"),
     SvgPropertySpec("visibility", true, "visible"),
     SvgPropertySpec("display", false, "inline"),
+    SvgPropertySpec("clip-path", false, "none"),
+    SvgPropertySpec("mask", false, "none"),
     SvgPropertySpec("clip-rule", true, "nonzero"),
-    SvgPropertySpec("stop-color", true, "black"),
-    SvgPropertySpec("stop-opacity", true, "1")
+    SvgPropertySpec("stop-color", false, "black"),
+    SvgPropertySpec("stop-opacity", false, "1")
 ]
 
 internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {

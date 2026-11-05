@@ -128,6 +128,16 @@ public class SvgRenderer_test {
         @Assert(clipBitmap.pixel(2, 2).alpha == 0.0)
         @Assert(colorNear(clipBitmap.pixel(7, 7), SvgColor.fromRgb(255, 0, 0)))
 
+        let styledClipDoc = svgDoc(
+            '<defs><clipPath id="c"><rect x="5" y="5" width="5" height="5"/></clipPath></defs>' +
+            '<rect width="10" height="10" fill="red" style="clip-path: url(#c)"/>',
+            width: 10,
+            height: 10
+        )
+        let styledClip = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(styledClipDoc)
+        @Assert(styledClip.pixel(2, 2).alpha == 0.0)
+        @Assert(colorNear(styledClip.pixel(7, 7), SvgColor.fromRgb(255, 0, 0)))
+
         let textDoc = svgDoc(
             '<text x="2" y="10" font-family="Hershey" font-size="10" fill="black">AB</text>',
             width: 30,

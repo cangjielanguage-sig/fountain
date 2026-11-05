@@ -399,6 +399,14 @@ public class SvgStyleResolver <: ToString {
                     case Some(list) => return Some(formatSvgLengthList(list))
                     case None => return None
                 }
+            case "clip-path" | "mask" =>
+                if (lower == "none") {
+                    return Some("none")
+                }
+                if (lower.size > 4 && lower[0..4] == "url(") {
+                    return Some(trimmed)
+                }
+                return None
             case "fill-rule" | "clip-rule" =>
                 match (SvgFillRule.fromName(lower)) {
                     case Some(rule) => return Some(rule.attrName())

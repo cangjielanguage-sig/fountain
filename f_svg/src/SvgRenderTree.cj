@@ -280,8 +280,8 @@ public class SvgRenderTreeBuilder {
                         style: Some(style),
                         bounds: bounds,
                         opacity: style.opacity(),
-                        clipPath: this.resolveUrlRef(text.attr("clip-path"), context),
-                        mask: this.resolveUrlRef(text.attr("mask"), context),
+                        clipPath: this.resolveUrlRef(style.get("clip-path"), context),
+                        mask: this.resolveUrlRef(style.get("mask"), context),
                         clipRect: context.clipRect
                     )
                 )
@@ -307,8 +307,8 @@ public class SvgRenderTreeBuilder {
             case _ => ()
         }
         let matrix = context.matrix.multiply(elementTransformMatrix(container))
-        let clipPath = this.resolveUrlRef(container.attr("clip-path"), context)
-        let maskElement = this.resolveUrlRef(container.attr("mask"), context)
+        let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
+        let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let grouped = style.opacity() < 1.0 || clipPath.isSome() || maskElement.isSome() ||
             context.clipRect.isSome()
         if (grouped) {
@@ -503,8 +503,8 @@ public class SvgRenderTreeBuilder {
         }
         let matrix = context.matrix.multiply(elementTransformMatrix(shape))
         let bounds = SvgGeometry.bounds(shape, style: style)
-        let clipPath = this.resolveUrlRef(shape.attr("clip-path"), context)
-        let maskElement = this.resolveUrlRef(shape.attr("mask"), context)
+        let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
+        let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let fill = style.fill()
         if (fill.kind != SvgPaintKind.None) {
             commands.add(
