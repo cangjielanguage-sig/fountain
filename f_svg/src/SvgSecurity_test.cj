@@ -352,6 +352,40 @@ public class SvgSecurity_test {
         let document = SvgParser.parse(text)
         @Assert(document.root.child("rect").isSome())
     }
+
+    /** 外部命名空间的同名 URL 属性不参与 SVG 安全过滤。 */
+    @TestCase
+    public func foreignNamespaceUrlAttributePreserved(): Unit {
+        let text = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:x=\"urn:x\">" +
+            "<x:rect fill=\"url(http://evil/x.svg#p)\" width=\"1\" height=\"1\"/></svg>"
+        let document = SvgParser.parse(text, options: SvgParseOptions(strict: true))
+        let rawElement = document.root.childrenOf("rect")[0]
+        @Assert(rawElement.attr("fill") == Some("url(http://evil/x.svg#p)"))
+    }
+
+    /** style 属性与 `<style>` 内容中的外部 URL 默认移除。 */
+    @TestCase
+    public func cssExternalUrlsRemoved(): Unit {
+        let text = "<svg><rect width=\"1\" height=\"1\" " +
+            "style=\"fill:url(https://evil/x.svg#p);stroke:red\"/>" +
+            "<style>@import url(https://evil/x.css);</style></svg>"
+        let document = SvgParser.parse(text)
+        let rect = document.root.child("rect").getOrThrow()
+        @Assert(rect.attr("style").isNone())
+        @Assert(document.root.child("style").isNone())
+        @Assert(countWarnings(document, "外部引用") >= 2)
+    }
+
+    /** `xml:base` 默认移除，避免把 `#id` 重定位到外部文档。 */
+    @TestCase
+    public func xmlBaseRemoved(): Unit {
+        let text = "<svg><use href=\"#a\" xml:base=\"https://evil/\"/></svg>"
+        let document = SvgParser.parse(text)
+        let use = document.root.child("use").getOrThrow()
+        @Assert(use.attr("base").isNone())
+        @Assert(use.attr("href") == Some("#a"))
+        @Assert(countWarnings(document, "xml:base") == 1)
+    }
 }
 
 private func nestedGroups(levels: Int64): String {

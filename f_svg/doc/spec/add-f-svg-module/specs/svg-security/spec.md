@@ -57,7 +57,7 @@
 
 系统 SHALL 提供 `SvgSecurityOptions`：`unsafePolicy`、`allowScript`、`allowEventAttributes`、`allowExternalReferences`、`allowDataImages`，默认值分别为 `Remove`、`false`、`false`、`false`、`true`。
 
-放行开关 SHALL 只影响对应类别，不得连带放宽其他类别。`allowExternalReferences` SHALL 只放行 `http:`、`https:` 与协议相对 `//` 引用，不得放行 `javascript:` 与 `file:`；后两者仍由 `unsafePolicy` 控制。
+放行开关 SHALL 只影响对应类别，不得连带放宽其他类别。`allowExternalReferences` SHALL 只放行 `http:`、`https:` 与协议相对 `//` 引用，不得放行 `javascript:` 与 `file:`；后两者仍由 `unsafePolicy` 控制。`allowExternalReferences` SHALL 只作用于 `href`；`fill` / `stroke` / `filter` / `clip-path` / `mask` / `marker-*` / `cursor` / `style` 中的 `url(...)` SHALL 由 `unsafePolicy` 控制。
 
 #### Scenario: 只放行事件属性
 

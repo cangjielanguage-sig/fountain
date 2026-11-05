@@ -134,6 +134,10 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 | `on*` event attributes | removed | `allowEventAttributes` |
 | `http:` / `https:` / `//` references | removed | `allowExternalReferences` |
 | `file:` / `javascript:` references | removed | `unsafePolicy` only (`allowExternalReferences` does not apply) |
+> `allowExternalReferences` applies to `href` only (`use` / `image` / `a`);
+> external `url(...)` references in `fill` / `stroke` / `filter` / `clip-path` / `mask` / `marker-*` / `cursor` / `style`
+> are controlled by `unsafePolicy` alone.
+
 | `data:` images | kept | `allowDataImages` (`false` removes) |
 | `#id` fragment references | kept | always kept |
 | External DTD / entities | never loaded | not configurable |
@@ -155,7 +159,7 @@ with more than 6 fractional digits are rounded. `SvgColor` emits `#rrggbbaa`
 ```cangjie
 SvgLength.parse("1.5em")             // value = 1.5, unit = Em
 SvgColor.parse("hsl(120,100%,50%)")  // #00ff00
-SvgPaint.parse("url(#grad1) none")   // Reference(#grad1, fallback = None)
+SvgPaint.parse("url(#grad1) none")   // Reference(#grad1, fallback = Some(SvgPaint.None))
 SvgTransform.parse("translate(10,20) scale(2)").toMatrix()
 SvgPathData.parse("M0 0 A5 5 0 0110 10")
 SvgViewBox.parse("0 0 200 100")

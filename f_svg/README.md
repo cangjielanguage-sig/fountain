@@ -132,6 +132,10 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 | `on*` 事件属性 | 移除 | `allowEventAttributes` |
 | `http:` / `https:` / `//` 引用 | 移除 | `allowExternalReferences` |
 | `file:` / `javascript:` 引用 | 移除 | 仅 `unsafePolicy`（`allowExternalReferences` 不放行） |
+> `allowExternalReferences` 仅作用于 `href`（`use` / `image` / `a` 等）；
+> `fill` / `stroke` / `filter` / `clip-path` / `mask` / `marker-*` / `cursor` / `style` 中的
+> `url(...)` 外部引用由 `unsafePolicy` 单独控制。
+
 | `data:` 图片 | 保留 | `allowDataImages`（置 `false` 时移除） |
 | `#id` 片段引用 | 保留 | 不可关闭 |
 | 外部 DTD / 外部实体 | 永不加载 | 不可放开 |
@@ -150,7 +154,7 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 ```cangjie
 SvgLength.parse("1.5em")          // value = 1.5, unit = Em
 SvgColor.parse("hsl(120,100%,50%)") // #00ff00
-SvgPaint.parse("url(#grad1) none")  // Reference(#grad1, fallback = None)
+SvgPaint.parse("url(#grad1) none")  // Reference(#grad1, fallback = Some(SvgPaint.None))
 SvgTransform.parse("translate(10,20) scale(2)").toMatrix()
 SvgPathData.parse("M0 0 A5 5 0 0110 10")
 SvgViewBox.parse("0 0 200 100")

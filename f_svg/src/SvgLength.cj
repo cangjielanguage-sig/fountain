@@ -83,7 +83,8 @@ public enum SvgLengthUnit <: Equatable<SvgLengthUnit> & ToString {
  * 长度值：数值 + 单位。
  *
  * `parse` 失败抛 `SvgException(InvalidValue)`，`tryParse` 返回 `None`；
- * `toString` 输出规范形式并满足 `parse(toString(x)) == x`。
+ * `toString` 输出规范形式；对规范形式可表示的值满足 `parse(toString(x)) == x`
+ * （超过 6 位小数与 `|v| < 1e-6` 归零是已声明的不保真边界）。
  */
 public struct SvgLength <: Equatable<SvgLength> & ToString {
     public let value: Float64

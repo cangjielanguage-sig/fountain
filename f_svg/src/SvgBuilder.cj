@@ -55,7 +55,7 @@ internal func buildSvgDocument(xml: XmlDocument, options: SvgParseOptions): SvgD
     let root = SvgRoot()
     context.elementCount = 1
     let rootPath = "/svg[1]"
-    fillSvgAttributes(root, rootXml, rootPath, context, true)
+    fillSvgAttributes(root, rootXml, rootPath, context, true, SvgNamespaces.SVG)
     buildSvgChildren(root, rootXml, SvgNamespaces.SVG, "/svg[1]", 1, context)
 
     let document = SvgDocument(root)
@@ -142,7 +142,7 @@ private func buildSvgOne(
             }
         }
         let element = SvgUnknownElement(rawName)
-        fillSvgAttributes(element, xml, path, context, false)
+        fillSvgAttributes(element, xml, path, context, false, namespace)
         buildSvgChildren(element, xml, namespace, path, depth, context)
         return Some(element)
     }
@@ -169,13 +169,46 @@ private func buildSvgOne(
         element = SvgUnknownElement(rawName)
     }
 
+    if (namespace == SvgNamespaces.SVG && local == "style") {
+        match (externalCssUrlTarget(collectXmlText(xml))) {
+            case Some(found) =>
+                if (context.options.strict) {
+                    throw SvgException(
+                        "不允许外部引用「${found}」",
+                        0,
+                        0,
+                        kind: SvgErrorKind.Security,
+                        elementPath: Some(path)
+                    )
+                }
+                if (applyUnsafePolicy("style 元素中的外部引用「${found}」", path, context)) {
+                    return None
+                }
+            case None => ()
+        }
+    }
+
     let validateSvg = namespace == SvgNamespaces.SVG && SvgTag.isKnown(local)
-    fillSvgAttributes(element, xml, path, context, validateSvg)
+    fillSvgAttributes(element, xml, path, context, validateSvg, namespace)
     if (context.options.strict && namespace == SvgNamespaces.SVG) {
         checkRequiredAttributes(local, xml, path)
     }
     buildSvgChildren(element, xml, namespace, path, depth, context)
     Some(element)
+}
+
+/** 收集元素子树中的文本与 CDATA，用于扫描 `<style>` 内容。 */
+private func collectXmlText(xml: XmlElement): String {
+    let out = StringBuilder()
+    for (node in xml.children) {
+        match (node) {
+            case XmlNode.TextNode(text) => out.append(text)
+            case XmlNode.CDataNode(text) => out.append(text)
+            case XmlNode.ElementNode(child) => out.append(collectXmlText(child))
+            case _ => ()
+        }
+    }
+    out.toString()
 }
 
 /** 相邻文本节点合并：序列化无法保留文本节点边界，合并后往返才稳定。 */
@@ -204,13 +237,14 @@ private func fillSvgAttributes(
     xml: XmlElement,
     path: String,
     context: SvgBuildContext,
-    validate: Bool
+    validate: Bool,
+    namespace: String
 ): Unit {
     for (attribute in xml.attributes) {
         if (isXmlnsDeclaration(attribute.name)) {
             continue
         }
-        if (shouldRemoveAttribute(attribute, path, context)) {
+        if (shouldRemoveAttribute(attribute, path, context, namespace)) {
             continue
         }
         if (validate && isSvgNamespaceAttribute(attribute.name)) {
@@ -256,35 +290,81 @@ private func isSvgUrlAttribute(local: String): Bool {
     false
 }
 
-private func shouldRemoveAttribute(attribute: XmlAttribute, path: String, context: SvgBuildContext): Bool {
+private func shouldRemoveAttribute(
+    attribute: XmlAttribute,
+    path: String,
+    context: SvgBuildContext,
+    elementNamespace: String
+): Bool {
     let local = attribute.name.local
     let security = context.options.security
+    if (elementNamespace != SvgNamespaces.SVG) {
+        return false
+    }
+    let svgAttribute = isSvgNamespaceAttribute(attribute.name)
+    let xlinkAttribute = match (attribute.name.uri) {
+        case Some(uri) => uri == SvgNamespaces.XLINK
+        case None => false
+    }
+
+    if (local == "href") {
+        if (svgAttribute || xlinkAttribute) {
+            return handleHrefValue(attribute.value, path, context)
+        }
+        return false
+    }
+    if (attribute.name.uri == Some(SvgNamespaces.XML) && local == "base") {
+        return applyUnsafePolicy("xml:base", path, context)
+    }
+    if (!svgAttribute) {
+        return false
+    }
     if (attribute.name.uri.isNone() && local.size > 2 && local[0..2].toAsciiLower() == "on") {
         if (security.allowEventAttributes) {
             return false
         }
         return applyUnsafePolicy("事件属性 ${local}", path, context)
     }
-    if (isSvgUrlAttribute(local)) {
-        match (externalUrlTarget(attribute.value)) {
-            case Some(target) =>
+    if (isSvgUrlAttribute(local) || local == "style") {
+        let target = if (local == "style") {
+            externalCssUrlTarget(attribute.value)
+        } else {
+            externalUrlTarget(attribute.value)
+        }
+        match (target) {
+            case Some(found) =>
                 if (context.options.strict) {
                     throw SvgException(
-                        "不允许外部引用「${target}」",
+                        "不允许外部引用「${found}」",
                         0,
                         0,
                         kind: SvgErrorKind.Security,
                         elementPath: Some(path)
                     )
                 }
-                return applyUnsafePolicy("URL 属性「${local}」中的外部引用「${target}」", path, context)
+                let what = if (local == "style") {
+                    "style 属性中的外部引用「${found}」"
+                } else {
+                    "URL 属性「${local}」中的外部引用「${found}」"
+                }
+                return applyUnsafePolicy(what, path, context)
             case None => ()
         }
     }
-    if (local == "href") {
-        return handleHrefValue(attribute.value, path, context)
-    }
     false
+}
+
+/** 扫描 CSS 文本中的 `url(...)` 与 `@import`；返回第一个外部目标。 */
+private func externalCssUrlTarget(value: String): ?String {
+    match (externalUrlTarget(value)) {
+        case Some(target) => return Some(target)
+        case None => ()
+    }
+    let lower = value.toAsciiLower()
+    if (lower.contains("@import")) {
+        return Some("@import")
+    }
+    None
 }
 
 /** 扫描 `url(...)`；内容不是 `#` 开头时返回该目标。 */
