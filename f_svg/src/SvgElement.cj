@@ -162,6 +162,17 @@ public open class SvgElement <: ToString {
         this
     }
 
+    /** 按命名空间 + 本地名删除属性。 */
+    public func removeAttr(namespace: String, local: String): Bool {
+        let index = this.namespacedAttributeIndex(namespace, local)
+        if (index < 0) {
+            return false
+        }
+        this.attributes.remove(at: index)
+        this.attributesVersion++
+        true
+    }
+
     public func removeAttr(name: String): Bool {
         let index = this.bareAttributeIndex(name)
         if (index < 0) {
@@ -377,6 +388,26 @@ private func prefixOf(namespace: String): String {
         "xml"
     } else {
         "ns"
+    }
+}
+
+/** `href` 读取：优先无前缀，其次 `xlink:href`。 */
+internal func readSvgHref(element: SvgElement): ?String {
+    match (element.attr("href")) {
+        case Some(value) => Some(value)
+        case None => element.attr(SvgNamespaces.XLINK, "href")
+    }
+}
+
+/** `href` 写入：默认写 `xlink:href`，同时清掉裸名，避免双份。 */
+internal func writeSvgHref(element: SvgElement, value: ?String): Unit {
+    match (value) {
+        case Some(href) =>
+            element.removeAttr("href")
+            element.setAttr(SvgNamespaces.XLINK, "href", href)
+        case None =>
+            element.removeAttr("href")
+            element.removeAttr(SvgNamespaces.XLINK, "href")
     }
 }
 
