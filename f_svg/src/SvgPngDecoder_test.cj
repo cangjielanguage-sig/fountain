@@ -483,3 +483,17 @@ public class SvgPngDecoder_test {
         @Assert(bytes == copy)
     }
 }
+
+@Test
+public class SvgPngChunkErrorM3_test {
+    /** 未知关键 chunk 属于结构错误，抛 Syntax。 */
+    @TestCase
+    public func unknownCriticalChunkIsSyntax(): Unit {
+        let out = pngPrefix(1, 1, 8, 6, 0)
+        pngChunk(out, "ZZZZ", [1, 2, 3])
+        pngChunk(out, "IDAT", pngZlib([0, 255, 0, 0, 255]))
+        pngChunk(out, "IEND", Array<Byte>())
+        let error = expectSvgException({=> SvgPngDecoder.decode(out.bytes())})
+        @Assert(error.kind == SvgErrorKind.Syntax)
+    }
+}

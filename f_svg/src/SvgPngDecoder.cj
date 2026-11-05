@@ -294,7 +294,7 @@ private func readHeaderChunks(bytes: Array<Byte>): SvgPngHeader {
                 idatClosed = true
             }
             if (isCriticalChunk(typeBytes)) {
-                throw SvgException("不支持的 PNG 关键 chunk", kind: SvgErrorKind.Unsupported)
+                throw SvgException("不支持的 PNG 关键 chunk", kind: SvgErrorKind.Syntax)
             }
         }
         position = crcOffset + 4
