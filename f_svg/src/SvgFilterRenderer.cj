@@ -114,6 +114,41 @@ public class SvgFilterRenderer {
         output
     }
 
+    private func mergePrimitive(
+        merge: SvgFeMerge,
+        fallback: SvgFilterBuffer,
+        named: HashMap<String, SvgFilterBuffer>
+    ): SvgFilterBuffer {
+        let buffers = ArrayList<SvgFilterBuffer>()
+        for (node in merge.children) {
+            match (node) {
+                case ElementNode(element) =>
+                    match (element) {
+                        case mergeNode: SvgFeMergeNode =>
+                            let buffer = match (mergeNode.inSource) {
+                                case Some(name) =>
+                                    match (named.get(name)) {
+                                        case Some(value) => value
+                                        case None =>
+                                            this.warnings.add(
+                                                "feMergeNode 引用了不存在的输入「${name}」"
+                                            )
+                                            transparentBuffer(fallback.width, fallback.height)
+                                    }
+                                case None => fallback
+                            }
+                            buffers.add(buffer)
+                        case _ => ()
+                    }
+                case _ => ()
+            }
+        }
+        if (buffers.size == 0) {
+            return fallback.copy()
+        }
+        mergeFilterBuffers(buffers)
+    }
+
     private func runChain(filter: SvgFilter, source: SvgFilterBuffer): SvgFilterBuffer {
         let named = HashMap<String, SvgFilterBuffer>()
         named["SourceGraphic"] = source
@@ -147,7 +182,10 @@ public class SvgFilterRenderer {
                     }
                 case None => ()
             }
-            let result = applyFilterPrimitive(primitive, input, input2)
+            let result = match (primitive) {
+                case merge: SvgFeMerge => this.mergePrimitive(merge, input, named)
+                case _ => applyFilterPrimitive(primitive, input, input2, this.warnings)
+            }
             let name = primitive.result ?? "result${index}"
             named[name] = result
             previous = result
@@ -187,13 +225,57 @@ private func transparentBuffer(width: Int64, height: Int64): SvgFilterBuffer {
     SvgFilterBuffer(width, height)
 }
 
-/** 原语分派；M3 阶段 9 前默认直通输入。 */
+/** 原语分派。 */
 private func applyFilterPrimitive(
     primitive: SvgFilterPrimitive,
     input: SvgFilterBuffer,
-    input2: SvgFilterBuffer
+    input2: SvgFilterBuffer,
+    warnings: ArrayList<String>
 ): SvgFilterBuffer {
-    input.copy()
+    match (primitive) {
+        case blur: SvgFeGaussianBlur =>
+            let deviations = blur.stdDeviation.values
+            var sigmaX = 0.0
+            var sigmaY = 0.0
+            if (deviations.size == 1) {
+                sigmaX = deviations[0]
+                sigmaY = deviations[0]
+            } else if (deviations.size >= 2) {
+                sigmaX = deviations[0]
+                sigmaY = deviations[1]
+            }
+            if (sigmaX < 0.0 || sigmaY < 0.0) {
+                warnings.add("feGaussianBlur 的 stdDeviation 含负值，按 0 处理")
+                sigmaX = max(0.0, sigmaX)
+                sigmaY = max(0.0, sigmaY)
+            }
+            blurFilterBuffer(input, sigmaX, sigmaY)
+        case offset: SvgFeOffset =>
+            offsetFilterBuffer(input, Int64(round(offset.dx.value)), Int64(round(offset.dy.value)))
+        case flood: SvgFeFlood =>
+            let color = match (flood.floodColor.color) {
+                case Some(value) => value
+                case None => SvgColor.Black
+            }
+            floodFilterBuffer(input.width, input.height, color, flood.floodOpacity)
+        case blend: SvgFeBlend =>
+            blendFilterBuffer(input, input2, blend.mode)
+        case composite: SvgFeComposite =>
+            compositeFilterBuffer(
+                input,
+                input2,
+                composite.operatorKind,
+                composite.k1,
+                composite.k2,
+                composite.k3,
+                composite.k4
+            )
+        case matrix: SvgFeColorMatrix =>
+            colorMatrixFilterBuffer(input, matrix.matrixType, matrix.values, warnings)
+        case tile: SvgFeTile =>
+            tileFilterBuffer(input, input.width, input.height)
+        case _ => input.copy()
+    }
 }
 
 private func toLinearRgb(buffer: SvgFilterBuffer): SvgFilterBuffer {
