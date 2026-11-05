@@ -166,8 +166,13 @@ public class LoomRunner {
                 case None => ''
             }
         }
-        // 三级解析：prompt 库 → 内置角色正文 → 字面文本
-        var persona = resolvePersona(personaKey)
+        // 三级解析：prompt 库 → 内置角色正文 → 字面文本。
+        // `custom` 是特例：正文只来自 character.prompts，不能把 "custom" 这个词当人格
+        var persona = if(personaKey.trimAscii().toAsciiLower() == 'custom'){
+            ''
+        }else{
+            resolvePersona(personaKey)
+        }
         // character.prompts 是用户级附加要求（语言、篇幅等），与本次风格无关，非空就追加
         let extra = match(character){
             case Some(record) => record.prompts.trimAscii()

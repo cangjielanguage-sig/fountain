@@ -103,6 +103,18 @@ class RetrievalEval_test {
                 @Expect(ids.contains(expected), true)
             }
         }
+
+        // 覆盖检查：每条语料都要被至少一条 query 引用。
+        // 只加文档不加 query，指标不会下降——覆盖率却会静默漏掉一批主题。
+        let referenced = HashSet<String>()
+        for(item in evalCases){
+            for(expected in item.expected){
+                referenced.add(expected)
+            }
+        }
+        for(doc in docs){
+            @Expect(referenced.contains(doc.id), true)
+        }
     }
 
     /**

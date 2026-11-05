@@ -167,6 +167,46 @@ class LoomPersona_test {
         }
     }
 
+    /**
+     * `custom` 人格：正文只来自 character.prompts。
+     *
+     * 不能走「字面文本」那一级——否则 system 开头会出现 `custom` 这个英文单词，
+     * 比不设置更糟。两个分支都断言：有 prompts 用它，没 prompts 就当没设置。
+     */
+    @TestCase
+    func testCustomCharacterUsesPromptsOnly(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.characters.set(Character(6, 'custom', '只用英文回答，控制在两句话内'))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: 6))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan(''), host, start())
+            @Expect(host.lastSystem.contains('只用英文回答，控制在两句话内'), true)
+            @Expect(host.lastSystem.contains('custom'), false)
+            @Expect(host.lastSystem.contains('BASE'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+        // 未填 prompts：等价于没设置人格，system 里不该留下 'custom'
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: 6))
+        meta.characters.set(Character(6, 'custom', ''))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan(''), host, start())
+            @Expect(host.lastSystem.contains('custom'), false)
+            @Expect(host.lastSystem, 'BASE')
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
     /** character.prompts 作为附加要求追加在人格正文之后 */
     @TestCase
     func testCharacterPromptsAppended(): Unit {
