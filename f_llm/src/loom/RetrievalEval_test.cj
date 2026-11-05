@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_llm.loom
 
 import std.collection.*
+import std.math.abs
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -47,6 +48,7 @@ class RetrievalEval_test {
         @Expect(report.recallAt1(), 1.0f64)
         @Expect(report.recallAtK(), 1.0f64)
         @Expect(report.mrr(), 1.0f64)
+        @Expect(report.ndcg(), 1.0f64)
         @Expect(report.misses.size, 0)
     }
 
@@ -59,6 +61,23 @@ class RetrievalEval_test {
         @Expect(report.recallAt1(), 0.0f64)
         @Expect(report.recallAtK(), 1.0f64)
         @Expect(report.mrr(), 0.5f64)
+        // 单相关排第 2：nDCG = 1 / log2(3) ≈ 0.6309
+        @Expect(abs(report.ndcg() - 0.6309f64) < 0.001f64, true)
+    }
+
+    /** nDCG 位置敏感：同一个命中，排第 1 必须高于排第 3 */
+    @TestCase
+    func testNdcgPenalizesLowerRank(): Unit {
+        let evalCases = cases([('q', 'd1')])
+        let first = { _: String, _: Int64 => ArrayList<String>(['d1', 'x', 'y']) }
+        let third = { _: String, _: Int64 => ArrayList<String>(['x', 'y', 'd1']) }
+        let top = RetrievalEval.evaluate(evalCases, first, topK: 5)
+        let low = RetrievalEval.evaluate(evalCases, third, topK: 5)
+        @Expect(top.ndcg(), 1.0f64)
+        @Expect(abs(low.ndcg() - 0.5f64) < 0.001f64, true)   // 1 / log2(4)
+        @Expect(top.ndcg() > low.ndcg(), true)
+        // 两者 recall@5 相同，只有 nDCG 能分出高低
+        @Expect(top.recallAtK(), low.recallAtK())
     }
 
     /** 多相关标注：命中任一期望文档即算对，排名取最靠前的那个 */
@@ -73,6 +92,8 @@ class RetrievalEval_test {
         @Expect(report.recallAt1(), 0.0f64)
         @Expect(report.recallAtK(), 1.0f64)
         @Expect(report.mrr(), 0.5f64)
+        // 3 个期望只命中第 2 名：DCG=1/log2(3)，IDCG=1+1/log2(3)+1/log2(4)
+        @Expect(abs(report.ndcg() - 0.2961f64) < 0.001f64, true)
         @Expect(report.misses.size, 0)
     }
 
@@ -98,10 +119,10 @@ class RetrievalEval_test {
     }
 
     /**
-     * 随附数据集：50 条语料 + 462 条正样本（300 模板化 + 150 难样本 + 12 多相关）+ 10 条负样本。
+     * 随附数据集：50 条语料 + 612 条正样本（300 模板化 + 300 难样本 + 12 多相关）+ 10 条负样本。
      *
-     * 规模是按「单主题结论」定的：10 个模板化主题各 30 条、难样本每文档 3 条；
-     * 全局 462 条约 ±3.5 点，够做换模型的粗判。要卡 5 点级回归仍需 500+，见 doc。
+     * 规模是按「单主题结论」定的：10 个模板化主题各 30 条、难样本每文档 6 条；
+     * 全局 612 条约 ±2.9 点，难样本 300 条约 ±5.7 点 —— 都够做换模型的粗判与回归检测。
      */
     @TestCase
     func testShippedDatasetIsWellFormed(): Unit {
@@ -139,12 +160,12 @@ class RetrievalEval_test {
         }
 
         @Expect(negatives, 10)
-        @Expect(evalCases.size - negatives, 462)
-        // 12 个主题：10 个模板化主题各至少 30 条、难样本每文档 3 条、多相关 12 条
+        @Expect(evalCases.size - negatives, 612)
+        // 12 个主题：10 个模板化主题各至少 30 条、难样本每文档 6 条、多相关 12 条
         @Expect(perTopic.size, 12)
         for((topic, count) in perTopic){
             if(topic == 'hard'){
-                @Expect(count, 150)
+                @Expect(count, 300)
             }else if(topic == 'multi'){
                 @Expect(count, 12)
             }else{

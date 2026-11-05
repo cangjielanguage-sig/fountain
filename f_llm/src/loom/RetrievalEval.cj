@@ -19,6 +19,7 @@ import std.collection.*
 import std.env.getVariable
 import std.fs.*
 import std.io.*
+import std.math.log
 
 /** 评测语料里的一条文档 */
 public class EvalDoc {
@@ -62,14 +63,24 @@ public class TopicStat {
     public let hitAt1: Int64
     public let hitAtK: Int64
     public let reciprocalSum: Float64
+    public let ndcgSum: Float64
 
     public init(topic: String, total: Int64, hitAt1: Int64, hitAtK: Int64,
-                reciprocalSum: Float64) {
+                reciprocalSum: Float64, ndcgSum: Float64) {
         this.topic = topic
         this.total = total
         this.hitAt1 = hitAt1
         this.hitAtK = hitAtK
         this.reciprocalSum = reciprocalSum
+        this.ndcgSum = ndcgSum
+    }
+
+    /** nDCG@k（二值相关）：位置越靠前分越高，多相关样本也能反映「漏了几个」 */
+    public func ndcg(): Float64 {
+        if(total <= 0){
+            return 0.0f64
+        }
+        ndcgSum / Float64(total)
     }
 
     public func recallAt1(): Float64 {
@@ -100,6 +111,7 @@ public class EvalReport {
     public let hitAt1: Int64
     public let hitAtK: Int64
     public let reciprocalSum: Float64
+    public let ndcgSum: Float64
     public let topK: Int64
     public let misses: ArrayList<String>
     public let negativeTotal: Int64
@@ -107,18 +119,31 @@ public class EvalReport {
     public let topics: ArrayList<TopicStat>
 
     public init(total: Int64, hitAt1: Int64, hitAtK: Int64, reciprocalSum: Float64,
-                topK: Int64, misses: ArrayList<String>,
+                ndcgSum: Float64, topK: Int64, misses: ArrayList<String>,
                 negativeTotal: Int64, negativePassed: Int64,
                 topics: ArrayList<TopicStat>) {
         this.total = total
         this.hitAt1 = hitAt1
         this.hitAtK = hitAtK
         this.reciprocalSum = reciprocalSum
+        this.ndcgSum = ndcgSum
         this.topK = topK
         this.misses = misses
         this.negativeTotal = negativeTotal
         this.negativePassed = negativePassed
         this.topics = topics
+    }
+
+    /**
+     * nDCG@k（二值相关）：与 recall 的区别是**位置敏感**，且会惩罚「多相关只命中一个」。
+     *
+     * 单相关样本里它等于 `1/log2(rank+1)`；多相关样本里理想排序能给到 1.0。
+     */
+    public func ndcg(): Float64 {
+        if(total <= 0){
+            return 0.0f64
+        }
+        ndcgSum / Float64(total)
     }
 
     public func recallAt1(): Float64 {
@@ -159,7 +184,7 @@ public class EvalReport {
         var text = '== ${label} ==\n'
         text += 'cases=${total} topK=${topK}\n'
         text += 'recall@1=${percent(recallAt1())} recall@${topK}=${percent(recallAtK())} '
-        text += 'mrr=${percent(mrr())}\n'
+        text += 'mrr=${percent(mrr())} ndcg@${topK}=${percent(ndcg())}\n'
         if(negativeTotal > 0){
             text += 'negatives=${negativeTotal} pass=${percent(negativeRate())}\n'
         }
@@ -185,7 +210,7 @@ public class EvalReport {
             for(item in sorted){
                 text += '  ${padRight(item.topic, 10)} n=${item.total} '
                 text += 'r@1=${percent(item.recallAt1())} r@${topK}=${percent(item.recallAtK())} '
-                text += 'mrr=${percent(item.mrr())}\n'
+                text += 'mrr=${percent(item.mrr())} ndcg=${percent(item.ndcg())}\n'
             }
         }
         if(!misses.isEmpty()){
@@ -283,11 +308,13 @@ public class RetrievalEval {
         var hitAt1: Int64 = 0
         var hitAtK: Int64 = 0
         var reciprocal: Float64 = 0.0f64
+        var ndcgTotal: Float64 = 0.0f64
         var negativeTotal: Int64 = 0
         var negativePassed: Int64 = 0
         let misses = ArrayList<String>()
         let statMap = HashMap<String, ArrayList<Int64>>()   // topic → [total, hit1, hitK]
         let reciprocalMap = HashMap<String, Float64>()
+        let ndcgMap = HashMap<String, Float64>()
 
         for(item in cases){
             let ranked = search(item.query, topK)
@@ -330,18 +357,60 @@ public class RetrievalEval {
             }else{
                 misses.add(item.query)
             }
+            // nDCG@k：二值相关，位置越靠前增益越大；多相关样本按理想排序归一
+            let ndcg = ndcgOf(ranked, item.expected, topK)
+            ndcgTotal += ndcg
+            ndcgMap[topic] = (ndcgMap.get(topic) ?? 0.0f64) + ndcg
             statMap[topic] = stat
         }
 
         let topics = ArrayList<TopicStat>()
         for((topic, stat) in statMap){
             topics.add(TopicStat(topic, stat[0], stat[1], stat[2],
-                                 reciprocalMap.get(topic) ?? 0.0f64))
+                                 reciprocalMap.get(topic) ?? 0.0f64,
+                                 ndcgMap.get(topic) ?? 0.0f64))
         }
         // 正样本总数 = 命中的 + 未命中的（负样本不计入分母）
         let positiveTotal = hitAtK + Int64(misses.size)
-        EvalReport(positiveTotal, hitAt1, hitAtK, reciprocal,
+        EvalReport(positiveTotal, hitAt1, hitAtK, reciprocal, ndcgTotal,
                    topK, misses, negativeTotal, negativePassed, topics)
+    }
+
+    /**
+     * nDCG@k（二值相关）。
+     *
+     * `DCG = Σ gain_i / log2(i+1)`，`IDCG` 是「期望文档全排在最前」时的值，
+     * 因此单相关样本等价于 `1/log2(rank+1)`，多相关样本还能反映「只命中其中一个」。
+     */
+    private static func ndcgOf(ranked: ArrayList<String>, expected: ArrayList<String>,
+                               topK: Int64): Float64 {
+        var dcg = 0.0f64
+        let limit = if(Int64(ranked.size) < topK){ Int64(ranked.size) }else{ topK }
+        for(index in 0..limit){
+            var gain = 0.0f64
+            for(wanted in expected){
+                if(ranked[index] == wanted){
+                    gain = 1.0f64
+                }
+            }
+            if(gain > 0.0f64){
+                dcg += gain / discount(index + 1)
+            }
+        }
+        var ideal = 0.0f64
+        let idealCount = if(Int64(expected.size) < topK){ Int64(expected.size) }else{ topK }
+        for(index in 0..idealCount){
+            ideal += 1.0f64 / discount(index + 1)
+        }
+        if(ideal <= 0.0f64){
+            return 0.0f64
+        }
+        dcg / ideal
+    }
+
+    /** `1 / log2(rank + 1)`，rank 从 1 开始 */
+    private static func discount(rank: Int64): Float64 {
+        log(Float64(rank) + 1.0f64) / log(2.0f64)
     }
 
     private static func linesOf(path: String): ArrayList<String> {
