@@ -61,6 +61,21 @@ class RetrievalEval_test {
         @Expect(report.mrr(), 0.5f64)
     }
 
+    /** 多相关标注：命中任一期望文档即算对，排名取最靠前的那个 */
+    @TestCase
+    func testMultiExpectedHitsAny(): Unit {
+        let evalCases = ArrayList<EvalCase>([
+            EvalCase('多相关', ArrayList<String>(['a', 'b', 'c']), topic: 'multi')
+        ].toArray())
+        // 三个期望里只命中了 b，且排第 2
+        let search = { _: String, _: Int64 => ArrayList<String>(['x', 'b', 'y']) }
+        let report = RetrievalEval.evaluate(evalCases, search, topK: 5)
+        @Expect(report.recallAt1(), 0.0f64)
+        @Expect(report.recallAtK(), 1.0f64)
+        @Expect(report.mrr(), 0.5f64)
+        @Expect(report.misses.size, 0)
+    }
+
     /** 未命中：计入 misses，指标为 0 */
     @TestCase
     func testMissIsRecorded(): Unit {
@@ -83,10 +98,10 @@ class RetrievalEval_test {
     }
 
     /**
-     * 随附数据集：50 条语料 + 350 条正样本（300 模板化 + 50 难样本）+ 10 条负样本。
+     * 随附数据集：50 条语料 + 462 条正样本（300 模板化 + 150 难样本 + 12 多相关）+ 10 条负样本。
      *
-     * 规模是按「单主题结论」定的：10 个模板化主题各 30 条，单主题 recall@1 的 95% 区间约 ±18 点；
-     * 全局 350 条约 ±4 点，够做换模型的粗判。要卡 5 点级回归仍需 500+，见 doc。
+     * 规模是按「单主题结论」定的：10 个模板化主题各 30 条、难样本每文档 3 条；
+     * 全局 462 条约 ±3.5 点，够做换模型的粗判。要卡 5 点级回归仍需 500+，见 doc。
      */
     @TestCase
     func testShippedDatasetIsWellFormed(): Unit {
@@ -124,14 +139,22 @@ class RetrievalEval_test {
         }
 
         @Expect(negatives, 10)
-        @Expect(evalCases.size - negatives, 350)
-        // 11 个主题：10 个模板化主题各至少 30 条（「单主题结论」的最低门槛）+ hard
-        @Expect(perTopic.size, 11)
+        @Expect(evalCases.size - negatives, 462)
+        // 12 个主题：10 个模板化主题各至少 30 条、难样本每文档 3 条、多相关 12 条
+        @Expect(perTopic.size, 12)
         for((topic, count) in perTopic){
             if(topic == 'hard'){
-                @Expect(count, 50)
+                @Expect(count, 150)
+            }else if(topic == 'multi'){
+                @Expect(count, 12)
             }else{
                 @Expect(count >= 30, true)
+            }
+        }
+        // 多相关样本必须真的有多个期望，否则「命中任一算对」的语义没被覆盖
+        for(item in evalCases){
+            if(item.topic == 'multi'){
+                @Expect(item.expected.size >= 2, true)
             }
         }
 
@@ -245,9 +268,10 @@ class RetrievalEval_test {
             if(item.isNegative()){
                 continue
             }
+            // 多相关样本单列：它的期望是一个集合，字符重合的表现与单期望不可比
             if(item.topic == 'hard'){
                 hard.add(item)
-            }else{
+            }else if(item.topic != 'multi'){
                 templated.add(item)
             }
         }
@@ -258,9 +282,9 @@ class RetrievalEval_test {
         // 模板化样本：字符重合就该几乎全中；掉下来说明数据集本身出了问题
         @Expect(easy.recallAt1() >= 0.9f64, true)
         @Expect(easy.recallAtK() >= 0.95f64, true)
-        // 难样本：字符重合只应该勉强命中——实测 recall@1 约 22%、recall@5 约 50%
+        // 难样本：字符重合只应该勉强命中——实测 recall@1 约 20%、recall@5 约 50%
         @Expect(tough.recallAt1() <= 0.5f64, true)
-        @Expect(tough.recallAtK() <= 0.7f64, true)
+        @Expect(tough.recallAtK() <= 0.75f64, true)
         // 两组必须拉开差距，否则「难样本」名不副实
         @Expect(tough.recallAt1() < easy.recallAt1(), true)
     }

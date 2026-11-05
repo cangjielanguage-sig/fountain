@@ -6,176 +6,150 @@
 | 层 | 位置 | 是否进 CI | 测什么 |
 |---|---|---|---|
 | 骨架 | `src/loom/RetrievalEval_test.cj` | 是（确定性） | 指标算得对、分层算得对、数据集没退化 |
-| 离线评测 | 本文档描述的跑法 | 否（nightly / 手动） | 真实模型下的 recall@1、recall@5、MRR、负样本通过率、按主题分层 |
+| 真实模型 | `src/loom/RetrievalEvalRunner.cj` + `eval/run_eval.sh` | 否（手动 / nightly） | 真实 embedding 下的 recall / MRR / 负样本通过率 |
 
 ## 数据格式
 
-`eval/retrieval_corpus.tsv`（`id \t 标题 \t 正文`）：
+`eval/retrieval_corpus.tsv`（`id \t 标题 \t 正文`，50 条）：
 
 ```
 d01	日报助手	日报用三段式：先给结论，再给关键数据，最后给建议。
 ```
 
-`eval/retrieval_queries.tsv`（`query \t 期望 id[,期望 id] \t 主题`）：
+`eval/retrieval_queries.tsv`（`query \t 期望 id[,期望 id] \t 主题`，462 条正样本 + 10 条负样本）：
 
 ```
 日报怎么写	d01	report
-报销多久能到账	d47,d46	cost
+一天干完活，怎么向上级交代自己做了什么、结果如何	d01	hard
+一天的交待和每周的汇总，内容怎么分工	d01,d02	multi
 量子计算机怎么造	-	negative
 ```
 
 | 约定 | 说明 |
 |---|---|
 | `#` 开头 | 注释；空行忽略 |
-| 期望列写多个 id | 命中任一即算对 |
-| 期望列写 `-` | **负样本**：期望检索不到任何文档，用来验证 `minScore` 阈值真的在挡噪声 |
-| 第三列主题 | 用于分层统计；负样本固定写 `negative`，难样本固定写 `hard` |
-| 难样本 | query **不含目标文档标题里的关键词**，只能靠语义匹配，例如「一天干完活怎么向上级交代」→ `d01 日报助手` |
+| 期望列写多个 id | **多相关标注**：命中任一即算对，MRR 取最靠前的那个 |
+| 期望列写 `-` | **负样本**：期望检索不到任何文档，用来验证 `minScore` 阈值 |
+| 主题列 | 分层统计用；负样本固定 `negative` |
 
-## 当前规模
+三类正样本的区别：
 
-| 维度 | 数量 | 能满足的判断 |
-|---|---|---|
-| 语料 | 50 条（10 主题 × 5） | — |
-| 模板化正样本 | 300 条（10 主题 × 30） | 全局：换模型粗判（±4 点）；单主题：±18 点区间内看趋势 |
-| **难样本** | **50 条（主题 `hard`）** | **区分模型语义能力**——关键词检索在这里只有 22% |
-| 负样本 | 10 条 | `minScore` 是否真的过滤掉了不相关结果 |
+| 主题 | 数量 | 特征 | 用途 |
+|---|---|---|---|
+| 10 个业务主题（`report`/`code`/…） | 300（10 × 30） | 模板化问法，与文档标题高度重合 | 守住链路、定位「哪类主题变差」 |
+| `hard` | **150**（50 文档 × 3） | **不含目标标题的实词**，只能靠语义 | **区分模型语义能力** |
+| `multi` | **12** | 一条 query 对应 2~3 个都算对的文档 | 验证多相关标注与「命中任一算对」语义 |
 
-**为什么必须有两类正样本**：模板化 query 与文档标题高度重合，字符重合检索器就能到 96%，
-它只能证明「链路没崩」，分不出模型好坏；难样本不含标题关键词，只有真正理解语义的检索器才拿得到分。
+## 真实基线（bge-m3，本机 8000）
 
-**规模与统计精度**（recall@1 的 95% 置信区间，`p̂ ± 1.96·√(p̂(1-p̂)/n)`）：
+```
+encoder=DefaultEmbedder（读 llm_embeddingUrl）  corpus=50  cases=472
+```
 
-| 样本量 | 观测 85% 时真实区间 | 适合做什么 |
-|---|---|---|
-| 20 | 69% ~ 100% | 冒烟：只发现「崩了」 |
-| **350（现状，全部正样本）** | 81% ~ 89% | **换模型粗判** |
-| **50（现状，难样本子集）** | 73% ~ 97% | 看模型语义能力量级，不看小数点 |
-| 500 | 82% ~ 88% | 日常回归门禁（能卡 5 点级退步） |
-| 每主题 30 | 67% ~ 100% | 单主题只看趋势，不看小数点 |
+| minScore | 全部 recall@1 / @5 / MRR | **hard** recall@1 / @5 | multi recall@1 / @5 | 负样本通过 |
+|---|---|---|---|---|
+| 0.2 | 81.16% / 92.20% / 85.71% | **50.00% / 76.00%** | 58.33% / 100% | **0%** |
+| **0.5** | 80.95% / 90.90% / 85.80% | **49.33% / 73.33%** | 58.33% / 83.33% | **90%** |
 
-要稳定检测「90% → 85%」这类 5 点退步（α=0.05、power=0.8），每组约需 **680 条**。
-因此日常门禁的实践做法是：**总量指标盯大退步，真正的信号看 `misses` 与分层里垫底的主题**。
+对照：同一个 `hard` 集合，**字符重合检索器只有 22%**，bge-m3 到 50%——这才是「换模型有没有用」的证据。
+
+两条结论：
+
+1. **`minScore` 取 0.5**：从 0.2 提到 0.5 只掉 1.3 点 recall@5，却把负样本通过率从 0% 拉到 90%。
+   bge-m3 对无关文本也会给 0.4~0.5 的余弦，阈值 0.2 等于不过滤。
+2. **全局数字没有意义**：模板化 300 条是 100%，把 `hard` 的 50% 平均成了 81%。
+   判断模型只看 `hard` 那一行。
 
 ## 跑真实模型
 
-`RetrievalEval.evaluate` 只接收一个检索函数，接什么都可以。
+```bash
+eval/run_eval.sh                                   # 默认 bge-m3 + 127.0.0.1:8000
+fllm_evalMinScore=0.5 eval/run_eval.sh             # 调阈值
+llm_embeddingUrl=http://host/v1/embeddings fllm_evalModel=bge-m3 eval/run_eval.sh
+```
 
-### 全局指标
+脚本做的事：设 `fllm_runEval=1` → `cjpm test --filter=RetrievalEvalManual_test` →
+报告写到 `/tmp/fllm_retrieval_eval.txt`，直接 `cat` 即可。
+
+等价的 Cangjie 入口：
 
 ```cangjie
-// 1. 把语料灌进技能库（id 用标题代替）
-for(doc in RetrievalEval.readCorpus('eval/retrieval_corpus.tsv')){
-    Stores.meta().skills.upsert(Skill(0, doc.title, doc.content, '{}', version: 1))
-}
-
-// 2. 装上真实编码器
-SkillCatalog.install({ => Stores.meta().skills },
-                     embedder: SkillCatalog.embeddingEncoder('bge-m3'))
-
-// 3. 跑一遍
-let cases = RetrievalEval.readCases('eval/retrieval_queries.tsv')
-let report = RetrievalEval.evaluate(cases, { query, topK =>
-    let ids = ArrayList<String>()
-    for(hit in SkillCatalog.search(query, topK: topK, minScore: 0.2)){
-        ids.add(hit.title)
-    }
-    ids
-}, topK: 5)
-println(report.render('bge-m3 / skills'))
+let outcome = RetrievalEvalRunner.run(InMemoryMetaStore(), './eval', 'bge-m3', minScore: 0.5f64)
+println(outcome.report)
+// outcome.embedFailures 必须为 0，否则本次测的是关键词而不是向量
 ```
 
-输出（`by topic` 按 recall@1 升序，**最差的排前面**）。下面是**最笨的字符重合检索器**跑同一份数据的实测值：
-模板化主题可当作「下限基线」（真实 embedding 不该更低），`hard` 则可当作「关键词方法失效后的参照」：
+输出（`by topic` 按 recall@1 升序，最差的排前面）：
 
 ```
-== naive char-overlap ==
-cases=350 topK=5
-recall@1=85.71% recall@5=92.86% mrr=88.65%
-negatives=10 pass=0.00%
+== all ==
+cases=462 topK=5
+recall@1=80.95% recall@5=90.90% mrr=85.80%
+negatives=10 pass=90.0%
 by topic (worst first):
-  hard       n=50 r@1=22.00% r@5=50.00% mrr=31.53%
-  report     n=30 r@1=86.67% r@5=100.00% mrr=93.33%
-  code       n=30 r@1=93.33% r@5=100.00% mrr=96.67%
-  data       n=30 r@1=93.33% r@5=100.00% mrr=96.67%
-  db         n=30 r@1=96.67% r@5=100.00% mrr=98.33%
-  ...
-misses(25):
-  - 一天干完活，怎么向上级交代自己做了什么、结果如何
-  - 跟老板说数字的时候，怎么讲清这个数是怎么算出来的
-  ...
+  hard       n=150 r@1=49.33% r@5=73.33% mrr=58.84%
+  multi      n=12 r@1=58.33% r@5=83.33% mrr=69.44%
+  monitor    n=30 r@1=80.00% r@5=100.00% mrr=90.00%
+  report     n=30 r@1=100.00% ...
 ```
 
-结论很直接：**同一份数据、同一个检索器，模板化 96.3% / 难样本 22.0%**。
-所以判断「换模型有没有用」，看 `hard` 那一行，而不是全局平均。
+### 一个必须知道的坑：编码失败会静默退回关键词
 
-两点必须注意：
+`SkillCatalog.search` 在编码失败时**整体退回关键词**（可用性优先），这会让「装了编码器却在跑关键词」
+完全看不出来。我第一次跑出的 `hard=6%` 就是这么来的——`SkillCatalog.embeddingEncoder('bge-m3')`
+依赖 `LLMConfs` 里的平台配置，没配时抛异常，被测的其实是关键词。
 
-1. **模板化那 300 条偏容易**：问法与文档标题高度重合，字符检索器能到 96%——它守的是「链路没崩」
-   和「哪类主题变差」，**不能用来判断模型优劣**；
-2. **`hard` 那 50 条才是判断依据**：同一个检索器在这里只有 22%（recall@1），模型有没有语义能力，
-   看这一行。真实 embedding 若在 `hard` 上远高于 22%，说明它确实在做语义匹配，而不是词面命中；
-3. **负样本 0% 是预期的**：字符检索器没有阈值，总会返回 5 条。负样本通过率只在检索函数带
-   `minScore` 时才有意义——它验的是阈值，不是排序。
+现在有两道防线：
 
-### 只跑单主题（含难样本）
+1. `SkillCatalog.embedFailures()` / `embedFailureDetail()` 暴露失败计数；
+2. `RetrievalEvalRunner` 把它带进 `EvalOutcome`，`RetrievalEvalManual_test` 断言 **必须为 0**，
+   否则测试直接失败——宁可红，也不要拿关键词结果冒充向量结果。
 
-按主题筛选后再评测，用于定位「哪个主题不行」：
+评测入口因此用 `DefaultEmbedder`（读 `llm_embeddingUrl`），不用 `embeddingEncoder`。
+
+### 只跑单主题 / 只看语义能力
 
 ```cangjie
 let only = ArrayList<EvalCase>()
 for(item in cases){
-    if(item.topic == 'db'){
+    if(item.topic == 'hard'){      // 换成 'db' 就是单主题
         only.add(item)
     }
 }
-println(RetrievalEval.evaluate(only, search, topK: 5).render('bge-m3 / db'))
-
-// 只看语义能力：只要难样本
-let semantic = ArrayList<EvalCase>()
-for(item in cases){
-    if(item.topic == 'hard'){
-        semantic.add(item)
-    }
-}
-println(RetrievalEval.evaluate(semantic, search, topK: 5).render('bge-m3 / hard'))
+println(RetrievalEval.evaluate(only, search, topK: 5).render('bge-m3 / hard'))
 ```
 
 ### 与基线比较
 
-`render` 是给人看的，机器比较建议直接用指标：
-
 ```cangjie
-let baseline = 0.8686f64     // 上一次记录的值（naive 基线）
-let current = report.recallAt1()
-if(current < baseline - 0.05f64){
-    println('REGRESSION: ${baseline} -> ${current}')
-}
+let baseline = 0.4933f64      // hard recall@1 的上一次记录
+if(report.hardRecall < baseline - 0.08f64){ println('REGRESSION') }
 ```
 
 | 指标 | 门槛建议 |
 |---|---|
-| `hard` 的 `recall@1` | **这是最该盯的一行**：低于基线 8 点即视为回归（50 条样本噪声约 ±13 点，所以只抓大幅退化） |
-| `recall@1` 全局 | 比基线低 5 点即视为回归（350 条样本下约 ±4 点噪声） |
-| 任一模板化主题 `recall@1` | 低 10 点即视为回归（单主题 30 条，阈值放宽） |
-| `negatives pass` | 低于 90% 说明阈值太松，噪声被当成结果返回 |
-| `misses` | 逐条看，尤其 `hard` 的 miss——那里才是真正的短板 |
+| `hard` 的 `recall@1` | **最该盯的一行**：低于基线 8 点即回归（150 条样本噪声约 ±8 点） |
+| `recall@1` 全局 | 比基线低 5 点即回归（462 条约 ±3.5 点噪声） |
+| 任一模板化主题 `recall@1` | 低 10 点即回归（单主题 30 条，阈值放宽） |
+| `negatives pass` | 低于 90% 说明 `minScore` 太松（实测 0.2 时为 0%） |
+| `misses` | 逐条看，尤其 `hard` 的 miss |
 
 ## 扩展数据集
 
-1. 往 `retrieval_corpus.tsv` 加行（id 递增，主题写在内容里即可）；
-2. **必须**往 `retrieval_queries.tsv` 加对应 query —— `testShippedDatasetIsWellFormed` 会检查
-   「每条语料都被至少一条 query 引用」，漏加会直接失败；
-3. 新主题要凑够 30 条 query，否则单主题指标不可用（测试只校验现有主题 ≥30）；
-4. 加难样本时遵守一条规则：**query 里不出现目标文档标题的任何实词**，否则它就退化成模板化样本。
-   `testShippedDatasetIsRetrievable` 会对比两组的字符重合命中率，差距消失就会失败。
+1. 往 `retrieval_corpus.tsv` 加行（id 递增）；
+2. **必须**往 `retrieval_queries.tsv` 加对应 query —— 测试会检查「每条语料都被至少一条 query 引用」；
+3. 新业务主题要凑够 30 条，否则单主题指标不可用；
+4. 加难样本时遵守：**query 里不出现目标文档标题的实词**，否则退化成模板化样本
+   （测试会对比两组的字符重合命中率，差距消失就失败）；
+5. 多相关样本把多个期望 id 用逗号写，并标 `multi`。
 
 ## 已知边界
 
 | 项 | 说明 |
 |---|---|
-| 模板化 query 不代表真实语言 | 每个文档 6 种问法（怎么写/要点/注意什么/标准做法/常见问题/怎么落地）；有真实日志后应替换 |
-| 难样本只有 50 条 | 每个文档 1 条，够看量级、不够做细粒度排名；扩到 150+ 才谈得上精度 |
-| 每 query 只标 1 个期望 | 多相关文档的场景没有体现，recall@5 无法反映「5 条里混了 4 条错的」 |
-| 不做人工评分 | 指标衡量「能不能找到」，不衡量「找到的内容是否有用」 |
-| 负样本只有 10 条 | 只够验证阈值量级，不能用来调 `minScore` 的精确值 |
+| 模板化 300 条不代表真实语言 | 每个文档 6 种问法；有真实日志后应替换 |
+| `hard` 是手写场景句 | 每文档 3 条，150 条 → 全局 noise ±8 点，够看量级、不够做细粒度排名 |
+| `multi` 只有 12 条 | 验证语义与流程，不足以评估多相关场景的排序质量 |
+| 不衡量「找到的内容是否有用」 | 只有命中判定，没有人工相关性评分 |
+| 负样本只有 10 条 | 只够验证阈值量级（0.2 与 0.5 的差别已很明显），不能精调 |
+| 单条 query 一次 embedding 调用 | 462 条约 460 次请求；本机 bge-m3 约 1.5 秒跑完，远程服务需考虑限流 |

@@ -49,6 +49,9 @@ public class SkillCatalog {
     private static var storeFactory: ?() -> SkillStore = None
     private static var embedder: ?(String) -> Array<Float64> = None
     private static var vectors = HashMap<String, Array<Float64>>()
+    /** 编码失败计数：query 侧 / 技能侧（静默降级要能被看见） */
+    private static var queryEmbedFailures: Int64 = 0
+    private static var skillEmbedFailures: Int64 = 0
 
     private init() {
     }
@@ -68,6 +71,45 @@ public class SkillCatalog {
             storeFactory = None
             embedder = None
             vectors = HashMap<String, Array<Float64>>()
+            queryEmbedFailures = 0
+            skillEmbedFailures = 0
+        }
+    }
+
+    /**
+     * 自上次 `reset()` 以来，向量化失败的次数。
+     *
+     * 向量失败会**静默退回关键词**（可用性优先），但这会让「装了编码器却在跑关键词」
+     * 这种配置错误完全看不出来——评测与排障时需要这个计数来判断到底走了哪条路。
+     */
+    public static func embedFailures(): Int64 {
+        let box = FailureBox()
+        synchronized(mutex){
+            box.query = queryEmbedFailures
+            box.skill = skillEmbedFailures
+        }
+        box.query + box.skill
+    }
+
+    /** 编码失败计数明细：query 侧、技能侧 */
+    public static func embedFailureDetail(): (Int64, Int64) {
+        let box = FailureBox()
+        synchronized(mutex){
+            box.query = queryEmbedFailures
+            box.skill = skillEmbedFailures
+        }
+        (box.query, box.skill)
+    }
+
+    private static func noteQueryFailure(): Unit {
+        synchronized(mutex){
+            queryEmbedFailures++
+        }
+    }
+
+    private static func noteSkillFailure(): Unit {
+        synchronized(mutex){
+            skillEmbedFailures++
         }
     }
 
@@ -120,11 +162,12 @@ public class SkillCatalog {
                                 case Some(vector) =>
                                     scored.add(SkillEntry(skill.title, skill.details,
                                         cosine(queryVec, vector)))
-                                case None => ()
+                                case None => noteSkillFailure()
                             }
                         }
                     case None =>
                         // 编码失败：整体退回关键词，避免一次网络故障就让技能不可用
+                        noteQueryFailure()
                         scored = keywordScore(skills, text)
                 }
             case None => scored = keywordScore(skills, text)
@@ -318,6 +361,11 @@ class FactoryBox {
 
 class EmbedderBox {
     public var value: ?(String) -> Array<Float64> = None
+}
+
+class FailureBox {
+    public var query: Int64 = 0
+    public var skill: Int64 = 0
 }
 
 class VectorBox {

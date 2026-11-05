@@ -84,6 +84,11 @@ class SkillCatalog_test {
             let hits = SkillCatalog.search('日报', topK: 3)
             @Expect(hits.size > 0, true)
             @Expect(hits[0].title, '日报助手')
+            // 降级要能被看见：曾经的「装了编码器却在跑关键词」就是靠这个计数发现的
+            let (queryFails, skillFails) = SkillCatalog.embedFailureDetail()
+            @Expect(queryFails, 1)
+            @Expect(skillFails, 0)
+            @Expect(SkillCatalog.embedFailures(), 1)
         }finally{
             SkillCatalog.reset()
         }

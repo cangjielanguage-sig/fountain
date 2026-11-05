@@ -322,6 +322,10 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 编码失败会**整体退回关键词**，不会因为一次 embedding 服务抖动就让技能不可用。
 
+代价是「装了编码器却在跑关键词」这种配置错误看不出来（实测踩过：`embeddingEncoder` 依赖 `LLMConfs` 平台配置，
+没配就抛异常、静默降级）。排障与评测请读 `SkillCatalog.embedFailureDetail()`：返回
+`(query 侧失败数, 技能侧失败数)`，`SkillCatalog.reset()` 时归零。
+
 加载后按标题 `skill.load` 取正文，拼成注入块：
 
 ```
