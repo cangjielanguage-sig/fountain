@@ -1,1773 +1,281 @@
 # f_llm
 
+仓颉（Cangjie）大模型工程库，属于 [fountain](../) 仓库。提供六块能力：
 
-> 当前分支的公开 API 见文末「v2 公开 API」一节；旧章节来自 `sts/1.3.x`，冲突时以新节为准。
-
-## STDX依赖
-
-配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
-
-大模型API
-开发者只需要关注组织文化、智能体、技能描述和FunctionCalling，以及事件定义和编排。
-大模型每次都要返回一个函数调用，每个函数调用都要返回一个事件数据和事件名；智能体按照函数调用的返回构造并向框架发送新事件。
-智能体访问大模型前可以按照指定的上下文策略裁剪或压缩上下文。
-
-## 常量定义
-
-### 大模型类型
-`public type LLMType = String`
-LLMType的取值：
-text embedding tokenizer rerank code video audio image prune
-这些取值跟大模型平台定义的类型不一致，这些字符串是框架内部定义的大模型配置要用来做什么
-```cj
-public type LLMType = String 
-//text embedding tokenizer rerank code video audio image prune
-public const LLM_TYPE_TEXT = 'text'
-public const LLM_TYPE_EMBEDDING = 'embedding'
-public const LLM_TYPE_TOKENIZER = 'tokenizer'
-public const LLM_TYPE_RERANK = 'rerank'
-public const LLM_TYPE_CODE = 'code'
-public const LLM_TYPE_VIDEO = 'video'
-public const LLM_TYPE_AUDIO = 'audio'
-public const LLM_TYPE_IMAGE = 'image'
-//search是一类工具接口，目前智谱提供了这个接口，由于也依赖智谱的鉴权KEY，也把它当作一个大模型配置
-public const LLM_TYPE_SEARCH = 'search'
-```
-
-### 角色
-```cj
-public type Role = String
-public const ROLE_SYSTEM = "system"
-public const ROLE_USER = "user"
-public const ROLE_ASSISTANT = "assistant"
-public const ROLE_TOOL = "tool"
-```
-
-### 技能类型
-主技能随智能体一起完整加载，辅助技能采用渐进式披露，跟随智能体辅助技能的元数据列表，后按照需要加载具体的技能。
-system永远排在前面，会话过程中加载的辅助技能也会插入到assistant/user/tool等消息的前面，其它system的后面。
-```cj
-public type SkillType = String
-public const SKILL_TYPE_PRIMARY = 'primary'
-public const SKILL_TYPE_AUXILIARY = 'auxiliary'
-```
-
-### 思考开关
-```cj
-public type ThinkingSwitch = String
-public const THINGKING_ENABLED = 'enabled'
-public const THINGKING_DISABLED = 'disabled'
-```
-
-### 上下文策略名
-```cj
-public type ContextPrunerName = String
-/**
- * 保留全部
- */
-public const CONTEXT_PRUNER_RETAIN = "Retain"
-/**
- * 保留最新
- */
-public const CONTEXT_PRUNER_LAST_N = "LastN"
-/**
- * 摘要
- */
-public const CONTEXT_PRUNER_SUMMARY = "Summary"
-/**
- * 提取关键词
- */
-public const CONTEXT_PRUNER_KEYWORDS = "Keywords"
-/**
- * system单独一个策略，assistant+user+tool另外一个策略
- */
-public const CONTEXT_PRUNER_DRC = "DRC"
-/**
- * 上下文饱和后执行一个指定策略
- */
-public const CONTEXT_PRUNER_SATURATION = "Saturation"
-```
-
-
-## 数据定义：`fountain::f_llm.model.po`
-
-### token用量数据定义
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: llm_token_usage]
-public class TokenUsage {
-    @ORMField['llm_id']
-    private var llmId: Int64 = 0
-    @ORMField['agent_id']
-    private var agentId: Int64 = 0
-    @ORMField['session']
-    private var session: String = ""
-    @ORMField['prompt_tokens']
-    private var prompt: Int64 = 0
-    @ORMField['completion_tokens']
-    private var completion: Int64 = 0
-    @ORMField['total_tokens']
-    private var total: Int64 = 0
-    @ORMField['cached_tokens']
-    private var cached: Int64 = 0
-    @ORMField['usage_time']
-    private var usageTime: Int64 = {=>
-        let now = DateTime.now()
-        now.year * 100000000 + now.month.toInteger() * 1000000 + now.dayOfMonth * 10000 + now.hour * 100 + now.minute
-    }()
-}
-```
-
-### 大模型定义
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: llm_conf]
-public class LLMConf {
-    @ORMField[true 'id']
-    private var id: Int64 = 0
-    @ORMField['llm_name']
-    private var name: String = ''
-    @ORMField['llm_type']
-    private var llmType: String = ''
-    @ORMField['llm_url']
-    private var url: String = ''
-    @ORMField['conf']
-    private var conf: String = ''
-    @ORMField['threshold']
-    private var threshold: Int64 = 0
-}
-```
-
-### 智能体定义
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: agents]
-public class Agent {
-    @ORMField[id column: 'id']
-    private var id: Int64 = 0
-    @ORMField['agent_name']
-    private var name: String = ''
-    @ORMField['agent']
-    private var agent: String = ''
-    @ORMField['acceptable']
-    private var acceptable: String = ''
-    @ORMField['category']
-    private var category: String = ''
-    @ORMField['tag']
-    private var tag: String = ''
-    @ORMField['llm_type']
-    private var llmType: String = ''
-    @ORMField['llm_name']
-    private var llmName: String = ''
-    @ORMField['pruner']
-    private var pruner: String = ''
-
-    public prop acceptableEvents: Array<String> {
-        get(){
-            acceptable.split(',')
-        }
-    }
-}
-```
-
-### 技能定义
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: skills]
-public class Skill {
-    @ORMField[id column: 'id']
-    private var id: Int64 = 0
-    @ORMField['agent_id']
-    private var agentId: Int64 = 0
-    @ORMField['accepted_event']
-    private var acceptedEvent: String = ""
-    @ORMField['returned_event']
-    private var returnedEvent: String = ""
-    @ORMField['title']
-    private var title: String = ""
-    @ORMField['metadata']
-    private var metadata: String = ""
-    @ORMField['details']
-    private var details: String = ""
-    @ORMField['functions']
-    private var functions: String = ""
-    @ORMField['skill_type']
-    private var skillType: String = ""
-
-    @DataExclude[field]
-    public prop functionNames: Iterator<String> {
-        get(){
-            functions.lazySplit(',', removeEmpty: true).map{f => f.trimAscii()}
-        }
-    }
-}
-```
-
-### 记忆总结定义
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: memory_summaries]
-public class MemorySummary {
-    @ORMField[id column: 'id']
-    private var id: Int64 = 0
-    @ORMField['kind']
-    private var kind: String = ''
-    @ORMField['content']
-    private var content: String = ''
-}
-```
-
-
-## 提取记忆
-
-每一条会话上下文会忠实地保存到硬盘，每天零点以session为单上下文边界根据记忆和配置项总结记忆
-- 总结经验教训
-  - 配置项是export llm_summarisingActionKind=experience
-  - 得到用户认可的操作会被视为成功的经验。
-  - 在一个session内曾经失败过，后来大模型又成功的操作会被视为失败的教训
-- 总结用户个性
-  - 配置项是export llm_summarisingIndividualityKind=individuality
-  - 用户个性包含用户对某些事物、事情的偏好以及做事、措辞的习惯
-- 配置项export llm_summarisingActionKind的其它情况
-  - 是空串时不做任何总结
-  - 不是空串，以配置项的值作为fountain::f_bean管理的对象名称前缀分别获取fountain::f_llm.memory.MemoryExtractor和fountain::f_llm.finder.MemorySummaryFinder两个接口的实现，如果没有找到什么抛出异常
-```cj
-public abstract class MemoryExtractor {
-    /**
-     * json是大模型返回JSON的JSON对象
-     * json中的第一级key可选项为lesson experience individuality，开发者可以继承此类定义自己需要的key
-     * overiwter用来覆盖已保存的历史记忆提取结果，相似度高的记忆会被覆盖
-     */
-    public func extract(json: JsonObject, overwriter: (String, String) -> Unit): Unit
-    /**
-     * json是大模型返回json的第二级，key是当前json中的key。
-     * 本函数的具体实现按照JSON构造一个字符串作为记忆总结的结果，推荐使用markdown格式
-     */
-    public func extract(json: JsonObject, key: String): String
-    protected func extract(key: String, jsonobj: JsonObject, overwriter: (String, String) -> Unit): Unit
-    protected func extractString(jsonobj: JsonObject, key: String): String
-    protected func extractArray(jsonobj: JsonObject, key: String): String
-    /**
-     * 总结记忆的系统提示词，用来说明当前记忆提取器的用途
-     */
-    public prop systemPrompts: String
-    /**
-     * 总结记忆的用户提示词前缀，发送给大模型的具体内容如下：
-     * ${extractor.userPrompts}
-     * ## 上下文
-     * ${context}
-     * 
-     * context是用ArrayList<ChatMessage>构造的字符串
-     */
-    public prop userPrompts: String
-}
-/** 
- * 经验教训提取器
- */
-public class ExperienceExtractor <: MemoryExtractor
-/**
- * 个性提取器
- */
-public class IndividualityExtractor <: MemoryExecutor
-```
-
-
-## 数据查询接口：`fountain::f_llm.finder`
-
-所有finder接口的实现必须是类且被`fountain::f_bean.macros.Bean`修饰
-### 查询智能体
-```cj
-public interface AgentsFinder {
-    func listAgents(): ArrayList<Agent>
-    func queryAgent(id: Int64): Agent
-}
-```
-
-### 知识查询接口
-```cj
-public interface KnowledgeFinder {
-    func search(param: KnowledgeParam): ArrayList<String>
-    func saveKnowledge(knowledge: Knowledge): Unit
-    func findKnowledge(kind: KnowledgeKind, title: String): ?String
-}
-```
-
-### 大模型查询接口
-进程启动时加载全部大模型配置
-```cj
-public interface LLMFinder {
-    func listConfs(llmTypes: Array<String>): ArrayList<LLMConf>
-}
-```
-
-### 组织查询接口
-```cj
-public interface OrganizationFinder {
-    func queryOrgCulture(agentId: Int64): String
-}
-```
-
-### 技能查询接口
-```cj
-public interface SkillsFinder {
-    func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkills(title: ArrayList<String>): ArrayList<Skill>
-    func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference>
-}
-```
-
-### token数据保存接口
-```cj
-public interface TokenUsageSaver {
-    func saveTokenUsage(usage: TokenUsage): Unit
-}
-```
-
-
-## 向量模型接口
-
-```cj
-/**
- * 参数
- */
-public class EmbeddingParam {
-    public EmbeddingParam(
-        public let agentId!: Int64,
-        public let session!: String,
-        public let input!: String,
-        public let dimension!: Int64 = 1024
-    ){}
-}
-/**
- * 响应
- */
-@DataAssist[props fields]
-public class EmbeddingResp {
-    private var embedding: Array<Float64> = []
-    private let usage: TokenUsage = TokenUsage()
-}
-/**
- * 开发者需要实现的抽象类，现在已经提供了GLM向量模型
- */
-public abstract class AbstractEmbeddingContext {
-    public AbstractEmbeddingContext(
-        protected let id: Int64,
-        protected let name: String,
-        protected let url: String,
-        protected let conf: String
-    ){}
-    public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.url, conf.conf)
-    }
-    public func access(param: EmbeddingParam): EmbeddingResp
-}
-```
-
-### 向量模型中介者
-```cj
-public class EmbeddingContextMediator {
-    /**
-     * 注册向量模型
-     * @param model 模型名称
-     * @param creator 创建向量模型实例的函数
-     */
-    public static func register(model: String, creator: (LLMConf) -> AbstractEmbeddingContext)
-    public static prop instance: EmbeddingContextMediator 
-
-    /**
-     * 访问向量模型
-     * @param model 模型名称
-     * @param param 参数
-     */
-    public func access(model: String, param: EmbeddingParam): EmbeddingResp 
-}
-```
-
-### 忘记查询/总结
-```cj
-public interface MemorySummaryFinder {
-    func overwrite(kind: String, content: String): Unit
-    func query(keywords: String): ArrayList<Experience>
-}
-public interface ExperienceFinder <: MemorySummaryFinder {}
-public interface IndividualityFinder <: MemorySummaryFinder {}
-
-```
-
-
-## 上下文策略：`fountain::f_llm.llm.ContextPrunerName`
-
-对上下文执行裁剪、压缩等
-```cj
-/**
- * 所有策略只需要使用`fountain::f_bean.macros.Bean`修饰实现本接口的类即可。
- * 或者用`fountain::f_bean.macros.Bean`修饰初始化并返回上下文策略实例函数。
- */
-public interface ContextPruner {
-    /**
-     * 策略名称
-     */
-    prop name: String
-    /**
-     * 策略的实现
-     * @param agentId 智能体ID
-     * @param session 会话标识，每次执行一个会话流程都要有一个新的标识
-     */
-    func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### 保留全部
-```cj
-@Bean
-public class RetainContext <: ContextPruner {
-    public prop name: String{
-        get(){
-            CONTEXT_PRUNER_RETAIN
-        }
-    }
-    public func prune(_: Int64, _: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### 保留最新
-```cj
-public class LastNContext <: ContextPruner {
-    public LastNContext(
-        private let n!: Int64 = 1
-    ){}
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_LAST_N}_${n}'
-        }
-    }
-    public func prune(_: Int64, _: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### 依赖大模型的策略
-```cj
-public abstract class ContextLLMPruner <: ContextPruner {
-    /**
-     * @param llmType 执行本策略的大模型类型
-     * @param model 执行本策略的大模型名称
-     * @param promptsGenerator 本策略的提示生成器
-     */
-    public ContextLLMPruner(
-        protected let llmType!: LLMType,
-        protected let model!: ModelName,
-        private let promptsGenerator!: (ArrayList<ChatMessage>) -> String
-    ){}
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### 上下文摘要策略
-```cj
-public class ContextSummaryPruner <: ContextLLMPruner {
-    public init(
-        llmType!: LLMType = LLM_TYPE_TEXT,
-        model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
-        promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
-- 总结下面的JSON所描述的内容，从中提取内容**要点**、**关键**内容，并以MARKDOWN格式返回。
-```json
-${JsonValue.tryFromData(messages.toData())}
-```'''}
-    ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
-    }
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_SUMMARY}_BY_${llmType}_${model}'
-        }
-    }
-}
-```
-### 上下文关键词策略
-```cj
-public class ContextKeywordsPruner <: ContextLLMPruner {
-    public init(
-        llmType!: LLMType = LLM_TYPE_TEXT,
-        model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
-        promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
-- 从下面的JSON所描述的内容中提取**关键词**，关键词之间以逗号分隔。
-```json
-${JsonValue.tryFromData(messages.toData())}
-```'''}
-    ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
-    }
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_KEYWORDS}_BY_${llmType}_${model}'
-        }
-    }
-}
-```
-### DRC
-system和assist/user/tool等消息执行不同的策略
-```cj
-public class DRCContextPruner <: ContextPruner {
-    /**
-     * @param systemPruner system消息的策略
-     * @param othersPruner 其他消息的策略
-    public DRCContextPruner(
-        private let systemPruner!: ContextPruner,
-        private let othersPruner!: ContextPruner
-    ){}
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_DRC}_${systemPruner.name}_${othersPruner.name}'
-        }
-    }
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### 饱和策略
-```cj
-public class SaturationContextPruner <: ContextPruner {
-    /**
-     * @param pruner token饱和时执行的策略
-    public SaturationContextPruner(
-        private let pruner!: ContextPruner
-    ){}
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_SATURATION}_${pruner.name}'
-        }
-    }
-    /**
-     * 使用agentId查询智能体使用的大模型llmType和大模型名，进而找到大模型的饱和token数
-     */
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### 保留最后的用户消息
-```cj
-public class RetainLastUserPruner <: ContextPruner {
-    public RetainLastUserPruner(
-        private let pruner!: ContextPruner
-    ){}
-    public prop name: String {
-        get(){
-            '${CONTEXT_PRUNER_RETAIN_LAST_USER}_${pruner.name}'
-        }
-    }
-    /**
-     * let msgs = this.pruner.prune(agentId, session, messages)
-     * 如果messages没有用户消息，则返回msgs
-     * 如果this.pruner.prune(agentId, session, messages)的返回包含的最后用户消息跟messages最后的用户消息一样也是返回msgs
-     * 否则把messages包含的最后用户消息添加到msgs尾再返回msgs。
-     */
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-
-
-## 大模型访问参数与响应
-
-```cj
-@DataAssist[props fields]
-public open class LLMParams {
-    public LLMParams(
-        private let model!: String = '',
-        private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    ){}
-    private let thinking: Thinking = Thinking()
-    //不能用驼峰命名法再用@FieldAlias['response_format']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
-    private var response_format: ResponseFormat = ResponseFormat.json
-    private var temperature: Float64 = 1.0
-    private var max_tokens: Int64 = 65536
-}
-
-@DataAssist[props fields]
-public open class LLMToolParams <: LLMParams {
-    public init(
-        model!: String = '',
-        messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    ){
-        super(model: model, messages: messages)
-    }
-    protected let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
-    
-    @DataExclude[prop field]
-    private let fnNames = HashSet<String>()
-    public func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall> {
-        for (function in functions where !fnNames.contains(function.function.name)) {
-            this.functions.add(function)
-            fnNames.add(function.function.name)
-        }
-    }
-}
-
-@DataAssist[props fields]
-public class Thinking {
-    public Thinking(
-        private var `type`!: ThinkingSwitch = THINGKING_ENABLED,
-        private var clear_thinking!: Bool = false
-    ){}
-}
-
-@DataAssist[props fields]
-public class ResponseFormat {
-    public static let json: ResponseFormat = ResponseFormat('json_object')
-    public static let text: ResponseFormat = ResponseFormat('text')
-    public init(){}
-    public init(t: String){
-        this.`type` = t
-    }
-    private var `type`: String = 'json_object'
-}
-
-@DataAssist[props fields]
-public class FunctionCall {
-    public let `type`: String = 'function'
-    public let function: Function = Function()
-}
-
-@DataAssist[props fields]
-public class Function {
-    public Function(
-        private var name!: String = '',
-        private var description!: String = '',
-        private var parameters!: Parameters = Parameters(),
-    ){}
-}
-
-@DataAssist[props fields]
-public class Parameters { 
-    public Parameters(
-        private var `type`!: String = 'object'
-    ){}
-    private var properties: HashMap<String, Property> = HashMap<String, Property>()
-    private var required: ArrayList<String> = ArrayList<String>()
-
-    public func addRequired(name: String) {
-        this.required.add(name)
-    }
-    public func addProperty(name!: String, `type`!: String, description!: String) {
-        this.properties.add(name, Property(`type`: `type`, description: description))
-    }
-    public func addProperty(name: String, property: Property){
-        this.properties.add(name, property)
-    }
-}
-
-@DataAssist[props fields]
-public class Property {
-    public Property(
-        private var `type`!: String = '',
-        private var description!: String = ''
-    ){}
-}
-```
-```cj
-@DataAssist[props fields]
-public class LLMResp {
-    private let usage: TokenUsage = TokenUsage()
-    private let messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-}
-```
-```cj
-@DataAssist[fields]
-public class TokenizerParams{
-    public TokenizerParams(
-        public let model!: String = '',
-        public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    ){}
-}
-```
-```cj
-@DataAssist[props fields]
-public open class ChatMessage {
-    public ChatMessage(
-        private var role: Role,
-        private var content: String) {}
-    public init(){
-        this('', '')
-    }
-}
-
-@DataAssist[props fields]
-public class SystemMessage <: ChatMessage {
-    public init(){
-        super(ROLE_SYSTEM, '')
-    }
-    public init(content: String){
-        super(ROLE_SYSTEM, content)
-    }
-}
-
-@DataAssist[props fields]
-public open class AssistantMessage <: ChatMessage {
-    @FieldAlias['reasoning_content']
-    private var reasoningContent: String = ""
-    public init(){
-        super(ROLE_ASSISTANT, '')
-    }
-    public init(content: String){
-        super(ROLE_ASSISTANT, content)
-    }
-}
-
-@DataAssist[props fields]
-public class UserMessage <: ChatMessage {
-    public init(){
-        super(ROLE_USER, '')
-    }
-    public init(content: String){
-        super(ROLE_USER, content)
-    }
-}
-
-@DataAssist[props fields]
-public class ToolCallFunction {
-    public ToolCallFunction(
-        private var name: String,
-        private var arguments: String
-    ){}
-    public init(){
-        this("", "")
-    }
-}
-
-@DataAssist[props fields]
-public class ToolCallMessage <: AssistantMessage {
-    @FieldAlias['tool_calls']
-    private let toolCalls: ArrayList<ToolCall> = ArrayList<ToolCall>()
-
-    public func addToolCall(call: ToolCall){
-        toolCalls.add(call)
-    }
-    public func addFunctionCall(id!: String, toolType!: ToolType, name!: String, arguments!: String){
-        addToolCall(ToolCall(id, toolType, ToolCallFunction(name, arguments)))
-    }
-}
-
-@DataAssist[props fields]
-public class ToolCall {
-    public ToolCall(
-        private var id: String,
-        @FieldAlias['type']
-        private var toolType: ToolType,
-        private var function: ToolCallFunction
-    ){}
-
-    public init(){
-        this('', '', ToolCallFunction())
-    }
-}
-
-@DataAssist[props fields]
-public class ToolMessage <: ChatMessage {
-    private var tool_call_id: String = ""
-    public init(){
-        super(ROLE_TOOL, '')
-    }
-}
-```
-
-
-## 访问大模型
-
-```cj
-/**
- * 抽象大模型访问上下文，已提供智谱的实现。
- * 开发者只需要提供AbstractLLMContext的实现，并使用`fountain::f_bean.macros.Bean`修饰这个实现。
- */
-public sealed abstract class AbstractLLMContext {
-    private AbstractLLMContext(
-        protected let id: Int64,
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
-    }
-    /**
-     * 访问大模型
-     * @param agentId 智能体ID
-     * @param session 会话标识，每次执行一个会话流程都要有一个新的标识
-     * @param params 访问大模型的参数
-     */
-    public func access(agentId: Int64, session: String, params: LLMParams): LLMResp
-    /**
-     * 获取大模型对接收到的messages产生的token数
-     */
-    public func tokenize(model: String, messages: ArrayList<ChatMessage>): Int64
-}
-```
-
-### 大模型中介者
-```cj
-public class LLMContextMediator {
-    /**
-     * 注册大模型
-     * @param llmType 大模型类型
-     * @param model 大模型名称
-     * @param creator 大模型创建者
-    public static func register(llmType: LLMType, model: String, creator: (LLMConf) -> AbstractLLMContext)
-    
-    public static prop instance: LLMContextMediator 
-    /**
-     * 访问指定大模型
-     * @param agentId 智能体ID
-     * @param session 会话标识，每次执行一个会话流程都要有一个新的标识
-     * @param llmType 大模型类型
-     * @param params 访问大模型的参数
-    public func access(agentId: Int64, session: String, llmType: LLMType, params: LLMParams): LLMResp 
-    /**
-     * 获取指定大模型的饱和token数
-     */
-    public func getTokenThreshold(llmType: LLMType, model: String): Int64 
-    /**
-     * 获取指定大模型对于指定消息的token数
-     */
-    public func tokenize(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Int64 
-    /**
-     * 判断指定上下文对于指定的大模型是否饱和
-     */
-    public func saturated(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Bool 
-}
-```
-
-
-## 搜索
-
-- 搜索（原 `doc/搜索.md` 已删除，接口见 `src/**`）
-
-## 函数调用
-
-### `fountain::f_llm.FunctionCalling`
-```cj
-/**
- * 函数调用结果，本模块是fcoder的辅助模块，而fcoder依赖f_egraph定义的事件和流程
- */
-public struct FunctionResult {
-    /**
-     * 函数调用结果
-     * @param event 本函数的结果要包装的事件名称
-     * @param result 函数调用结果，要么是简单字符串，要么是MARKDOWN格式的文本
-     */
-    public FunctionResult(
-        public prop event!: String,
-        public prop result!: String
-    ){}
-}
-public interface CommonFunctionCalling {
-    /**
-     * JSON SCHEMA形式描述的大模型函数定义
-     */
-    prop definition: JsonObject
-    /**
-     * 函数名称
-     */
-    prop name: String
-    /**
-     * 函数描述
-     */
-    prop description: String 
-    /**
-     * 函数调用，这个函数供agent调用，开发者实现`func call(params: T): FunctionResult`即可
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    func call(json: JsonObject): FunctionResult
-}
-/**
- * 此接口的实现必须是类且被fountain::f_bean.macros.Bean修饰，只要被`@Bean`修饰本接口的实现即可完成函数的注册
- */
-public interface FunctionCalling<T> <: CommonFunctionCalling where T <: DataFields<T> {
-    /**
-     * JSON SCHEMA形式描述的大模型函数定义
-     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
-     */
-    prop definition: JsonObject 
-    /**
-     * 函数名称
-     */
-    prop name: String
-    /**
-     * 函数描述
-     */
-    prop description: String
-    /**
-     * 函数调用。默认实现只抛出FunctionCallingException
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    func call(params: T): FunctionResult
-    /**
-     * 函数调用，这个函数供agent调用，开发者实现`func call(params: T): FunctionResult`即可
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    func call(json: JsonValue): FunctionResult {
-        DataObject<T>.populate(json.toData()).getOrThrow() |> call
-    }
-}
-```
-### 大模型回复的解析函数
-本函数不做任何事，仅仅是把大模型返回的JSON解析为Answer对象
-```cj
-@DataAssist[props fields]
-public class Answer {
-    @JsonStringSchema[description:'流程下一步的事件名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'你的回复，将作为流程下一步事件的参数']
-    private var answer: String = ''
-}
-
-@Bean
-public class AnswerFunction <: FunctionCalling<Answer> {
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'answer'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '如果需要直接输出回复，而不依赖其它函数的结果，务必使用此函数传递回复'
-        }
-    }
-    /**
-     * 用来解析大模型的返回
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: Answer): FunctionResult {
-        FunctionResult(event: params.event, result: params.answer)
-    }
-}
-```
-
-### 技能加载函数
-```cj
-@DataAssist[props fields]
-public class SkillLoading {
-    @JsonStringSchema[description:'流程当前步骤的事件名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'技能标题，具备唯一性']
-    private var title: String = ''
-}
-
-@Bean
-public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
-    private let skillsFinder = lookup<SkillsFinder>()
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'loadSkill'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '加载技能详细描述'
-        }
-    }
-    /**
-     * 用来加载技能详细描述
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: SkillLoading): FunctionResult {
-        FunctionResult(event: params.event, result: skillsFinder.loadSkill(params.title), resultType: ResultType.Skill)
-    }
-}
-```
-
-### 技能引用加载函数
-```cj
-
-@DataAssist[props fields]
-public class SkillReferenceLoading {
-    @JsonStringSchema[description:'流程当前步骤的事件名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'待加载的技能标题列表，标题具备唯一性']
-    private var references: ArrayList<SkillReferenceParam> = ArrayList<SkillReferenceParam>()
-}
-
-
-@Bean
-public class SkillReferenceLoadingFunction <: FunctionCalling<SkillReferenceLoading> {
-    private let skillsFinder = lookup<SkillsFinder>()
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'loadSkillReferences'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '加载技能详细描述'
-        }
-    }
-    /**
-     * 用来加载技能详细描述
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: SkillReferenceLoading): FunctionResult 
-}
-```
-
-### 经验、教训、用户个性等记忆加载函数
-```cj
-@DataAssist[props fields]
-public class MemoryLoading {
-    @JsonStringSchema[description:'流程当前步骤的事件名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'查询与本参数相关性最强的经验']
-    private var query: String = ''
-}
-
-@Bean
-public class MemoriesLoadingFunction <: FunctionCalling<MemoryLoading> {
-    private let finder = lookup<MemorySummaryFinder>()
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'loadMemories'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '加载经验、教训、用户个性等的详细内容，这些内容来自过往会话的记忆总结'
-        }
-    }
-    /**
-     * 用来加载经验详细描述
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: MemoryLoading): FunctionResult
-}
-```
-
-### 命令行执行函数
-```cj
-
-@DataAssist[props fields]
-public class Command {
-    @JsonStringSchema[description:'流程下一步的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'完整的操作系统控制台命令']
-    private var command: String = ''
-}
-
-@Bean
-public class CommandFunction <: FunctionCalling<Command> {
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'command'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '执行操作系统控制台命令'
-        }
-    }
-    /**
-     * @param params 命令参数
-     * @return 函数调用结果
-     */
-    public func call(params: Command): FunctionResult 
-}
-```
-
-### 控制台读写函数
-用户在Linux按下CTRL+D，或者在Windows按下CTRL+Z时表示结束输入。
-```cj
-@DataAssist[props fields]
-public class ConsoleOutput {
-    @JsonStringSchema[description:'流程下一步的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'大模型输出到控制台的内容']
-    private var content: String = ''
-}
-
-@Bean
-public class ConsoleFunction <: FunctionCalling<ConsoleOutput> {
-    private let writer = ConsoleWriter()
-    private let reader = ConsoleReader()
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'console'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '控制台读写，大模型向控制台输出一段内容，用户通过控制台向大模型指示下一步行动'
-        }
-    }
-    /**
-     * 控制台读写，向控制台输出大模型需要用户看到的内容，等待用户回复或确认下一步行动。
-     */
-    public func call(params: ConsoleOutput): FunctionResult 
-}
-```
-
-### 文件读取函数
-```cj
-@DataAssist[props fields]
-public class FileReadingParams {
-    @JsonStringSchema[description:'流程下一步事件的名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'''
-UNIX风格的文件路径，
-这个函数是一个应用程序的一部分，本路径会作为配置的可用路径的相对路径，即使大模型返回的参数使用了绝对路径也不会访问整个操作系统的文件系统。''']
-    private var path: String = ''
-    @JsonStringSchema[description:'与mode配合使用，符合条件的文本行才会返回']
-    private var condition: String = ''
-    @JsonStringSchema[description: '''
-读取文件的模式，与condition配合使用。
-### 可选值
-- entire: 默认值，返回整个文件，此时condition不生效
-- regex: 符合condition所表示的正则表达式的文本行才会返回
-- tail: 此时condition必须是整数，返回文件最后的指定行数，返回的行数是condition表示的整数
-- head: 此时condition必须是整数，返回文件开头的指定行数，返回的行数是condition表示的整数
-- random: 此时condition必须是整数，使用蓄水池算法从文件中随机选择指定行数，返回的行数是condition表示的整数
-''']
-    private var mode: String = 'entire'
-}
-
-@Bean
-public class FileReadingFunction <: AbstractFileFunction<FileReadingParams> {
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'readFile'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '读文件'
-        }
-    }
-    /**
-     * 写文件的操作
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: FileReadingParams): FunctionResult
-}
-```
-
-### 文件内容替换函数
-```cj
-
-@DataAssist[props fields]
-public class FileReplacingParams {
-    @JsonStringSchema[description:'流程下一步事件的名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'''
-UNIX风格的文件路径。
-这个函数是一个应用程序的一部分，本路径会作为配置的可用路径的相对路径，即使大模型返回的参数使用了绝对路径也不会访问整个操作系统的文件系统。''']
-    private var path: String = ''
-    @JsonStringSchema[description:'待替换的内容']
-    private var replacement: String = ''
-    @JsonStringSchema[description: '符合这个正则表达式的文本行才会替换，如果是空串会返回错误']
-    private var regex: String = ''
-}
-
-@Bean
-public class FileReplacngFunction <: AbstractFileFunction<FileReplacingParams> {
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'replaceFile'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '逐行替换文件内容，替换成功返回OK，否则返回错误原因，如果文件不存在会立即返回"文件不存在"'
-        }
-    }
-    /**
-     * 写文件的操作
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: FileReplacingParams): FunctionResult 
-}
-```
-
-### 文件写写入函数
-```cj
-
-@DataAssist[props fields]
-public class FileWritingParams {
-    @JsonStringSchema[description:'流程下一步事件的名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'''
-UNIX风格的文件路径。
-这个函数是一个应用程序的一部分，本路径会作为配置的可用路径的相对路径，即使大模型返回的参数使用了绝对路径也不会访问整个操作系统的文件系统。''']
-    private var path: String = ''
-    @JsonStringSchema[description:'待写入的文件内容']
-    private var content: String = ''
-    @JsonStringSchema[description: '''
-文件写入方式, 默认为 append, 可选值有 append, truncate。
-如果content是空串，而指定了truncate，则会把文件清空。
-如果文件不存在会自动创建新文件。''']
-    private var mode: String = 'append'
-}
-
-@Bean
-public class FileWritingFunction <: AbstractFileFunction<FileWritingParams> {
-    /**
-     * 函数名称
-     */
-    public prop name: String {
-        get(){
-            'writeFile'
-        }
-    }
-    /**
-     * 函数描述
-     */
-    public prop description: String {
-        get(){
-            '写文件，写成功返回OK，否则返回错误原因'
-        }
-    }
-    /**
-     * 写文件的操作
-     * @param params 函数参数
-     * @return 函数调用结果
-     */
-    public func call(params: FileWritingParams): FunctionResult 
-}
-```
-
-
-## 智能体的定义
-
-1. 使用事件名+agent.id查询skill
-   - 一个智能体可以有若干主要技能和若干辅助技能，也可以没有
-2. 把agent.agent+skill.details组成完整的提示词模板
-   技能包含主技能和辅助技能，组织文化、智能体描述、主技能描述、辅助技能元数据拼在一起作为一个system消息
-   ```md
-   组织文化
-   ===
-   ${culture}
-
-   > **重要提示**：标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
-
-   智能体描述
-   ===
-   ${agent.agent}
-   ___
-
-   技能列表
-   ===
-   # 主技能
-   ## 技能标题：${skill.title}
-   ${skill.details}
-   ___
-
-   # 辅助技能元数据
-   ## 技能标题：${skill.title}
-   ${skill.metadata}
-   ___
-   ```
-3. 把exec(e: Event)的e.data做以下转换((e.data as ToData)?.toData()).getOrThrow() as SimpleDataObject，
-   将转换后的实例作为模板参数替换提示词模板中的{{...}}占位符
-4. 用agent.llmType agent.llmName查询大模型
-5. 用替换后的提示词+函数列表访问大模型
-6. 用大模型返回的结果访问函数
-7. 用函数返回的结果构造事件作为智能体的返回
-8. 控制上下文长度的策略接口和若干实现
-     #### 上下文策略（fountain::f_llm.llm.ContextPruner的子类型）：
-     - A：Retain（RetainContext）：保留全部上下文
-     - B：LastN（LastNContext）：用初始化参数指定N的具体数
-       - 这个策略的名称是'LastN_${n}'，n是初始化指定的具体数
-     - B：Summary（ContextSummaryPruner）：对全部上下文总结概要
-       - 这个策略的名称是'Summary_BY_${llmType}_${model}'，llmType和model都是初始化参数
-       - llmType是大模型可以做的事情，可取的值: text code image video audio embedding rerank tokenizer。
-       - model是大模型的名称
-     - D: Keywords（ContextKeywordsPruner）：对全部上下文提取关键词
-       - 这个策略的名称是'Keywords_BY_${llmType}_${model}'，llmType是大模型可以做的事情，可取的值: text code image video audio embedding rerank tokenizer。
-       - model是大模型的名称
-     - E：DRC（DRCContextPruner）：对system和其他消息执行不同的上下文策略
-       - 这个策略的名称是'DRC_BY_${systemPruner.name}_${otherPruner.name}'。
-     - F：饱和上下文（SaturationContextPruner）：
-       - 这个策略的名称是'Saturation_${pruner.name}'
-       - 上下文饱和时执行指定策略，
-       - 饱和token数在大模型配置中指定，
-       - 可以用agentId查询到智能体使用使用的大模型，进而确定大模型配置的饱和token数
-         - 不同的大模型饱和token数可能不同，
-           - 通常支持1M上下文的大模型在上下文达到10%~15%会产生严重幻觉，
-           - 支持200K上下文的大模型在上下文达到80K时会产生严重幻觉。
-           - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和token数
-
-
-## todo
-
-```cj
-package fountain::f_llm.finder
-public interface TodoFinder {
-    /**
-     * 保存待办
-     * @param task 待办任务名称
-     * @param todos 当前task的待办列表
-     */
-    func save(task: String, todos: ArrayList<Todo>): Unit
-    /**
-     * 列出待办
-     * @param task 待办任务名称
-     * @return 待办列表
-     */
-    func list(task: String): ArrayList<Todo>
-    /**
-     * 更新待办状态
-     * @param task 待办任务名称
-     * @param id 待办ID
-     * @param status 待办状态
-     * @return 更新的待办数量，如果返回的值不是1表示参数错了，或者待办不存在
-     */
-    func updateStatus(task: String, id: Int64, status: String): Int64
-}
-```
-
-```cj
-package fountain::f_llm.tool
-@DataAssist[props fields]
-public class TodoSavingParam {
-    @JsonStringSchema[description:'流程下一步骤的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'任务名称']
-    private var task: String = ''
-    @JsonArraySchema[description:'待办列表']
-    private var todos: ArrayList<TodoSaving> = ArrayList<TodoSaving>()
-}
-@DataAssist[props fields]
-public class TodoSaving {
-    @JsonStringSchema[description:'待办标题']
-    private var title: String = ''
-    @JsonStringSchema[description:'待办详述']
-    private var content: String = ''
-    @JsonStringSchema[description:'待办状态']
-    private var status: String = TODO_STATUS_PENDING
-    @JsonArraySchema[description:'前置待办ID列表']
-    private var predecessor: ArrayList<Int64> = ArrayList<Int64>()
-}
-@DataAssist[props fields]
-public class TodoListParam{
-    @JsonStringSchema[description:'流程下一步骤的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'任务名称']
-    private var task: String = ''
-}
-@DataAssist[props fields]
-public class TodoStatusParam{
-    @JsonStringSchema[description:'流程下一步骤的事件名称']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'任务名称']
-    private var task: String = ''
-    @JsonStringSchema[description:'待办ID']
-    private var id: Int64 = 0
-    @JsonStringSchema[description:'新的待办状态']
-    private var status: String = ''
-}
-```
-
-```cj
-package fountain::f_llm.tool
-@ToolCall
-public class TodoFunction {
-    @FunctionDefinition[
-        name: 'addTodo',
-        description: '添加待办'
-    ]
-    public func addTodo(param: TodoSavingParam): FunctionResult 
-
-    @FunctionDefinition[
-        name: 'todoList',
-        description: '查询全部待办'
-    ]
-    public func todoList(param: TodoListParam): FunctionResult 
-    @FunctionDefinition[
-        name: 'updateTodoStatus',
-        description: '更新待办状态'
-    ]
-    public func updateStatus(param: TodoStatusParam): FunctionResult 
-}
-```
-
-
-## tool call 函数定义
-
-可以在一个类定义多个tool call函数
-```cj
-/**
- * 用来修饰类的公共实例函数，这个类必须被@ToolCall宏修饰
- */
-@Annotation[target: [MemberFunction]]
-public class FunctionDefinition {
-    public const FunctionDefinition(
-        public let name!: String,
-        public let description!: String
-    ){}
-}
-```
-
-```cj
-macro package fountain::f_llm.macros
-/**
- * 用来定义tool call函数的宏，这个宏用来修饰类，被它修饰的类将被注册到fountain::f_bean，
- * 并且被它修饰的类的公共实例函数将被注册为tool call函数。
- * 只有被@FunctionDefinition修饰的函数才会被注册为tool call函数，否则将抛出异常。
- */
-public macro ToolCall(input: Tokens): Tokens 
-/**
- * 用来修饰类，这个类将被注册到fountain::f_bean，并且被它修饰的类的公共实例函数将被注册为tool call函数。
- * 只有被@FunctionDefinition修饰的函数才会被注册为tool call函数，否则将抛出异常。
- * 所不同的是这个宏的公共实例函数交被织入符合条件的切面。
- */
-public macro WeavedToolCall(input: Tokens): Tokens 
-```
-
-
-## 存储选型：内容族 / 元数据族
-
-f_llm 的持久化分两族，各自三选一，可交叉组合：
-
-| 族 | 存什么 | 可选实现 | 配置键 |
-|---|---|---|---|
-| 内容族 | 记忆、经验、知识、文档 | `f_hydra`（默认）/ `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
-| 元数据族 | 人格、技能、提示词、模型配置 | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
-| 演进族 | 演进报告、演进状态、已消费知识、每日租约 | 报告/状态跟随 `llm_metaStore`；租约跟随 `llm_memoryStore` | 见下文「存储：演进报告 / 状态 / 租约」 |
-
-- 未知配置值**启动失败**并打印可选列表，不静默回退；
-- 元数据走 `f_store` 时无需任何数据库，数据落在 `llm_metaStorePath`；
-- 开发者可实现 `ContentStore` / `MetaStore`，用 `Stores.registerContent` / `Stores.registerMeta` 注册后按名字选中。
-
-```cj
-// 内容族默认 f_hydra（进程内、零外部依赖）；也可切到 fhydra（远程 HTTP）
-Config.set<String>([
-    ('llm_memoryStore', 'f_hydra'),
-    ('llm_metaStore', 'f_store'),
-    ('llm_metaStorePath', './data/f_llm-meta'),
-    ('llm_hydraPath', './data/f_hydra'),
-    // 远程时改用：
-    // ('llm_memoryStore', 'fhydra'),
-    // ('llm_hydraUrl', 'http://127.0.0.1:18081/rpc'),
-    // ('llm_hydraSecret', 'change-me')
-])
-```
-
-旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 仍会被识别，但只打 `warn`、不生效。
-
-### 存储选型与适配器
-
-两个配置项决定用哪套实现：
-
-```cj
-Config.set<String>([
-    ('llm_memoryStore', 'f_hydra'),    // f_hydra(榛樿) / fhydra / postgres / mysql / inMemory
-    ('llm_metaStore',   'f_store')     // postgres / mysql / f_store
-]);
-```
-
-- **内容族**（记忆 / 知识）：`llm_memoryStore` → `Stores.content()`；
-- **元数据族**（人格 / 技能 / 提示词 / 模型配置）：`llm_metaStore` → `MetaStoreAdapter`；
-- 实现类用 `@Bean` + `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]` 条件装配，适配器内部 `lookupOption<T>()` 取用；
-- 启动时调用 `StoreWiring.wire()`（`fountain::f_llm.wiring`）：加载实现包、注册 `inMemory`/`postgres`/`mysql` 三个内容族，并执行启动校验；
-  配置值未注册会**立即失败并列出可选实现**，不静默回退；
-- 业务侧 `Memory` 首次写摘要时也会调用一次 `wire()`（幂等），因此即便应用忘了显式接线，摘要也不会静默丢失（失败会打 `warn`）；
-- `wire()` 还会把 7 个预定义记忆种类补种到 `llm_memory_kind`（`user_id=0`，权重取自 `MemoryKinds.weightOf`）；
-  数据库不可用时只告警、不阻断启动；
-- 自定义记忆种类同样落库：`MemoryKinds.register/remove` 会写/删 `llm_memory_kind`（`predefined=false`），
-  启动 `attach()` 时按 `user_id` 载回内存；写库失败只告警，不阻断业务；
-- Token 用量会落 `llm_token_usage`：`PostgresTokenUsageSaver` / `MySqlTokenUsageSaver` 按 `llm_memoryStore`
-  条件装配，替换掉只打日志的 `DummyTokenUsageSaver`；
-- `wire()` 同时注册元数据族三个实现（`postgres`/`mysql`/`f_store`），并只初始化一次 bean 容器条件
-  （`BeanFactory.afterRegistered()`）；`MetaStoreAdapter` 严格按 `llm_metaStore` 分支——
-  `f_store` 直接构造，`postgres`/`mysql` 必须有对应 bean，未知值或 bean 缺失都抛错，**不再静默落到 f_store**；
-- 实现包：`store.postgres` / `store.mysql`（各自 import 对应驱动），`dao.postgres` / `dao.mysql` 只放 SQL。
-
-### 向量化（BGE-M3）
-
-默认连本机 `http://127.0.0.1:8000/v1/embeddings`（`BgeM3Transport`），一次请求取三路：
-
-| 字段 | 含义 | 落库 |
-|---|---|---|
-| `embedding` | dense，1024 维，CLS + L2 | `llm_memory_vector.title_dense` |
-| `lexical_weights` | sparse，`tokenId → 权重` | `llm_memory_token` |
-| `colbert_vecs` | 每 token 一个 1024 维向量（最多 96） | `*_colbert`（`bytea`） |
-
-超时只覆盖读/写（默认 3000ms，可用 `llm_embeddingTimeoutMs` 调）。
-
-**索引重建（运维入口）**：历史数据缺 sparse/colbert 时，用 `MemoryIndexRebuilder` 按页重算这两路（不动 dense）：
-
-```cj
-// 方式一：直接在代码里调用
-MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace, batchSize: 100)
-
-// 方式二：配置驱动，启动后调用一次
-Config.set<Bool>([('llm_rebuildIndexOnStart', true)])
-Config.set<Int64>([('llm_rebuildIndexUserId', 0)])
-Config.set<String>([('llm_rebuildIndexNamespace', 'global')])
-MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
-```
-
-**待办（等外部支持）**
-
-- 连接级超时：`stdx.net.http` 的 `ClientBuilder` 尚未提供 `connectTimeout`，等标准库支持后再补；
-  当前建连阶段依赖操作系统 TCP 超时。
-
-其它外部依赖限制（MySQL 必须有 MyVector、f_store 单实例、历史数据重建等）见
-[`doc/known-limitations.md`](doc/known-limitations.md)。
-
-> `lexical_weights` 由官方 `sparse_linear.pt` 计算（`ReLU(h·w+b)`，同 token 取最大），与 FlagEmbedding
-> 的 `_process_token_weights` 一致；该文件只有 **3.5KB**，因为它是 `(1,1024)` 的投影向量，不是词表大小的矩阵。
-> `colbert_vecs` 由官方 `colbert_linear.pt`（`1024×1024`，约 2.1MB）投影后按 token 归一化。
-> 换成只给 dense 的 OpenAI 兼容端点时，改用 `LlmEmbeddingTransport`（sparse/colbert 为空，检索自动标 `degraded`）。
-
-### 知识检索（块级）
-
-- `KnowledgeStore.upsert` 覆盖写正文后按 **400 字窗口 / 50 字重叠**切块，写入 `llm_document_chunk`；
-- `KnowledgeStore.search(KnowledgeQuery)` 返回**块级**结果：按查询词命中次数打分（多词累加），
-  同分按 `docId`、`seq` 升序，可用 `docIds` 限定范围；
-- **混合检索**：有 `Embedder` 时，块向量走余弦相似度（PG `<=>` / 内存直算），与词面命中数合并打分
-  （`score = cosine + 0.1 × min(命中数, 5)`）；没有 `Embedder` 时退化为纯词面；
-- PG / MySQL / 内存三实现都支持语义召回（MySQL 需 MyVector 组件，写入后 `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')` 建索引）；
-- **候选分页**：词面召回按页取（默认 200/页、总上限 1000），dense 的 k 随请求 `limit` 放大（20×，封顶 1000），不再硬截断 200；
-- **重建工具**：换 Embedder 或切块参数后用
-  `KnowledgeIndexRebuilder.rebuildAll(store, batchSize)` / `rebuild(store, docIds)` 重算块向量
-  （内部走 `upsert`，重新切块并重写向量）。
-
-### MySQL（9.7 LTS + MyVector）
-
-MySQL Community 版**没有**向量索引（`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` 都不存在），
-需要额外安装 [MyVector](https://github.com/askdba/myvector) 组件：
-
-| 项 | 要求 |
+| 能力 | 入口 |
 |---|---|
-| MySQL | 9.7 LTS（实测 9.7.4，官方 tarball 或 APT） |
-| MyVector | 组件模式，`INSTALL COMPONENT 'file://myvector'` |
-| 向量列 | `MYVECTOR(type=HNSW,dim=1024,size=…,dist=COSINE,m=16,ef=100)` |
-| 建索引 | `CALL mysql.myvector_index_build('db.table.col','pk')` |
-| 查询 | `MYVECTOR_IS_ANN('db.table.col','pk', myvector_construct('[…]'), k, (SELECT JSON_ARRAYAGG(id) …))` |
+| 大模型访问（多平台、多候选、熔断、流式） | `fountain::f_llm.llm.LLM` |
+| 存储（内容族 / 元数据族 / 演进族） | `fountain::f_llm.store.Stores` |
+| 记忆、知识、技能、人格、提示词 | `MemoryStore` / `KnowledgeStore` / `MetaStore` |
+| loom 编排（文本 → 流程 → 执行） | `fountain::f_llm.loom.LoomWiring` |
+| 技能演进（经验 → 技能，带 A/B 门禁） | `fountain::f_llm.loom.SkillEvolutionJob` |
+| 检索质量评测 | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
-**权限**：MyVector 的 binlog 账号需要 `SELECT, LOCK TABLES, REPLICATION CLIENT, REPLICATION SLAVE`；
-应用账号需要 `EXECUTE ON mysql.*`（建索引/状态/删除都是存储过程）。
-
-**隔离**：`user_id` / `namespace` 必须放进 `MYVECTOR_IS_ANN` 的第五参数（`JSON_ARRAYAGG` 子查询），
-写在 `WHERE` 里会变成「先取 k 条再过滤」，结果可能少于 k 条。
-
-**限制**：MyVector 的查询改写不认预处理占位符（`myvector_construct(?)`、`k=?` 都会 1064），
-故 MySQL 实现的 ANN SQL 使用字面量拼接（向量只含数字，namespace 做引号转义）。
-
-### 完全不用数据库（f_store 元数据）
-
-只需把元数据族切到 `f_store`，人格/技能/提示词/模型配置都会落到本地目录：
-
-```cj
-Config.set<String>([
-    ('llm_metaStore', 'f_store'),
-    ('llm_metaStorePath', './data/f_llm-meta')
-])
-```
-
-```text
-./data/f_llm-meta/                 # f_store 数据目录（自动创建）
-```
-
-约束与语义：
-
-- 首次启动自动建目录；目录必须可写，否则启动失败；
-- 人格一人一条（覆盖写），技能带 `version`，提示词按 `(name, version)` 存并保留 `latest`；
-- 写入顺序是「先主体、后索引」，启动时扫描主体补建缺失索引（`f_store` 没有事务）；
-- 内容族仍需在 `postgres` / `mysql` / `f_hydra` / `fhydra` 中选一个——记忆与知识要向量检索，`f_store` 不承担这部分；
-- `f_store` **不实现 `KnowledgeStore`**：知识文档需要向量化检索，配置成 `f_store` 时知识能力不可用（不是降级，是边界）。
-
-## 配置项
-
-所有配置项都是环境变量。本节列出的是早期链路的键；存储与评测相关的新键
-（`llm_memoryStore` / `llm_metaStore` / `llm_embeddingUrl` / `hydra_filterFields` / `fllm_*` 等）
-见文末「环境变量一览（新增部分）」。
-```cj
-public static const LLM = 'llm'
-/**
- * 字符串
- * 大模型可操作的路径，大模型只能操作这个路径下的文件
- */
-public static const FILE_SANDBOX_PATH = LLM + '_fileSandboxPath'
-/**
- * 正整数
- * 访问大模型失败的重试次数，默认是Int64.Max
- */
-public static const LLM_ACCESS_TRYING_COUNT = LLM + '_accessTryingCount'
-/**
- * 正整数
- * 访问大模型的重试时间，每次试图与大模型交互开始持续这么长时间内可以一直重试，直到访问成功或者超时
- * 单位是秒，默认是Int64.Max
- */
-public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_accessTryingElapsed'
-/**
- * 字符串
- * 忠实记忆存储路径
- */
-public static const LLM_FAITHFUL_MEMORY_PATH = LLM + '_faithfulMemoryPath'
-/**
- * Bool
- * 是否保存记忆，只有保存记忆才能产生经验
- */
-public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
-/**
- * 字符串
- * 用来总结经验的模型，默认是glm-4.7-flash
- */
-public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
-```
-
-
+- 版本：`1.3.17`，`output-type = "dynamic"`
+- 依赖：`f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util` 等，全部是同仓模块
 
 ---
 
-## v2 公开 API（分支 `feature/f_llm`，变更 `f-llm-openai-compat`）
+## 目录结构
 
-> 本节是当前分支的公开 API。下文旧章节来自 `sts/1.3.x`，保留作历史参考；与新 API 冲突时以本节为准。
-
-### 配置：`LLMConf`
-
-字段：`provider / llmName / actualLlmName / url / auth / temperature / alwaysThinking / conf / enabled / weight`。
-
-- `conf` 是 `HashMap<String, String>`：**只读 prop + `setConf()` 写入**，库里存 JSON 文本（列名仍是 `conf`）；
-- 只装载 `enabled = true AND weight > 0`，其余在 SQL 层过滤；
-- 配置来源可插拔：`llm_confSource = database`（默认）/ `env` / `file:<path>`；未知来源启动失败；
-- 默认模型常量已切到 DeepSeek：`MODEL_NAME_DEEPSEEK_FLASH = 'deepseek-flash'`。
-
-主要配置项：`llm_confRefreshSeconds`(60)、`llm_loadBalanceAlgo`(`randomWeight`/`roundRobin`)、`llm_failureThreshold`(5)、`llm_cooldownSeconds`(60)、`llm_streamIdleTimeout`(120)、`llm_streamMaxLineBytes`(1 MiB)、`llm_toolResultMaxBytes`(64 KiB)、`llm_fetchMaxBytes`(256 KiB)、`llm_balanceLowThreshold`(100)。
-
-### 门面
-
-```cj
-LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
-LLM.chatStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
-LLM.chatByName(llmName: String, params): LLMResp     // 从配置快照选平台（含权重与熔断）
-LLM.respondByName(llmName: String, params): LLMResp
-LLM.respond(candidates, params): LLMResp
-LLM.respondStream(candidates, params, onDelta): LLMResp
+```
+src/
+├── llm/            模型访问：LLM 门面、LLMConf 装载、方言、裁剪器、流式、Token 计数
+├── llm/openai/     OpenAI 兼容的请求/响应映射
+├── embedding/      BGE-M3 向量化：Embedding 门面、HTTP 传输、三路编码
+├── store/          存储契约与实现（f_store / f_hydra / fhydra / postgres / mysql / inMemory）
+├── dao/            SQL 语句（postgres / mysql）
+├── loom/           流程编排、存储网关、技能演进、检索评测
+├── memory/         记忆摘要与提炼（FaithfulMemory / ExperienceExtractor / IndividualityExtractor）
+├── search/         联网搜索（DeepSeek 等 Provider）
+├── tool/           工具：函数调用框架与内置工具（读文件、写文件、命令行、联网、todo…）
+├── finder/         各类查询门面（技能、知识、记忆、组织、事件、Token 用量）
+├── model/          数据模型（LLMConf、Skill、Knowledge、Agent、MemorySummary、TokenUsage…）
+├── agents/         智能体事件与事件数据
+├── balance/        平台余额查询与签名
+├── service/        LLM 配置来源（静态 / 文件 / 环境变量 / 数据库 / 元数据存储）
+├── config/         环境变量键与默认值
+├── constant/       常量（模型名、角色、裁剪器名、Todo 状态、知识种类…）
+├── wiring/         启动接线（StoreWiring）
+├── exception/      异常类型
+├── util/           Redactor（敏感信息脱敏）
+├── mcp/            MCP 客户端
+└── macros/         注解宏入口
 ```
 
-- 429/408/409/425/5xx 换下一个候选，其余 4xx 立即失败；
-- 流式异常统一包成 `LLMException`，消息带 `requestId` / `phase` / `provider` / `model`；
-- `LLMToolLoop.run(candidates, params, enabled: true)` 才开自动工具循环，上限 8 轮（超限 `finishReason=rounds_exceeded`）。
+---
 
-### 装载、调度与熔断
+## 快速开始
 
-`LLMConfsHolder`（不可变快照 + 懒刷新 + 权重调度 + 熔断）、`LLMConfSource`、`CircuitBreaker`、`LLMCandidateProvider`、`LLMConfsSnapshot`。刷新按 `llm_confRefreshSeconds` 懒式 TTL，失败保留旧快照；熔断按 `conf.id` 计数，只计可重试失败，刷新后清理已删配置。
+### 1. 配置（环境变量，启动时读一次）
 
-### 工具
+```bash
+export llm_memoryStore=f_hydra                      # 内容族（默认）
+export llm_metaStore=f_store                        # 元数据族（默认）
+export llm_metaStorePath=./data/f_llm-meta          # f_store 落盘目录
+export llm_embeddingUrl=http://127.0.0.1:8000/v1/embeddings
+```
 
-- `FunctionMediator.register / definition / names / getDefinitions / call`；
-- 内置：`currentTime`（iso / epoch 毫秒）、`webSearch`（借启用 conf 的凭据）、`webFetch`（SSRF 防护：协议白名单 + 内网地址族 + 非 http(s) 拒绝）；
-- MCP：`McpToolSource(alias, client).load()`，工具名 `mcp__{alias}__{tool}`，**超 64 字符或非法字符直接失败，不截断**；`inputSchema` 剥掉所有 `$` 开头的元信息键、**保留 `additionalProperties`**；联合类型取第一个非 `null` 类型；
-- 搜索能力可注册：`SearchProvider` + `SearchProviderRegistry`，无可用配置抛 `SearchUnavailableException`。
+**配置只在启动时读取一次**，不支持运行期修改（见 `doc/known-limitations.md`）。
+
+### 2. 存储接线
+
+```cangjie
+import fountain::f_llm.wiring.StoreWiring
+
+main(): Int64 {
+    // 注册各实现、校验配置、建表、补种预定义记忆种类
+    StoreWiring.wire()
+    0
+}
+```
+
+### 3. 调模型
+
+```cangjie
+import std.collection.ArrayList
+
+import fountain::f_llm.llm.*
+
+main(): Int64 {
+    let messages = ArrayList<ChatMessage>()
+    messages.add(UserMessage(content: '用一句话解释什么是熔断'))
+    let resp = LLM.chatByName('deepseek-flash',
+                              LLMParams(model: 'deepseek-flash', messages: messages))
+    println(resp.messages[0].content)
+    0
+}
+```
+
+`LLM` 的入口：
+
+| 方法 | 说明 |
+|---|---|
+| `chat(candidates, params, hooks?)` | 按候选列表调用，失败转移 + 熔断 |
+| `chatByName(llmName, params)` | 按名字从配置快照取候选 |
+| `respond` / `respondByName` | Responses 风格接口 |
+| `chatStream` / `respondStream` | 流式，逐段回调 |
+| `setTransport` / `setStreamTransport` | 替换底层传输（测试注入） |
+
+### 4. 编排
+
+```cangjie
+import fountain::f_llm.loom.*
+
+let service = LoomWiring.wire(plannerModel: 'deepseek-flash')
+let preview = service.execute(LoomRequest(
+    name: 'daily-report',
+    description: '每天汇总昨日提交与 issue，写成日报发给团队'))
+```
+
+详见下文「loom 编排」。
+
+---
+
+## 大模型访问
+
+### 配置装载
+
+| 组件 | 作用 |
+|---|---|
+| `LLMConf` | 单个平台配置：provider、url、auth、实际模型名、能力位 |
+| `LLMConfs` | 候选集合，按权重挑起点、失败转移、记熔断 |
+| `LLMConfService` | 配置服务：刷新、下发、持久化 |
+| `LLMConfSource` | 来源：`StaticConfSource` / `FileConfSource` / `EnvConfSource` / `DatabaseConfSource` / `StoreMetaConfSource` |
+| `LLMCandidateProvider` | 候选提供者（按模型名或权重） |
+| `CircuitBreaker` | 失败计数 + 冷却窗口 |
+
+配置来源由 `llm_confSource` 选择；`llm_confs` 可直接内联一组配置（静态部署）。
+
+### 方言（Provider Dialect）
+
+`ProviderDialect` 负责把统一的请求体翻译成各家格式：
+
+| 方言 | 适用 |
+|---|---|
+| `StandardDialect` | OpenAI 兼容（含大多数聚合平台） |
+| `DeepSeekDialect` | DeepSeek 原生字段差异 |
+| `ZhipuDialect` / `VolcengineDialect` / `AliyunDialect` / `SiliconFlowDialect` | 各家参数与报文差异 |
+
+`DialectRegistry` 按 provider 选方言；模型名归一由 `ModelNames.normalize` 负责（只用于能力判断与日志，报文里的 `model` 永远是配置的原文）。
 
 ### 上下文裁剪
 
-8 个既有策略的**对外语义不变**；`ContextPrunerMediator.register/names`，未知策略名抛异常并列出可用名；新增示例 `TokenBudget_{budget}`；`Saturation_{inner}` 改为按 **conf 的 `tokenThreshold`** 判断（0 表示不限制）。
+`ContextPrunerMediator` 按名字选裁剪器，`llm_prunerLlmName` 指定依赖模型的裁剪器所用模型：
 
-### 余额
+| 名字 | 实现 | 行为 |
+|---|---|---|
+| `Retain` | `RetainContextPruner` | 全部保留 |
+| `LastN` | `LastNContextPruner` | 保留最近 N 条 |
+| `RetainLastUser` | `RetainLastUserPruner` | 保留最后一条用户消息 |
+| `RetainLastRound` | `RetainLastNRoundPruner` | 保留最近 N 轮 |
+| `TokenBudget` | `TokenBudgetContextPruner` | 按 token 预算裁剪 |
+| `Saturation` | `SaturationContextPruner` | 饱和度裁剪 |
+| `DRC` | `DRCContextPruner` | 动态相关度裁剪 |
+| `Summary` / `Keywords` | 依赖模型 | 摘要 / 关键词压缩 |
 
-`BalanceQuerier` + `BalanceMediator`（`@Bean` 自动发现 + 显式注册，同名失败）：
+裁剪策略通过 `ContextPrunerMediator.prune(...)` 调用；各策略都以「保留首条 system 消息」为约定（细节见 `doc/f_llm-memory-design.md` §7.3）。
 
-| 平台 | 状态 |
+### 工具调用
+
+| 组件 | 作用 |
 |---|---|
-| DeepSeek | `GET /user/balance`，多币种各一条，金额字符串原样保留 |
-| 腾讯云 | `DescribeAccountBalance`（TC3-HMAC-SHA256，**金额单位是分**，展示前 ÷100） |
-| 火山引擎 | `QueryBalanceAcct`（V4 签名，Service=`billing`，Region=`cn-north-1`） |
-| 智谱 / 硅基流动 / 阿里云 | 可编译占位，调用抛 `BalanceUnsupportedException` |
+| `FunctionDefinition` | 函数签名（名、描述、参数 schema） |
+| `FunctionCalling<T>` / `CommonFunctionCalling` | 单函数封装 |
+| `WrappedFunctionCalling<T>` | 包装已有函数 |
+| `FunctionMediator` | 注册表 + 调用入口（`FunctionMediator.call(name, args)`） |
+| `LLMToolLoop` | 多轮「模型要工具 → 执行 → 回填」循环 |
 
-**金额一律以元为单位**（腾讯云上游是分，解析时 ÷100；可用 `conf['balanceUnit'] = yuan|fen` 覆盖代理口径），两位小数字符串 + `totalValue` 元数值。低于 `llm_balanceLowThreshold` 或账户不可用时快照 `low = true` 并记一条 `warn`。
+内置工具（`ToolName` 里有常量）：
 
-### 数据库
-
-`LLMConfDAO`（`@DAO <: RootDAO`，走 `f_orm`）+ `LLMConfService`（`<: RootService` + `@Bean` 实现）；建表脚本见 `doc/sql/llm_conf.postgres.sql` 与 `llm_conf.mysql.sql`。
-### 多模态与向量化
-
-```cj
-// 图片：data URI 或公网 URL；支持 webp/png/jpeg/gif
-let user = UserMessage('这张图是什么颜色？')
-user.addImage('data:image/png;base64,...', detail: 'high')   // detail: auto|low|high
-let resp = LLM.chat(candidates, LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>([user])))
-```
-
-`deepseek-flash` 实测支持图片输入（`input_modalities=["text","image"]`，32×32 纯红图能答出"红色"）。`Responses` 路径同样支持多模态（`input_image`，`image_url` 是字符串）：DeepSeek 的 `/responses` 实测可用，`LLM.respond` 直接发图即可。
-
-```cj
-// 向量化：按 llmName 选配置（llmType=embedding），失败转移与熔断与 chat 同构
-let resp = Embedding.embed('embed-pro', EmbeddingParam(agentId: 1, session: 's', input: '仓颉编程语言'))
-resp.embedding   // Array<Float64>
-```
-
-旧链路 `EmbeddingContextMediator` / `GLMEmbeddingContext` / `AbstractEmbeddingContext` 已删除；`KnowledgeEntity` 的 `embeddingAccessor` 传 `Embedding.embed` 即可。
-**腾讯云 tokenhub（OpenAI 兼容网关）**：
-
-```cj
-let conf = LLMConf()
-conf.provider = 'tokenhub'                                    // 走 StandardDialect，无需新方言
-conf.actualLlmName = ModelNames.TENCENT_DEEPSEEK_FLASH        // 'deepseek/deepseek-flash'，必须原样发
-conf.url = 'https://tokenhub.tencentmaas.com/v1'
-conf.auth = '<key>'
-```
-
-模型名归一：`ModelNames.normalize('deepseek/deepseek-flash') == MODEL_NAME_DEEPSEEK_FLASH`（也认 `deepseek-ai/DeepSeek-V3`、`zhipu/glm-5` 等聚合平台写法）。**归一只用于能力判断与日志，报文里的 `model` 永远是 `actualLlmName` 原文**——改掉前缀会 404。
+| 工具 | 说明 |
+|---|---|
+| `FileReadingFunction` / `FileWritingFunction` / `FileReplacngFunction` | 文件读写与替换，受 `llm_fileSandboxPath` 限制 |
+| `CommandFunction` | 执行命令行 |
+| `ConsoleFunction` | 控制台读写 |
+| `WebSearchFunction` / `WebFetchFunction` | 联网搜索与抓取（带 `SsrfGuard` 防内网探测） |
+| `SkillLoadingFunction` / `SkillReferenceLoadingFunction` | 技能与技能引用加载 |
+| `MemoriesLoadingFunction` | 经验、教训、用户个性等记忆加载 |
+| `TodoFunction` | todo 增删改查 |
+| `CurrentTimeFunction` | 当前时间 |
+| `AnswerFunction` | 结构化回答 |
 
 ---
 
-## loom 用法
+## 存储
 
-> 本节是使用指南；实现细节、状态机与边界见 `doc/loom.md`。
+### 三族与配置键
+
+| 族 | 存什么 | 实现 | 配置键 |
+|---|---|---|---|
+| 内容族 | 记忆、经验、知识、文档 | `f_hydra`（默认）/ `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
+| 元数据族 | 人格、技能、提示词、模型配置 | `postgres` / `mysql` / `f_store`（默认） | `llm_metaStore` |
+| 演进族 | 演进报告、演进状态、已消费知识、每日租约 | 报告/状态跟随元数据族；租约跟随内容族 | 同上 |
+
+- 未知配置值**启动失败**并打印可选列表，不静默回退；
+- 自定义实现用 `Stores.registerContent(name, factory)` / `Stores.registerMeta(name, factory)` 注册；
+- `Stores.content()` / `Stores.meta()` 按配置取当前实现。
+
+### 契约
+
+| 契约 | 说明 |
+|---|---|
+| `ContentStore` | 内容族容器：`prop memory: MemoryStore` + `prop knowledge: KnowledgeStore` |
+| `MetaStore` | 元数据族容器：`characters` / `skills` / `prompts` / `confs` |
+| `MemoryStore` | 记忆与经验：`add / get / remove / list / search / listByKind` |
+| `KnowledgeStore` | 知识与切块：`upsert / get / remove / search / docIds` |
+| `CharacterStore` | 每用户一条人格：`get / set / reset` |
+| `SkillStore` | 技能：`upsert / get / list / remove` |
+| `PromptStore` | 提示词：`put / get(name,version) / latest / remove` |
+| `LLMConfStore` | 模型配置：`names / candidates / put` |
+
+数据模型（`store/StoreModels.cj`）：
+
+| 类型 | 关键字段 |
+|---|---|
+| `MemoryRecord` | `id / userId / namespace / title / content / kind / saveTime` |
+| `MemoryHit` | `record / score`（`search` 返回，带正文） |
+| `KnowledgeDoc` | `docId / title / content` |
+| `Character` | `userId / characterKey / prompts` |
+| `Skill` | `id / title / details / functions / version` |
+| `PromptEntry` | `name / version / content` |
+| `EvolutionEntry` | `id / skillTitle / action / detail / at` |
+
+### 落盘布局
+
+**f_store**（无数据库部署）：
+
+```
+f_llm:meta:character:{userId}                        → 人格（key 与 prompts 两段）
+f_llm:meta:skill:{id}                                → 技能
+f_llm:meta:prompt:{name}:{version}                   → 提示词
+f_llm:evolution:data:{id}                            → 演进报告
+f_llm:evolution:idx:{标题长度}:{标题}:{补零at}:{补零id}  → 报告索引（bySkill）
+f_llm:evolution:time:{补零at}:{补零id}                → 报告索引（list）
+f_llm:evo-state:run                                 → 演进水位线
+f_llm:evo-state:skill:{title}                       → 每技能冷却与门禁结果
+f_llm:evo-state:kn:{docId}                          → 已消费的知识
+```
+
+**SQL**：建表语句在模块根目录的 `tables-pg.sql` / `tables-mysql.sql`；`StoreWiring.wire()` 在启动时幂等建表并建索引（PG 的演进报告索引为 `(skill_title, at_time DESC)`）。
+
+### 向量化（BGE-M3）
+
+| 组件 | 作用 |
+|---|---|
+| `Embedding` | 门面：`embed(llmName, EmbeddingParam)`，走配置快照 + 熔断 |
+| `HttpEmbedder` | OpenAI 兼容的 `/v1/embeddings` 客户端 |
+| `BgeM3Transport` / `BgeM3Codec` | BGE-M3 三路编码（dense / sparse / colbert） |
+| `DefaultEmbedder` | 生产用 `Embedder` 实现，读 `llm_embeddingUrl` |
+
+端点默认 `http://127.0.0.1:8000/v1/embeddings`，可用 `deploy_bge_m3.sh` 在本机拉起。
+
+### 知识检索
+
+- `KnowledgeChunker`：按长度与重叠切块；
+- `KnowledgeSearch`：向量召回（块级），返回 `KnowledgeHit`；
+- `KnowledgeIndexRebuilder` / `MemoryIndexRebuilder`：启动时按 `llm_rebuildIndexOnStart` 重建索引。
+
+---
+
+## loom 编排
+
+把一句自然语言变成可执行的流程：
+
+```
+自然语言描述
+→ Planner（LLM 产出 JSON 计划，或返回澄清问题）
+→ CodeGen（计划 → 步骤源码 + 流程源码，不编译）
+→ LoomRegistry / LoomStore（存源码与状态）
+→ LoomCompiler（编译步骤闭包）
+→ LoomRunner（拓扑序执行，结果事件）
+```
+
+状态机：`clarifying → pending → compiled`，编译失败标 `failed`（单条失败不影响其它流程）。
 
 ### 5 分钟上手
 
-```cj
+```cangjie
 import fountain::f_egraph.base.*
 import fountain::f_llm.loom.*
 
@@ -1804,13 +312,9 @@ service.delete('daily-report')   // 删除
 
 不传 `chat` 时用 `LoomWiring.wire(plannerModel: '…')`，内部走 `LoomDefaults.chat`（需要配置好 `LLMConf`）。
 
-### 两条使用路径
+### 手工定义流程
 
-**A. 自然语言编排** —— 上面那套 `LoomRequest` + `LoomService`。
-
-**B. 手工定义流程** —— 跳过 Planner，直接构造 `FlowPlan`，适合自己写死流程或先验证执行链：
-
-```cj
+```cangjie
 let plan = FlowPlan('weekly-report')
 let fetch = StepPlan('fetch', 'tool')
 fetch.tool = 'webSearch'
@@ -1827,8 +331,6 @@ let _ = LoomRunner().run(plan, host,
     StartEvent(category: 'loom', tag: 'weekly-report', name: 'start', data: ''))
 ```
 
-### 步骤类型与执行语义
-
 | kind | 用途 | 关键字段 |
 |---|---|---|
 | `tool` | 调已注册工具 / MCP | `tool`、`args` |
@@ -1843,36 +345,21 @@ let _ = LoomRunner().run(plan, host,
 | 并发 | 默认同步；`StepPlan.async` 或 `run(parallel: true)`（计划里 `parallel` 同理）才真并发 |
 | 校验 | `plan.validate()`：重复 id、悬空边、缺 kind 都会抛错 |
 
-### 链路
-
-把一句自然语言变成可执行的流程（`fountain::f_llm.loom`）：
-
-```
-自然语言描述
-→ Planner（LLM 产出 JSON 计划，或返回澄清问题）
-→ CodeGen（计划 → 步骤源码 + 流程源码，不编译）
-→ LoomRegistry / LoomStore（存源码与状态）
-→ LoomCompiler（编译步骤闭包）
-→ LoomRunner（拓扑序执行，结果事件）
-```
-
-状态机：`clarifying → pending → compiled`，编译失败标 `failed`（单条失败不影响其它流程）。
-
 ### 工具（注册给模型）
 
 | 工具 | 关键参数 | 行为 |
 |---|---|---|
-| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, execute?, parallel?` | `confirm=false` 只返回计划；`confirm=true` 编译标 compiled；`execute=true` 顺带跑一次 |
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, execute?, parallel?` | `confirm=false` 只返回计划；`confirm=true` 编译；`execute=true` 顺带跑一次 |
 | `loomDelete` | `name` | 从注册表与库中移除 |
-| `memoryCall` | `op`(search/add/remove) + `payload` | 读写记忆，与 `loomStore("memory", …)` 同一网关 |
+| `memoryCall` | `op`(search/add/remove) + `payload` | 与 `loomStore("memory", …)` 同一网关 |
 | `knowledgeIngest` | `docId, title, content` | 写入知识库 |
 | `listTools` / `searchTools` | `offset, limit` / `query, topK` | 列工具、按关键词检索工具 |
 | `skillImport` | `path` | 导入技能包目录，同名 title 幂等 |
 | `scheduleCreate` / `scheduleDelete` | `name, cron, payload?` / `name` | 注册/取消定时任务 |
 
-### 流程内可用的 JIT 入口
+### 流程内的 JIT 入口
 
-```cj
+```cangjie
 loomCallTool(name, argsJson)          // 调已注册的 tool / MCP
 loomCallLlm(model, system, input)     // 调大模型
 loomStore(kind, op, payload)          // 读写六类存储
@@ -1880,18 +367,17 @@ loomStore(kind, op, payload)          // 读写六类存储
 
 | kind | op | 说明 |
 |---|---|---|
-| `memory` | `add` / `get` / `list` / `search` / `remove` | `list` 支持 `kind` 过滤（先过滤再分页） |
+| `memory` | `add` / `get` / `list` / `search` / `remove` | `search` 返回 `{id,title,content,kind,score}`，可直接喂模型；`list` 支持 `kind` 过滤 |
 | `experience` | 同 `memory` | 入口别名，强制 `kind=experience` |
-| `knowledge` | `get` / `docIds` / `search` / `upsert` / `remove` | |
+| `knowledge` | `get` / `docIds` / `search` / `upsert` / `remove` | `search` 返回命中块与正文 |
 | `skill` | `load` / `get` / `list` / `upsert` / `count` / `remove` | `load` 按标题取正文 |
-| `prompt` | `latest` / `get` / `put` / `remove` | |
+| `prompt` | `latest` / `get` / `put` / `remove` | `put` 的 `version<=0` 表示接在最新版本之后 |
 | `character` | `get` / `set` / `reset` | `characterKey` 必须是预定义值（或 `custom`） |
-| `evolution` | `list` / `by_skill` | **只读**：报告由后台演进任务写，模型不该改审计记录 |
+| `evolution` | `list` / `by_skill` | **只读**：报告由后台演进任务写 |
 
-payload 都是 JSON **字符串**，常用组合：
+payload 都是 JSON 字符串：
 
-```cj
-// 记忆：列举（kind 先过滤再分页）、检索（返回里带正文）、按 id 取、写入
+```cangjie
 let mem  = loomStore("memory", "list",
     "{\"userId\":7,\"namespace\":\"work\",\"kind\":\"note\",\"offset\":0,\"limit\":20}")
 let hits = loomStore("memory", "search",
@@ -1900,36 +386,29 @@ let one  = loomStore("memory", "get", "{\"userId\":7,\"id\":42}")
 let id   = loomStore("memory", "add",
     "{\"userId\":7,\"namespace\":\"work\",\"title\":\"发布结论\",\"content\":\"先灰度 5%\",\"kind\":\"note\"}")
 
-// 经验：memory 的别名，写入本质是 kind=experience
-let exp = loomStore("experience", "search",
+let exp  = loomStore("experience", "search",
     "{\"userId\":7,\"namespace\":\"work\",\"text\":\"灰度\",\"topK\":5}")
 
-// 知识
 loomStore("knowledge", "upsert", "{\"docId\":\"k1\",\"title\":\"发布规范\",\"content\":\"先灰度 5%\"}")
 let doc  = loomStore("knowledge", "get", "{\"docId\":\"k1\"}")
 let docs = loomStore("knowledge", "search", "{\"text\":\"灰度\",\"limit\":5}")
 
-// 技能 / 提示词 / 人格
 let skill = loomStore("skill", "load", "{\"title\":\"日报助手\"}")
 let all   = loomStore("skill", "list", "{}")
 let prm   = loomStore("prompt", "get", "{\"name\":\"reviewer\",\"version\":1}")
 let ch    = loomStore("character", "get", "{\"userId\":7}")
 
-// 演进报告（只读）
 let history = loomStore("evolution", "by_skill", "{\"skill\":\"日报助手\",\"limit\":5}")
 ```
 
-把检索结果喂给模型，就在下一个 LLM 步骤里用模板引用：
+在下一个 LLM 步骤里用模板引用：
 
-```cj
+```cangjie
 let ask = StepPlan('ask', 'llm')
 ask.model = 'deepseek-flash'
 ask.system = 'BASE'
 ask.input = '参考资料：{mem.output}\n问题：{start.output}'   // 多路引用
 ```
-
-写操作也可以放在流程里：`memory.add` / `knowledge.upsert` 执行后，存储侧立即生效，
-流程结束的自动提炼仍会另写一条 `note` 与 `experience`。
 
 ### 人格与角色
 
@@ -1941,55 +420,37 @@ ask.input = '参考资料：{mem.output}\n问题：{start.output}'   // 多路�
 3. 字面文本：以上都没有 → 把入参本身当正文
 ```
 
-`custom` 是特例：正文只来自 `character.prompts`，不会把 `custom` 这个词当人格。
-`character.prompts` 作为**用户级附加要求**（语言、篇幅等）追加在人格正文之后。
-角色记录按 `LoomMemoryPolicy.userId` 取（`userId<=0` 时跳过，不查库）。
-
-四种指定方式，按优先级从高到低：
-
-```cj
-// 1) 提示词库里的条目（最高优先级）：把名字写进 persona
+```cangjie
+// 1) 提示词库条目（最高优先级）
 loomStore("prompt", "put", "{\"name\":\"reviewer\",\"content\":\"你是严格评审员\"}")
 plan.persona = 'reviewer'
 
-// 2) 预定义人格 key：库里没有同名提示词时用内置正文（13 个之一）
+// 2) 预定义人格 key
 plan.persona = 'rigorous'        // default/rigorous/friendly/blunt/…
 
-// 3) 字面文本：库里查不到、也不是预定义 key，就当正文
+// 3) 字面文本
 plan.persona = '只挑错，不夸奖'
 
-// 4) 什么都不写：回落到该用户的 character 记录（风格 + 附加要求）
+// 4) 留空：回落到该用户的 character 记录
 loomStore("character", "set",
     "{\"userId\":7,\"characterKey\":\"rigorous\",\"prompts\":\"回答不超过 300 字，用中文\"}")
 plan.persona = ''
 ```
 
-`custom` 的正文只来自 `character.prompts`；两者都空就等于不设置人格（不会注入 `custom` 这个词）。
+`custom` 是特例：正文只来自 `character.prompts`，不会把 `custom` 这个词当人格；两者都空就等于不设置。
+`character.prompts` 作为**用户级附加要求**（语言、篇幅等）追加在人格正文之后。
+角色记录按 `LoomMemoryPolicy.userId` 取（`userId<=0` 时跳过）。
 
 ### 技能注入
 
 | 方式 | 用法 | 说明 |
 |---|---|---|
-| 显式 | `LoomRunner.run(..., skills: ['日报助手'])` | 按标题加载，顺序固定 |
+| 显式 | `LoomRunner().run(plan, host, start, skills: ['日报助手'])` | 按标题加载，顺序固定 |
 | 自动 | 不传 `skills` 且 `autoSkills=true`（默认） | 用「计划备注 + 起始输入」检索，取 `skillTopK`（默认 3）条 |
 
 `SkillCatalog` 两种模式：装了编码器走向量余弦（向量按 `标题#版本` 缓存），否则/失败退关键词
 （词面包含、字符命中比例、标题覆盖比例）。**编码失败会静默降级**，排障读
 `SkillCatalog.embedFailureDetail()`——返回 `(query 侧失败数, 技能侧失败数)`。
-
-```cj
-// 显式：按标题加载，顺序固定
-LoomRunner().run(plan, host, start, skills: ['日报助手'])
-
-// 自动：不传 skills，用「计划备注 + 起始输入」检索
-let policy = LoomMemoryPolicy(autoSkills: true, skillTopK: 3, skillMinScore: 0.2f64)
-LoomWiring.wire(chat, memoryPolicy: policy,
-                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))   // 装了才走向量
-LoomRunner().run(plan, host, start)
-
-// 排障：确认到底走了哪条路（>0 说明已静默降级为关键词）
-let (queryFails, skillFails) = SkillCatalog.embedFailureDetail()
-```
 
 ### 流程结束的提炼
 
@@ -2003,35 +464,27 @@ let (queryFails, skillFails) = SkillCatalog.embedFailureDetail()
 
 `summarize=true` 时改由模型返回 `{"memory":"…","experience":"…"}`，JSON 非法回落规则提炼。
 
-> 这套提炼属于 **loom 链路**，与上文「提取记忆」章节（`Memory` + 摘要模型那条老链路）是两套独立机制：
-> 老链路面向智能体对话，loom 链路面向流程执行，两者写的是同一份记忆存储。
-
-开关都在 `LoomMemoryPolicy`（构造参数）：
+开关都在 `LoomMemoryPolicy`：
 
 | 参数 | 默认 | 作用 |
 |---|---|---|
-| `enabled` | `true` | 关掉后连临时上下文都不记，也不写记忆/经验 |
-| `userId` / `namespace` | `0` / `'loom'` | 写到哪个用户、哪个命名空间；也决定读哪个 character |
-| `maxTurns` | `20` | 上下文摘要最多取最近多少轮 |
-| `summarize` / `model` | `false` / `''` | 用模型提炼（返回 `{memory, experience}`），否则按规则截断 |
-| `writeKnowledge` | `false` | 把记忆内容再写一份知识文档 `loom:<流程>:<序号>` |
+| `enabled` | `true` | 关掉后连临时上下文都不记 |
+| `userId` / `namespace` | `0` / `'loom'` | 写到哪；也决定读哪个 character |
+| `maxTurns` | `20` | 摘要最多取最近多少轮 |
+| `summarize` / `model` | `false` / `''` | 模型提炼 |
+| `writeKnowledge` | `false` | 额外写知识文档 |
+| `autoSkills` / `skillTopK` / `skillMinScore` | `true` / `3` / `0.2` | 自动技能挑选 |
 
-### 常见坑
+### 定时任务
 
-| 现象 | 原因与处理 |
-|---|---|
-| input 里原样出现 `{fetch.output}` | 语法是 `{stepId.output}`，`stepId` 必须与 `StepPlan` 的 id 完全一致 |
-| JIT 里引用上一步变量报未定义 | JIT 变量不跨步骤，用 `{id.output}` 传值 |
-| 流程跑完没写经验 | 本次一次模型都没调（`turns` 为空）；纯工具流程不产生记忆 |
-| system 开头是 `rigorous` 这种单词 | 该名字既不是库里的提示词、也不是预定义 key；检查 `prompt` 库是否有同名条目 |
-| 检索明显像关键词而不是语义 | 编码器失败已静默降级，读 `SkillCatalog.embedFailureDetail()`；常见原因是 `embeddingEncoder` 依赖 `LLMConfs` 平台配置 |
-| `unsupported evolution.save` | 报告在流程内只读，写入口只有后台演进任务 |
-| 分叉没有并行 | 默认同步；`run(parallel: true)` 或计划里 `parallel=true` |
-| `loom flow is not compiled` | 执行前先 `confirmFlow(name)` |
+`scheduleCreate` 注册的流程任务由 `LoomScheduler`（`TicktockScheduler`，基于 `f_ticktock`）驱动；
+JIT 步骤在任务里执行时由 `JitTicktockTask` 承接。`LoomSchedules` 未安装时注册与触发都跳过。
+
+---
 
 ## 经验 → 技能演进
 
-演进统一由 `SkillEvolutionJob` 执行（流程结束只写经验，不改技能）：
+流程结束只写经验，**技能的一切改动都由 `SkillEvolutionJob` 执行**：
 
 ```
 到点触发 → 读水位线后的新增素材（经验 + 知识）
@@ -2044,15 +497,15 @@ let (queryFails, skillFails) = SkillCatalog.embedFailureDetail()
 | 组件 | 默认策略 |
 |---|---|
 | `SkillEvolutionPolicy` | 样本 ≥ 3、成功率 ≥ 0.8、冷却 1 天；**上次门禁失败则 2 天** |
-| `SkillGate` | 用技能自带 `samples` 跑旧版/新版，`新版 ≥ 旧版` 且达 `minScore` 才落库；无样例直接拒绝 |
-| `SkillNamer` | 名字 ≤ 24 字，**必须至少 1 条样例**，否则不建（没样例的新技能无法自我演进） |
+| `SkillGate` | 用技能自带 `samples` 跑旧版/新版，新版 ≥ 旧版且达 `minScore` 才落库；无样例直接拒绝 |
+| `SkillNamer` | 标题 ≤ 24 字、**至少一条样例**，否则不建（没样例的新技能无法自我演进） |
 | 知识去重 | `processedAmong(docIds)` 成员判定，避免同一批知识每轮重复聚类 |
 
-启动注册（不写 cron 就不启用）：
+启动注册：
 
-```cj
+```cangjie
 LoomWiring.wire(chat, plannerModel: 'chat-pro',
-                evolutionCron: '0 0 3 * * * *',       // 空串 = 不启用
+                evolutionCron: '0 0 3 * * * *',      // 空串 = 不启用
                 evolutionUserId: 7,
                 evolutionNamespace: 'work',
                 evolutionNameCandidates: true,
@@ -2061,43 +514,31 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 
 ### 多进程互斥：每日租约
 
-任务一天只跑一次，用「时间型 UUID + 日期级乐观锁」保证只有一个进程执行（`f_util.UUID.unixTimeBased`）：
+任务一天只跑一次，用「时间型 UUID + 日期级乐观锁」保证只有一个进程执行：
 
-| 向量存储（`llm_memoryStore`） | 租约存哪 | 互斥 |
+| 向量存储（`llm_memoryStore`） | 租约存放 | 互斥 |
 |---|---|---|
-| `mysql` / `postgres` | 单行表 `llm_evolution_lease` | `UPDATE ... WHERE lease_value = 旧值`，真正 CAS |
+| `mysql` / `postgres` | 单行表 `llm_evolution_lease` | `UPDATE … WHERE lease_value = 旧值`，真正 CAS |
 | `f_hydra` | 本地全 0 向量记录的 payload | 本地存储，单进程无需跨进程 |
 | `fhydra` | 远程全 0 向量记录 | 先写后读校验 |
 | 其它 | f_store / 内存 | 单进程 |
 
 全 0 向量的原因：租约不该被任何语义检索命中（与任何查询的余弦都是 0）。
 
-## 存储：演进报告 / 状态 / 租约
-
-存储从「两族」扩到「两族 + 三张表」，都跟随 `llm_metaStore`（租约跟随 `llm_memoryStore`）：
-
-| 用途 | 接口 | 实现 | 落点 |
-|---|---|---|---|
-| 演进报告 | `EvolutionStore` | `FStoreEvolutionStore` / `InMemoryEvolutionStore` / `PostgresEvolutionStore` / `MySqlEvolutionStore` | f_store 三键 或表 `llm_skill_evolution` |
-| 演进状态（水位线 + 每技能冷却） | `EvolutionStateStore` | 同上四实现 | f_store 键 或表 `llm_skill_evolution_state`（水位线用保留行 `__run__`） |
-| 已消费知识 | 同上 | 同上 | 表 `llm_skill_evolution_knowledge` |
-| 每日租约 | `EvolutionLease` | PG / MySQL / f_hydra / f_store / 内存 | 表 `llm_evolution_lease` 或向量记录 |
-
-`f_store` 没有二级索引，用「条件键 → 数据键」自建：
-
 ```
-f_llm:evolution:data:{id}                             → 记录本体
-f_llm:evolution:idx:{标题长度}:{标题}:{补零at}:{补零id}   → 数据键（bySkill）
-f_llm:evolution:time:{补零at}:{补零id}                 → 数据键（list）
+启动 → EvolutionLeases.bootstrap()：租约不存在就写一次 UUID
+每天触发 → acquire(now)
+  ├─ 日期 == 今天 → 空串 → 放弃
+  └─ 日期 < 今天 → 新 UUID + CI 覆盖
+       ├─ 成功 → 抢到
+       └─ 失败（别人先改）→ 放弃
 ```
 
-`LoomWiring.wire` 启动时调 `EvolutionStores.bootstrap()` + `EvolutionStateStores.bootstrap()` +
-`EvolutionLeases.bootstrap()`：SQL 部署建表建索引（PG 另有 `idx_evo_skill (skill_title, at_time DESC)`），
-失败不阻断启动。
+---
 
 ## 检索评测
 
-单测只能验证排序逻辑，语义质量要用真实模型测（`doc/retrieval-eval.md`）：
+单测只验证排序逻辑，语义质量要用真实模型测（详见 `doc/retrieval-eval.md`）：
 
 | 位置 | 内容 |
 |---|---|
@@ -2111,31 +552,100 @@ fllm_evalMinScore=0.5 eval/run_eval.sh    # 调阈值
 ```
 
 指标：`recall@1` / `recall@5` / `MRR` / `nDCG@5`（位置敏感、多相关按理想排序归一）+ 负样本通过率。
-实测（bge-m3，`minScore=0.5`）：模板化 ~100%、**难样本 recall@1 39.66%、nDCG@5 54.76%**、
-负样本 90%；同一 `hard` 集合上字符重合只有 22%。
+实测（bge-m3，`minScore=0.5`）：模板化 ~100%、**难样本 recall@1 39.66% / nDCG@5 54.76%**、负样本 90%；
+同一 `hard` 集合上字符重合只有 22%。
 
-## 环境变量一览（新增部分）
+Cangjie 侧入口：
+
+```cangjie
+let outcome = RetrievalEvalRunner.run(InMemoryMetaStore(), './eval', 'bge-m3', minScore: 0.5f64)
+println(outcome.report)
+// outcome.embedFailures 必须为 0，否则测的是关键词而不是向量
+```
+
+---
+
+## 配置项
+
+全部是环境变量，启动时读一次。
+
+### 存储与向量化
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `llm_memoryStore` | `f_hydra` | 内容族 + 租约选型（`f_hydra`/`fhydra`/`postgres`/`mysql`/`inMemory`） |
-| `llm_metaStore` | `f_store` | 元数据族 + 演进报告/状态选型 |
+| `llm_memoryStore` | `f_hydra` | 内容族 + 租约：`f_hydra`/`fhydra`/`postgres`/`mysql`/`inMemory` |
+| `llm_metaStore` | `f_store` | 元数据族 + 演进报告/状态 |
 | `llm_metaStorePath` | `./data/f_llm-meta` | f_store 路径 |
-| `llm_embeddingUrl` | `http://127.0.0.1:8000/v1/embeddings` | BGE-M3 端点（`DefaultEmbedder` 用） |
+| `llm_contentStoreUrl` | 空 | 远程内容存储地址（fhydra） |
 | `llm_hydraPath` / `llm_hydraUrl` / `llm_hydraSecret` | `./data/f_hydra` / `http://127.0.0.1:18081/rpc` / 空 | f_hydra 本地路径、远程地址、共享密钥 |
-| `hydra_filterFields` | `kind,save_day,tags` | fhydra 服务端倒排白名单（改后重启自动重建） |
-| `fllm_runEval` | 未设 | `1` 时才跑真实模型评测 |
-| `fllm_evalModel` / `fllm_evalMinScore` / `fllm_evalDir` | `bge-m3` / `0.2` / `./eval` | 评测参数 |
+| `llm_embeddingUrl` | `http://127.0.0.1:8000/v1/embeddings` | BGE-M3 端点 |
+| `llm_embeddingTimeoutMs` / `llm_embeddingRetries` | `3000` / `2` | 超时与重试 |
+| `llm_rebuildIndexOnStart` / `llm_rebuildIndexUserId` / `llm_rebuildIndexNamespace` | 关 / 0 / 空 | 启动重建向量索引 |
+| `llm_memoryUserId` | 0 | 记忆默认归属用户 |
 
-## 文档索引
+### 模型访问
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `llm_confSource` | 空 | 配置来源：`static` / `file` / `env` / `database` / `store` |
+| `llm_confs` | 空 | 内联配置（JSON 数组） |
+| `llm_confRefreshSeconds` | 无 | 配置刷新周期 |
+| `llm_loadBalanceAlgo` | 无 | 候选挑选算法 |
+| `llm_failureThreshold` / `llm_cooldownSeconds` | 无 | 熔断阈值与冷却 |
+| `llm_accessTryingCount` / `llm_accessTryingElapsed` | 无 | 重试次数 / 总重试时长 |
+| `llm_streamIdleTimeout` / `llm_streamMaxLineBytes` | 无 | 流式空闲超时与单行上限 |
+| `llm_toolResultMaxBytes` / `llm_fetchMaxBytes` | 无 | 工具结果 / 抓取内容上限 |
+| `llm_prunerLlmName` / `llm_summarisingLlmName` | 无 | 依赖模型的裁剪器 / 提炼所用模型 |
+| `llm_balanceLowThreshold` | 无 | 余额告警阈值 |
+
+### 其它
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `llm_fileSandboxPath` | 无 | 文件工具只能访问该目录 |
+| `llm_faithfulMemoryPath` | 无 | 忠实记忆落盘路径 |
+| `llm_makingMemory` | 无 | 是否保存记忆（保存才有经验） |
+| `llm_summarisingModel` / `llm_summarisingActionKind` | `glm-4.7-flash` / 无 | 经验总结模型与动作类型 |
+| `llm_db` | 无 | 数据库连接（SQL 部署） |
+| `hydra_filterFields` | `kind,save_day,tags` | fhydra 服务端倒排白名单（改后重启自动重建） |
+| `fllm_runEval` / `fllm_evalModel` / `fllm_evalMinScore` / `fllm_evalDir` | 未设 / `bge-m3` / `0.2` / `./eval` | 检索评测 |
+
+旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` / `llm_contentStore` 只识别、不生效，启动时逐条 `warn`。
+
+---
+
+## 测试
+
+```bash
+cjpm test                 # 单元测试，不依赖外部服务
+FLLM_DB_TEST=1 cjpm test  # 额外跑 postgres / mysql 真库集成用例
+```
+
+真库用例按环境变量判断可达性，不可达时自动跳过（不算失败）。
+
+---
+
+## 文档
 
 | 文件 | 内容 |
 |---|---|
-| `doc/f_llm.md` | 完整设计（这份 README 的详版） |
-| `doc/f_llm-memory-design.md` | 记忆/知识/技能/人格的设计与提示词 |
+| `doc/f_llm.md` | 完整设计（长文，覆盖本文所有细节） |
+| `doc/f_llm-memory-design.md` | 记忆 / 知识 / 技能 / 人格的设计与提示词 |
 | `doc/loom.md` | loom 编排、存储网关、人格、技能演进、报告表 |
-| `doc/retrieval-eval.md` | 检索评测：数据格式、指标、真实基线、门槛建议 |
+| `doc/retrieval-eval.md` | 检索评测：数据格式、指标、真实基线、门槛 |
 | `doc/content-store.md` | 内容族存储契约 |
 | `doc/known-limitations.md` | 已知限制（配置只读、并发、成本等） |
 | `doc/dev-env.md` | 开发环境与依赖 |
-| `doc/todo.md` | 待办与未实现项 |
+| `doc/todo.md` | 未实现项 |
+
+---
+
+## 已知限制（摘要）
+
+| 项 | 说明 |
+|---|---|
+| 配置只读 | 只在启动时读取一次，切换存储或端点必须重启 |
+| 编码器失败静默降级 | `SkillCatalog` 退回关键词；用 `embedFailureDetail()` 判断实际走向 |
+| 演进重建是全量扫描 | 白名单变更时重建倒排，O(记录数)，建议低峰期操作 |
+| `processedKnowledge` 有上限 | 只用于运维查看；去重走 `processedAmong`，无上限 |
+| 单进程定时任务 | `SkillEvolutionJob.schedule` 注册在服务内，跨进程依靠每日租约 |
