@@ -344,6 +344,40 @@ class LoomMemoryE2E_test {
         }
     }
 
+    /** 流程内直接读人格（character.get），结果能进模型 input */
+    @TestCase
+    func testCharacterGetReachesModel(): Unit {
+        let target = gateway()
+        target.call('character', 'set',
+            '{"userId":5,"characterKey":"reviewer","prompts":"tone,length"}')
+        LoomHostApi.installStore(target.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false, userId: USER))
+        try{
+            let value = FlowPlan('character-e2e')
+            let step = StepPlan('ch', 'jit')
+            step.input = "let ch_result = loomStore('character', 'get', '{\"userId\":5}')"
+            let ask = StepPlan('ask', 'llm')
+            ask.model = 'deepseek-flash'
+            ask.system = 'BASE'
+            ask.input = '当前人格：{ch.output}'
+            value.steps.add(step)
+            value.steps.add(ask)
+            value.edges.add(EdgePlan('ch', 'ask'))
+
+            let host = E2eHost()
+            LoomRunner().run(value, host,
+                StartEvent(category: 'loom', tag: 'character-e2e', name: 'start', data: '读人格'))
+            @Expect(host.lastInput.contains('"characterKey":"reviewer"'), true)
+            // prompts 是同一条记录上的附加提示词名列表
+            @Expect(host.lastInput.contains('"prompts":"tone,length"'), true)
+            // 未配置的用户返回空串，不会编造
+            @Expect(target.call('character', 'get', '{"userId":999}'), '')
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+        }
+    }
+
     /** 流程内部写入的记忆与知识，流程结束后能从存储读回 */
     @TestCase
     func testFlowWritesMemoryAndKnowledge(): Unit {
