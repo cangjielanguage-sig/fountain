@@ -67,13 +67,19 @@ private class SvgSpan {
 public class SvgRasterizer {
     private let bitmap: SvgBitmap
     private let samplesPerPixel: Int64
+    private let antiAlias: SvgAntiAliasMode
 
-    public init(bitmap: SvgBitmap, samplesPerPixel!: Int64 = 4) {
+    public init(
+        bitmap: SvgBitmap,
+        samplesPerPixel!: Int64 = 4,
+        antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample
+    ) {
         if (samplesPerPixel != 1 && samplesPerPixel != 2 && samplesPerPixel != 4) {
             throw invalidValue("samplesPerPixel 只允许 1 / 2 / 4")
         }
         this.bitmap = bitmap
         this.samplesPerPixel = samplesPerPixel
+        this.antiAlias = antiAlias
     }
 
     /** 填充路径；`matrix` 把用户坐标映射到设备坐标。 */
@@ -241,6 +247,9 @@ public class SvgRasterizer {
         if (contours.size == 0) {
             return None
         }
+        if (this.antiAlias == SvgAntiAliasMode.Analytic) {
+            return analyticCoverage(contours, this.bitmap.width, this.bitmap.height, fillRule)
+        }
         let edges = buildEdges(contours)
         if (edges.size == 0) {
             return None
@@ -325,7 +334,7 @@ public class SvgRasterizer {
         opacity: Float64,
         colorAt: (Int64, Int64) -> SvgColor
     ): Unit {
-        let total = this.samplesPerPixel * this.samplesPerPixel
+        let total = this.coverageTotal()
         var index = 0
         while (index < coverage.size) {
             let count = coverage[index]
@@ -343,8 +352,15 @@ public class SvgRasterizer {
         }
     }
 
+    private func coverageTotal(): Int64 {
+        if (this.antiAlias == SvgAntiAliasMode.Analytic) {
+            return ANALYTIC_COVERAGE_SCALE
+        }
+        this.samplesPerPixel * this.samplesPerPixel
+    }
+
     private func compositeCoverage(coverage: Array<Int64>, color: SvgColor, opacity: Float64): Unit {
-        let total = this.samplesPerPixel * this.samplesPerPixel
+        let total = this.coverageTotal()
         var index = 0
         while (index < coverage.size) {
             let count = coverage[index]

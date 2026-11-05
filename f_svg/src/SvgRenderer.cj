@@ -253,7 +253,7 @@ public class SvgRenderer {
                         match (this.options.background) {
                             case Some(color) =>
                                 let path = rectPathData(box)
-                                SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel).fill(
+                                SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel, antiAlias: this.options.antiAlias).fill(
                                     path,
                                     matrix: command.matrix,
                                     color: color,
@@ -326,7 +326,7 @@ public class SvgRenderer {
                 match (gradient) {
                     case Some(found) =>
                         let box = command.bounds ?? SvgBounds.empty()
-                        let raster = SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel)
+                        let raster = SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel, antiAlias: this.options.antiAlias)
                         if (isStroke) {
                             raster.strokeGradient(
                                 path,
@@ -368,7 +368,8 @@ public class SvgRenderer {
                         }
                         let raster = SvgRasterizer(
                             bitmap,
-                            samplesPerPixel: this.options.samplesPerPixel
+                            samplesPerPixel: this.options.samplesPerPixel,
+                            antiAlias: this.options.antiAlias
                         )
                         let inverse = match (command.matrix.invert()) {
                             case Some(value) => value
@@ -419,7 +420,7 @@ public class SvgRenderer {
                         }
                 }
         }
-        let raster = SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel)
+        let raster = SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel, antiAlias: this.options.antiAlias)
         if (isStroke) {
             raster.stroke(
                 path,
