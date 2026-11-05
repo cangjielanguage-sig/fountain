@@ -45,8 +45,23 @@ public class SvgFilterRenderer {
         let y = filter.y ?? SvgLength(-10.0, unit: SvgLengthUnit.Percent)
         let width = filter.width ?? SvgLength(120.0, unit: SvgLengthUnit.Percent)
         let height = filter.height ?? SvgLength(120.0, unit: SvgLengthUnit.Percent)
-        let viewportWidth = Float64(source.width)
-        let viewportHeight = Float64(source.height)
+        // userSpaceOnUse 的百分比以当前视口的用户空间尺寸为基准，
+        // 不能直接用设备像素尺寸，否则 viewBox / dpr 缩放会二次放大。
+        let inverse = match (transform.invert()) {
+            case Some(value) => value
+            case None => SvgMatrix.identity
+        }
+        let userOrigin = inverse.apply(SvgPoint(0.0, 0.0))
+        let userCornerX = inverse.apply(SvgPoint(Float64(source.width), 0.0))
+        let userCornerY = inverse.apply(SvgPoint(0.0, Float64(source.height)))
+        let viewportWidth = sqrt(
+            (userCornerX.x - userOrigin.x) * (userCornerX.x - userOrigin.x) +
+            (userCornerX.y - userOrigin.y) * (userCornerX.y - userOrigin.y)
+        )
+        let viewportHeight = sqrt(
+            (userCornerY.x - userOrigin.x) * (userCornerY.x - userOrigin.x) +
+            (userCornerY.y - userOrigin.y) * (userCornerY.y - userOrigin.y)
+        )
         let localX = filterAxis(x, objectBounds.x, objectBounds.width, objectUnits, viewportWidth)
         let localY = filterAxis(y, objectBounds.y, objectBounds.height, objectUnits, viewportHeight)
         let localWidth = filterAxis(width, 0.0, objectBounds.width, objectUnits, viewportWidth)

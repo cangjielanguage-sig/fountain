@@ -313,4 +313,21 @@ public class SvgFilterPercentRegionM3_test {
         @Assert(near(region.x, 20.0) && near(region.y, 10.0))
         @Assert(near(region.width, 100.0) && near(region.height, 50.0))
     }
+
+    /** 百分比在用户空间求值后再应用 CTM：viewBox / dpr 缩放不二次放大区域。 */
+    @TestCase
+    public func userSpacePercentUsesUserViewport(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" " +
+            "x=\"10%\" y=\"10%\" width=\"50%\" height=\"50%\"/></defs></svg>"
+        )
+        let region = SvgFilterRenderer().region(
+            filterOf(document),
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.scale(2.0, 2.0),
+            SvgBitmap(400, 200)
+        )
+        @Assert(near(region.x, 40.0) && near(region.y, 20.0))
+        @Assert(near(region.width, 200.0) && near(region.height, 100.0))
+    }
 }
