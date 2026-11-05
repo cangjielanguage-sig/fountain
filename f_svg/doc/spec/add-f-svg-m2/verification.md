@@ -348,4 +348,19 @@
 - 最终验证：`cjpm test` **346 / 346 通过，0 failed，0 error**；`cjpm build` 成功，`f_svg` 自身 errlog 0 字节（构建输出 warning 均来自 `f_xml` 等依赖）。
 - 分级结果：**CRITICAL = 0**，本轮计划内 WARNING = 0；W16 与 SUGGESTION 1–6 保持记录、未改动。
 
+---
+
+## 8. 终验修复结果（2026-11-05，feature/f_svg，第三轮）
+
+修复依据：`fix-plan-3.md`。W1、W2 均先补失败用例（Red），确认失败原因后写最小实现（Green），`cjpm test` 全绿后独立提交。
+
+| 编号 | 结果 | 主要落点与用例 |
+|---|---|---|
+| W1 | 已修复 | `SvgTextChar` 增加 `xExplicit` / `yExplicit`；`tspan` 应用 `x` / `y` 时跳过已显式字符并标记本次写入；`applyRootTextAttributes` 只填充未显式字符，短列表复用末值不变。用例 `SvgTextRenderer_test.explicitTspanPositionWins`（`<text x=0><tspan x=50>` → 50、y 同理、嵌套 tspan → 80、无 `tspan` 显式值时根列表行为回归） |
+| W2 | 已修复 | 渲染时字体未注册的 `case None` 分支置 `missingGlyph = true`；`SvgGeometry.textElementBounds` 删除根字体预检查，统一以 `layout.missingGlyph` 判定。用例 `SvgGeometry_test.textBoundsRespectTspanFonts`（根字体未注册但 `tspan` 覆盖 → `Some`；根字体已注册但 `tspan` 未注册 → `None`）、`SvgTextRenderer_test.degradations` 补 `missingGlyph` 断言 |
+
+- 首个 Red 失败原因：W1 `near(glyphs[0].x, 50.0)` 失败（根 `x=0` 覆盖 tspan 的 50）；W2 `degradations` 的 `missingGlyph == true` 失败，且混合字体首个断言（期望 `Some`）失败。
+- 最终验证：`cjpm test` **348 / 348 通过，0 failed，0 error**；`cjpm build` 成功，`f_svg` 自身 errlog 0 字节（构建输出 warning 均来自 `f_xml` 等依赖）。
+- 分级结果：**CRITICAL = 0**，本轮计划内 WARNING 清零（W1、W2 均已修复）。
+
 
