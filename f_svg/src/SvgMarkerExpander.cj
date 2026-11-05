@@ -28,10 +28,23 @@ internal let SVG_MAX_MARKER_DEPTH: Int64 = 64
 public class SvgMarkerInstance {
     public let marker: SvgMarker
     public let matrix: SvgMatrix
+    /** 视口（markerWidth × markerHeight）到用户空间的矩阵，用于 overflow 裁剪。 */
+    public let viewportMatrix: SvgMatrix
+    public let viewportWidth: Float64
+    public let viewportHeight: Float64
 
-    internal init(marker: SvgMarker, matrix: SvgMatrix) {
+    internal init(
+        marker: SvgMarker,
+        matrix: SvgMatrix,
+        viewportMatrix: SvgMatrix,
+        viewportWidth: Float64,
+        viewportHeight: Float64
+    ) {
         this.marker = marker
         this.matrix = matrix
+        this.viewportMatrix = viewportMatrix
+        this.viewportWidth = viewportWidth
+        this.viewportHeight = viewportHeight
     }
 }
 
@@ -160,7 +173,16 @@ public class SvgMarkerExpander {
                 }
                 case Angle(fixed) => fixed
             }
-            result.add(SvgMarkerInstance(marker, markerMatrix(marker, points[index], angle, style)))
+            let viewportMatrix = markerViewportMatrix(marker, points[index], angle, style)
+            result.add(
+                SvgMarkerInstance(
+                    marker,
+                    markerContentMatrix(marker, viewportMatrix),
+                    viewportMatrix,
+                    markerWidth(marker),
+                    markerHeight(marker)
+                )
+            )
             index++
         }
     }
@@ -326,34 +348,48 @@ private func markerIdOf(text: String): ?String {
     }
 }
 
-private func markerMatrix(
+private func markerUnitScale(marker: SvgMarker, style: SvgComputedStyle): Float64 {
+    if (marker.markerUnits == SvgMarkerUnits.StrokeWidth) {
+        let width = style.strokeWidth().value
+        if (width > 0.0) {
+            return width
+        }
+        return 1.0
+    }
+    1.0
+}
+
+private func markerWidth(marker: SvgMarker): Float64 {
+    (marker.markerWidth ?? SvgLength(3.0)).value
+}
+
+private func markerHeight(marker: SvgMarker): Float64 {
+    (marker.markerHeight ?? SvgLength(3.0)).value
+}
+
+/** 视口坐标 → 用户空间；不包含 viewBox 内容映射与 refX/refY 平移。 */
+private func markerViewportMatrix(
     marker: SvgMarker,
     vertex: SvgPoint,
     angle: Float64,
     style: SvgComputedStyle
 ): SvgMatrix {
-    let unitScale = if (marker.markerUnits == SvgMarkerUnits.StrokeWidth) {
-        let width = style.strokeWidth().value
-        if (width > 0.0) {
-            width
-        } else {
-            1.0
-        }
-    } else {
-        1.0
-    }
+    let unitScale = markerUnitScale(marker, style)
+    SvgMatrix.translate(vertex.x, vertex.y)
+        .multiply(SvgMatrix.rotate(angle))
+        .multiply(SvgMatrix.scale(unitScale, unitScale))
+}
+
+/** 内容坐标（viewBox / marker 用户坐标）→ 用户空间。 */
+private func markerContentMatrix(marker: SvgMarker, viewportMatrix: SvgMatrix): SvgMatrix {
     let content = match (marker.viewBox) {
         case Some(box) =>
-            let width = (marker.markerWidth ?? SvgLength(3.0)).value
-            let height = (marker.markerHeight ?? SvgLength(3.0)).value
-            marker.preserveAspectRatio.toMatrix(box, width, height)
+            marker.preserveAspectRatio.toMatrix(box, markerWidth(marker), markerHeight(marker))
         case None => SvgMatrix.identity
     }
     let referenceX = (marker.refX ?? SvgLength(0.0)).value
     let referenceY = (marker.refY ?? SvgLength(0.0)).value
-    SvgMatrix.translate(vertex.x, vertex.y)
-        .multiply(SvgMatrix.rotate(angle))
-        .multiply(SvgMatrix.scale(unitScale, unitScale))
+    viewportMatrix
         .multiply(content)
         .multiply(SvgMatrix.translate(-referenceX, -referenceY))
 }

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.math.*
 
 /**
  * `vector-effect` 的取值。
@@ -51,8 +52,23 @@ public class SvgVectorEffect <: Equatable<SvgVectorEffect> & ToString {
         }
     }
 
-    internal static func fromName(name: String): ?SvgVectorEffect {
-        match (name.trimAscii().toAsciiLower()) {
+    /**
+     * 非缩放描边的用户空间系数：`1 / sqrt(|det(CTM)|)`。
+     * 行列式非有限或接近 0 时返回 0，调用方按 `none` 处理。
+     */
+    public static func strokeScale(matrix: SvgMatrix): Float64 {
+        let determinant = matrix.determinant()
+        if (!isFiniteSvgNumber(determinant) || abs(determinant) < 1.0e-12) {
+            return 0.0
+        }
+        let scale = sqrt(abs(determinant))
+        if (!isFiniteSvgNumber(scale) || scale <= 0.0) {
+            return 0.0
+        }
+        1.0 / scale
+    }
+
+    internal static func fromName(name: String): ?SvgVectorEffect {        match (name.trimAscii().toAsciiLower()) {
             case "none" => Some(SvgVectorEffect.NoEffect)
             case "non-scaling-stroke" => Some(SvgVectorEffect.NonScalingStroke)
             case _ => None

@@ -27,6 +27,7 @@ private class SvgRenderFrame {
     let matrix: SvgMatrix
     let bounds: ?SvgBounds
     let filter: ?SvgElement
+    let clip: ?SvgClipRect
 
     init(
         bitmap: SvgBitmap,
@@ -36,7 +37,8 @@ private class SvgRenderFrame {
         clipRect: ?SvgBounds,
         matrix: SvgMatrix,
         bounds: ?SvgBounds,
-        filter: ?SvgElement
+        filter: ?SvgElement,
+        clip: ?SvgClipRect
     ) {
         this.bitmap = bitmap
         this.opacity = opacity
@@ -46,6 +48,7 @@ private class SvgRenderFrame {
         this.matrix = matrix
         this.bounds = bounds
         this.filter = filter
+        this.clip = clip
     }
 }
 
@@ -137,7 +140,8 @@ public class SvgRenderer {
                             command.clipRect,
                             command.matrix,
                             command.bounds,
-                            command.filter
+                            command.filter,
+                            command.clip
                         )
                     )
                 case GroupEnd =>
@@ -164,6 +168,7 @@ public class SvgRenderer {
                     this.applyEffects(
                         frame.bitmap,
                         frame.clipRect,
+                        frame.clip,
                         frame.clipPath,
                         frame.mask,
                         frame.matrix,
@@ -183,7 +188,7 @@ public class SvgRenderer {
                         output
                     }
                     let needsLayer = command.clipRect.isSome() || command.clipPath.isSome() ||
-                        command.mask.isSome() || command.filter.isSome()
+                        command.mask.isSome() || command.filter.isSome() || command.clip.isSome()
                     if (needsLayer) {
                         var layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
                         this.renderCommand(layer, command, list, registry, images, patterns)
@@ -205,6 +210,7 @@ public class SvgRenderer {
                         this.applyEffects(
                             layer,
                             command.clipRect,
+                            command.clip,
                             command.clipPath,
                             command.mask,
                             command.matrix,
@@ -354,6 +360,19 @@ public class SvgRenderer {
         if (opacity <= 0.0) {
             return
         }
+        var strokeScale = 1.0
+        if (isStroke && command.nonScalingStroke) {
+            strokeScale = SvgVectorEffect.strokeScale(command.matrix)
+            if (strokeScale <= 0.0) {
+                this.warnings.add(
+                    "元素「${command.tag}」的 non-scaling-stroke 变换不可逆，已按 none 描边"
+                )
+                strokeScale = 1.0
+            }
+        }
+        let effectiveStrokeWidth = style.strokeWidth().value * strokeScale
+        let effectiveDashArray = scaleStrokeDash(strokeDashValues(style), strokeScale)
+        let effectiveDashOffset = style.strokeDashOffset().value * strokeScale
         let color = match (paint.kind) {
             case None => return
             case CurrentColor => style.color()
@@ -376,12 +395,12 @@ public class SvgRenderer {
                                 style.color(),
                                 root: Some(list.root),
                                 matrix: command.matrix,
-                                strokeWidth: style.strokeWidth().value,
+                                strokeWidth: effectiveStrokeWidth,
                                 lineCap: style.strokeLineCap(),
                                 lineJoin: style.strokeLineJoin(),
                                 miterLimit: style.strokeMiterLimit(),
-                                dashArray: strokeDashValues(style),
-                                dashOffset: style.strokeDashOffset().value,
+                                dashArray: effectiveDashArray,
+                                dashOffset: effectiveDashOffset,
                                 opacity: opacity
                             )
                         } else {
@@ -422,12 +441,12 @@ public class SvgRenderer {
                         if (isStroke) {
                             let userContours = flattenPathData(path, SvgMatrix.identity, 0.25)
                             let strokeStyle = SvgStrokeStyle(
-                                style.strokeWidth().value,
+                                effectiveStrokeWidth,
                                 lineCap: style.strokeLineCap(),
                                 lineJoin: style.strokeLineJoin(),
                                 miterLimit: style.strokeMiterLimit(),
-                                dashArray: strokeDashValues(style),
-                                dashOffset: style.strokeDashOffset().value
+                                dashArray: effectiveDashArray,
+                                dashOffset: effectiveDashOffset
                             )
                             let outlines = SvgStrokeOutliner.outlineContours(userContours, strokeStyle)
                             let transformed = ArrayList<Array<SvgPoint>>()
@@ -467,12 +486,12 @@ public class SvgRenderer {
                 path,
                 matrix: command.matrix,
                 color: color,
-                strokeWidth: style.strokeWidth().value,
+                strokeWidth: effectiveStrokeWidth,
                 lineCap: style.strokeLineCap(),
                 lineJoin: style.strokeLineJoin(),
                 miterLimit: style.strokeMiterLimit(),
-                dashArray: strokeDashValues(style),
-                dashOffset: style.strokeDashOffset().value,
+                dashArray: effectiveDashArray,
+                dashOffset: effectiveDashOffset,
                 opacity: opacity
             )
         } else {
@@ -489,6 +508,7 @@ public class SvgRenderer {
     private func applyEffects(
         bitmap: SvgBitmap,
         clipRect: ?SvgBounds,
+        clip: ?SvgClipRect,
         clipPath: ?SvgElement,
         maskElement: ?SvgElement,
         matrix: SvgMatrix,
@@ -497,6 +517,19 @@ public class SvgRenderer {
     ): Unit {
         match (clipRect) {
             case Some(rect) => clipBitmapToRect(bitmap, rect)
+            case None => ()
+        }
+        match (clip) {
+            case Some(rect) =>
+                let mask = SvgClipCoverage.render(
+                    rect,
+                    matrix,
+                    bitmap.width,
+                    bitmap.height,
+                    samplesPerPixel: this.options.samplesPerPixel,
+                    antiAlias: this.options.antiAlias
+                )
+                mask.applyTo(bitmap)
             case None => ()
         }
         let targetBox = bounds ?? SvgBounds.empty()
@@ -564,6 +597,17 @@ private func strokeDashValues(style: SvgComputedStyle): Array<Float64> {
         values.add(length.value)
     }
     values.toArray()
+}
+
+private func scaleStrokeDash(values: Array<Float64>, scale: Float64): Array<Float64> {
+    if (scale == 1.0 || values.size == 0) {
+        return values
+    }
+    let scaled = ArrayList<Float64>()
+    for (value in values) {
+        scaled.add(value * scale)
+    }
+    scaled.toArray()
 }
 
 private func rectPathData(box: SvgBounds): SvgPathData {

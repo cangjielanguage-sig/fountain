@@ -71,6 +71,10 @@ public class SvgDisplayCommand {
     public let aspect: ?SvgPreserveAspectRatio
     /** 元素引用的 `filter` 元素。 */
     public let filter: ?SvgElement
+    /** `clip` 属性矩形；在滤镜之后、`clip-path` 之前应用。 */
+    public let clip: ?SvgClipRect
+    /** 描边是否按设备空间计算（`vector-effect: non-scaling-stroke`）。 */
+    public let nonScalingStroke: Bool
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -86,7 +90,9 @@ public class SvgDisplayCommand {
         clipRect!: ?SvgBounds = None,
         href!: ?String = None,
         aspect!: ?SvgPreserveAspectRatio = None,
-        filter!: ?SvgElement = None
+        filter!: ?SvgElement = None,
+        clip!: ?SvgClipRect = None,
+        nonScalingStroke!: Bool = false
     ) {
         this.kind = kind
         this.tag = tag
@@ -102,6 +108,8 @@ public class SvgDisplayCommand {
         this.href = href
         this.aspect = aspect
         this.filter = filter
+        this.clip = clip
+        this.nonScalingStroke = nonScalingStroke
     }
 }
 
@@ -234,7 +242,8 @@ public class SvgRenderTreeBuilder {
         height: Int64,
         matrix: SvgMatrix,
         fonts: ?SvgFontRegistry,
-        root!: ?SvgElement = None
+        root!: ?SvgElement = None,
+        clipRect!: ?SvgBounds = None
     ): SvgDisplayList {
         this.ensureGuard()
         let resolver = SvgStyleResolver()
@@ -247,7 +256,7 @@ public class SvgRenderTreeBuilder {
             matrix,
             Float64(width),
             Float64(height),
-            None,
+            clipRect,
             styles,
             root ?? container,
             0,
@@ -352,6 +361,7 @@ public class SvgRenderTreeBuilder {
                 let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
                 let maskElement = this.resolveUrlRef(style.get("mask"), context)
                 let filterElement = this.resolveUrlRef(style.get("filter"), context)
+                let clip = style.clipRect()
                 if (filterElement.isSome()) {
                     this.appendFilteredGroupBegin(
                         commands,
@@ -362,7 +372,8 @@ public class SvgRenderTreeBuilder {
                         maskElement,
                         context.clipRect,
                         filterElement,
-                        bounds
+                        bounds,
+                        clip
                     )
                 }
                 commands.add(
@@ -377,7 +388,8 @@ public class SvgRenderTreeBuilder {
                         clipPath: if (filterElement.isSome()) { None } else { clipPath },
                         mask: if (filterElement.isSome()) { None } else { maskElement },
                         clipRect: if (filterElement.isSome()) { None } else { context.clipRect },
-                        filter: None
+                        filter: None,
+                        clip: if (filterElement.isSome()) { None } else { clip }
                     )
                 )
                 if (filterElement.isSome()) {
@@ -408,8 +420,9 @@ public class SvgRenderTreeBuilder {
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
+        let clip = style.clipRect()
         let grouped = style.opacity() < 1.0 || clipPath.isSome() || maskElement.isSome() ||
-            context.clipRect.isSome() || filterElement.isSome()
+            context.clipRect.isSome() || filterElement.isSome() || clip.isSome()
         let childContext = SvgRenderTreeContext(
             matrix,
             context.width,
@@ -455,7 +468,8 @@ public class SvgRenderTreeBuilder {
                     mask: maskElement,
                     clipRect: context.clipRect,
                     bounds: groupBounds,
-                    filter: filterElement
+                    filter: filterElement,
+                    clip: clip
                 )
             )
         }
@@ -482,23 +496,27 @@ public class SvgRenderTreeBuilder {
         matrix = matrix.multiply(elementTransformMatrix(svg))
         let originX = lengthOrZero(svg.x)
         let originY = lengthOrZero(svg.y)
-        let p0 = context.matrix.apply(SvgPoint(originX, originY))
-        let p1 = context.matrix.apply(SvgPoint(originX + viewport.width, originY + viewport.height))
-        let clip = SvgBounds(
-            if (p0.x < p1.x) { p0.x } else { p1.x },
-            if (p0.y < p1.y) { p0.y } else { p1.y },
-            abs(p1.x - p0.x),
-            abs(p1.y - p0.y)
+        let clip = transformedRectBounds(
+            context.matrix,
+            originX,
+            originY,
+            viewport.width,
+            viewport.height
         )
         let combinedClip = match (context.clipRect) {
             case Some(existing) => existing.intersect(clip)
             case None => clip
         }
+        let overflowVisible = match (context.styles.get(svg)) {
+            case Some(style) => !style.overflowMode().clips()
+            case None => false
+        }
+        let childClip = if (overflowVisible) { context.clipRect } else { Some(combinedClip) }
         let childContext = SvgRenderTreeContext(
             matrix,
             viewport.width,
             viewport.height,
-            Some(combinedClip),
+            childClip,
             context.styles,
             context.root,
             context.depth + 1,
@@ -562,17 +580,18 @@ public class SvgRenderTreeBuilder {
                                 case None => SvgPreserveAspectRatio.Default
                             }
                             matrix = matrix.multiply(aspect.toMatrix(box, width, height))
-                            let p0 = matrix.apply(SvgPoint(0.0, 0.0))
-                            let p1 = matrix.apply(SvgPoint(width, height))
-                            clipRect = Some(
-                                SvgBounds(
-                                    if (p0.x < p1.x) { p0.x } else { p1.x },
-                                    if (p0.y < p1.y) { p0.y } else { p1.y },
-                                    abs(p1.x - p0.x),
-                                    abs(p1.y - p0.y)
-                                )
-                            )
                         case None => ()
+                    }
+                    let overflowVisible = match (context.styles.get(container)) {
+                        case Some(style) => !style.overflowMode().clips()
+                        case None => false
+                    }
+                    if (!overflowVisible) {
+                        let symbolClip = transformedRectBounds(matrix, 0.0, 0.0, width, height)
+                        clipRect = Some(match (context.clipRect) {
+                            case Some(existing) => existing.intersect(symbolClip)
+                            case None => symbolClip
+                        })
                     }
                 }
             case _ => ()
@@ -619,6 +638,7 @@ public class SvgRenderTreeBuilder {
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
+        let clip = style.clipRect()
         let filtered = filterElement.isSome()
         if (filtered) {
             this.appendFilteredGroupBegin(
@@ -630,7 +650,8 @@ public class SvgRenderTreeBuilder {
                 maskElement,
                 context.clipRect,
                 filterElement,
-                bounds
+                bounds,
+                clip
             )
         }
         let fill = style.fill()
@@ -647,7 +668,8 @@ public class SvgRenderTreeBuilder {
                     clipPath: if (filtered) { None } else { clipPath },
                     mask: if (filtered) { None } else { maskElement },
                     clipRect: if (filtered) { None } else { context.clipRect },
-                    filter: None
+                    filter: None,
+                    clip: if (filtered) { None } else { clip }
                 )
             )
         }
@@ -665,7 +687,9 @@ public class SvgRenderTreeBuilder {
                     clipPath: if (filtered) { None } else { clipPath },
                     mask: if (filtered) { None } else { maskElement },
                     clipRect: if (filtered) { None } else { context.clipRect },
-                    filter: None
+                    filter: None,
+                    clip: if (filtered) { None } else { clip },
+                    nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke
                 )
             )
         }
@@ -684,7 +708,8 @@ public class SvgRenderTreeBuilder {
         mask: ?SvgElement,
         clipRect: ?SvgBounds,
         filter: ?SvgElement,
-        bounds: ?SvgBounds
+        bounds: ?SvgBounds,
+        clip: ?SvgClipRect
     ): Unit {
         commands.add(
             SvgDisplayCommand(
@@ -696,7 +721,8 @@ public class SvgRenderTreeBuilder {
                 mask: mask,
                 clipRect: clipRect,
                 bounds: bounds,
-                filter: filter
+                filter: filter,
+                clip: clip
             )
         )
     }
@@ -731,6 +757,27 @@ public class SvgRenderTreeBuilder {
                 continue
             }
             let expanded = ArrayList<SvgDisplayCommand>()
+            let overflowVisible = match (context.styles.get(instance.marker)) {
+                case Some(style) => !style.overflowMode().clips()
+                case None => false
+            }
+            let markerClip: ?SvgBounds = if (overflowVisible) {
+                None
+            } else {
+                let viewport = base.multiply(instance.viewportMatrix)
+                    .multiply(SvgMatrix.translate(-(instance.marker.refX ?? SvgLength(0.0)).value, -(instance.marker.refY ?? SvgLength(0.0)).value))
+                let clip = transformedRectBounds(
+                    viewport,
+                    0.0,
+                    0.0,
+                    instance.viewportWidth,
+                    instance.viewportHeight
+                ).inflate(1.0)
+                Some(match (context.clipRect) {
+                    case Some(existing) => existing.intersect(clip)
+                    case None => clip
+                })
+            }
             try {
                 let list = this.buildContent(
                     instance.marker,
@@ -738,7 +785,8 @@ public class SvgRenderTreeBuilder {
                     Int64(context.height),
                     base.multiply(instance.matrix),
                     context.fonts,
-                    root: Some(context.root)
+                    root: Some(context.root),
+                    clipRect: markerClip
                 )
                 for (command in list.commands) {
                     expanded.add(command)
@@ -775,6 +823,7 @@ public class SvgRenderTreeBuilder {
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
+        let clip = style.clipRect()
         let filtered = filterElement.isSome()
         if (filtered) {
             this.appendFilteredGroupBegin(
@@ -786,7 +835,8 @@ public class SvgRenderTreeBuilder {
                 maskElement,
                 context.clipRect,
                 filterElement,
-                Some(box)
+                Some(box),
+                clip
             )
         }
         commands.add(
@@ -802,7 +852,8 @@ public class SvgRenderTreeBuilder {
                 clipRect: if (filtered) { None } else { context.clipRect },
                 href: image.href,
                 aspect: image.preserveAspectRatio,
-                filter: None
+                filter: None,
+                clip: if (filtered) { None } else { clip }
             )
         )
         if (filtered) {
@@ -876,8 +927,26 @@ private func symbolDimension(container: SvgContainer, name: String, index: Int64
     }
 }
 
-private func maxInt64(first: Int64, second: Int64): Int64 {
-    if (first > second) { first } else { second }
+/** 用户空间矩形经矩阵变换后的轴对齐包围盒（四角）。 */
+private func transformedRectBounds(
+    matrix: SvgMatrix,
+    x: Float64,
+    y: Float64,
+    width: Float64,
+    height: Float64
+): SvgBounds {
+    let c0 = matrix.apply(SvgPoint(x, y))
+    let c1 = matrix.apply(SvgPoint(x + width, y))
+    let c2 = matrix.apply(SvgPoint(x + width, y + height))
+    let c3 = matrix.apply(SvgPoint(x, y + height))
+    let minimumX = min(min(c0.x, c1.x), min(c2.x, c3.x))
+    let maximumX = max(max(c0.x, c1.x), max(c2.x, c3.x))
+    let minimumY = min(min(c0.y, c1.y), min(c2.y, c3.y))
+    let maximumY = max(max(c0.y, c1.y), max(c2.y, c3.y))
+    SvgBounds(minimumX, minimumY, maximumX - minimumX, maximumY - minimumY)
+}
+
+private func maxInt64(first: Int64, second: Int64): Int64 {    if (first > second) { first } else { second }
 }
 
 /** 像素尺寸向上取整；减去相对 epsilon 抵消浮点乘法误差。 */

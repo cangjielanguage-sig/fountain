@@ -295,7 +295,9 @@ public class SvgMarkerEffectsM3_test {
         )
         let filteredBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
             .render(filtered)
-        @Assert(colorNear(filteredBitmap.pixel(15, 10), SvgColor.fromRgb(255, 0, 0)))
+        // M4-A2：marker 默认 overflow="hidden"，滤镜向视口外扩张的部分按 SVG 1.1 裁剪。
+        @Assert(filteredBitmap.pixel(13, 10).alpha > 0.5)
+        @Assert(filteredBitmap.pixel(15, 10).alpha == 0.0)
 
         let masked = SvgParser.parse(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\">" +

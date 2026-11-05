@@ -108,8 +108,51 @@ public class SvgClipProperty {
     }
 }
 
-private func splitClipComponents(body: String): Array<String> {
-    let result = ArrayList<String>()
+/** `clip` 的覆盖率蒙版渲染。 */
+public class SvgClipCoverage {
+    public static func render(
+        clip: SvgClipRect,
+        matrix: SvgMatrix,
+        width: Int64,
+        height: Int64,
+        samplesPerPixel!: Int64 = 4,
+        antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample
+    ): SvgCoverageMask {
+        if (width <= 0 || height <= 0) {
+            throw invalidValue("clip 蒙版尺寸必须为正，实际 ${width}×${height}")
+        }
+        let mask = SvgCoverageMask(width, height)
+        let box = SvgClipProperty.toBounds(clip)
+        if (box.width <= 0.0 || box.height <= 0.0) {
+            return mask
+        }
+        let scratch = SvgBitmap(width, height)
+        let path = SvgPathData([
+            SvgPathCommand(SvgPathCommandKind.MoveTo, false, [box.x, box.y]),
+            SvgPathCommand(SvgPathCommandKind.LineTo, false, [box.x + box.width, box.y]),
+            SvgPathCommand(
+                SvgPathCommandKind.LineTo,
+                false,
+                [box.x + box.width, box.y + box.height]
+            ),
+            SvgPathCommand(SvgPathCommandKind.LineTo, false, [box.x, box.y + box.height]),
+            SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>())
+        ])
+        SvgRasterizer(scratch, samplesPerPixel: samplesPerPixel, antiAlias: antiAlias).fill(
+            path,
+            matrix: matrix,
+            color: SvgColor.White,
+            fillRule: SvgFillRule.Nonzero,
+            opacity: 1.0
+        )
+        for (index in 0..(width * height)) {
+            mask.coverage[index] = scratch.pixels[index * 4 + 3]
+        }
+        mask
+    }
+}
+
+private func splitClipComponents(body: String): Array<String> {    let result = ArrayList<String>()
     let bytes = body.unsafeBytes()
     var index = 0
     while (index < bytes.size) {
