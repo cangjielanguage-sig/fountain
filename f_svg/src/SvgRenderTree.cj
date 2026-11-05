@@ -906,3 +906,45 @@ private func unionCommandBounds(
     }
     result
 }
+
+/** 按构建器的 `/tag[i]` 规则给出元素路径；用于 warning 定位。 */
+internal func svgElementPath(root: ?SvgElement, target: SvgElement): String {
+    match (root) {
+        case Some(node) =>
+            let base = "/${node.tag}[1]"
+            if (node.identity == target.identity) {
+                return base
+            }
+            match (findSvgElementPath(node, target, base)) {
+                case Some(value) => value
+                case None => base
+            }
+        case None => "/${target.tag}[1]"
+    }
+}
+
+private func findSvgElementPath(
+    parent: SvgElement,
+    target: SvgElement,
+    path: String
+): ?String {
+    let counters = HashMap<String, Int64>()
+    for (node in parent.children) {
+        match (node) {
+            case ElementNode(child) =>
+                let tag = child.tag
+                let index = (counters.get(tag) ?? 0) + 1
+                counters[tag] = index
+                let childPath = "${path}/${tag}[${index}]"
+                if (child.identity == target.identity) {
+                    return Some(childPath)
+                }
+                match (findSvgElementPath(child, target, childPath)) {
+                    case Some(value) => return Some(value)
+                    case None => ()
+                }
+            case _ => ()
+        }
+    }
+    None
+}

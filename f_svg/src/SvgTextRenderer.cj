@@ -240,7 +240,13 @@ public class SvgTextRenderer {
                 }
             case None => text
         }
-        let rotations = resolveTextRotations(rotationSource, count, this.warnings)
+        let location = "元素「${svgElementPath(root, rotationSource)}」"
+        let rotations = resolveTextRotations(
+            rotationSource,
+            count,
+            this.warnings,
+            location: location
+        )
         match (textPathElement) {
             case Some(pathElement) =>
                 match (resolveTextPathData(pathElement, root)) {
@@ -257,10 +263,10 @@ public class SvgTextRenderer {
                             style.textAnchor()
                         )
                         for (warning in pathLayout.warnings) {
-                            this.warnings.add("textPath：${warning}")
+                            this.warnings.add("${location} textPath：${warning}")
                         }
                         if (placed.size == 0 && count > 0) {
-                            this.warnings.add("textPath 的路径为空，降级为普通文本")
+                            this.warnings.add("${location} textPath 的路径为空，降级为普通文本")
                         } else {
                             placements = Some(placed)
                         }
@@ -532,8 +538,10 @@ private func scalePathX(path: SvgPathData, factor: Float64): SvgPathData {
 internal func resolveTextRotations(
     text: SvgTextElement,
     count: Int64,
-    warnings: ArrayList<String>
+    warnings: ArrayList<String>,
+    location!: String = ""
 ): Array<Float64> {
+    let prefix = if (location.size > 0) { "${location} " } else { "" }
     let result = Array<Float64>(count, repeat: 0.0)
     if (count == 0) {
         return result
@@ -541,16 +549,16 @@ internal func resolveTextRotations(
     match (text.rotate) {
         case Some(values) =>
             if (values.size == 0) {
-                warnings.add("文本 rotate 列表为空，已忽略")
+                warnings.add("${prefix}文本 rotate 列表为空，已忽略")
                 return result
             }
             fillTextRotations(result, values)
         case None =>
             match (text.attr("rotate")) {
                 case Some(raw) =>
-                    let values = parseLenientRotateList(raw, warnings)
+                    let values = parseLenientRotateList(raw, warnings, prefix)
                     if (values.size == 0) {
-                        warnings.add("文本 rotate 列表为空，已忽略")
+                        warnings.add("${prefix}文本 rotate 列表为空，已忽略")
                         return result
                     }
                     fillTextRotations(result, values)
@@ -574,7 +582,11 @@ private func fillTextRotations(result: Array<Float64>, values: Array<Float64>): 
 }
 
 /** `rotate` 逐项解析：非法项记 warning 并按 0 处理，其余项仍生效。 */
-private func parseLenientRotateList(text: String, warnings: ArrayList<String>): Array<Float64> {
+private func parseLenientRotateList(
+    text: String,
+    warnings: ArrayList<String>,
+    prefix: String
+): Array<Float64> {
     let bytes = text.unsafeBytes()
     let values = ArrayList<Float64>()
     var index = skipSvgSpaces(bytes, 0)
@@ -586,14 +598,14 @@ private func parseLenientRotateList(text: String, warnings: ArrayList<String>): 
         match (scanSvgNumber(text, index)) {
             case Some(token) =>
                 if (token.value.isNaN() || token.value.isInf()) {
-                    warnings.add("文本 rotate 含非法值，已按 0 处理")
+                    warnings.add("${prefix}文本 rotate 含非法值，已按 0 处理")
                     values.add(0.0)
                 } else {
                     values.add(token.value)
                 }
                 index = skipSvgSpaces(bytes, token.end)
             case None =>
-                warnings.add("文本 rotate 含非法值，已按 0 处理")
+                warnings.add("${prefix}文本 rotate 含非法值，已按 0 处理")
                 values.add(0.0)
                 var next = index
                 while (next < bytes.size && bytes[next] != b',' && !isSvgSpace(bytes[next])) {

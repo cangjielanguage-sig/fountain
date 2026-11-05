@@ -346,3 +346,27 @@ public class SvgTextRotatePartialM3_test {
         @Assert(warnings[0].contains("rotate"))
     }
 }
+
+@Test
+public class SvgTextWarningLocationM3_test {
+    /** 文本 / 路径类 warning 带元素路径。 */
+    @TestCase
+    public func warningsContainElementPath(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\" rotate=\"abc\">" +
+                "<textPath path=\"\">AB</textPath></text>",
+                width: 40,
+                height: 40
+            )
+        )
+        var located = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("/svg[1]/text[1]")) {
+                located = true
+            }
+        }
+        @Assert(located)
+    }
+}
