@@ -50,7 +50,7 @@
 
 `Supersample` 档下 `samplesPerPixel = 1` SHALL 关闭抗锯齿，用于像素精确用例；`2` / `4` SHALL 逐级提升边缘平滑度。
 
-`Analytic` 档的覆盖率 SHALL 与 `Supersample` 档保持视觉一致：同一图形的边缘像素差值不超过 `2/255`。
+`Analytic` 档的覆盖率 SHALL 与同一几何的 **64× 超采样参考图**保持一致：对应像素的任一通道差值不超过 `2/255`。4× 点采样自身的量化误差可达约 `15/255`，不得作为 `2/255` 的判据。
 
 #### Scenario: 斜边覆盖
 
@@ -65,7 +65,7 @@
 #### Scenario: 解析档
 
 - **WHEN** `antiAlias = Analytic` 填充同样的 45° 三角形
-- **THEN** 每个像素覆盖率介于 0 与 1 之间，且与 4× 超采样结果的差值不超过 `2/255`
+- **THEN** 每个像素覆盖率介于 0 与 1 之间，且与 64× 超采样参考图的差值不超过 `2/255`
 
 ## ADDED Requirements
 
@@ -80,7 +80,7 @@
 - 覆盖率 SHALL 钳制到 `0..1`；
 - 颜色 SHALL 按 `source-over` 合成，公式与 `Supersample` 档一致。
 
-45° 斜线两侧相邻像素的覆盖率之和 SHALL 约等于 1（误差 ≤ `1/255`）；圆形边缘的解析覆盖率与 4× 超采样结果 SHALL 满足误差 ≤ `2/255`。
+45° 斜线两侧相邻像素的覆盖率之和 SHALL 约等于 1（误差 ≤ `1/255`）；圆形边缘的解析覆盖率与同一几何的 64× 超采样参考图 SHALL 满足逐像素通道差 ≤ `2/255`。
 
 `Analytic` 档 SHALL 支持与描边、渐变、图案、滤镜、marker、裁剪、蒙版组合使用，且同一输入多次渲染输出逐字节一致。
 
@@ -91,18 +91,18 @@
 
 #### Scenario: 圆的误差
 
-- **WHEN** 用 `Analytic` 与 `Supersample`（4×）分别填充同一圆
+- **WHEN** 用 `Analytic` 填充一个圆，并构造同一几何的 64× 超采样参考图
 - **THEN** 对应像素通道差值不超过 `2/255`
 
 #### Scenario: 自交 nonzero
 
 - **WHEN** 用 `Analytic` + `nonzero` 填充自交回旋路径
-- **THEN** 重叠区域为实心，与 `Supersample` + `nonzero` 结果一致
+- **THEN** 重叠区域为实心，与 64× 超采样参考图 + `nonzero` 结果逐像素通道差不超过 `2/255`
 
 #### Scenario: 自交 evenodd
 
 - **WHEN** 用 `Analytic` + `evenodd` 填充同一路径
-- **THEN** 重叠区域出现空洞，与 `Supersample` + `evenodd` 结果一致
+- **THEN** 重叠区域出现空洞，与 64× 超采样参考图 + `evenodd` 结果逐像素通道差不超过 `2/255`
 
 #### Scenario: 组合确定性
 

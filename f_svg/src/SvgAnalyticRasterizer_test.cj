@@ -24,7 +24,7 @@ private let ANALYTIC_TRIANGLE: SvgPathData = SvgPathData.parse("M 0 0 L 4 0 L 4 
 
 @Test
 public class SvgAnalyticRasterizer_test {
-    /** 45° 斜线两侧相邻像素覆盖率之和约为 1。 */
+    /** 45° 斜线两侧相邻像素覆盖率和为 1（误差 ≤ 1/255）。 */
     @TestCase
     public func diagonalCoverageConservation(): Unit {
         let contours = flattenPathData(ANALYTIC_TRIANGLE, SvgMatrix.identity, 0.25)
@@ -32,11 +32,11 @@ public class SvgAnalyticRasterizer_test {
         let left = Float64(coverage[0 * 4 + 0]) / 65535.0
         let right = Float64(coverage[1 * 4 + 1]) / 65535.0
         @Assert(abs(left + right - 1.0) <= 1.0 / 255.0)
-        @Assert(left > 0.0 && left < 1.0)
-        @Assert(right > 0.0 && right < 1.0)
+        @Assert(abs(left - 0.5) <= 1.0 / 255.0)
+        @Assert(abs(right - 0.5) <= 1.0 / 255.0)
     }
 
-    /** 圆形解析覆盖率与 4× 超采样平均差 ≤ 2/255。 */
+    /** 圆形解析覆盖率与 64× 参考图逐像素通道差 ≤ 2/255。 */
     @TestCase
     public func circleMatchesSupersampling(): Unit {
         let document = svgDoc(
@@ -47,15 +47,44 @@ public class SvgAnalyticRasterizer_test {
         let analytic = SvgRenderer(
             options: SvgRenderOptions(samplesPerPixel: 4, antiAlias: SvgAntiAliasMode.Analytic)
         ).render(document)
-        let supersample = SvgRenderer(
-            options: SvgRenderOptions(samplesPerPixel: 4, antiAlias: SvgAntiAliasMode.Supersample)
-        ).render(document)
-        var total: Float64 = 0.0
-        for (index in 0..analytic.pixels.size) {
-            total += abs(Float64(analytic.pixels[index]) - Float64(supersample.pixels[index]))
+        let circle = (document.root.child("circle").getOrThrow() as SvgCircle).getOrThrow()
+        let pathData = elementPathData(circle).getOrThrow()
+        let reference = denseContourCoverage(
+            flattenPathData(pathData, SvgMatrix.identity, 0.25),
+            50,
+            50,
+            SvgFillRule.Nonzero
+        )
+        var worst: Int64 = 0
+        var worstIndex: Int64 = -1
+        for (index in 0..reference.size) {
+            let expected = Int64(round(reference[index] * 255.0))
+            let actual = Int64(analytic.pixels[index * 4 + 3])
+            let difference = if (actual > expected) { actual - expected } else { expected - actual }
+            if (difference > worst) {
+                worst = difference
+                worstIndex = index
+            }
         }
-        let average = total / Float64(analytic.pixels.size)
-        @Assert(average <= 2.0)
+        if (worst > 2) {
+            @Fail("worst=${worst} at ${worstIndex}")
+        }
+        @Assert(worst <= 2)
+    }
+
+    /** 高度小于 1/32 像素的细条也必须得到精确覆盖率。 */
+    @TestCase
+    public func thinFeatureCoverage(): Unit {
+        let document = svgDoc(
+            "<rect x=\"10\" y=\"10.005\" width=\"10\" height=\"0.01\" fill=\"red\"/>",
+            width: 20,
+            height: 20
+        )
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(document)
+        let coverage = bitmap.pixel(15, 10).alpha * 255.0
+        @Assert(coverage >= 2.0 && coverage <= 4.0)
     }
 
     /** 自交路径 nonzero 实心、evenodd 空洞。 */
@@ -182,6 +211,133 @@ private func denseCircleCoverage(
     result
 }
 
+private class SvgDenseCrossing {
+    let x: Float64
+    let direction: Int64
+
+    init(x: Float64, direction: Int64) {
+        this.x = x
+        this.direction = direction
+    }
+}
+
+private class SvgDenseSpan {
+    let start: Float64
+    let end: Float64
+
+    init(start: Float64, end: Float64) {
+        this.start = start
+        this.end = end
+    }
+}
+
+/**
+ * 独立的 64× 参考图：每个像素取 64×64 个点，用扫描线交点与填充规则判定内外。
+ *
+ * 与解析覆盖率实现无共享代码：参考图只做点在多边形内判定，量化误差约 1/4096。
+ */
+private func denseContourCoverage(
+    contours: Array<Array<SvgPoint>>,
+    width: Int64,
+    height: Int64,
+    fillRule: SvgFillRule,
+    samples!: Int64 = 64
+): Array<Float64> {
+    let result = Array<Float64>(width * height, repeat: 0.0)
+    let sampleArea = Float64(samples * samples)
+    let subRows = height * samples
+    for (subRow in 0..subRows) {
+        let row = subRow / samples
+        let y = (Float64(subRow) + 0.5) / Float64(samples)
+        let crossings = ArrayList<SvgDenseCrossing>()
+        for (contour in contours) {
+            if (contour.size < 2) {
+                continue
+            }
+            var index = 0
+            while (index < contour.size) {
+                let first = contour[index]
+                let second = contour[(index + 1) % contour.size]
+                if (first.y != second.y) {
+                    let low = if (first.y < second.y) { first.y } else { second.y }
+                    let high = if (first.y < second.y) { second.y } else { first.y }
+                    if (y >= low && y < high) {
+                        let fraction = (y - first.y) / (second.y - first.y)
+                        crossings.add(
+                            SvgDenseCrossing(
+                                first.x + (second.x - first.x) * fraction,
+                                if (second.y > first.y) { 1 } else { -1 }
+                            )
+                        )
+                    }
+                }
+                index++
+            }
+        }
+        if (crossings.size < 2) {
+            continue
+        }
+        sortDenseCrossings(crossings)
+        let spans = ArrayList<SvgDenseSpan>()
+        match (fillRule) {
+            case Nonzero =>
+                var winding: Int64 = 0
+                var index = 0
+                while (index + 1 < crossings.size) {
+                    winding += crossings[index].direction
+                    if (winding != 0) {
+                        spans.add(SvgDenseSpan(crossings[index].x, crossings[index + 1].x))
+                    }
+                    index++
+                }
+            case Evenodd =>
+                var index = 0
+                while (index + 1 < crossings.size) {
+                    spans.add(SvgDenseSpan(crossings[index].x, crossings[index + 1].x))
+                    index += 2
+                }
+        }
+        for (span in spans) {
+            if (span.end <= span.start) {
+                continue
+            }
+            var column = Int64(floor(span.start))
+            if (column < 0) {
+                column = 0
+            }
+            let last = Int64(ceil(span.end)) - 1
+            while (column <= last && column < width) {
+                var inside = 0
+                for (subColumn in 0..samples) {
+                    let x = Float64(column) + (Float64(subColumn) + 0.5) / Float64(samples)
+                    if (x >= span.start && x < span.end) {
+                        inside++
+                    }
+                }
+                if (inside > 0) {
+                    result[row * width + column] += Float64(inside) / sampleArea
+                }
+                column++
+            }
+        }
+    }
+    result
+}
+
+private func sortDenseCrossings(values: ArrayList<SvgDenseCrossing>): Unit {
+    var index = 1
+    while (index < values.size) {
+        let value = values[index]
+        var position = index - 1
+        while (position >= 0 && values[position].x > value.x) {
+            values[position + 1] = values[position]
+            position--
+        }
+        values[position + 1] = value
+        index++
+    }
+}
+
 @Test
 public class SvgAnalyticComplexM3_test {
     /** 甜甜圈（多轮廓 evenodd）逐像素误差 ≤ 2/255。 */
@@ -214,6 +370,7 @@ public class SvgAnalyticComplexM3_test {
             @Fail("worst=${worst} at ${worstIndex}")
         }
         @Assert(worst <= 2)
+        @Assert(bitmap.pixel(25, 25).alpha == 0.0)
     }
 
     /** 两个分离轮廓与高密度参考逐像素一致。 */
@@ -268,5 +425,17 @@ public class SvgAnalyticComplexM3_test {
         }
         @Assert(nonzeroArea > evenoddArea)
         @Assert(evenoddArea > 0)
+        let contours = flattenPathData(SvgPathData.parse(path), SvgMatrix.identity, 0.25)
+        let referenceNonzero = denseContourCoverage(contours, 40, 40, SvgFillRule.Nonzero)
+        let referenceEvenodd = denseContourCoverage(contours, 40, 40, SvgFillRule.Evenodd)
+        var expectedNonzero: Float64 = 0.0
+        var expectedEvenodd: Float64 = 0.0
+        for (index in 0..referenceNonzero.size) {
+            expectedNonzero += referenceNonzero[index]
+            expectedEvenodd += referenceEvenodd[index]
+        }
+        // 64× 参考图自身的总面积量化误差约 1 px²；再留 2 px² 余量。
+        @Assert(abs(Float64(nonzeroArea) / 255.0 - expectedNonzero) <= 3.0)
+        @Assert(abs(Float64(evenoddArea) / 255.0 - expectedEvenodd) <= 3.0)
     }
 }

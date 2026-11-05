@@ -42,8 +42,6 @@ public enum SvgAntiAliasMode <: Equatable<SvgAntiAliasMode> & ToString {
     }
 }
 
-// TODO(M3-9): 解析覆盖率光栅化。
-
 private func analyticMax(left: Int64, right: Int64): Int64 {
     if (left > right) {
         left
@@ -60,11 +58,30 @@ private func analyticMin(left: Int64, right: Int64): Int64 {
     }
 }
 
+private func analyticMaxReal(left: Float64, right: Float64): Float64 {
+    if (left > right) {
+        left
+    } else {
+        right
+    }
+}
+
+private func analyticMinReal(left: Float64, right: Float64): Float64 {
+    if (left < right) {
+        left
+    } else {
+        right
+    }
+}
+
 /** 解析覆盖率的定点刻度。 */
 internal let ANALYTIC_COVERAGE_SCALE: Int64 = 65535
-/** 每像素行在 y 方向的子扫描线条数。 */
-private let ANALYTIC_SUB_SCANLINES: Int64 = 32
+/** 事件去重与零宽度判定阈值。 */
+private let ANALYTIC_EPSILON: Float64 = 1e-9
 
+/**
+ * 一条有向边，按 `x = xAtMin + (y - yMin) * slope` 参数化，[yMin, yMax] 为 y 覆盖区间。
+ */
 private class SvgAnalyticEdge {
     let yMin: Float64
     let yMax: Float64
@@ -79,33 +96,30 @@ private class SvgAnalyticEdge {
         this.slope = slope
         this.direction = direction
     }
+
+    func xAt(y: Float64): Float64 {
+        this.xAtMin + (y - this.yMin) * this.slope
+    }
 }
 
 private class SvgAnalyticHit {
     let x: Float64
     let direction: Int64
+    let edge: SvgAnalyticEdge
 
-    init(x: Float64, direction: Int64) {
+    init(x: Float64, direction: Int64, edge: SvgAnalyticEdge) {
         this.x = x
         this.direction = direction
-    }
-}
-
-private class SvgAnalyticSpan {
-    let start: Float64
-    let end: Float64
-
-    init(start: Float64, end: Float64) {
-        this.start = start
-        this.end = end
+        this.edge = edge
     }
 }
 
 /**
- * 解析覆盖率：把轮廓离散为设备空间线段，逐子扫描线按像素列累加有符号覆盖长度。
+ * 解析覆盖率：把轮廓离散为设备空间线段，按像素行内的事件区间精确积分。
  *
- * 每条线段只在它跨越的扫描线内贡献；缠绕方向由 `nonzero` / `evenodd` 独立判定，
- * 覆盖率按 y 方向子扫描线求平均并钳制到 `0..1`。
+ * 行内先按顶点 y 与线段交点 y 分割，保证每个子区间内边的左右次序不变；
+ * 再对每个内部区间逐像素列累加 `∫ (clip(xRight) - clip(xLeft)) dy`，
+ * 即按像素列累加有符号面积。`nonzero` 用绕数判定内部，`evenodd` 用奇偶配对。
  */
 internal func analyticCoverage(
     contours: Array<Array<SvgPoint>>,
@@ -117,8 +131,6 @@ internal func analyticCoverage(
     if (contours.size == 0) {
         return coverage
     }
-    var minX = Float64.Inf
-    var maxX = -Float64.Inf
     var minY = Float64.Inf
     var maxY = -Float64.Inf
     let edges = ArrayList<SvgAnalyticEdge>()
@@ -130,8 +142,6 @@ internal func analyticCoverage(
         while (index < contour.size) {
             let first = contour[index]
             let second = contour[(index + 1) % contour.size]
-            minX = min(minX, min(first.x, second.x))
-            maxX = max(maxX, max(first.x, second.x))
             minY = min(minY, min(first.y, second.y))
             maxY = max(maxY, max(first.y, second.y))
             if (first.y != second.y) {
@@ -150,40 +160,13 @@ internal func analyticCoverage(
     }
     let firstRow = analyticMax(0, Int64(floor(minY)))
     let lastRow = analyticMin(height - 1, Int64(ceil(maxY)) - 1)
-    let firstColumn = analyticMax(0, Int64(floor(minX)))
-    let lastColumn = analyticMin(width - 1, Int64(ceil(maxX)) - 1)
-    if (firstRow > lastRow || firstColumn > lastColumn) {
+    if (firstRow > lastRow) {
         return coverage
     }
     let accumulated = Array<Float64>(width * height, repeat: 0.0)
-    let weight = 1.0 / Float64(ANALYTIC_SUB_SCANLINES)
     var row = firstRow
     while (row <= lastRow) {
-        var sub = 0
-        while (sub < ANALYTIC_SUB_SCANLINES) {
-            let y = Float64(row) +
-                (Float64(sub) + 0.5) / Float64(ANALYTIC_SUB_SCANLINES)
-            let hits = collectAnalyticHits(edges, y)
-            if (hits.size >= 2) {
-                sortAnalyticHits(hits)
-                let spans = match (fillRule) {
-                    case Nonzero => analyticNonzeroSpans(hits)
-                    case Evenodd => analyticEvenOddSpans(hits)
-                }
-                for (span in spans) {
-                    accumulateAnalyticSpan(
-                        accumulated,
-                        width,
-                        span,
-                        row,
-                        firstColumn,
-                        lastColumn,
-                        weight
-                    )
-                }
-            }
-            sub++
-        }
+        accumulateAnalyticRow(edges, accumulated, width, row, fillRule)
         row++
     }
     let total = Float64(ANALYTIC_COVERAGE_SCALE)
@@ -196,17 +179,210 @@ internal func analyticCoverage(
     coverage
 }
 
-private func collectAnalyticHits(
+/** 处理一行：收集顶点与交点事件，逐子区间积分到像素列。 */
+private func accumulateAnalyticRow(
     edges: ArrayList<SvgAnalyticEdge>,
-    y: Float64
-): ArrayList<SvgAnalyticHit> {
-    let hits = ArrayList<SvgAnalyticHit>()
+    accumulated: Array<Float64>,
+    width: Int64,
+    row: Int64,
+    fillRule: SvgFillRule
+): Unit {
+    let rowTop = Float64(row)
+    let rowBottom = rowTop + 1.0
+    let active = ArrayList<SvgAnalyticEdge>()
     for (edge in edges) {
-        if (y >= edge.yMin && y < edge.yMax) {
-            hits.add(SvgAnalyticHit(edge.xAtMin + (y - edge.yMin) * edge.slope, edge.direction))
+        if (edge.yMax > rowTop && edge.yMin < rowBottom) {
+            active.add(edge)
         }
     }
-    hits
+    if (active.size == 0) {
+        return
+    }
+    let events = ArrayList<Float64>()
+    events.add(rowTop)
+    events.add(rowBottom)
+    for (edge in active) {
+        if (edge.yMin > rowTop + ANALYTIC_EPSILON && edge.yMin < rowBottom - ANALYTIC_EPSILON) {
+            events.add(edge.yMin)
+        }
+        if (edge.yMax > rowTop + ANALYTIC_EPSILON && edge.yMax < rowBottom - ANALYTIC_EPSILON) {
+            events.add(edge.yMax)
+        }
+    }
+    var first = 0
+    while (first + 1 < active.size) {
+        var second = first + 1
+        while (second < active.size) {
+            match (analyticCrossingY(active[first], active[second])) {
+                case Some(value) =>
+                    if (value > rowTop + ANALYTIC_EPSILON &&
+                        value < rowBottom - ANALYTIC_EPSILON) {
+                        events.add(value)
+                    }
+                case None => ()
+            }
+            second++
+        }
+        first++
+    }
+    sortAnalyticValues(events)
+    var index = 0
+    while (index + 1 < events.size) {
+        let ya = events[index]
+        let yb = events[index + 1]
+        if (yb - ya > ANALYTIC_EPSILON) {
+            accumulateAnalyticBand(active, accumulated, width, row, ya, yb, fillRule)
+        }
+        index++
+    }
+}
+
+/** 在一个左右次序不变的子区间内按填充规则求内部区间并积分。 */
+private func accumulateAnalyticBand(
+    active: ArrayList<SvgAnalyticEdge>,
+    accumulated: Array<Float64>,
+    width: Int64,
+    row: Int64,
+    ya: Float64,
+    yb: Float64,
+    fillRule: SvgFillRule
+): Unit {
+    let middle = (ya + yb) * 0.5
+    let hits = ArrayList<SvgAnalyticHit>()
+    for (edge in active) {
+        if (middle >= edge.yMin && middle < edge.yMax) {
+            hits.add(SvgAnalyticHit(edge.xAt(middle), edge.direction, edge))
+        }
+    }
+    if (hits.size < 2) {
+        return
+    }
+    sortAnalyticHits(hits)
+    var index = 0
+    var winding: Int64 = 0
+    while (index + 1 < hits.size) {
+        let spanStart = hits[index]
+        let spanEnd = hits[index + 1]
+        var inside = true
+        match (fillRule) {
+            case Nonzero =>
+                winding += spanStart.direction
+                inside = winding != 0
+            case Evenodd => inside = index % 2 == 0
+        }
+        if (inside) {
+            accumulateAnalyticEdges(
+                accumulated,
+                width,
+                row,
+                spanStart.edge,
+                spanEnd.edge,
+                ya,
+                yb
+            )
+        }
+        if (fillRule == SvgFillRule.Evenodd) {
+            index += 2
+        } else {
+            index++
+        }
+    }
+}
+
+/** 对 [ya, yb] 区间，把左右边界之间的面积精确累加到像素列。 */
+private func accumulateAnalyticEdges(
+    accumulated: Array<Float64>,
+    width: Int64,
+    row: Int64,
+    leftEdge: SvgAnalyticEdge,
+    rightEdge: SvgAnalyticEdge,
+    ya: Float64,
+    yb: Float64
+): Unit {
+    let leftA = leftEdge.xAt(ya)
+    let leftB = leftEdge.xAt(yb)
+    let rightA = rightEdge.xAt(ya)
+    let rightB = rightEdge.xAt(yb)
+    let minimum = analyticMinReal(analyticMinReal(leftA, leftB), analyticMinReal(rightA, rightB))
+    let maximum = analyticMaxReal(analyticMaxReal(leftA, leftB), analyticMaxReal(rightA, rightB))
+    var column = analyticMax(0, Int64(floor(minimum)))
+    let lastColumn = analyticMin(width - 1, Int64(ceil(maximum)) - 1)
+    while (column <= lastColumn) {
+        let right = analyticEdgeColumnIntegral(rightEdge, column, ya, yb)
+        let left = analyticEdgeColumnIntegral(leftEdge, column, ya, yb)
+        let contribution = right - left
+        if (contribution > 0.0) {
+            accumulated[row * width + column] += contribution
+        }
+        column++
+    }
+}
+
+/**
+ * `∫_ya^yb clamp(x(y) - column, 0, 1) dy` 的精确值。
+ *
+ * 线性 x(y) 与 `clamp` 的分段点（column、column+1）把区间切成至多三段，
+ * 每段内被积函数为 0、1 或线性，直接累加梯形面积。
+ */
+private func analyticEdgeColumnIntegral(
+    edge: SvgAnalyticEdge,
+    column: Int64,
+    ya: Float64,
+    yb: Float64
+): Float64 {
+    let xa = edge.xAt(ya)
+    let xb = edge.xAt(yb)
+    let left = Float64(column)
+    let delta = xb - xa
+    let values = ArrayList<Float64>()
+    values.add(0.0)
+    values.add(1.0)
+    if (abs(delta) > ANALYTIC_EPSILON) {
+        let lower = (left - xa) / delta
+        if (lower > 0.0 && lower < 1.0) {
+            values.add(lower)
+        }
+        let upper = (left + 1.0 - xa) / delta
+        if (upper > 0.0 && upper < 1.0) {
+            values.add(upper)
+        }
+    }
+    sortAnalyticValues(values)
+    var total = 0.0
+    var index = 0
+    while (index + 1 < values.size) {
+        let u0 = values[index]
+        let u1 = values[index + 1]
+        if (u1 - u0 > ANALYTIC_EPSILON) {
+            let x0 = xa + delta * u0
+            let x1 = xa + delta * u1
+            let dy = (u1 - u0) * (yb - ya)
+            let low = analyticMinReal(x0, x1)
+            let high = analyticMaxReal(x0, x1)
+            if (low >= left + 1.0) {
+                total += dy
+            } else if (high > left) {
+                total += (clampSvgUnit(x0 - left) + clampSvgUnit(x1 - left)) * 0.5 * dy
+            }
+        }
+        index++
+    }
+    total
+}
+
+/** 两条非水平边的交点 y；平行或不相交返回 `None`。 */
+private func analyticCrossingY(first: SvgAnalyticEdge, second: SvgAnalyticEdge): ?Float64 {
+    let denominator = first.slope - second.slope
+    if (abs(denominator) < ANALYTIC_EPSILON) {
+        return None
+    }
+    let offset = second.xAtMin - first.xAtMin + first.yMin * first.slope -
+        second.yMin * second.slope
+    let y = offset / denominator
+    if (y <= first.yMin || y >= first.yMax || y <= second.yMin || y >= second.yMax) {
+        return None
+    }
+    Some(y)
 }
 
 private func sortAnalyticHits(hits: ArrayList<SvgAnalyticHit>): Unit {
@@ -223,51 +399,16 @@ private func sortAnalyticHits(hits: ArrayList<SvgAnalyticHit>): Unit {
     }
 }
 
-private func analyticNonzeroSpans(hits: ArrayList<SvgAnalyticHit>): ArrayList<SvgAnalyticSpan> {
-    let spans = ArrayList<SvgAnalyticSpan>()
-    var winding: Int64 = 0
-    var index = 0
-    while (index + 1 < hits.size) {
-        winding += hits[index].direction
-        if (winding != 0) {
-            spans.add(SvgAnalyticSpan(hits[index].x, hits[index + 1].x))
+private func sortAnalyticValues(values: ArrayList<Float64>): Unit {
+    var index = 1
+    while (index < values.size) {
+        let value = values[index]
+        var position = index - 1
+        while (position >= 0 && values[position] > value) {
+            values[position + 1] = values[position]
+            position--
         }
+        values[position + 1] = value
         index++
-    }
-    spans
-}
-
-private func analyticEvenOddSpans(hits: ArrayList<SvgAnalyticHit>): ArrayList<SvgAnalyticSpan> {
-    let spans = ArrayList<SvgAnalyticSpan>()
-    var index = 0
-    while (index + 1 < hits.size) {
-        spans.add(SvgAnalyticSpan(hits[index].x, hits[index + 1].x))
-        index += 2
-    }
-    spans
-}
-
-private func accumulateAnalyticSpan(
-    accumulated: Array<Float64>,
-    width: Int64,
-    span: SvgAnalyticSpan,
-    row: Int64,
-    firstColumn: Int64,
-    lastColumn: Int64,
-    weight: Float64
-): Unit {
-    if (span.end <= span.start) {
-        return
-    }
-    let startColumn = analyticMax(firstColumn, Int64(floor(span.start)))
-    let endColumn = analyticMin(lastColumn, Int64(ceil(span.end)) - 1)
-    var column = startColumn
-    while (column <= endColumn) {
-        let left = max(span.start, Float64(column))
-        let right = min(span.end, Float64(column + 1))
-        if (right > left) {
-            accumulated[row * width + column] += (right - left) * weight
-        }
-        column++
     }
 }
