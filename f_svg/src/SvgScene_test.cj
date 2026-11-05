@@ -28,8 +28,7 @@ internal func loadScene(name: String): SvgDocument {
 internal func compareScene(bitmap: SvgBitmap, name: String): Unit {
     let path = Path("${SCENE_DIR}/${name}.rgba")
     if (!exists(path)) {
-        File.writeTo(path, bitmap.pixels)
-        @Fail("已生成缺失的场景快照 ${name}.rgba，请重新运行测试")
+        @Fail("场景快照 ${name}.rgba 缺失，请从版本库恢复，测试不会自动生成期望值")
     }
     let expected = File.readFrom(path)
     if (expected.size != bitmap.pixels.size) {
@@ -117,5 +116,65 @@ public class SvgSceneM3_test {
     @TestCase
     public func m3Marker(): Unit {
         compareScene(SvgRenderer().render(loadScene("m3-marker")), "m3-marker")
+    }
+}
+
+
+/** M1/M2 默认渲染的逐字节基线：容差 0。 */
+@Test
+public class SvgSceneByteBaseline_test {
+    private func compareExact(bitmap: SvgBitmap, name: String): Unit {
+        let path = Path("${SCENE_DIR}/${name}.rgba")
+        if (!exists(path)) {
+            @Fail("场景快照 ${name}.rgba 缺失")
+        }
+        let expected = File.readFrom(path)
+        @Assert(expected.size == bitmap.pixels.size)
+        for (index in 0..expected.size) {
+            if (expected[index] != bitmap.pixels[index]) {
+                let pixelIndex = index / 4
+                let x = pixelIndex % bitmap.width
+                let y = pixelIndex / bitmap.width
+                @Fail(
+                    "场景 ${name} 字节漂移在 (${x},${y}) 偏移 ${index}：" +
+                    "实际 ${bitmap.pixels[index]}，期望 ${expected[index]}"
+                )
+            }
+        }
+    }
+
+    @TestCase
+    public func basicExact(): Unit {
+        compareExact(SvgRenderer().render(loadScene("basic")), "basic")
+    }
+
+    @TestCase
+    public func gradientExact(): Unit {
+        compareExact(SvgRenderer().render(loadScene("gradient")), "gradient")
+    }
+
+    @TestCase
+    public func strokeExact(): Unit {
+        compareExact(SvgRenderer().render(loadScene("stroke")), "stroke")
+    }
+
+    @TestCase
+    public func clipExact(): Unit {
+        compareExact(SvgRenderer().render(loadScene("clip")), "clip")
+    }
+
+    @TestCase
+    public func textExact(): Unit {
+        compareExact(SvgRenderer().render(loadScene("text")), "text")
+    }
+
+    @TestCase
+    public func animationExact(): Unit {
+        let document = loadScene("animation")
+        let timeline = SvgTimeline(document)
+        let renderer = SvgRenderer()
+        compareExact(renderer.render(timeline.sample(0.0)), "animation-0")
+        compareExact(renderer.render(timeline.sample(0.5)), "animation-05")
+        compareExact(renderer.render(timeline.sample(1.0)), "animation-1")
     }
 }
