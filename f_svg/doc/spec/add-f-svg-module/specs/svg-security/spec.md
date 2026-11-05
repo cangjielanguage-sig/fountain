@@ -4,7 +4,7 @@
 
 ### Requirement: 危险内容默认移除
 
-系统 SHALL 默认移除 SVG 文档中的 `<script>` 元素与所有 `on*` 事件属性（`onload`、`onclick` 等）。
+系统 SHALL 默认移除 SVG 文档中 local name 为 `script` 的元素（不限定命名空间）与所有 `on*` 事件属性（`onload`、`onclick` 等）。
 
 移除动作 SHALL 在构建模型时执行，不得先进入模型再删除；每次移除 SHALL 向 `SvgDocument.warnings` 追加一条包含元素路径与内容类别的告警。
 
@@ -14,6 +14,11 @@
 
 - **WHEN** 解析 `<svg><script>alert(1)</script></svg>`
 - **THEN** 模型中无 `script` 元素，`warnings` 至少一条包含 `script` 与 `/svg[1]`
+
+#### Scenario: 移除外来命名空间脚本
+
+- **WHEN** 解析 `foreignObject` 内 XHTML 命名空间的 `<script>`
+- **THEN** 该元素同样被移除并记录 warning
 
 #### Scenario: 移除事件属性
 
@@ -52,7 +57,7 @@
 
 系统 SHALL 提供 `SvgSecurityOptions`：`unsafePolicy`、`allowScript`、`allowEventAttributes`、`allowExternalReferences`、`allowDataImages`，默认值分别为 `Remove`、`false`、`false`、`false`、`true`。
 
-放行开关 SHALL 只影响对应类别，不得连带放宽其他类别。
+放行开关 SHALL 只影响对应类别，不得连带放宽其他类别。`allowExternalReferences` SHALL 只放行 `http:`、`https:` 与协议相对 `//` 引用，不得放行 `javascript:` 与 `file:`；后两者仍由 `unsafePolicy` 控制。
 
 #### Scenario: 只放行事件属性
 
@@ -63,6 +68,11 @@
 
 - **WHEN** `allowExternalReferences = true`
 - **THEN** `https:` / `//` 引用保留且不记移除告警
+
+#### Scenario: 放行开关不覆盖危险协议
+
+- **WHEN** `allowExternalReferences = true` 且文档含 `javascript:` 与 `file:` 引用
+- **THEN** 两者仍按 `unsafePolicy` 移除或拒绝
 
 ### Requirement: 规模上限硬失败
 

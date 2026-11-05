@@ -55,7 +55,7 @@ internal func buildSvgDocument(xml: XmlDocument, options: SvgParseOptions): SvgD
     let root = SvgRoot()
     context.elementCount = 1
     let rootPath = "/svg[1]"
-    fillSvgAttributes(root, rootXml, rootPath, context)
+    fillSvgAttributes(root, rootXml, rootPath, context, true)
     buildSvgChildren(root, rootXml, SvgNamespaces.SVG, "/svg[1]", 1, context)
 
     let document = SvgDocument(root)
@@ -130,7 +130,7 @@ private func buildSvgOne(
     let local = xml.name.local
     let rawName = QName(local, prefix: xml.name.prefix, uri: Some(namespace))
 
-    if (namespace == SvgNamespaces.SVG && local == "script") {
+    if (local == "script") {
         if (!context.options.security.allowScript) {
             match (context.options.security.unsafePolicy) {
                 case SvgUnsafePolicy.Reject =>
@@ -142,7 +142,7 @@ private func buildSvgOne(
             }
         }
         let element = SvgUnknownElement(rawName)
-        fillSvgAttributes(element, xml, path, context)
+        fillSvgAttributes(element, xml, path, context, false)
         buildSvgChildren(element, xml, namespace, path, depth, context)
         return Some(element)
     }
@@ -169,7 +169,8 @@ private func buildSvgOne(
         element = SvgUnknownElement(rawName)
     }
 
-    fillSvgAttributes(element, xml, path, context)
+    let validateSvg = namespace == SvgNamespaces.SVG && SvgTag.isKnown(local)
+    fillSvgAttributes(element, xml, path, context, validateSvg)
     if (context.options.strict && namespace == SvgNamespaces.SVG) {
         checkRequiredAttributes(local, xml, path)
     }
@@ -202,7 +203,8 @@ private func fillSvgAttributes(
     element: SvgElement,
     xml: XmlElement,
     path: String,
-    context: SvgBuildContext
+    context: SvgBuildContext,
+    validate: Bool
 ): Unit {
     for (attribute in xml.attributes) {
         if (isXmlnsDeclaration(attribute.name)) {
@@ -211,11 +213,21 @@ private func fillSvgAttributes(
         if (shouldRemoveAttribute(attribute, path, context)) {
             continue
         }
-        validateSvgAttribute(attribute, path, context)
-        if (attribute.name.local == "offset") {
-            warnOffsetIfClamped(attribute.value, path, context)
+        if (validate && isSvgNamespaceAttribute(attribute.name)) {
+            validateSvgAttribute(attribute, path, context)
+            if (attribute.name.local == "offset") {
+                warnOffsetIfClamped(attribute.value, path, context)
+            }
         }
         element.appendAttribute(attribute.name, attribute.value)
+    }
+}
+
+/** 只有无命名空间或 SVG 命名空间的属性才按 SVG 语义校验。 */
+private func isSvgNamespaceAttribute(name: QName): Bool {
+    match (name.uri) {
+        case Some(uri) => uri == SvgNamespaces.SVG
+        case None => true
     }
 }
 
@@ -320,7 +332,7 @@ private func handleHrefValue(value: String, path: String, context: SvgBuildConte
     let allowed = if (lower.size >= 5 && lower[0..5] == "data:") {
         context.options.security.allowDataImages
     } else {
-        context.options.security.allowExternalReferences
+        context.options.security.allowExternalReferences && isPermittedExternalReference(lower)
     }
     if (allowed) {
         return false
@@ -329,6 +341,13 @@ private func handleHrefValue(value: String, path: String, context: SvgBuildConte
         throw SvgException("不允许外部引用「${trimmed}」", 0, 0, kind: SvgErrorKind.Security, elementPath: Some(path))
     }
     applyUnsafePolicy("外部引用 ${trimmed}", path, context)
+}
+
+/** 外部引用放行开关只覆盖 http/https 与协议相对 URL。 */
+private func isPermittedExternalReference(lower: String): Bool {
+    (lower.size >= 5 && lower[0..5] == "http:") ||
+    (lower.size >= 6 && lower[0..6] == "https:") ||
+    (lower.size >= 2 && lower[0..2] == "//")
 }
 
 private func applyUnsafePolicy(what: String, path: String, context: SvgBuildContext): Bool {

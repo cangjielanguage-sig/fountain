@@ -268,6 +268,59 @@ public class SvgSecurity_test {
         )
     }
 
+    /** allowExternalReferences 只放行 http/https/协议相对，不放行 javascript:/file:。 */
+    @TestCase
+    public func allowExternalReferencesKeepsDangerousSchemesOut(): Unit {
+        let text = "<svg><use href=\"javascript:alert(1)\"/>" +
+            "<image href=\"file:///etc/passwd\" width=\"1\" height=\"1\"/>" +
+            "<use href=\"https://x/y#a\"/></svg>"
+        let document = SvgParser.parse(
+            text,
+            options: SvgParseOptions(security: SvgSecurityOptions(allowExternalReferences: true))
+        )
+        let uses = document.root.childrenOf("use")
+        @Assert(uses[0].attr("href").isNone())
+        @Assert(uses[1].attr("href") == Some("https://x/y#a"))
+        @Assert(document.root.child("image").getOrThrow().attr("href").isNone())
+        @Assert(countWarnings(document, "外部引用") == 2)
+    }
+
+    /** Keep 策略下 javascript:/file: 仍可显式保留。 */
+    @TestCase
+    public func dangerousSchemesKeptOnlyByKeepPolicy(): Unit {
+        let document = SvgParser.parse(
+            "<svg><use href=\"javascript:alert(1)\"/><image href=\"file:///etc/passwd\" width=\"1\" height=\"1\"/></svg>",
+            options: SvgParseOptions(
+                security: SvgSecurityOptions(
+                    unsafePolicy: SvgUnsafePolicy.Keep,
+                    allowExternalReferences: true
+                )
+            )
+        )
+        @Assert(document.root.child("use").getOrThrow().attr("href") == Some("javascript:alert(1)"))
+        @Assert(document.root.child("image").getOrThrow().attr("href") == Some("file:///etc/passwd"))
+    }
+
+    /** script 按 local name 过滤，不限于 SVG 命名空间。 */
+    @TestCase
+    public func scriptRemovedInEveryNamespace(): Unit {
+        let text = "<svg><foreignObject>" +
+            "<script xmlns=\"http://www.w3.org/1999/xhtml\">alert(1)</script>" +
+            "</foreignObject><script>alert(2)</script></svg>"
+        let document = SvgParser.parse(text)
+        let foreignObject = document.root.child("foreignObject").getOrThrow()
+        @Assert(foreignObject.childrenOf("script").size == 0)
+        @Assert(document.root.childrenOf("script").size == 0)
+        @Assert(countWarnings(document, "script") >= 2)
+
+        let kept = SvgParser.parse(
+            text,
+            options: SvgParseOptions(security: SvgSecurityOptions(allowScript: true))
+        )
+        @Assert(kept.root.child("foreignObject").getOrThrow().childrenOf("script").size == 1)
+        @Assert(kept.root.childrenOf("script").size == 1)
+    }
+
     /** 实体上限透传 f_xml：超限按 Syntax 包装。 */
     @TestCase
     public func entityLimitsPassthrough(): Unit {

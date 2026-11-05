@@ -57,6 +57,10 @@ public open class SvgElement <: ToString {
 
     private var transformCache: ?SvgValueCache<SvgTransform> = None
 
+    /** 外部命名空间到前缀的稳定映射；同一 URI 复用，不同 URI 不冲突。 */
+    private let namespacePrefixes = HashMap<String, String>()
+    private var nextNamespaceOrdinal: Int64 = 1
+
     /** 原始限定名；未知元素用它保留前缀。 */
     internal var rawQName: ?QName = None
 
@@ -153,13 +157,15 @@ public open class SvgElement <: ToString {
         this
     }
 
-    /** 命名空间写入。`xlink` / `xml` 前缀按约定生成。 */
+    /** 命名空间写入。`xlink` / `xml` 前缀固定，其余按 URI 稳定分配。 */
     public func setAttr(namespace: String, local: String, value: String): SvgElement {
         let index = this.namespacedAttributeIndex(namespace, local)
         if (index >= 0) {
             this.attributes[index] = SvgAttribute(this.attributes[index].name, value)
         } else {
-            this.attributes.add(SvgAttribute(QName(local, prefix: Some(prefixOf(namespace)), uri: Some(namespace)), value))
+            this.attributes.add(
+                SvgAttribute(QName(local, prefix: Some(this.prefixFor(namespace)), uri: Some(namespace)), value)
+            )
         }
         this.attributesVersion++
         this
@@ -361,6 +367,57 @@ public open class SvgElement <: ToString {
         -1
     }
 
+    /** 同一 URI 复用前缀；新 URI 分配 `ns1`、`ns2`… 并跳过已占用前缀。 */
+    private func prefixFor(namespace: String): String {
+        if (namespace == SvgNamespaces.XLINK) {
+            return "xlink"
+        }
+        if (namespace == SvgNamespaces.XML) {
+            return "xml"
+        }
+        match (this.namespacePrefixes.get(namespace)) {
+            case Some(prefix) => return prefix
+            case None => ()
+        }
+        for (attribute in this.attributes) {
+            if (attribute.name.uri == Some(namespace)) {
+                match (attribute.name.prefix) {
+                    case Some(prefix) =>
+                        this.namespacePrefixes[namespace] = prefix
+                        return prefix
+                    case None => ()
+                }
+            }
+        }
+        var candidate = ""
+        while (true) {
+            candidate = "ns" + this.nextNamespaceOrdinal.toString()
+            this.nextNamespaceOrdinal++
+            if (!this.prefixInUse(candidate)) {
+                break
+            }
+        }
+        this.namespacePrefixes[namespace] = candidate
+        candidate
+    }
+
+    private func prefixInUse(prefix: String): Bool {
+        for (attribute in this.attributes) {
+            match (attribute.name.prefix) {
+                case Some(existing) => if (existing == prefix) {
+                    return true
+                }
+                case None => ()
+            }
+        }
+        for ((_, used) in this.namespacePrefixes) {
+            if (used == prefix) {
+                return true
+            }
+        }
+        false
+    }
+
     private func siblingIndex(): Int64 {
         match (this.parent) {
             case None => 1
@@ -401,16 +458,6 @@ private func parseTransformOrNone(text: String): ?SvgTransform {
         Some(SvgTransform.parse(text))
     } catch (_: SvgException) {
         None
-    }
-}
-
-private func prefixOf(namespace: String): String {
-    if (namespace == SvgNamespaces.XLINK) {
-        "xlink"
-    } else if (namespace == SvgNamespaces.XML) {
-        "xml"
-    } else {
-        "ns"
     }
 }
 

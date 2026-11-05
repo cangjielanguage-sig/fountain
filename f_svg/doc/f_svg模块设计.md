@@ -603,6 +603,9 @@ public struct SvgAttribute {
 类型化 setter 命中同名属性时**原位替换**，否则追加。序列化按该顺序输出。  
 这样「解析 → 序列化」的属性顺序稳定，便于 diff 与快照测试。
 
+**命名空间前缀**：`setAttr(namespace:local:value:)` 对同一 URI 复用已分配前缀，新 URI 依次分配
+`ns1`、`ns2`…，并跳过已占用的前缀；`xlink` 与 `xml` 使用固定前缀。
+
 ### 4.3 容器与根
 
 ```cangjie
@@ -873,6 +876,9 @@ public class SvgParser {
 
 > 安全上限在两种模式下都**硬失败**；不存在「宽松就放行」的开关。
 
+属性值与必需属性校验只作用于 **SVG 命名空间的已知元素**；外部命名空间的元素与属性原样保留，
+不参与 SVG 语义校验（严格模式也不会因此报错）。
+
 ### 5.5 错误与定位
 
 ```cangjie
@@ -990,10 +996,10 @@ SvgDocument
 
 | 威胁                                             | 默认策略                              | 可配置                       |
 | ---------------------------------------------- | --------------------------------- | ------------------------- |
-| `<script>` 元素                                  | `Remove`：移除并记 warning             | `Keep` / `Reject`         |
+| `script` 元素（按 local name，任意命名空间）              | `Remove`：移除并记 warning             | `Keep` / `Reject`         |
 | `on*` 事件属性（`onload`、`onclick`…）                | `Remove`                          | `Keep` / `Reject`         |
-| `javascript:` href                             | 视为外部引用，`Remove`                   | 同上                        |
-| 外部引用（`http:` / `https:` / `file:` / 协议相对 `//`） | `Remove`                          | `allowExternalReferences` |
+| `javascript:` / `file:` 引用                     | 视为不安全引用，`Remove`                   | 仅 `unsafePolicy`           |
+| 外部引用（`http:` / `https:` / 协议相对 `//`）           | `Remove`                          | `allowExternalReferences` |
 | `<image href="data:...">`                      | 允许（不发起 I/O）                       | `allowDataImages`         |
 | 外部 DTD / 外部实体                                  | `f_xml` 永不加载，引用即报错                | 不可放开                      |
 | 实体膨胀                                           | `f_xml` 三层上限（64 KB / 8 MB / 2 GB） | 透传 `EntityLimits`         |

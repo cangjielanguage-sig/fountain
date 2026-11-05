@@ -132,7 +132,8 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 |---|---|---|
 | `<script>` | removed | `allowScript` / `unsafePolicy` |
 | `on*` event attributes | removed | `allowEventAttributes` |
-| `http:` / `https:` / `file:` / `//` / `javascript:` references | removed | `allowExternalReferences` |
+| `http:` / `https:` / `//` references | removed | `allowExternalReferences` |
+| `file:` / `javascript:` references | removed | `unsafePolicy` only (`allowExternalReferences` does not apply) |
 | `data:` images | kept | `allowDataImages` (`false` removes) |
 | `#id` fragment references | kept | always kept |
 | External DTD / entities | never loaded | not configurable |

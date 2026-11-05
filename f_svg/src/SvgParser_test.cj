@@ -221,6 +221,24 @@ public class SvgParser_test {
     }
 
 
+    /** 严格模式只校验 SVG 命名空间的已知元素与属性。 */
+    @TestCase
+    public func foreignNamespaceSkippedInStrict(): Unit {
+        let foreignDoc = "<svg xmlns:x=\"urn:x\"><x:rect fill=\"var(--x)\" width=\"1\"/></svg>"
+        let document = SvgParser.parse(foreignDoc, options: SvgParseOptions(strict: true))
+        let rect = document.root.child("rect").getOrThrow()
+        @Assert(rect is SvgUnknownElement)
+        @Assert(rect.attr("fill") == Some("var(--x)"))
+        @Assert(document.warnings.size == 0)
+
+        let foreignAttribute =
+            "<svg xmlns:x=\"urn:x\"><rect x:fill=\"var(--x)\" width=\"1\" height=\"1\"/></svg>"
+        let withAttribute = SvgParser.parse(foreignAttribute, options: SvgParseOptions(strict: true))
+        let shape = withAttribute.root.child("rect").getOrThrow()
+        @Assert(shape.attr("urn:x", "fill") == Some("var(--x)"))
+        @Assert(withAttribute.warnings.size == 0)
+    }
+
     /** 标签表全覆盖：每个已知标签都得到对应模型类型。 */
     @TestCase
     public func tagTableCoverage(): Unit {

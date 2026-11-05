@@ -73,6 +73,28 @@ public class SvgElement_test {
         @Assert(element.attributes[0].name.prefix == Some("xlink"))
     }
 
+    /** 不同外部命名空间分配稳定且互不冲突的前缀。 */
+    @TestCase
+    public func namespacePrefixAllocation(): Unit {
+        let element = SvgElement("g")
+        element.setAttr("urn:a", "k", "1")
+        element.setAttr("urn:b", "k", "2")
+        element.setAttr("urn:a", "j", "3")
+        @Assert(element.attr("urn:a", "k") == Some("1"))
+        @Assert(element.attr("urn:b", "k") == Some("2"))
+        @Assert(element.attributes.size == 3)
+        let first = element.attributes[0].name.prefix.getOrThrow()
+        let second = element.attributes[1].name.prefix.getOrThrow()
+        @Assert(first == "ns1")
+        @Assert(second == "ns2")
+        @Assert(element.attributes[2].name.prefix == Some(first))
+
+        element.setAttr(SvgNamespaces.XLINK, "href", "#a")
+        @Assert(element.attributes[3].name.prefix == Some("xlink"))
+        element.setAttr(SvgNamespaces.XML, "lang", "zh")
+        @Assert(element.attributes[4].name.prefix == Some("xml"))
+    }
+
     /** 子节点顺序与 parent 维护。 */
     @TestCase
     public func children(): Unit {

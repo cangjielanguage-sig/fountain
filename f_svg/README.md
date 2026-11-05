@@ -130,7 +130,8 @@ let document = SvgParser.parse(userInput, options: SvgParseOptions(
 |---|---|---|
 | `<script>` | 移除 | `allowScript` / `unsafePolicy` |
 | `on*` 事件属性 | 移除 | `allowEventAttributes` |
-| `http:` / `https:` / `file:` / `//` / `javascript:` 引用 | 移除 | `allowExternalReferences` |
+| `http:` / `https:` / `//` 引用 | 移除 | `allowExternalReferences` |
+| `file:` / `javascript:` 引用 | 移除 | 仅 `unsafePolicy`（`allowExternalReferences` 不放行） |
 | `data:` 图片 | 保留 | `allowDataImages`（置 `false` 时移除） |
 | `#id` 片段引用 | 保留 | 不可关闭 |
 | 外部 DTD / 外部实体 | 永不加载 | 不可放开 |
