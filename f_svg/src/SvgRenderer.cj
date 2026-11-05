@@ -249,12 +249,13 @@ public class SvgRenderer {
                     case None => return
                 }
                 let textRenderer = SvgTextRenderer(registry: registry)
-                let outline = match (textRenderer.outline(text, style: style, root: Some(list.root))) {
-                    case Some(value) => value
-                    case None => return
-                }
+                let layout = textRenderer.outline(text, style: style, root: Some(list.root))
                 for (warning in textRenderer.warnings) {
                     this.warnings.add(warning)
+                }
+                let outline = match (layout) {
+                    case Some(value) => value
+                    case None => return
                 }
                 let textCommand = SvgDisplayCommand(
                     SvgDisplayCommandKind.FillPath,

@@ -71,6 +71,8 @@ private class SvgPathSegment {
  */
 public class SvgTextPathLayout {
     public let warnings = ArrayList<String>()
+    /** 路径本身无命令或总弧长 ≤ 0；用于区分“空路径”与“有效路径但无可放置字形”。 */
+    internal var pathEmpty: Bool = false
 
     public func place(
         advances: Array<Float64>,
@@ -78,6 +80,7 @@ public class SvgTextPathLayout {
         startOffset: SvgLength,
         anchor: SvgTextAnchor
     ): Array<SvgTextPlacement> {
+        this.pathEmpty = false
         let contours = flattenPathData(path, SvgMatrix.identity, 0.25)
         let segments = ArrayList<SvgPathSegment>()
         var total: Float64 = 0.0
@@ -99,6 +102,7 @@ public class SvgTextPathLayout {
             }
         }
         if (total <= 0.0) {
+            this.pathEmpty = true
             this.warnings.add("textPath 的路径为空，无法排版")
             return Array<SvgTextPlacement>()
         }

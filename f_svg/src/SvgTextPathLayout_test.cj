@@ -270,9 +270,19 @@ public class SvgTextPathInteraction_test {
     }
 }
 
+private func hasVisiblePixel(bitmap: SvgBitmap): Bool {
+    var index = 0
+    while (index < bitmap.width * bitmap.height) {
+        if (bitmap.pixels[index * 4 + 3] > 0) {
+            return true
+        }
+        index++
+    }
+    false
+}
+
 @Test
-public class SvgTextPathEmptyM3_test {
-    /** 空 path 属性降级为普通水平文本。 */
+public class SvgTextPathEmptyM3_test {    /** 空 path 属性降级为普通水平文本。 */
     @TestCase
     public func emptyPathAttributeDegrades(): Unit {
         let plain = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(
@@ -299,6 +309,55 @@ public class SvgTextPathEmptyM3_test {
             }
         }
         @Assert(warned)
+    }
+
+    /** 有效路径短于首个字形：截断为空，不退化为完整水平文本。 */
+    @TestCase
+    public func shortValidPathDrawsNothing(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let bitmap = renderer.render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">" +
+                "<textPath path=\"M 5 20 L 6 20\">AB</textPath></text>",
+                width: 40,
+                height: 40
+            )
+        )
+        @Assert(!hasVisiblePixel(bitmap))
+        var truncated = false
+        var degraded = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("截断")) {
+                truncated = true
+            }
+            if (warning.contains("降级")) {
+                degraded = true
+            }
+        }
+        @Assert(truncated)
+        @Assert(!degraded)
+    }
+
+    /** startOffset 在路径末端时同样截断为空。 */
+    @TestCase
+    public func startOffsetAtEndDrawsNothing(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let bitmap = renderer.render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">" +
+                "<textPath path=\"M 5 20 L 25 20\" startOffset=\"200%\">AB</textPath></text>",
+                width: 40,
+                height: 40
+            )
+        )
+        @Assert(!hasVisiblePixel(bitmap))
+        var degraded = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("降级")) {
+                degraded = true
+            }
+        }
+        @Assert(!degraded)
     }
 
     /** href 指向零长度路径同样降级。 */

@@ -266,7 +266,12 @@ public class SvgTextRenderer {
                             this.warnings.add("${location} textPath：${warning}")
                         }
                         if (placed.size == 0 && count > 0) {
-                            this.warnings.add("${location} textPath 的路径为空，降级为普通文本")
+                            if (pathLayout.pathEmpty) {
+                                this.warnings.add("${location} textPath 的路径为空，降级为普通文本")
+                            } else {
+                                // 路径有效但所有字形都被截断：保持空排版，不再退化为水平文本。
+                                placements = Some(placed)
+                            }
                         } else {
                             placements = Some(placed)
                         }
