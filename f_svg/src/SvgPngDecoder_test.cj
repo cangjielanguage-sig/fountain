@@ -497,3 +497,49 @@ public class SvgPngChunkErrorM3_test {
         @Assert(error.kind == SvgErrorKind.Syntax)
     }
 }
+
+@Test
+public class SvgPngStructureM3_test {
+    /** tRNS 长度必须与颜色类型匹配。 */
+    @TestCase
+    public func invalidTrnsLength(): Unit {
+        let gray = buildPng(1, 1, 8, 0, 0, [0, 128], trns: [0, 128, 0])
+        @Assert(expectSvgException({=> SvgPngDecoder.decode(gray)}).kind == SvgErrorKind.Syntax)
+        let rgb = buildPng(1, 1, 8, 2, 0, [0, 1, 2, 3], trns: [0, 1])
+        @Assert(expectSvgException({=> SvgPngDecoder.decode(rgb)}).kind == SvgErrorKind.Syntax)
+        let rgba = buildPng(1, 1, 8, 6, 0, [0, 1, 2, 3, 4], trns: [0, 1, 2, 3, 4, 5])
+        @Assert(expectSvgException({=> SvgPngDecoder.decode(rgba)}).kind == SvgErrorKind.Syntax)
+    }
+
+    /** 重复 IHDR、空 PLTE、调色板缺 PLTE 均为 Syntax。 */
+    @TestCase
+    public func structuralVariants(): Unit {
+        let duplicate = pngPrefix(1, 1, 8, 6, 0)
+        let header = ByteBuffer()
+        header.write(pngBe32(1))
+        header.write(pngBe32(1))
+        header.write([8, 6, 0, 0, 0])
+        pngChunk(duplicate, "IHDR", header.bytes())
+        pngChunk(duplicate, "IDAT", pngZlib([0, 255, 0, 0, 255]))
+        pngChunk(duplicate, "IEND", Array<Byte>())
+        @Assert(
+            expectSvgException({=> SvgPngDecoder.decode(duplicate.bytes())}).kind ==
+                SvgErrorKind.Syntax
+        )
+
+        let emptyPalette = pngPrefix(1, 1, 8, 2, 0)
+        pngChunk(emptyPalette, "PLTE", Array<Byte>())
+        pngChunk(emptyPalette, "IDAT", pngZlib([0, 1, 2, 3]))
+        pngChunk(emptyPalette, "IEND", Array<Byte>())
+        @Assert(
+            expectSvgException({=> SvgPngDecoder.decode(emptyPalette.bytes())}).kind ==
+                SvgErrorKind.Syntax
+        )
+
+        let missingPalette = buildPng(1, 1, 4, 3, 0, [0, 0x10])
+        @Assert(
+            expectSvgException({=> SvgPngDecoder.decode(missingPalette)}).kind ==
+                SvgErrorKind.Syntax
+        )
+    }
+}

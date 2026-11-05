@@ -102,6 +102,20 @@ public class SvgPngDecoder {
         if (header.colorType == 3 && header.transparency.size > header.palette.size / 3) {
             throw SvgException("tRNS 长于调色板", kind: SvgErrorKind.Syntax)
         }
+        if (header.transparency.size > 0) {
+            let expectedTrns: Int64 = match (header.colorType) {
+                case 0 => 2
+                case 2 => 6
+                case 3 => -1
+                case _ => 0
+            }
+            if (expectedTrns == 0) {
+                throw SvgException("该颜色类型不允许 tRNS", kind: SvgErrorKind.Syntax)
+            }
+            if (expectedTrns > 0 && Int64(header.transparency.size) != expectedTrns) {
+                throw SvgException("tRNS 长度与颜色类型不符", kind: SvgErrorKind.Syntax)
+            }
+        }
         let channels = channelCount(header.colorType)
         let bitsPerPixel = channels * header.bitDepth
         let bytesPerPixel = (bitsPerPixel + 7) / 8
