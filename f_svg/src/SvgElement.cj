@@ -75,7 +75,7 @@ public open class SvgElement <: ToString {
             this.attr("id")
         }
         set(value) {
-            this.writeOptional("id", value)
+            this.writeOptionalAttribute("id", value)
         }
     }
 
@@ -85,7 +85,7 @@ public open class SvgElement <: ToString {
             this.attr("class")
         }
         set(value) {
-            this.writeOptional("class", value)
+            this.writeOptionalAttribute("class", value)
         }
     }
 
@@ -95,7 +95,7 @@ public open class SvgElement <: ToString {
             this.attr("style")
         }
         set(value) {
-            this.writeOptional("style", value)
+            this.writeOptionalAttribute("style", value)
         }
     }
 
@@ -285,7 +285,7 @@ public open class SvgElement <: ToString {
         out.toString()
     }
 
-    private func writeOptional(name: String, value: ?String): Unit {
+    internal func writeOptionalAttribute(name: String, value: ?String): Unit {
         match (value) {
             case Some(text) => this.setAttr(name, text)
             case None => this.removeAttr(name)
