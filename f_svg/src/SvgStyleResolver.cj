@@ -194,14 +194,27 @@ public class SvgStyleResolver <: ToString {
                 }
         }
         fontSizeRaw = resolveCssKeyword(fontSizeRaw, fontSpec, parent)
-        let normalizedFontSize = this.normalizeValue(
+        var normalizedFontSize = this.normalizeValue(
             "font-size",
             fontSizeRaw,
             parent,
             elementPath,
             16.0
-        ) ?? "16px"
-        let fontSizePx = (SvgLength.tryParse(normalizedFontSize) ?? SvgLength(16.0)).value
+        )
+        if (normalizedFontSize.isNone()) {
+            let original = fontSizeRaw
+            let inherited = match (parent) {
+                case Some(parentStyle) => parentStyle.get("font-size") ?? "16px"
+                case None => "16px"
+            }
+            normalizedFontSize = this.normalizeValue("font-size", inherited, parent, elementPath, 16.0)
+            if (normalizedFontSize.isNone()) {
+                normalizedFontSize = Some("16px")
+            }
+            this.warnings.add("元素「${elementPath}」属性「font-size」的值「${original}」不合法，已回退")
+        }
+        let resolvedFontSize = normalizedFontSize ?? "16px"
+        let fontSizePx = (SvgLength.tryParse(resolvedFontSize) ?? SvgLength(16.0)).value
         for (spec in SVG_PROPERTY_TABLE) {
             let name = spec.name
             var raw = spec.initial
@@ -224,7 +237,7 @@ public class SvgStyleResolver <: ToString {
             }
             raw = resolveCssKeyword(raw, spec, parent)
             var normalized = if (name == "font-size") {
-                Some(normalizedFontSize)
+                normalizedFontSize
             } else {
                 this.normalizeValue(name, raw, parent, elementPath, fontSizePx)
             }

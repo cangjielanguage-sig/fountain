@@ -283,6 +283,24 @@ public class SvgComputedStyle_test {
         @Assert(near(relativeStyle.letterSpacing().value, 8.0))
         @Assert(near(relativeStyle.wordSpacing().value, 24.0))
         @Assert(near(relativeStyle.strokeDashOffset().value, 8.0))
+
+        let fontRoot = SvgRoot()
+        let fontParent = SvgElement("g")
+        fontParent.style = "font-size: 20px"
+        let fontChild = SvgRect()
+        fontChild.style = "font-size: bogus"
+        fontParent.appendElement(fontChild)
+        fontRoot.appendElement(fontParent)
+        let fontResolver = SvgStyleResolver()
+        let fontStyle = styleOf(fontResolver.compute(fontRoot), fontChild)
+        @Assert(fontStyle.fontSize() == SvgLength(20.0, unit: SvgLengthUnit.Px))
+        var fontWarning = false
+        for (warning in fontResolver.warnings) {
+            if (warning.contains("/svg[1]/g[1]/rect[1]") && warning.contains("font-size")) {
+                fontWarning = true
+            }
+        }
+        @Assert(fontWarning)
     }
 
     /** `<style>` 收集、外部样式表合并顺序与计算不修改文档。 */
