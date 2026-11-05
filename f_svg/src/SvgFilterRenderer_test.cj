@@ -294,3 +294,23 @@ public class SvgFilterAttributeM3_test {
         @Assert(found)
     }
 }
+
+@Test
+public class SvgFilterPercentRegionM3_test {
+    /** userSpaceOnUse 的百分比区域按视口解释。 */
+    @TestCase
+    public func userSpacePercentRegion(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" " +
+            "x=\"10%\" y=\"10%\" width=\"50%\" height=\"50%\"/></defs></svg>"
+        )
+        let region = SvgFilterRenderer().region(
+            filterOf(document),
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.identity,
+            SvgBitmap(200, 100)
+        )
+        @Assert(near(region.x, 20.0) && near(region.y, 10.0))
+        @Assert(near(region.width, 100.0) && near(region.height, 50.0))
+    }
+}

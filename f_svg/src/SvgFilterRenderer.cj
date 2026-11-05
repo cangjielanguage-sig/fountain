@@ -45,10 +45,12 @@ public class SvgFilterRenderer {
         let y = filter.y ?? SvgLength(-10.0, unit: SvgLengthUnit.Percent)
         let width = filter.width ?? SvgLength(120.0, unit: SvgLengthUnit.Percent)
         let height = filter.height ?? SvgLength(120.0, unit: SvgLengthUnit.Percent)
-        let localX = filterAxis(x, objectBounds.x, objectBounds.width, objectUnits)
-        let localY = filterAxis(y, objectBounds.y, objectBounds.height, objectUnits)
-        let localWidth = filterAxis(width, 0.0, objectBounds.width, objectUnits)
-        let localHeight = filterAxis(height, 0.0, objectBounds.height, objectUnits)
+        let viewportWidth = Float64(source.width)
+        let viewportHeight = Float64(source.height)
+        let localX = filterAxis(x, objectBounds.x, objectBounds.width, objectUnits, viewportWidth)
+        let localY = filterAxis(y, objectBounds.y, objectBounds.height, objectUnits, viewportHeight)
+        let localWidth = filterAxis(width, 0.0, objectBounds.width, objectUnits, viewportWidth)
+        let localHeight = filterAxis(height, 0.0, objectBounds.height, objectUnits, viewportHeight)
         let c0 = transform.apply(SvgPoint(localX, localY))
         let c1 = transform.apply(SvgPoint(localX + localWidth, localY))
         let c2 = transform.apply(SvgPoint(localX + localWidth, localY + localHeight))
@@ -214,7 +216,8 @@ private func filterAxis(
     length: SvgLength,
     base: Float64,
     extent: Float64,
-    objectUnits: Bool
+    objectUnits: Bool,
+    viewportExtent: Float64
 ): Float64 {
     if (objectUnits) {
         let fraction = if (length.unit == SvgLengthUnit.Percent) {
@@ -223,6 +226,8 @@ private func filterAxis(
             length.value
         }
         base + fraction * extent
+    } else if (length.unit == SvgLengthUnit.Percent) {
+        length.value / 100.0 * viewportExtent
     } else {
         length.value
     }
