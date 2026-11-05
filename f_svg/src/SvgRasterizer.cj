@@ -91,6 +91,46 @@ public class SvgRasterizer {
         this.fillContours(contours, color, fillRule, opacity)
     }
 
+
+    /** 描边：先轮廓化，再按 nonzero 填充。宽度以用户单位计。 */
+    public func stroke(
+        path: SvgPathData,
+        matrix!: SvgMatrix = SvgMatrix.identity,
+        color!: SvgColor,
+        strokeWidth!: Float64 = 1.0,
+        lineCap!: SvgLineCap = SvgLineCap.Butt,
+        lineJoin!: SvgLineJoin = SvgLineJoin.Miter,
+        miterLimit!: Float64 = 4.0,
+        dashArray!: Array<Float64> = Array<Float64>(),
+        dashOffset!: Float64 = 0.0,
+        opacity!: Float64 = 1.0
+    ): Unit {
+        if (strokeWidth <= 0.0 || color.alpha <= 0.0 || opacity <= 0.0) {
+            return
+        }
+        let scale = matrixScale(matrix)
+        let userTolerance = if (scale > RASTER_EPSILON) { 0.25 / scale } else { 0.25 }
+        let userContours = flattenPathData(path, SvgMatrix.identity, userTolerance)
+        let style = SvgStrokeStyle(
+            strokeWidth,
+            lineCap: lineCap,
+            lineJoin: lineJoin,
+            miterLimit: miterLimit,
+            dashArray: dashArray,
+            dashOffset: dashOffset
+        )
+        let deviceContours = SvgStrokeOutliner.outlineContours(userContours, style)
+        let transformed = ArrayList<Array<SvgPoint>>()
+        for (contour in deviceContours) {
+            let points = ArrayList<SvgPoint>()
+            for (point in contour) {
+                points.add(matrix.apply(point))
+            }
+            transformed.add(points.toArray())
+        }
+        this.fillContours(transformed.toArray(), color, SvgFillRule.Nonzero, opacity)
+    }
+
     /** 直接填充已扁平化的设备坐标轮廓，供描边等内部管线复用。 */
     internal func fillContours(
         contours: Array<Array<SvgPoint>>,
