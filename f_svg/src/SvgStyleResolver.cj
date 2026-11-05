@@ -453,6 +453,57 @@ public class SvgStyleResolver <: ToString {
                     return Some(trimmed)
                 }
                 return None
+            case "clip" => return SvgClipProperty.normalize(trimmed)
+            case "overflow" =>
+                match (SvgOverflow.fromName(lower)) {
+                    case Some(value) =>
+                        if (value.clips()) {
+                            return Some("hidden")
+                        }
+                        return Some("visible")
+                    case None => return None
+                }
+            case "vector-effect" =>
+                match (SvgVectorEffect.fromName(lower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "dominant-baseline" =>
+                match (SvgDominantBaseline.fromName(lower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "alignment-baseline" =>
+                match (SvgAlignmentBaseline.fromName(lower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "baseline-shift" =>
+                match (SvgBaselineShift.fromName(trimmed)) {
+                    case Some(value) =>
+                        match (value) {
+                            case Length(length) =>
+                                match (length.unit) {
+                                    case Percent =>
+                                        return Some(
+                                            formatSvgNumber(length.value / 100.0 * fontSizePx) + "px"
+                                        )
+                                    case _ => return Some(resolveFontRelativeLength(length, fontSizePx))
+                                }
+                            case _ => return Some(value.toString())
+                        }
+                    case None => return None
+                }
+            case "text-decoration" =>
+                match (SvgTextDecoration.tryParse(trimmed)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "writing-mode" =>
+                match (SvgWritingMode.fromName(lower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
             case "fill-rule" | "clip-rule" =>
                 match (SvgFillRule.fromName(lower)) {
                     case Some(rule) => return Some(rule.attrName())

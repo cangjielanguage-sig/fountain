@@ -207,6 +207,8 @@ public struct SvgRenderOptions {
     public let images: ?SvgImageResourceProvider
     /** 抗锯齿档位；默认超采样，保持 M2 输出。 */
     public let antiAlias: SvgAntiAliasMode
+    /** `switch` 的 `systemLanguage` 匹配列表；默认 `["en"]`。 */
+    public let languages: Array<String>
 
     public init(
         width!: Int64 = 0,
@@ -217,7 +219,8 @@ public struct SvgRenderOptions {
         fonts!: ?SvgFontRegistry = None,
         devicePixelRatio!: Float64 = 1.0,
         images!: ?SvgImageResourceProvider = None,
-        antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample
+        antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample,
+        languages!: Array<String> = ["en"]
     ) {
         if (width < 0 || height < 0) {
             throw invalidValue("渲染宽高不能为负，实际 ${width}×${height}")
@@ -240,6 +243,7 @@ public struct SvgRenderOptions {
         this.devicePixelRatio = devicePixelRatio
         this.images = images
         this.antiAlias = antiAlias
+        this.languages = languages
     }
 
     /** 校验输出像素总数；超限抛 `Limit`。 */

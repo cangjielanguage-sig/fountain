@@ -104,7 +104,15 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("filter", false, "none"),
     SvgPropertySpec("marker-start", true, "none"),
     SvgPropertySpec("marker-mid", true, "none"),
-    SvgPropertySpec("marker-end", true, "none")
+    SvgPropertySpec("marker-end", true, "none"),
+    SvgPropertySpec("clip", false, "none"),
+    SvgPropertySpec("overflow", false, "hidden"),
+    SvgPropertySpec("vector-effect", false, "none"),
+    SvgPropertySpec("dominant-baseline", true, "auto"),
+    SvgPropertySpec("alignment-baseline", true, "auto"),
+    SvgPropertySpec("baseline-shift", true, "baseline"),
+    SvgPropertySpec("text-decoration", false, "none"),
+    SvgPropertySpec("writing-mode", true, "lr-tb")
 ]
 
 internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {
@@ -261,6 +269,45 @@ public class SvgComputedStyle <: ToString {
     /** `<image>` 的取样质量；未设置时按 `auto`。 */
     public func imageRendering(): SvgImageRendering {
         SvgImageRendering.fromName(this.get("image-rendering") ?? "auto") ?? SvgImageRendering.Auto
+    }
+
+    /** `clip` 解析结果；`none` / `auto` / 非法值返回 `None`。 */
+    public func clipRect(): ?SvgClipRect {
+        match (this.get("clip")) {
+            case Some(text) => SvgClipProperty.parse(text)
+            case None => None
+        }
+    }
+
+    public func overflowMode(): SvgOverflow {
+        SvgOverflow.fromName(this.get("overflow") ?? "hidden") ?? SvgOverflow.Hidden
+    }
+
+    public func vectorEffect(): SvgVectorEffect {
+        SvgVectorEffect.fromName(this.get("vector-effect") ?? "none") ?? SvgVectorEffect.NoEffect
+    }
+
+    public func dominantBaseline(): SvgDominantBaseline {
+        SvgDominantBaseline.fromName(this.get("dominant-baseline") ?? "auto") ??
+            SvgDominantBaseline.Auto
+    }
+
+    public func alignmentBaseline(): SvgAlignmentBaseline {
+        SvgAlignmentBaseline.fromName(this.get("alignment-baseline") ?? "auto") ??
+            SvgAlignmentBaseline.Auto
+    }
+
+    public func baselineShift(): SvgBaselineShift {
+        SvgBaselineShift.fromName(this.get("baseline-shift") ?? "baseline") ??
+            SvgBaselineShift.Baseline
+    }
+
+    public func textDecoration(): SvgTextDecoration {
+        SvgTextDecoration.tryParse(this.get("text-decoration") ?? "none") ?? SvgTextDecoration.none
+    }
+
+    public func writingMode(): SvgWritingMode {
+        SvgWritingMode.fromName(this.get("writing-mode") ?? "lr-tb") ?? SvgWritingMode.LrTb
     }
 
     public func toString(): String {
