@@ -323,17 +323,17 @@ exists and is skipped otherwise. M2 rendering scenes live in
 Performance reference values are recorded in
 [`doc/perf-baseline.md`](doc/perf-baseline.md).
 
-## Non-goals for M2
+## Non-goals for M3
 
-- Filters, XHTML inside `foreignObject`, `pattern`;
-- `<image>` decoding or any external resource access (a placeholder is drawn);
+- JPEG / WebP / GIF decoding, the `feImage` primitive;
+- XHTML semantics inside `foreignObject`;
 - Full CSS3: pseudo-classes, attribute selectors, media queries, `@font-face`, CSS transitions;
 - Bidirectional text, ligatures, glyph substitution, built-in CJK fonts, TTF/OTF parsing;
-- `textPath` layout, text `rotate` lists, event-driven animation and scripts;
-- SVGZ, GPU/native raster backends.
+- SMIL extensions (`animateColor`, event-driven animation, scripts) and `textPath` `side`;
+- GPU/native raster backends.
 
-`textPath` and text `rotate` degrade to plain text with a warning; unknown
-elements are skipped during rendering.
+When no registered font covers a character, text bounds return `None`; rendering
+still draws a placeholder glyph and emits a warning.
 
 ## API notes
 

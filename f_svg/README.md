@@ -320,16 +320,16 @@ cjpm test
 大样本冒烟使用仓库内 `.assets/README/module-dependencies.svg`（存在时执行，不存在时跳过）。
 性能参考值见 [`doc/perf-baseline.md`](doc/perf-baseline.md)。
 
-## M2 不做什么
+## M3 不做什么
 
-- 滤镜、`foreignObject` 内部 XHTML、`pattern`；
-- `<image>` 位图解码与任何外部资源访问（渲染时只画占位矩形）；
+- JPEG / WebP / GIF 解码、`feImage` 外部图像原语；
+- `foreignObject` 内部 XHTML 语义；
 - 完整 CSS3：伪类、属性选择器、媒体查询、`@font-face`、CSS 动画/过渡；
 - 双向文本、连字、字形替换、内置 CJK 字体、TTF/OTF 解析；
-- `textPath` 排版、文本 `rotate` 列表、事件驱动动画与脚本；
-- SVGZ、GPU / native 光栅后端。
+- SMIL 扩展（`animateColor`、事件驱动动画、脚本）与文本 `textPath` 的 `side` 属性；
+- GPU / native 光栅后端。
 
-`textPath` 与文本 `rotate` 在 M2 降级为普通文本并写 warning；未知元素在渲染时跳过。
+未注册字体或字体缺字时，文本包围盒返回 `None`；渲染仍绘制占位字形并写 warning。
 
 ## 已知 API 约定
 
