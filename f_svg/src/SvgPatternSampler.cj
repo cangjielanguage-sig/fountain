@@ -167,12 +167,17 @@ public class SvgPatternSampler {
             case Some(tile) => return Some(tile)
             case None => ()
         }
-        let active = this.ensureGuard().enter(pattern.identity, "pattern", this.warnings)
+        let sessionGuard = this.ensureGuard()
+        let active = sessionGuard.enter(pattern.identity, "pattern", this.warnings)
         if (!active) {
             return None
         }
-        let result = this.sampleTileUncached(pattern, objectBounds, options, key)
-        this.ensureGuard().leave()
+        var result: ?SvgPatternTile = None
+        try {
+            result = this.sampleTileUncached(pattern, objectBounds, options, key)
+        } finally {
+            sessionGuard.leave()
+        }
         result
     }
 

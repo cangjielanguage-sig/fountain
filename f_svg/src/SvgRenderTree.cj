@@ -715,31 +715,28 @@ public class SvgRenderTreeBuilder {
             return
         }
         let base = context.matrix.multiply(elementTransformMatrix(shape))
+        let sessionGuard = this.ensureGuard()
         for (instance in instances) {
-            let active = match (this.guard) {
-                case Some(guard) => guard.enter(
-                    instance.marker.identity,
-                    "marker",
-                    this.warnings
-                )
-                case None => true
-            }
-            if (!active) {
+            if (!sessionGuard.enter(instance.marker.identity, "marker", this.warnings)) {
                 continue
             }
-            let list = this.buildContent(
-                instance.marker,
-                Int64(context.width),
-                Int64(context.height),
-                base.multiply(instance.matrix),
-                context.fonts,
-                root: Some(context.root)
-            )
-            match (this.guard) {
-                case Some(guard) => guard.leave()
-                case None => ()
+            let expanded = ArrayList<SvgDisplayCommand>()
+            try {
+                let list = this.buildContent(
+                    instance.marker,
+                    Int64(context.width),
+                    Int64(context.height),
+                    base.multiply(instance.matrix),
+                    context.fonts,
+                    root: Some(context.root)
+                )
+                for (command in list.commands) {
+                    expanded.add(command)
+                }
+            } finally {
+                sessionGuard.leave()
             }
-            for (command in list.commands) {
+            for (command in expanded) {
                 commands.add(command)
             }
         }

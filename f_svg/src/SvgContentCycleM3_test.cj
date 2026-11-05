@@ -144,6 +144,32 @@ public class SvgContentCycleM3_test {
         @Assert(error.kind == SvgErrorKind.Limit)
     }
 
+    /** 一次 Limit 之后复用同一 renderer：不残留引用栈、不误报循环或深度上限。 */
+    @TestCase
+    public func guardRecoversAfterLimit(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let deep = SvgParser.parse(patternChainSvg(70))
+        let error = expectSvgException({=> renderer.render(deep)})
+        @Assert(error.kind == SvgErrorKind.Limit)
+
+        let normal = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">" +
+            "<defs><pattern id=\"p\" width=\"5\" height=\"5\" patternUnits=\"userSpaceOnUse\">" +
+            "<rect width=\"5\" height=\"5\" fill=\"red\"/></pattern></defs>" +
+            "<rect width=\"20\" height=\"20\" fill=\"url(#p)\"/></svg>"
+        )
+        let bitmap = renderer.render(normal)
+        @Assert(bitmap.width == 20 && bitmap.height == 20)
+        @Assert(colorNear(bitmap.pixel(10, 10), SvgColor.fromRgb(255, 0, 0)))
+        var cycleWarning = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("循环")) {
+                cycleWarning = true
+            }
+        }
+        @Assert(!cycleWarning)
+    }
+
     /** 非循环的内容嵌套超过 64 层抛 Limit。 */
     @TestCase
     public func contentDepthLimit(): Unit {
