@@ -219,6 +219,12 @@ let options = SvgRenderOptions(images: Some(MemoryImages()))
 let bitmap = SvgRenderer(options: options).render(document)
 ```
 
+Note: the default `SvgParseOptions` removes external references such as `mem://`. Parse such
+documents with `SvgSecurityOptions(unsafePolicy: SvgUnsafePolicy.Keep)`, otherwise the provider
+is never called. `allowExternalReferences` only permits `http(s):` and protocol-relative URLs,
+not custom schemes.
+```
+
 `<image>` accepts exactly two sources: inline `data:image/png;base64,` bytes, or bytes returned
 by a caller-supplied `SvgImageResourceProvider.resolve(href)`. The library never opens network
 connections or files and never executes scripts. Missing providers, `None` results and decode

@@ -227,6 +227,11 @@ let options = SvgRenderOptions(images: Some(MemoryImages()))
 let bitmap = SvgRenderer(options: options).render(document)
 ```
 
+注意：默认 `SvgParseOptions` 会移除 `mem://` 等外部引用；解析这类文档时需设置
+`SvgParseOptions(security: SvgSecurityOptions(unsafePolicy: SvgUnsafePolicy.Keep))`，
+否则 provider 不会被调用。`allowExternalReferences` 只放行 `http(s):` 与协议相对 URL，
+不放行自定义协议。
+
 `<image>` 只接受两种来源：`data:image/png;base64,` 内联字节，或调用方注入的
 `SvgImageResourceProvider.resolve(href)`。库内不联网、不打开文件、不执行脚本；
 `preserveAspectRatio` 与 `image-rendering` 分别控制映射与最近邻 / 双线性取样。
