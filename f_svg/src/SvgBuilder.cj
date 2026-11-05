@@ -211,6 +211,9 @@ private func fillSvgAttributes(
             continue
         }
         validateSvgAttribute(attribute, path, context)
+        if (attribute.name.local == "offset") {
+            warnOffsetIfClamped(attribute.value, path, context)
+        }
         element.appendAttribute(attribute.name, attribute.value)
     }
 }
@@ -268,6 +271,32 @@ private func applyUnsafePolicy(what: String, path: String, context: SvgBuildCont
             context.warnings.add("已移除${what}（${path}）")
             true
         case SvgUnsafePolicy.Keep => false
+    }
+}
+
+/** `offset` 归一后越界必须钳制并记 warning（不做严格模式报错）。 */
+private func warnOffsetIfClamped(value: String, path: String, context: SvgBuildContext): Unit {
+    let trimmed = value.trimAscii()
+    if (trimmed.size == 0) {
+        return
+    }
+    var body = trimmed
+    var percent = false
+    if (trimmed[trimmed.size - 1] == b'%') {
+        percent = true
+        body = trimmed[0..trimmed.size - 1]
+    }
+    match (tryParseSvgFloat(body)) {
+        case Some(number) =>
+            let raw = if (percent) {
+                number / 100.0
+            } else {
+                number
+            }
+            if (raw < 0.0 || raw > 1.0) {
+                context.warnings.add("属性「offset」的值「${value}」超出 0..1，已钳制（${path}）")
+            }
+        case None => ()
     }
 }
 

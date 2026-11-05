@@ -220,6 +220,51 @@ public class SvgParser_test {
         @Assert(document.warnings.size >= 1)
     }
 
+
+    /** 标签表全覆盖：每个已知标签都得到对应模型类型。 */
+    @TestCase
+    public func tagTableCoverage(): Unit {
+        let text = "<svg>" +
+            "<g/><defs/><symbol/><marker/><pattern/><clipPath/><mask/><switch/><a/><foreignObject/>" +
+            "<rect width=\"1\" height=\"1\"/><circle r=\"1\"/><ellipse rx=\"1\" ry=\"1\"/>" +
+            "<line/><polyline points=\"0,0 1,1\"/><polygon points=\"0,0 1,1\"/><path d=\"M0 0\"/>" +
+            "<text/><tspan/><textPath/>" +
+            "<linearGradient/><radialGradient/><stop/>" +
+            "<use/><image/></svg>"
+        let document = SvgParser.parse(text)
+        @Assert(document.root is SvgRoot)
+        @Assert(document.root.child("g").getOrThrow() is SvgContainer)
+        @Assert(document.root.child("defs").getOrThrow() is SvgContainer)
+        @Assert(document.root.child("clipPath").getOrThrow() is SvgContainer)
+        @Assert(document.root.child("a").getOrThrow() is SvgContainer)
+        @Assert(document.root.child("rect").getOrThrow() is SvgRect)
+        @Assert(document.root.child("circle").getOrThrow() is SvgCircle)
+        @Assert(document.root.child("ellipse").getOrThrow() is SvgEllipse)
+        @Assert(document.root.child("line").getOrThrow() is SvgLine)
+        @Assert(document.root.child("polyline").getOrThrow() is SvgPolyline)
+        @Assert(document.root.child("polygon").getOrThrow() is SvgPolygon)
+        @Assert(document.root.child("path").getOrThrow() is SvgPath)
+        @Assert(document.root.child("text").getOrThrow() is SvgText)
+        @Assert(document.root.child("tspan").getOrThrow() is SvgTspan)
+        @Assert(document.root.child("textPath").getOrThrow() is SvgTextPath)
+        @Assert(document.root.child("linearGradient").getOrThrow() is SvgLinearGradient)
+        @Assert(document.root.child("radialGradient").getOrThrow() is SvgRadialGradient)
+        @Assert(document.root.child("stop").getOrThrow() is SvgStop)
+        @Assert(document.root.child("use").getOrThrow() is SvgUse)
+        @Assert(document.root.child("image").getOrThrow() is SvgImage)
+    }
+
+    /** offset 越界钳制时记 warning。 */
+    @TestCase
+    public func offsetClampWarning(): Unit {
+        let document = SvgParser.parse("<svg><stop offset=\"1.5\"/><stop offset=\"-0.2\"/></svg>")
+        let stops = document.root.childrenOf("stop")
+        @Assert((stops[0] as SvgStop).getOrThrow().offset == Some(1.0))
+        @Assert((stops[1] as SvgStop).getOrThrow().offset == Some(0.0))
+        @Assert(document.warnings.size >= 2)
+        @Assert(document.warnings[0].contains("offset"))
+    }
+
     /** XML 语法错误包装为 Syntax，保留行列。 */
     @TestCase
     public func xmlSyntaxError(): Unit {

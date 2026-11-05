@@ -64,6 +64,8 @@ public class SvgSecurity_test {
 
         @Assert(countWarnings(document, "外部引用") >= 6)
         @Assert(countWarnings(document, "事件属性") >= 2)
+        @Assert(countWarnings(document, "/svg[1]/rect[1]") >= 1)
+        @Assert(countWarnings(document, "/svg[1]/image[1]") >= 1)
     }
 
     /** Reject 策略：脚本与外部引用都抛 Security。 */

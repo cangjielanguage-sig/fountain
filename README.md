@@ -308,6 +308,11 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_xml/README.md>
 
+### `fountain::f_svg`
+SVG 1.1 静态文档：值类型、类型化 DOM、解析与生成、未知内容无损保留、安全过滤与规模上限
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_svg/README.md>
+
 ### `fountain::f_zip`
 ZIP 容器读写：ZIP64 双向、流式写入（24 字节 ZIP64 descriptor）、大条目落盘、Zip Slip / 符号链接 / 炸弹防护
 
