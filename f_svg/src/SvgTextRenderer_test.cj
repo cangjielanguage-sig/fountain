@@ -166,6 +166,7 @@ public class SvgTextRenderer_test {
         let missing = emptyRegistry.layout(text, style: textStyleOf(text))
         @Assert(missing.glyphs.size == 1)
         @Assert(missing.glyphs[0].path.isSome())
+        @Assert(missing.missingGlyph)
         @Assert(emptyRegistry.warnings.size >= 1)
 
         let pathText = SvgTextPath()

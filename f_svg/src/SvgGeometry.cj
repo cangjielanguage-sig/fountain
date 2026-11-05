@@ -771,9 +771,6 @@ private func textElementBounds(
         case Some(value) => value
         case None => SvgFontRegistry.defaultRegistry()
     }
-    if (registry.resolve(style.fontFamily(), style.fontWeight(), style.fontStyle()).isNone()) {
-        return None
-    }
     let layout = SvgTextRenderer(registry: registry).layout(text, style: style)
     if (layout.missingGlyph) {
         return None

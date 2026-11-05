@@ -149,6 +149,33 @@ public class SvgGeometry_test {
         full.fontSize = SvgLength(10.0)
         @Assert(SvgGeometry.bounds(full, style: textStyleOf(full), fonts: Some(registry)).isSome())
     }
+
+    /** 混合字体：缺字判定以各字符实际字体为准，不被根字体预检查误判。 */
+    @TestCase
+    public func textBoundsRespectTspanFonts(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Fixed", FixedBBoxFont())
+
+        let overridden = SvgText()
+        overridden.fontFamily = "Missing"
+        overridden.fontSize = SvgLength(10.0)
+        let span = SvgTspan()
+        span.fontFamily = "Fixed"
+        span.appendText("AB")
+        overridden.appendElement(span)
+        let overriddenStyle = textStyleOf(overridden)
+        @Assert(SvgGeometry.bounds(overridden, style: overriddenStyle, fonts: Some(registry)).isSome())
+
+        let fallback = SvgText()
+        fallback.fontFamily = "Fixed"
+        fallback.fontSize = SvgLength(10.0)
+        let badSpan = SvgTspan()
+        badSpan.fontFamily = "Missing"
+        badSpan.appendText("A")
+        fallback.appendElement(badSpan)
+        let fallbackStyle = textStyleOf(fallback)
+        @Assert(SvgGeometry.bounds(fallback, style: fallbackStyle, fonts: Some(registry)).isNone())
+    }
 }
 
 internal class SingleGlyphFont <: SvgFont {

@@ -165,6 +165,7 @@ public class SvgTextRenderer {
                     }
                     paths.add(entry.path)
                 case None =>
+                    missingGlyph = true
                     this.warnings.add("未找到字体「${char.family}」，使用占位字形")
                     advances.add(char.fontSize * 0.5)
                     paths.add(placeholderGlyph(char.fontSize, char.fontSize * 0.5))
