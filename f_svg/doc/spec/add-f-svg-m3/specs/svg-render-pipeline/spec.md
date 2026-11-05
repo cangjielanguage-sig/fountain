@@ -16,7 +16,7 @@
 
 1. `href` 以 `data:image/png;base64,` 开头且 `allowDataImages` 为真时，内置 base64 解码与 PNG 解码；
 2. 其他 `href` 仅在 `SvgRenderOptions.images` 非 `None` 时调用 `SvgImageResourceProvider.resolve(href)`；
-3. 资源不可用、解码失败或未注入 provider 时，按 `x` / `y` / `width` / `height` 绘制占位并追加 warning；占位默认透明，若 `SvgRenderOptions.background` 非空则用背景色填充（与 M2 一致）。
+3. 资源不可用、解码失败或未注入 provider 时，按 `x` / `y` / `width` / `height` 绘制透明占位，并追加 warning；设置 `SvgRenderOptions.background` 时按 M2 用背景色填充占位。
 
 #### Scenario: data URI
 
@@ -31,7 +31,7 @@
 #### Scenario: 未注入 provider
 
 - **WHEN** `images = None` 且 `href="mem://red"`
-- **THEN** 绘制透明占位（设置 `background` 时为背景色）并追加 warning，不抛异常
+- **THEN** 绘制透明占位（设置 `background` 时按 M2 用背景色填充）并追加 warning，不抛异常
 
 ### Requirement: image 映射与取样
 
