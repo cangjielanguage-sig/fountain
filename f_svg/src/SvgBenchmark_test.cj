@@ -62,4 +62,24 @@ public class SvgBenchmark_test {
         @Assert(png.size > 8)
         println("1024×1024 PNG 编码: ${pngElapsed.toNanoseconds() / 1000000} ms")
     }
+
+    /** 1000 段路径 bbox 基准（参考，非门禁）。 */
+    @TestCase
+    public func geometryBenchmark(): Unit {
+        let builder = StringBuilder("M0 0")
+        for (index in 0..1000) {
+            if (index % 2 == 0) {
+                builder.append(" L${index + 1} ${index % 37}")
+            } else {
+                builder.append(" C${index} 10 ${index + 1} 20 ${index + 2} 0")
+            }
+        }
+        let path = SvgPath(d: SvgPathData.parse(builder.toString()))
+        let style = styleOf(computeTree(path), path)
+        let start = MonoTime.now()
+        let box = SvgGeometry.bounds(path, style: style)
+        let elapsed = MonoTime.now() - start
+        @Assert(box.isSome())
+        println("1000 段路径 bounds: ${elapsed.toNanoseconds() / 1000000} ms")
+    }
 }

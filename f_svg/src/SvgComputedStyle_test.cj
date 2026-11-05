@@ -330,12 +330,12 @@ public class SvgComputedStyle_test {
         @Assert(withoutParent.fontSize() == SvgLength(16.0, unit: SvgLengthUnit.Px))
     }
 
-    /** 1000 规则 × 1000 元素的匹配基准（只记录，不门禁）。 */
+    /** 1000 条简单类选择器 × 1000 元素的匹配基准（只记录，不门禁）。 */
     @TestCase
     public func thousandByThousandBenchmark(): Unit {
         let rules = StringBuilder()
         for (index in 0..1000) {
-            rules.append("rect { fill: #010203 }\n")
+            rules.append(".c${index} { fill: #010203 }\n")
         }
         let root = SvgRoot()
         for (index in 0..1000) {
@@ -348,6 +348,6 @@ public class SvgComputedStyle_test {
         let tree = resolver.compute(root)
         let elapsed = MonoTime.now() - start
         @Assert(tree.size == 1001)
-        println("CSS 1000x1000 匹配耗时: ${elapsed.toNanoseconds() / 1000000} ms")
+        println("CSS 1000 类选择器 x 1000 元素（匹配 + 计算样式）耗时: ${elapsed.toNanoseconds() / 1000000} ms")
     }
 }
