@@ -276,7 +276,7 @@ public class SvgTextRenderer {
                             placements = Some(placed)
                         }
                     case None =>
-                        this.warnings.add("textPath 的路径缺失或为空，降级为普通文本")
+                        this.warnings.add("${location} textPath 的路径缺失或为空，降级为普通文本")
                 }
             case None => ()
         }

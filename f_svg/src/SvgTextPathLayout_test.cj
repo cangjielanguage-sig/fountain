@@ -428,4 +428,25 @@ public class SvgTextWarningLocationM3_test {
         }
         @Assert(located)
     }
+
+    /** href 指向不存在的路径时，降级 warning 同样带元素路径。 */
+    @TestCase
+    public func missingHrefWarningContainsLocation(): Unit {
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(
+            svgDoc(
+                "<text font-family=\"Hershey\" font-size=\"10\" fill=\"black\">" +
+                "<textPath href=\"#missing\">AB</textPath></text>",
+                width: 40,
+                height: 40
+            )
+        )
+        var located = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("textPath") && warning.contains("/svg[1]/text[1]")) {
+                located = true
+            }
+        }
+        @Assert(located)
+    }
 }
