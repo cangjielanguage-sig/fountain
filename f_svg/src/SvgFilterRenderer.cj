@@ -85,16 +85,17 @@ public class SvgFilterRenderer {
         let bottom = Int64(ceil(area.y + area.height))
         let width = right - left
         let height = bottom - top
-        let output = SvgBitmap(source.width, source.height)
         if (width <= 0 || height <= 0) {
-            return output
+            return SvgBitmap(source.width, source.height)
         }
+        // 先做除法判定再分配区域缓冲与输出位图，保证超限时不发生大块分配。
         if (width > options.maxPixels / height) {
             throw SvgException(
                 "滤镜区域像素数超过 maxPixels 上限 ${options.maxPixels}",
                 kind: SvgErrorKind.Limit
             )
         }
+        let output = SvgBitmap(source.width, source.height)
         let sourceBuffer = SvgFilterBuffer.fromBitmap(source, left, top, width, height)
         let linear = (filter.attr("color-interpolation-filters") ?? "srgb").trimAscii().toAsciiLower() ==
             "linearrgb"

@@ -228,3 +228,27 @@ public class SvgFilterRenderer_test {
         }
     }
 }
+
+@Test
+public class SvgFilterRegionOrderM3_test {
+    /** 区域超限在分配区域缓冲前抛出。 */
+    @TestCase
+    public func limitBeforeAllocation(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" " +
+            "x=\"0\" y=\"0\" width=\"64\" height=\"64\"><feOffset dx=\"1\"/></filter></defs></svg>"
+        )
+        let error = expectSvgException(
+            {=>
+                SvgFilterRenderer().apply(
+                    filterOf(document),
+                    SvgBitmap(64, 64),
+                    SvgBounds(0.0, 0.0, 1.0, 1.0),
+                    SvgMatrix.identity,
+                    SvgRenderOptions(maxPixels: 4095)
+                )
+            }
+        )
+        @Assert(error.kind == SvgErrorKind.Limit)
+    }
+}
