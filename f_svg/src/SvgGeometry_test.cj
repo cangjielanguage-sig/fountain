@@ -96,4 +96,73 @@ public class SvgGeometry_test {
         let container = SvgContainer(SvgContainerKind.Group)
         @Assert(geometryBounds(container).isNone())
     }
+
+    /** 文本包围盒使用注册字体并遵循 tspan / 间距 / textLength 布局。 */
+    @TestCase
+    public func textBoundsFollowLayout(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Fixed", FixedBBoxFont())
+        let text = SvgText()
+        text.appendText("AB")
+        text.fontFamily = "Fixed"
+        text.fontSize = SvgLength(10.0)
+        let simple = SvgGeometry.bounds(text, style: textStyleOf(text), fonts: Some(registry))
+        @Assert(boundsNear(simple ?? SvgBounds.empty(), SvgBounds(0.0, -8.0, 20.0, 8.0)))
+
+        text.letterSpacing = SvgLength(2.0)
+        let spaced = SvgGeometry.bounds(text, style: textStyleOf(text), fonts: Some(registry))
+        @Assert(near((spaced ?? SvgBounds.empty()).width, 22.0))
+
+        let complex = SvgText()
+        complex.fontFamily = "Fixed"
+        complex.fontSize = SvgLength(10.0)
+        complex.appendText("A")
+        let span = SvgTspan()
+        span.fontSize = SvgLength(20.0)
+        span.dx = [SvgLength(3.0)]
+        span.appendText("B")
+        complex.appendElement(span)
+        let complexStyle = textStyleOf(complex)
+        let layout = SvgTextRenderer(registry: registry).layout(complex, style: complexStyle)
+        let geometry = SvgGeometry.bounds(complex, style: complexStyle, fonts: Some(registry))
+        @Assert(boundsNear(geometry ?? SvgBounds.empty(), layout.bounds ?? SvgBounds.empty()))
+        @Assert((geometry ?? SvgBounds.empty()).width > 20.0)
+    }
+}
+
+internal class FixedBBoxFont <: SvgFont {
+    public func glyphPath(codePoint: Int64, fontSize: Float64): ?SvgPathData {
+        if (codePoint == 32) {
+            return Some(SvgPathData(Array<SvgPathCommand>()))
+        }
+        let scale = fontSize / 10.0
+        Some(
+            SvgPathData([
+                SvgPathCommand(SvgPathCommandKind.MoveTo, false, [0.0, -8.0 * scale]),
+                SvgPathCommand(SvgPathCommandKind.LineTo, false, [10.0 * scale, -8.0 * scale]),
+                SvgPathCommand(SvgPathCommandKind.LineTo, false, [10.0 * scale, 0.0]),
+                SvgPathCommand(SvgPathCommandKind.LineTo, false, [0.0, 0.0]),
+                SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>())
+            ])
+        )
+    }
+
+    public func advance(codePoint: Int64, fontSize: Float64): Float64 {
+        fontSize
+    }
+
+    public func ascent(fontSize: Float64): Float64 {
+        fontSize * 0.8
+    }
+
+    public func descent(fontSize: Float64): Float64 {
+        fontSize * 0.2
+    }
+
+    public func glyphBounds(codePoint: Int64, fontSize: Float64): ?SvgBounds {
+        if (codePoint == 32) {
+            return None
+        }
+        Some(SvgBounds(0.0, -fontSize * 0.8, fontSize, fontSize * 0.8))
+    }
 }

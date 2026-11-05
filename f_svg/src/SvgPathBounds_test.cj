@@ -219,7 +219,7 @@ public class SvgPathBounds_test {
         let registry = SvgFontRegistry()
         registry.register("test", FixedSvgFont())
         let withFont = SvgGeometry.bounds(text, style: style, fonts: Some(registry))
-        @Assert(boundsNear(withFont ?? SvgBounds.empty(), SvgBounds(10.0, 10.0, 20.0, 10.0)))
+        @Assert(boundsNear(withFont ?? SvgBounds.empty(), SvgBounds(10.0, 10.0, 10.0, 10.0)))
 
         let emptyText = SvgText()
         emptyText.fontSize = SvgLength(10.0)

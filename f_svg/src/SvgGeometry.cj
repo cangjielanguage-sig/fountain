@@ -764,62 +764,12 @@ private func textElementBounds(
     style: SvgComputedStyle,
     fonts: ?SvgFontRegistry
 ): ?SvgBounds {
-    let content = text.text()
-    if (content.size == 0) {
-        return None
-    }
     let registry = match (fonts) {
         case Some(value) => value
         case None => SvgFontRegistry.defaultRegistry()
     }
-    let font = match (registry.resolve(style.fontFamily(), style.fontWeight(), style.fontStyle())) {
-        case Some(value) => value
-        case None => return None
-    }
-    let fontSize = style.fontSize().value
-    if (fontSize <= 0.0) {
+    if (registry.resolve(style.fontFamily(), style.fontWeight(), style.fontStyle()).isNone()) {
         return None
     }
-    var totalAdvance = 0.0
-    for (rune in content.runes()) {
-        totalAdvance += font.advance(Int64(UInt32(rune)), fontSize)
-    }
-    let anchorOffset = match (style.textAnchor()) {
-        case SvgTextAnchor.Start => 0.0
-        case SvgTextAnchor.Middle => -totalAdvance / 2.0
-        case SvgTextAnchor.End => -totalAdvance
-    }
-    let startX = firstLengthValue(text.x, 0.0) + anchorOffset
-    let startY = firstLengthValue(text.y, 0.0)
-    var pen = startX
-    var box = SvgBounds.empty()
-    var hasAny = false
-    for (rune in content.runes()) {
-        let codePoint = Int64(UInt32(rune))
-        match (font.glyphBounds(codePoint, fontSize)) {
-            case Some(glyph) =>
-                if (!glyph.isEmpty()) {
-                    box = box.union(SvgBounds(glyph.x + pen, glyph.y + startY, glyph.width, glyph.height))
-                    hasAny = true
-                }
-            case None => ()
-        }
-        pen += font.advance(codePoint, fontSize)
-    }
-    if (hasAny) {
-        Some(box)
-    } else {
-        None
-    }
-}
-
-private func firstLengthValue(values: ?Array<SvgLength>, fallback: Float64): Float64 {
-    match (values) {
-        case Some(list) => if (list.size > 0) {
-            list[0].value
-        } else {
-            fallback
-        }
-        case None => fallback
-    }
+    SvgTextRenderer(registry: registry).layout(text, style: style).bounds
 }

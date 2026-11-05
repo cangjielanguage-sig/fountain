@@ -128,6 +128,7 @@ private class SvgRenderTreeContext {
     let root: SvgElement
     let depth: Int64
     let useStack: Array<String>
+    let fonts: ?SvgFontRegistry
 
     init(
         matrix: SvgMatrix,
@@ -137,7 +138,8 @@ private class SvgRenderTreeContext {
         styles: SvgComputedStyleTree,
         root: SvgElement,
         depth: Int64,
-        useStack: Array<String>
+        useStack: Array<String>,
+        fonts: ?SvgFontRegistry
     ) {
         this.matrix = matrix
         this.width = width
@@ -147,6 +149,7 @@ private class SvgRenderTreeContext {
         this.root = root
         this.depth = depth
         this.useStack = useStack
+        this.fonts = fonts
     }
 }
 
@@ -185,7 +188,8 @@ public class SvgRenderTreeBuilder {
                         styles,
                         root,
                         0,
-                        Array<String>()
+                        Array<String>(),
+                        options.fonts
                     )
                     this.walkChildren(root, context, commands)
                 }
@@ -221,7 +225,8 @@ public class SvgRenderTreeBuilder {
             styles,
             element,
             0,
-            Array<String>()
+            Array<String>(),
+            options.fonts
         )
         this.walkElement(element, context, commands)
         SvgDisplayList(commands.toArray(), element, outputWidth, outputHeight, Float64(width), Float64(height))
@@ -270,7 +275,7 @@ public class SvgRenderTreeBuilder {
                     return
                 }
                 let matrix = context.matrix.multiply(elementTransformMatrix(text))
-                let bounds = SvgGeometry.bounds(text, style: style)
+                let bounds = SvgGeometry.bounds(text, style: style, fonts: context.fonts)
                 commands.add(
                     SvgDisplayCommand(
                         SvgDisplayCommandKind.Text,
@@ -332,7 +337,8 @@ public class SvgRenderTreeBuilder {
             context.styles,
             context.root,
             context.depth,
-            context.useStack
+            context.useStack,
+            context.fonts
         )
         if (container.kind == SvgContainerKind.Switch) {
             for (node in container.children) {
@@ -391,7 +397,8 @@ public class SvgRenderTreeBuilder {
             context.styles,
             context.root,
             context.depth + 1,
-            context.useStack
+            context.useStack,
+            context.fonts
         )
         this.walkChildren(svg, childContext, commands)
     }
@@ -479,7 +486,8 @@ public class SvgRenderTreeBuilder {
             context.styles,
             context.root,
             context.depth + 1,
-            nextStack.toArray()
+            nextStack.toArray(),
+            context.fonts
         )
         if (target.tag == "symbol") {
             this.walkChildren(target, childContext, commands)
