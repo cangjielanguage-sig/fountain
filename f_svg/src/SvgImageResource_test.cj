@@ -105,3 +105,33 @@ public class SvgImageResource_test {
         @Assert(error.kind == SvgErrorKind.Limit)
     }
 }
+
+@Test
+public class SvgNestedDecodeBudgetM3_test {
+    /** pattern tile 内的 image 计入外层渲染的解码像素预算。 */
+    @TestCase
+    public func patternTileSharesBudget(): Unit {
+        let red = SvgBitmap(2, 2)
+        red.fill(SvgColor.fromRgb(255, 0, 0))
+        let blue = SvgBitmap(2, 2)
+        blue.fill(SvgColor.fromRgb(0, 0, 255))
+        let redUri = m3PngDataUri(red.toPngBytes())
+        let blueUri = m3PngDataUri(blue.toPngBytes())
+        let document = m3KeepDoc(
+            "<defs><pattern id=\"p\" width=\"4\" height=\"4\" patternUnits=\"userSpaceOnUse\">" +
+            "<image href=\"${redUri}\" width=\"4\" height=\"4\"/></pattern></defs>" +
+            "<rect width=\"20\" height=\"20\" fill=\"url(#p)\"/>" +
+            "<image href=\"${blueUri}\" width=\"4\" height=\"4\"/>",
+            width: 20,
+            height: 20
+        )
+        let resource = SvgImageResource(budget: SvgDecodeBudget(4))
+        let renderer = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1),
+            sessionImages: resource,
+            sessionGuard: SvgRenderGuard()
+        )
+        let error = expectSvgException({=> renderer.render(document)})
+        @Assert(error.kind == SvgErrorKind.Limit)
+    }
+}
