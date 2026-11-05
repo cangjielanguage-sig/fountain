@@ -103,7 +103,10 @@ public class SvgFilterRenderer {
         } else {
             sourceBuffer
         }
-        let result = this.runChain(filter, working)
+        let primitiveObjectUnits = filter.primitiveUnits == SvgCoordinateUnits.ObjectBoundingBox
+        let primitiveScaleX = if (primitiveObjectUnits) { objectBounds.width } else { 1.0 }
+        let primitiveScaleY = if (primitiveObjectUnits) { objectBounds.height } else { 1.0 }
+        let result = this.runChain(filter, working, primitiveScaleX, primitiveScaleY)
         let final = if (linear) {
             toSrgb(result)
         } else {
@@ -148,7 +151,12 @@ public class SvgFilterRenderer {
         mergeFilterBuffers(buffers)
     }
 
-    private func runChain(filter: SvgFilter, source: SvgFilterBuffer): SvgFilterBuffer {
+    private func runChain(
+        filter: SvgFilter,
+        source: SvgFilterBuffer,
+        primitiveScaleX: Float64,
+        primitiveScaleY: Float64
+    ): SvgFilterBuffer {
         let named = HashMap<String, SvgFilterBuffer>()
         named["SourceGraphic"] = source
         var previous = source
@@ -183,7 +191,14 @@ public class SvgFilterRenderer {
             }
             let result = match (primitive) {
                 case merge: SvgFeMerge => this.mergePrimitive(merge, input, named)
-                case _ => applyFilterPrimitive(primitive, input, input2, this.warnings)
+                case _ => applyFilterPrimitive(
+                    primitive,
+                    input,
+                    input2,
+                    this.warnings,
+                    primitiveScaleX,
+                    primitiveScaleY
+                )
             }
             let name = primitive.result ?? "result${index}"
             named[name] = result
@@ -229,7 +244,9 @@ private func applyFilterPrimitive(
     primitive: SvgFilterPrimitive,
     input: SvgFilterBuffer,
     input2: SvgFilterBuffer,
-    warnings: ArrayList<String>
+    warnings: ArrayList<String>,
+    scaleX: Float64,
+    scaleY: Float64
 ): SvgFilterBuffer {
     match (primitive) {
         case blur: SvgFeGaussianBlur =>
@@ -237,11 +254,11 @@ private func applyFilterPrimitive(
             var sigmaX = 0.0
             var sigmaY = 0.0
             if (deviations.size == 1) {
-                sigmaX = deviations[0]
-                sigmaY = deviations[0]
+                sigmaX = deviations[0] * scaleX
+                sigmaY = deviations[0] * scaleY
             } else if (deviations.size >= 2) {
-                sigmaX = deviations[0]
-                sigmaY = deviations[1]
+                sigmaX = deviations[0] * scaleX
+                sigmaY = deviations[1] * scaleY
             }
             if (sigmaX < 0.0 || sigmaY < 0.0) {
                 warnings.add("feGaussianBlur 的 stdDeviation 含负值，按 0 处理")
@@ -250,7 +267,11 @@ private func applyFilterPrimitive(
             }
             blurFilterBuffer(input, sigmaX, sigmaY)
         case offset: SvgFeOffset =>
-            offsetFilterBuffer(input, Int64(round(offset.dx.value)), Int64(round(offset.dy.value)))
+            offsetFilterBuffer(
+                input,
+                Int64(round(offset.dx.value * scaleX)),
+                Int64(round(offset.dy.value * scaleY))
+            )
         case flood: SvgFeFlood =>
             let color = match (flood.floodColor.color) {
                 case Some(value) => value

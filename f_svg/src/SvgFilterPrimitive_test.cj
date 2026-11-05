@@ -322,3 +322,41 @@ public class SvgFilterChainM3_test {
         @Assert(output.pixel(1, 5).alpha == 0.0)
     }
 }
+
+@Test
+public class SvgFilterPrimitiveUnitsM3_test {
+    /** primitiveUnits=objectBoundingBox 时 stdDeviation 按包围盒缩放。 */
+    @TestCase
+    public func objectBoundingBoxScalesDeviation(): Unit {
+        let objectUnits = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" primitiveUnits=\"objectBoundingBox\" " +
+            "filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"20\" height=\"10\">" +
+            "<feGaussianBlur stdDeviation=\"0.1\"/></filter></defs></svg>"
+        )
+        let userUnits = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" primitiveUnits=\"userSpaceOnUse\" " +
+            "filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"20\" height=\"10\">" +
+            "<feGaussianBlur stdDeviation=\"0.1\"/></filter></defs></svg>"
+        )
+        let source = SvgBitmap(20, 10)
+        source.setPixel(10, 5, SvgColor.fromRgb(255, 255, 255))
+        let objectOutput = SvgFilterRenderer().apply(
+            filterOf(objectUnits),
+            source,
+            SvgBounds(0.0, 0.0, 20.0, 10.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        let userOutput = SvgFilterRenderer().apply(
+            filterOf(userUnits),
+            source,
+            SvgBounds(0.0, 0.0, 20.0, 10.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        @Assert(!(objectOutput.pixels == userOutput.pixels))
+        @Assert(objectOutput.pixel(14, 5).alpha > 0.0)
+        @Assert(userOutput.pixel(14, 5).alpha == 0.0)
+        @Assert(objectOutput.pixel(10, 5).alpha < userOutput.pixel(10, 5).alpha)
+    }
+}
