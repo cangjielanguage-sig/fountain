@@ -62,11 +62,50 @@ private func analyticMin(left: Int64, right: Int64): Int64 {
 
 /** 解析覆盖率的定点刻度。 */
 internal let ANALYTIC_COVERAGE_SCALE: Int64 = 65535
+/** 每像素行在 y 方向的子扫描线条数。 */
+private let ANALYTIC_SUB_SCANLINES: Int64 = 32
+
+private class SvgAnalyticEdge {
+    let yMin: Float64
+    let yMax: Float64
+    let xAtMin: Float64
+    let slope: Float64
+    let direction: Int64
+
+    init(yMin: Float64, yMax: Float64, xAtMin: Float64, slope: Float64, direction: Int64) {
+        this.yMin = yMin
+        this.yMax = yMax
+        this.xAtMin = xAtMin
+        this.slope = slope
+        this.direction = direction
+    }
+}
+
+private class SvgAnalyticHit {
+    let x: Float64
+    let direction: Int64
+
+    init(x: Float64, direction: Int64) {
+        this.x = x
+        this.direction = direction
+    }
+}
+
+private class SvgAnalyticSpan {
+    let start: Float64
+    let end: Float64
+
+    init(start: Float64, end: Float64) {
+        this.start = start
+        this.end = end
+    }
+}
 
 /**
- * 计算解析覆盖率：简单路径按像素精确裁剪求面积，复杂路径按固定 8×8 子采样判定内外。
+ * 解析覆盖率：把轮廓离散为设备空间线段，逐子扫描线按像素列累加有符号覆盖长度。
  *
- * 返回每个像素的覆盖率，取值 `0..65535`。
+ * 每条线段只在它跨越的扫描线内贡献；缠绕方向由 `nonzero` / `evenodd` 独立判定，
+ * 覆盖率按 y 方向子扫描线求平均并钳制到 `0..1`。
  */
 internal func analyticCoverage(
     contours: Array<Array<SvgPoint>>,
@@ -82,13 +121,32 @@ internal func analyticCoverage(
     var maxX = -Float64.Inf
     var minY = Float64.Inf
     var maxY = -Float64.Inf
+    let edges = ArrayList<SvgAnalyticEdge>()
     for (contour in contours) {
-        for (point in contour) {
-            minX = min(minX, point.x)
-            maxX = max(maxX, point.x)
-            minY = min(minY, point.y)
-            maxY = max(maxY, point.y)
+        if (contour.size < 2) {
+            continue
         }
+        var index = 0
+        while (index < contour.size) {
+            let first = contour[index]
+            let second = contour[(index + 1) % contour.size]
+            minX = min(minX, min(first.x, second.x))
+            maxX = max(maxX, max(first.x, second.x))
+            minY = min(minY, min(first.y, second.y))
+            maxY = max(maxY, max(first.y, second.y))
+            if (first.y != second.y) {
+                let yMin = if (first.y < second.y) { first.y } else { second.y }
+                let yMax = if (first.y < second.y) { second.y } else { first.y }
+                let xAtMin = if (first.y < second.y) { first.x } else { second.x }
+                let slope = (second.x - first.x) / (second.y - first.y)
+                let direction = if (second.y > first.y) { 1 } else { -1 }
+                edges.add(SvgAnalyticEdge(yMin, yMax, xAtMin, slope, direction))
+            }
+            index++
+        }
+    }
+    if (edges.size == 0) {
+        return coverage
     }
     let firstRow = analyticMax(0, Int64(floor(minY)))
     let lastRow = analyticMin(height - 1, Int64(ceil(maxY)) - 1)
@@ -97,192 +155,119 @@ internal func analyticCoverage(
     if (firstRow > lastRow || firstColumn > lastColumn) {
         return coverage
     }
-    let simple = contours.size == 1 && !selfIntersecting(contours[0])
+    let accumulated = Array<Float64>(width * height, repeat: 0.0)
+    let weight = 1.0 / Float64(ANALYTIC_SUB_SCANLINES)
     var row = firstRow
     while (row <= lastRow) {
-        var column = firstColumn
-        while (column <= lastColumn) {
-            let value = if (simple) {
-                let clipped = clipToPixel(contours[0], Float64(column), Float64(row))
-                let area = clampSvgUnit(abs(polygonArea(clipped)))
-                Int64(round(area * Float64(ANALYTIC_COVERAGE_SCALE)))
-            } else {
-                var inside = 0
-                let samples: Int64 = 8
-                var sy = 0
-                while (sy < samples) {
-                    var sx = 0
-                    while (sx < samples) {
-                        let point = SvgPoint(
-                            Float64(column) + (Float64(sx) + 0.5) / Float64(samples),
-                            Float64(row) + (Float64(sy) + 0.5) / Float64(samples)
-                        )
-                        let winding = windingNumber(contours, point)
-                        let filled = match (fillRule) {
-                            case Nonzero => winding != 0
-                            case Evenodd => winding % 2 != 0
-                        }
-                        if (filled) {
-                            inside++
-                        }
-                        sx++
-                    }
-                    sy++
+        var sub = 0
+        while (sub < ANALYTIC_SUB_SCANLINES) {
+            let y = Float64(row) +
+                (Float64(sub) + 0.5) / Float64(ANALYTIC_SUB_SCANLINES)
+            let hits = collectAnalyticHits(edges, y)
+            if (hits.size >= 2) {
+                sortAnalyticHits(hits)
+                let spans = match (fillRule) {
+                    case Nonzero => analyticNonzeroSpans(hits)
+                    case Evenodd => analyticEvenOddSpans(hits)
                 }
-                inside * ANALYTIC_COVERAGE_SCALE / (samples * samples)
+                for (span in spans) {
+                    accumulateAnalyticSpan(
+                        accumulated,
+                        width,
+                        span,
+                        row,
+                        firstColumn,
+                        lastColumn,
+                        weight
+                    )
+                }
             }
-            coverage[row * width + column] = value
-            column++
+            sub++
         }
         row++
+    }
+    let total = Float64(ANALYTIC_COVERAGE_SCALE)
+    var index = 0
+    while (index < accumulated.size) {
+        let value = clampSvgUnit(accumulated[index]) * total
+        coverage[index] = Int64(round(value))
+        index++
     }
     coverage
 }
 
-/** 判断单个轮廓是否自交（忽略相邻边与首末边）。 */
-private func selfIntersecting(polygon: Array<SvgPoint>): Bool {
-    let count = polygon.size
-    if (count < 4) {
-        return false
-    }
-    var first = 0
-    while (first < count) {
-        let a0 = polygon[first]
-        let a1 = polygon[(first + 1) % count]
-        var second = first + 1
-        while (second < count) {
-            if (second != first && second != (first + 1) % count &&
-                first != (second + 1) % count) {
-                let b0 = polygon[second]
-                let b1 = polygon[(second + 1) % count]
-                if (segmentsIntersect(a0, a1, b0, b1)) {
-                    return true
-                }
-            }
-            second++
+private func collectAnalyticHits(
+    edges: ArrayList<SvgAnalyticEdge>,
+    y: Float64
+): ArrayList<SvgAnalyticHit> {
+    let hits = ArrayList<SvgAnalyticHit>()
+    for (edge in edges) {
+        if (y >= edge.yMin && y < edge.yMax) {
+            hits.add(SvgAnalyticHit(edge.xAtMin + (y - edge.yMin) * edge.slope, edge.direction))
         }
-        first++
     }
-    false
+    hits
 }
 
-private func segmentsIntersect(a0: SvgPoint, a1: SvgPoint, b0: SvgPoint, b1: SvgPoint): Bool {
-    let d1 = crossProduct(a0, a1, b0)
-    let d2 = crossProduct(a0, a1, b1)
-    let d3 = crossProduct(b0, b1, a0)
-    let d4 = crossProduct(b0, b1, a1)
-    if (((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0)) &&
-        ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))) {
-        return true
+private func sortAnalyticHits(hits: ArrayList<SvgAnalyticHit>): Unit {
+    var index = 1
+    while (index < hits.size) {
+        let value = hits[index]
+        var position = index - 1
+        while (position >= 0 && hits[position].x > value.x) {
+            hits[position + 1] = hits[position]
+            position--
+        }
+        hits[position + 1] = value
+        index++
     }
-    false
 }
 
-private func crossProduct(a: SvgPoint, b: SvgPoint, c: SvgPoint): Float64 {
-    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-}
-
-private func windingNumber(contours: Array<Array<SvgPoint>>, point: SvgPoint): Int64 {
+private func analyticNonzeroSpans(hits: ArrayList<SvgAnalyticHit>): ArrayList<SvgAnalyticSpan> {
+    let spans = ArrayList<SvgAnalyticSpan>()
     var winding: Int64 = 0
-    for (contour in contours) {
-        if (contour.size < 2) {
-            continue
-        }
-        var index = 0
-        while (index < contour.size) {
-            let a = contour[index]
-            let b = contour[(index + 1) % contour.size]
-            if (a.y <= point.y) {
-                if (b.y > point.y && crossProduct(a, b, point) > 0.0) {
-                    winding++
-                }
-            } else {
-                if (b.y <= point.y && crossProduct(a, b, point) < 0.0) {
-                    winding--
-                }
-            }
-            index++
-        }
-    }
-    winding
-}
-
-private func polygonArea(polygon: Array<SvgPoint>): Float64 {
-    if (polygon.size < 3) {
-        return 0.0
-    }
-    var total = 0.0
     var index = 0
-    while (index < polygon.size) {
-        let current = polygon[index]
-        let next = polygon[(index + 1) % polygon.size]
-        total += current.x * next.y - next.x * current.y
-        index++
-    }
-    total / 2.0
-}
-
-/** 用四条半平面把多边形裁剪到像素方块。 */
-private func clipToPixel(polygon: Array<SvgPoint>, left: Float64, top: Float64): Array<SvgPoint> {
-    var current = polygon
-    current = clipHalfPlane(current, 0, left)
-    current = clipHalfPlane(current, 1, left + 1.0)
-    current = clipHalfPlane(current, 2, top)
-    current = clipHalfPlane(current, 3, top + 1.0)
-    current
-}
-
-/** axis: 0=left(x>=v) 1=right(x<=v) 2=top(y>=v) 3=bottom(y<=v)。 */
-private func clipHalfPlane(
-    polygon: Array<SvgPoint>,
-    axis: Int64,
-    value: Float64
-): Array<SvgPoint> {
-    if (polygon.size == 0) {
-        return polygon
-    }
-    let result = ArrayList<SvgPoint>()
-    var index = 0
-    while (index < polygon.size) {
-        let current = polygon[index]
-        let next = polygon[(index + 1) % polygon.size]
-        let currentInside = insideHalfPlane(current, axis, value)
-        let nextInside = insideHalfPlane(next, axis, value)
-        if (currentInside) {
-            result.add(current)
-        }
-        if (currentInside != nextInside) {
-            result.add(intersectHalfPlane(current, next, axis, value))
+    while (index + 1 < hits.size) {
+        winding += hits[index].direction
+        if (winding != 0) {
+            spans.add(SvgAnalyticSpan(hits[index].x, hits[index + 1].x))
         }
         index++
     }
-    result.toArray()
+    spans
 }
 
-private func insideHalfPlane(point: SvgPoint, axis: Int64, value: Float64): Bool {
-    match (axis) {
-        case 0 => point.x >= value
-        case 1 => point.x <= value
-        case 2 => point.y >= value
-        case 3 => point.y <= value
-        case _ => false
+private func analyticEvenOddSpans(hits: ArrayList<SvgAnalyticHit>): ArrayList<SvgAnalyticSpan> {
+    let spans = ArrayList<SvgAnalyticSpan>()
+    var index = 0
+    while (index + 1 < hits.size) {
+        spans.add(SvgAnalyticSpan(hits[index].x, hits[index + 1].x))
+        index += 2
     }
+    spans
 }
 
-private func intersectHalfPlane(a: SvgPoint, b: SvgPoint, axis: Int64, value: Float64): SvgPoint {
-    let useX = axis == 0 || axis == 1
-    let coordinate = if (useX) {
-        if (abs(b.x - a.x) < 1e-12) {
-            0.0
-        } else {
-            (value - a.x) / (b.x - a.x)
-        }
-    } else {
-        if (abs(b.y - a.y) < 1e-12) {
-            0.0
-        } else {
-            (value - a.y) / (b.y - a.y)
-        }
+private func accumulateAnalyticSpan(
+    accumulated: Array<Float64>,
+    width: Int64,
+    span: SvgAnalyticSpan,
+    row: Int64,
+    firstColumn: Int64,
+    lastColumn: Int64,
+    weight: Float64
+): Unit {
+    if (span.end <= span.start) {
+        return
     }
-    SvgPoint(a.x + (b.x - a.x) * coordinate, a.y + (b.y - a.y) * coordinate)
+    let startColumn = analyticMax(firstColumn, Int64(floor(span.start)))
+    let endColumn = analyticMin(lastColumn, Int64(ceil(span.end)) - 1)
+    var column = startColumn
+    while (column <= endColumn) {
+        let left = max(span.start, Float64(column))
+        let right = min(span.end, Float64(column + 1))
+        if (right > left) {
+            accumulated[row * width + column] += (right - left) * weight
+        }
+        column++
+    }
 }

@@ -122,3 +122,141 @@ public class SvgAnalyticRasterizer_test {
         @Assert(first.pixels == second.pixels)
     }
 }
+
+
+/** 用 180 边形近似圆，避免测试依赖 arc 扁平化细节。 */
+private func polygonCirclePath(cx: Float64, cy: Float64, radius: Float64, segments!: Int64 = 180): String {
+    let out = StringBuilder()
+    let pi = 3.141592653589793
+    for (index in 0..segments) {
+        let angle = 2.0 * pi * Float64(index) / Float64(segments)
+        let x = cx + radius * cos(angle)
+        let y = cy + radius * sin(angle)
+        if (index == 0) {
+            out.append("M ${x} ${y}")
+        } else {
+            out.append(" L ${x} ${y}")
+        }
+    }
+    out.append(" Z")
+    out.toString()
+}
+
+/** 独立的高密度参考覆盖率：每像素 128×128 点采样。 */
+private func denseCircleCoverage(
+    width: Int64,
+    height: Int64,
+    cx: Float64,
+    cy: Float64,
+    outer: Float64,
+    inner: Float64
+): Array<Float64> {
+    let samples: Int64 = 128
+    let result = Array<Float64>(width * height, repeat: 0.0)
+    for (row in 0..height) {
+        for (column in 0..width) {
+            var inside = 0
+            for (sy in 0..samples) {
+                let y = Float64(row) + (Float64(sy) + 0.5) / Float64(samples)
+                for (sx in 0..samples) {
+                    let x = Float64(column) + (Float64(sx) + 0.5) / Float64(samples)
+                    let distance = sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy))
+                    if (distance <= outer && distance >= inner) {
+                        inside++
+                    }
+                }
+            }
+            result[row * width + column] = Float64(inside) / Float64(samples * samples)
+        }
+    }
+    result
+}
+
+@Test
+public class SvgAnalyticComplexM3_test {
+    /** 甜甜圈（多轮廓 evenodd）逐像素误差 ≤ 2/255。 */
+    @TestCase
+    public func donutMatchesDenseReference(): Unit {
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(
+            svgDoc(
+                "<path d=\"" + polygonCirclePath(25.0, 25.0, 20.0) + " " +
+                polygonCirclePath(25.0, 25.0, 10.0) + "\" " +
+                "fill=\"red\" fill-rule=\"evenodd\"/>",
+                width: 50,
+                height: 50
+            )
+        )
+        let reference = denseCircleCoverage(50, 50, 25.0, 25.0, 20.0, 10.0)
+        var worst: Int64 = 0
+        var worstIndex: Int64 = -1
+        for (index in 0..reference.size) {
+            let expected = Int64(round(reference[index] * 255.0))
+            let actual = Int64(bitmap.pixels[index * 4 + 3])
+            let difference = if (actual > expected) { actual - expected } else { expected - actual }
+            if (difference > worst) {
+                worst = difference
+                worstIndex = index
+            }
+        }
+        if (worst > 2) {
+            @Fail("worst=${worst} at ${worstIndex}")
+        }
+        @Assert(worst <= 2)
+    }
+
+    /** 两个分离轮廓与高密度参考逐像素一致。 */
+    @TestCase
+    public func multipleContoursMatchReference(): Unit {
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(
+            svgDoc(
+                "<path d=\"" + polygonCirclePath(15.0, 25.0, 10.0) + " " +
+                polygonCirclePath(40.0, 25.0, 10.0) + "\" " +
+                "fill=\"red\" fill-rule=\"nonzero\"/>",
+                width: 56,
+                height: 40
+            )
+        )
+        let left = denseCircleCoverage(56, 40, 15.0, 25.0, 10.0, 0.0)
+        let right = denseCircleCoverage(56, 40, 40.0, 25.0, 10.0, 0.0)
+        var worst: Int64 = 0
+        var worstIndex: Int64 = -1
+        for (index in 0..left.size) {
+            let reference = if (left[index] > right[index]) { left[index] } else { right[index] }
+            let expected = Int64(round(reference * 255.0))
+            let actual = Int64(bitmap.pixels[index * 4 + 3])
+            let difference = if (actual > expected) { actual - expected } else { expected - actual }
+            if (difference > worst) {
+                worst = difference
+                worstIndex = index
+            }
+        }
+        if (worst > 2) {
+            @Fail("worst=${worst} at ${worstIndex}")
+        }
+        @Assert(worst <= 2)
+    }
+
+    /** 自交五角星：nonzero 填充面积大于 evenodd。 */
+    @TestCase
+    public func selfIntersectionAreaDiffers(): Unit {
+        let path = "M 20 2 L 25 38 L 2 15 L 38 15 L 15 38 Z"
+        let nonzero = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(svgDoc("<path d=\"${path}\" fill=\"red\" fill-rule=\"nonzero\"/>", width: 40, height: 40))
+        let evenodd = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(svgDoc("<path d=\"${path}\" fill=\"red\" fill-rule=\"evenodd\"/>", width: 40, height: 40))
+        var nonzeroArea: Int64 = 0
+        var evenoddArea: Int64 = 0
+        for (index in 0..nonzero.pixels.size / 4) {
+            nonzeroArea += Int64(nonzero.pixels[index * 4 + 3])
+            evenoddArea += Int64(evenodd.pixels[index * 4 + 3])
+        }
+        @Assert(nonzeroArea > evenoddArea)
+        @Assert(evenoddArea > 0)
+    }
+}
