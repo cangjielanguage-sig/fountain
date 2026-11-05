@@ -41,7 +41,10 @@ public class SvgBounds_test {
         @Assert(boundsNear(first.intersect(overlap), SvgBounds(5.0, 5.0, 5.0, 5.0)))
         @Assert(boundsNear(first.inflate(2.0), SvgBounds(-2.0, -2.0, 14.0, 14.0)))
         @Assert(boundsNear(first.inflate(-2.0), SvgBounds(2.0, 2.0, 6.0, 6.0)))
-        @Assert(first.inflate(-20.0).isEmpty())
+        let collapsed = first.inflate(-20.0)
+        @Assert(!collapsed.isEmpty())
+        @Assert(boundsNear(collapsed, SvgBounds(20.0, 20.0, 0.0, 0.0)))
+        @Assert(SvgBounds.empty().inflate(2.0).isEmpty())
     }
 
     /** 零尺寸退化盒参与并集时保留。 */

@@ -111,7 +111,14 @@ public struct SvgBounds <: Equatable<SvgBounds> & ToString {
         if (this.isEmpty()) {
             return SvgBounds.empty()
         }
-        SvgBounds(this.x - amount, this.y - amount, this.width + 2.0 * amount, this.height + 2.0 * amount)
+        let width = this.width + 2.0 * amount
+        let height = this.height + 2.0 * amount
+        SvgBounds(
+            this.x - amount,
+            this.y - amount,
+            if (width > 0.0) { width } else { 0.0 },
+            if (height > 0.0) { height } else { 0.0 }
+        )
     }
 
     public func toString(): String {
