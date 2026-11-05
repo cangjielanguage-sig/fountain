@@ -33,18 +33,68 @@ public class EvalDoc {
     }
 }
 
-/** 一条评测 query 与它期望命中的文档（多个即「命中任一算对」） */
+/**
+ * 一条评测 query。
+ *
+ * - `expected` 为空表示**负样本**：期望检索不到任何文档（用来校验 `minScore` 阈值）；
+ * - `topic` 用于分层统计——全局指标会把「某个主题全错」平均掉。
+ */
 public class EvalCase {
     public let query: String
     public let expected: ArrayList<String>
+    public let topic: String
 
-    public init(query: String, expected: ArrayList<String>) {
+    public init(query: String, expected: ArrayList<String>, topic!: String = '') {
         this.query = query
         this.expected = expected
+        this.topic = topic
+    }
+
+    public func isNegative(): Bool {
+        expected.isEmpty()
     }
 }
 
-/** 一轮评测的结果：recall@1 / recall@k / MRR + 未命中清单 */
+/** 单个主题的指标 */
+public class TopicStat {
+    public let topic: String
+    public let total: Int64
+    public let hitAt1: Int64
+    public let hitAtK: Int64
+    public let reciprocalSum: Float64
+
+    public init(topic: String, total: Int64, hitAt1: Int64, hitAtK: Int64,
+                reciprocalSum: Float64) {
+        this.topic = topic
+        this.total = total
+        this.hitAt1 = hitAt1
+        this.hitAtK = hitAtK
+        this.reciprocalSum = reciprocalSum
+    }
+
+    public func recallAt1(): Float64 {
+        if(total <= 0){
+            return 0.0f64
+        }
+        Float64(hitAt1) / Float64(total)
+    }
+
+    public func recallAtK(): Float64 {
+        if(total <= 0){
+            return 0.0f64
+        }
+        Float64(hitAtK) / Float64(total)
+    }
+
+    public func mrr(): Float64 {
+        if(total <= 0){
+            return 0.0f64
+        }
+        reciprocalSum / Float64(total)
+    }
+}
+
+/** 一轮评测的结果：全局指标 + 负样本通过率 + 按主题分层 */
 public class EvalReport {
     public let total: Int64
     public let hitAt1: Int64
@@ -52,15 +102,23 @@ public class EvalReport {
     public let reciprocalSum: Float64
     public let topK: Int64
     public let misses: ArrayList<String>
+    public let negativeTotal: Int64
+    public let negativePassed: Int64
+    public let topics: ArrayList<TopicStat>
 
     public init(total: Int64, hitAt1: Int64, hitAtK: Int64, reciprocalSum: Float64,
-                topK: Int64, misses: ArrayList<String>) {
+                topK: Int64, misses: ArrayList<String>,
+                negativeTotal: Int64, negativePassed: Int64,
+                topics: ArrayList<TopicStat>) {
         this.total = total
         this.hitAt1 = hitAt1
         this.hitAtK = hitAtK
         this.reciprocalSum = reciprocalSum
         this.topK = topK
         this.misses = misses
+        this.negativeTotal = negativeTotal
+        this.negativePassed = negativePassed
+        this.topics = topics
     }
 
     public func recallAt1(): Float64 {
@@ -84,12 +142,52 @@ public class EvalReport {
         reciprocalSum / Float64(total)
     }
 
-    /** 可直接打印的报告 */
+    /** 负样本通过率：检索结果为空才算通过 */
+    public func negativeRate(): Float64 {
+        if(negativeTotal <= 0){
+            return 0.0f64
+        }
+        Float64(negativePassed) / Float64(negativeTotal)
+    }
+
+    /**
+     * 可直接打印的报告：全局 → 负样本 → 按主题（recall@1 升序，最差的排前面）。
+     *
+     * 主题排序是刻意的：全局 85% 可能掩盖「某个主题 0%」，先看垫底的主题。
+     */
     public func render(label: String): String {
         var text = '== ${label} ==\n'
         text += 'cases=${total} topK=${topK}\n'
         text += 'recall@1=${percent(recallAt1())} recall@${topK}=${percent(recallAtK())} '
         text += 'mrr=${percent(mrr())}\n'
+        if(negativeTotal > 0){
+            text += 'negatives=${negativeTotal} pass=${percent(negativeRate())}\n'
+        }
+        if(!topics.isEmpty()){
+            text += 'by topic (worst first):\n'
+            let sorted = ArrayList<TopicStat>()
+            for(item in topics){
+                sorted.add(item)
+            }
+            for(left in 0..sorted.size){
+                var lowest = left
+                for(right in left + 1..sorted.size){
+                    if(sorted[right].recallAt1() < sorted[lowest].recallAt1()){
+                        lowest = right
+                    }
+                }
+                if(lowest != left){
+                    let temp = sorted[left]
+                    sorted[left] = sorted[lowest]
+                    sorted[lowest] = temp
+                }
+            }
+            for(item in sorted){
+                text += '  ${padRight(item.topic, 10)} n=${item.total} '
+                text += 'r@1=${percent(item.recallAt1())} r@${topK}=${percent(item.recallAtK())} '
+                text += 'mrr=${percent(item.mrr())}\n'
+            }
+        }
         if(!misses.isEmpty()){
             text += 'misses(${misses.size}):\n'
             for(query in misses){
@@ -102,10 +200,18 @@ public class EvalReport {
     private static func percent(value: Float64): String {
         '${Int64(value * 10000.0f64) / 100}.${Int64(value * 10000.0f64) % 100}%'
     }
+
+    private static func padRight(text: String, width: Int64): String {
+        var padded = text
+        while(Int64(padded.size) < width){
+            padded += ' '
+        }
+        padded
+    }
 }
 
 /**
- * 检索质量评测骨架：读 TSV 语料与 query 集，跑一个检索函数，算 recall / MRR。
+ * 检索质量评测骨架：读 TSV 语料与 query 集，跑一个检索函数，算 recall / MRR / 分层。
  *
  * 刻意不内置真实的 embedding 调用——真实模型依赖网络与版本，跑 CI 既慢又不稳定。
  * 用法是把「怎么检索」作为函数传进来：单元测试传假编码器的检索器（确定），
@@ -137,7 +243,7 @@ public class RetrievalEval {
         docs
     }
 
-    /** 读 `query \t 期望id[,期望id]` */
+    /** 读 `query \t 期望id[,期望id] \t 主题`；期望列为 `-` 表示负样本 */
     public static func readCases(path: String): ArrayList<EvalCase> {
         let cases = ArrayList<EvalCase>()
         for(line in linesOf(path)){
@@ -145,16 +251,22 @@ public class RetrievalEval {
             if(fields.size < 2){
                 continue
             }
+            let topic = if(fields.size >= 3){ fields[2].trimAscii() }else{ '' }
             let expected = ArrayList<String>()
-            for(item in fields[1].split(',')){
-                let id = item.trimAscii()
-                if(!id.isEmpty()){
-                    expected.add(id)
+            let raw = fields[1].trimAscii()
+            if(raw != '-'){
+                for(item in raw.split(',')){
+                    let id = item.trimAscii()
+                    if(!id.isEmpty()){
+                        expected.add(id)
+                    }
                 }
             }
-            if(!expected.isEmpty()){
-                cases.add(EvalCase(fields[0], expected))
+            if(expected.isEmpty() && raw != '-'){
+                // 既不是负样本、又没写期望：数据写坏了，直接跳过而不是当成负样本
+                continue
             }
+            cases.add(EvalCase(fields[0], expected, topic: topic))
         }
         cases
     }
@@ -163,6 +275,7 @@ public class RetrievalEval {
      * 跑一轮评测：`search(query, topK)` 返回按相关度降序的 id 列表。
      *
      * MRR 取「期望文档中排名最靠前的那一个」的倒数排名；未命中记入 `misses`。
+     * 负样本单独统计：返回空列表才算通过，不计入 recall 分母。
      */
     public static func evaluate(cases: ArrayList<EvalCase>,
                                 search: (String, Int64) -> ArrayList<String>,
@@ -170,9 +283,28 @@ public class RetrievalEval {
         var hitAt1: Int64 = 0
         var hitAtK: Int64 = 0
         var reciprocal: Float64 = 0.0f64
+        var negativeTotal: Int64 = 0
+        var negativePassed: Int64 = 0
         let misses = ArrayList<String>()
+        let statMap = HashMap<String, ArrayList<Int64>>()   // topic → [total, hit1, hitK]
+        let reciprocalMap = HashMap<String, Float64>()
+
         for(item in cases){
             let ranked = search(item.query, topK)
+            if(item.isNegative()){
+                negativeTotal++
+                if(ranked.isEmpty()){
+                    negativePassed++
+                }
+                continue
+            }
+            let topic = if(item.topic.isEmpty()){ 'default' }else{ item.topic }
+            let stat = match(statMap.get(topic)){
+                case Some(value) => value
+                case None => ArrayList<Int64>([0, 0, 0])
+            }
+            stat[0] = stat[0] + 1
+
             var rank: Int64 = 0
             for(index in 0..ranked.size){
                 var matched = false
@@ -188,15 +320,28 @@ public class RetrievalEval {
             }
             if(rank == 1){
                 hitAt1++
+                stat[1] = stat[1] + 1
             }
             if(rank >= 1){
                 hitAtK++
+                stat[2] = stat[2] + 1
                 reciprocal += 1.0f64 / Float64(rank)
+                reciprocalMap[topic] = (reciprocalMap.get(topic) ?? 0.0f64) + 1.0f64 / Float64(rank)
             }else{
                 misses.add(item.query)
             }
+            statMap[topic] = stat
         }
-        EvalReport(Int64(cases.size), hitAt1, hitAtK, reciprocal, topK, misses)
+
+        let topics = ArrayList<TopicStat>()
+        for((topic, stat) in statMap){
+            topics.add(TopicStat(topic, stat[0], stat[1], stat[2],
+                                 reciprocalMap.get(topic) ?? 0.0f64))
+        }
+        // 正样本总数 = 命中的 + 未命中的（负样本不计入分母）
+        let positiveTotal = hitAtK + Int64(misses.size)
+        EvalReport(positiveTotal, hitAt1, hitAtK, reciprocal,
+                   topK, misses, negativeTotal, negativePassed, topics)
     }
 
     private static func linesOf(path: String): ArrayList<String> {

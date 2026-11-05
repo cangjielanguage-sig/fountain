@@ -82,14 +82,18 @@ class RetrievalEval_test {
         @Expect(report.mrr(), 0.0f64)
     }
 
-    /** 随附数据集：20 条语料 + 20 条 query，id 唯一，期望 id 都存在 */
+    /**
+     * 随附数据集：50 条语料 + 300 条正样本 + 10 条负样本。
+     *
+     * 规模是按「单主题结论」定的：10 个主题各 30 条，单主题 recall@1 的 95% 区间约 ±18 点；
+     * 全局 300 条约 ±4 点，够做换模型的粗判。要卡 5 点级回归仍需 500+，见 doc。
+     */
     @TestCase
     func testShippedDatasetIsWellFormed(): Unit {
         let dir = evalDir()
         let docs = RetrievalEval.readCorpus('${dir}/retrieval_corpus.tsv')
         let evalCases = RetrievalEval.readCases('${dir}/retrieval_queries.tsv')
-        @Expect(docs.size, 20)
-        @Expect(evalCases.size, 20)
+        @Expect(docs.size, 50)
 
         let ids = HashSet<String>()
         for(doc in docs){
@@ -97,24 +101,83 @@ class RetrievalEval_test {
             ids.add(doc.id)
             @Expect(doc.title.isEmpty(), false)
         }
+
+        let queries = HashSet<String>()
+        let referenced = HashSet<String>()
+        let perTopic = HashMap<String, Int64>()
+        var negatives: Int64 = 0
         for(item in evalCases){
-            @Expect(item.query.isEmpty(), false)
+            // query 不重复，否则指标被同一句重复加权
+            @Expect(queries.contains(item.query), false)
+            queries.add(item.query)
+            if(item.isNegative()){
+                negatives++
+                @Expect(item.topic, 'negative')
+                continue
+            }
+            @Expect(item.topic.isEmpty(), false)
+            perTopic[item.topic] = (perTopic.get(item.topic) ?? 0) + 1
             for(expected in item.expected){
                 @Expect(ids.contains(expected), true)
+                referenced.add(expected)
             }
+        }
+
+        @Expect(negatives, 10)
+        @Expect(evalCases.size - negatives, 300)
+        // 10 个主题、每主题至少 30 条——这是「单主题结论」的最低门槛
+        @Expect(perTopic.size, 10)
+        for((_, count) in perTopic){
+            @Expect(count >= 30, true)
         }
 
         // 覆盖检查：每条语料都要被至少一条 query 引用。
         // 只加文档不加 query，指标不会下降——覆盖率却会静默漏掉一批主题。
-        let referenced = HashSet<String>()
-        for(item in evalCases){
-            for(expected in item.expected){
-                referenced.add(expected)
-            }
-        }
         for(doc in docs){
             @Expect(referenced.contains(doc.id), true)
         }
+    }
+
+    /** 分层统计：主题内指标独立计算，负样本不计入 recall 分母 */
+    @TestCase
+    func testPerTopicAndNegativeStats(): Unit {
+        let evalCases = ArrayList<EvalCase>([
+            EvalCase('a1', ArrayList<String>(['x']), topic: 'alpha'),
+            EvalCase('a2', ArrayList<String>(['x']), topic: 'alpha'),
+            EvalCase('b1', ArrayList<String>(['y']), topic: 'beta'),
+            EvalCase('n1', ArrayList<String>(), topic: 'negative')
+        ].toArray())
+        // alpha 全中第 1；beta 排第 2；负样本返回空 → 通过
+        let search = { query: String, _: Int64 =>
+            if(query == 'b1'){
+                ArrayList<String>(['z', 'y'])
+            }else if(query == 'n1'){
+                ArrayList<String>()
+            }else{
+                ArrayList<String>(['x'])
+            }
+        }
+        let report = RetrievalEval.evaluate(evalCases, search, topK: 5)
+        @Expect(report.total, 3)                 // 负样本不进分母
+        @Expect(report.negativeTotal, 1)
+        @Expect(report.negativeRate(), 1.0f64)
+        @Expect(report.topics.size, 2)
+
+        var alpha: ?TopicStat = None
+        var beta: ?TopicStat = None
+        for(item in report.topics){
+            if(item.topic == 'alpha'){
+                alpha = Some(item)
+            }
+            if(item.topic == 'beta'){
+                beta = Some(item)
+            }
+        }
+        @Expect(alpha.getOrThrow().recallAt1(), 1.0f64)
+        @Expect(beta.getOrThrow().recallAt1(), 0.0f64)
+        @Expect(beta.getOrThrow().mrr(), 0.5f64)
+        // 报告里最差的主题排在前面
+        @Expect(report.render('分层').contains('beta'), true)
     }
 
     /**
