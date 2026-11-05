@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.math.*
 
 private class SvgRenderFrame {
     let bitmap: SvgBitmap
@@ -93,6 +94,10 @@ public class SvgRenderer {
             case Some(value) => value
             case None => SvgFontRegistry.defaultRegistry()
         }
+        let images = SvgImageResource(
+            provider: this.options.images,
+            budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
+        )
         for (command in list.commands) {
             match (command.kind) {
                 case GroupBegin =>
@@ -139,7 +144,7 @@ public class SvgRenderer {
                         command.mask.isSome()
                     if (needsLayer) {
                         let layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
-                        this.renderCommand(layer, command, list, registry)
+                        this.renderCommand(layer, command, list, registry, images)
                         this.applyEffects(
                             layer,
                             command.clipRect,
@@ -151,7 +156,7 @@ public class SvgRenderer {
                         )
                         SvgGroupCompositor.composite(target, layer, 1.0)
                     } else {
-                        this.renderCommand(target, command, list, registry)
+                        this.renderCommand(target, command, list, registry, images)
                     }
             }
         }
@@ -162,7 +167,8 @@ public class SvgRenderer {
         bitmap: SvgBitmap,
         command: SvgDisplayCommand,
         list: SvgDisplayList,
-        registry: SvgFontRegistry
+        registry: SvgFontRegistry,
+        images: SvgImageResource
     ): Unit {
         let style = match (command.style) {
             case Some(value) => value
@@ -198,10 +204,30 @@ public class SvgRenderer {
                 this.drawFill(bitmap, textCommand, list, style)
                 this.drawStroke(bitmap, textCommand, list, style)
             case Image =>
-                match (this.options.background) {
-                    case Some(color) =>
-                        match (command.bounds) {
-                            case Some(box) =>
+                let box = match (command.bounds) {
+                    case Some(value) => value
+                    case None => return
+                }
+                var loaded: ?SvgBitmap = None
+                match (command.href) {
+                    case Some(href) => loaded = images.load(href)
+                    case None => ()
+                }
+                match (loaded) {
+                    case Some(source) =>
+                        drawImage(
+                            bitmap,
+                            command,
+                            style,
+                            box,
+                            source
+                        )
+                    case None =>
+                        this.warnings.add(
+                            "元素「${command.tag}」的 <image> 资源不可用，已绘制占位（href=${command.href ?? ""}）"
+                        )
+                        match (this.options.background) {
+                            case Some(color) =>
                                 let path = rectPathData(box)
                                 SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel).fill(
                                     path,
@@ -212,7 +238,6 @@ public class SvgRenderer {
                                 )
                             case None => ()
                         }
-                    case None => ()
                 }
             case _ => ()
         }
@@ -435,4 +460,207 @@ public func renderToPng(
     options!: SvgRenderOptions = SvgRenderOptions()
 ): Array<Byte> {
     SvgRenderer(options: options).render(document).toPngBytes()
+}
+
+
+/** 源图 → 目标矩形的映射参数。 */
+private struct SvgImageMapping {
+    let scaleX: Float64
+    let scaleY: Float64
+    let offsetX: Float64
+    let offsetY: Float64
+
+    init(scaleX: Float64, scaleY: Float64, offsetX: Float64, offsetY: Float64) {
+        this.scaleX = scaleX
+        this.scaleY = scaleY
+        this.offsetX = offsetX
+        this.offsetY = offsetY
+    }
+}
+
+private func imageMapping(
+    boxWidth: Float64,
+    boxHeight: Float64,
+    sourceWidth: Float64,
+    sourceHeight: Float64,
+    aspect: ?SvgPreserveAspectRatio
+): SvgImageMapping {
+    let ratio = match (aspect) {
+        case Some(value) => value
+        case None => SvgPreserveAspectRatio.Default
+    }
+    if (ratio.align == SvgAspectAlign.NoAlign) {
+        return SvgImageMapping(boxWidth / sourceWidth, boxHeight / sourceHeight, 0.0, 0.0)
+    }
+    let scaleX = boxWidth / sourceWidth
+    let scaleY = boxHeight / sourceHeight
+    let scale = if (ratio.slice) {
+        max(scaleX, scaleY)
+    } else {
+        min(scaleX, scaleY)
+    }
+    let contentWidth = sourceWidth * scale
+    let contentHeight = sourceHeight * scale
+    let factorX = if (ratio.align.isXMin()) {
+        0.0
+    } else if (ratio.align.isXMax()) {
+        1.0
+    } else {
+        0.5
+    }
+    let factorY = if (ratio.align.isYMin()) {
+        0.0
+    } else if (ratio.align.isYMax()) {
+        1.0
+    } else {
+        0.5
+    }
+    SvgImageMapping(
+        scale,
+        scale,
+        (boxWidth - contentWidth) * factorX,
+        (boxHeight - contentHeight) * factorY
+    )
+}
+
+private func drawImage(
+    target: SvgBitmap,
+    command: SvgDisplayCommand,
+    style: SvgComputedStyle,
+    box: SvgBounds,
+    source: SvgBitmap
+): Unit {
+    if (box.width <= 0.0 || box.height <= 0.0) {
+        return
+    }
+    let inverse = match (command.matrix.invert()) {
+        case Some(value) => value
+        case None => return
+    }
+    let c0 = command.matrix.apply(SvgPoint(box.x, box.y))
+    let c1 = command.matrix.apply(SvgPoint(box.x + box.width, box.y))
+    let c2 = command.matrix.apply(SvgPoint(box.x + box.width, box.y + box.height))
+    let c3 = command.matrix.apply(SvgPoint(box.x, box.y + box.height))
+    let minimumX = min(min(c0.x, c1.x), min(c2.x, c3.x))
+    let maximumX = max(max(c0.x, c1.x), max(c2.x, c3.x))
+    let minimumY = min(min(c0.y, c1.y), min(c2.y, c3.y))
+    let maximumY = max(max(c0.y, c1.y), max(c2.y, c3.y))
+    let startX = max(0, Int64(floor(minimumX)))
+    let endX = min(target.width, Int64(ceil(maximumX)))
+    let startY = max(0, Int64(floor(minimumY)))
+    let endY = min(target.height, Int64(ceil(maximumY)))
+    let rendering = style.imageRendering()
+    let bilinear = rendering == SvgImageRendering.Auto || rendering == SvgImageRendering.OptimizeQuality
+    let mapping = imageMapping(
+        box.width,
+        box.height,
+        Float64(source.width),
+        Float64(source.height),
+        command.aspect
+    )
+    var py = startY
+    while (py < endY) {
+        var px = startX
+        while (px < endX) {
+            let local = inverse.apply(SvgPoint(Float64(px) + 0.5, Float64(py) + 0.5))
+            let u = local.x - box.x
+            let v = local.y - box.y
+            if (u >= 0.0 && u < box.width && v >= 0.0 && v < box.height) {
+                let sample = sampleImage(source, mapping, u, v, bilinear)
+                if (sample[3] > 0) {
+                    let alpha = Float64(sample[3]) / 255.0 * command.opacity
+                    if (alpha > 0.0) {
+                        target.blend(
+                            px,
+                            py,
+                            SvgRgba(
+                                Float64(sample[0]) / 255.0 * alpha,
+                                Float64(sample[1]) / 255.0 * alpha,
+                                Float64(sample[2]) / 255.0 * alpha,
+                                alpha
+                            )
+                        )
+                    }
+                }
+            }
+            px++
+        }
+        py++
+    }
+}
+
+private func sampleImage(
+    source: SvgBitmap,
+    mapping: SvgImageMapping,
+    u: Float64,
+    v: Float64,
+    bilinear: Bool
+): Array<Byte> {
+    let transparent: Array<Byte> = [0, 0, 0, 0]
+    let sourceX = (u - mapping.offsetX) / mapping.scaleX
+    let sourceY = (v - mapping.offsetY) / mapping.scaleY
+    if (sourceX < 0.0 || sourceY < 0.0 ||
+        sourceX >= Float64(source.width) || sourceY >= Float64(source.height)) {
+        return transparent
+    }
+    let result = Array<Byte>(4, repeat: 0)
+    if (!bilinear) {
+        let x = min(Int64(floor(sourceX)), source.width - 1)
+        let y = min(Int64(floor(sourceY)), source.height - 1)
+        let base = (y * source.width + x) * 4
+        result[0] = source.pixels[base]
+        result[1] = source.pixels[base + 1]
+        result[2] = source.pixels[base + 2]
+        result[3] = source.pixels[base + 3]
+        return result
+    }
+    let centerX = sourceX - 0.5
+    let centerY = sourceY - 0.5
+    let floorX = Int64(floor(centerX))
+    let floorY = Int64(floor(centerY))
+    let fractionX = centerX - Float64(floorX)
+    let fractionY = centerY - Float64(floorY)
+    let x0 = clampImageIndex(floorX, source.width)
+    let x1 = clampImageIndex(floorX + 1, source.width)
+    let y0 = clampImageIndex(floorY, source.height)
+    let y1 = clampImageIndex(floorY + 1, source.height)
+    let weights: Array<Float64> = [
+        (1.0 - fractionX) * (1.0 - fractionY),
+        fractionX * (1.0 - fractionY),
+        (1.0 - fractionX) * fractionY,
+        fractionX * fractionY
+    ]
+    let columns: Array<Int64> = [x0, x1, x0, x1]
+    let rows: Array<Int64> = [y0, y0, y1, y1]
+    var alpha: Float64 = 0.0
+    var red: Float64 = 0.0
+    var green: Float64 = 0.0
+    var blue: Float64 = 0.0
+    for (index in 0..4) {
+        let base = (rows[index] * source.width + columns[index]) * 4
+        let weight = weights[index]
+        let sampleAlpha = Float64(source.pixels[base + 3]) / 255.0
+        alpha += sampleAlpha * weight
+        red += Float64(source.pixels[base]) / 255.0 * sampleAlpha * weight
+        green += Float64(source.pixels[base + 1]) / 255.0 * sampleAlpha * weight
+        blue += Float64(source.pixels[base + 2]) / 255.0 * sampleAlpha * weight
+    }
+    if (alpha <= 0.0) {
+        return transparent
+    }
+    result[0] = UInt8(Int64(round(clampSvgUnit(red / alpha) * 255.0)))
+    result[1] = UInt8(Int64(round(clampSvgUnit(green / alpha) * 255.0)))
+    result[2] = UInt8(Int64(round(clampSvgUnit(blue / alpha) * 255.0)))
+    result[3] = UInt8(Int64(round(clampSvgUnit(alpha) * 255.0)))
+    result
+}
+
+private func clampImageIndex(value: Int64, size: Int64): Int64 {
+    if (value < 0) {
+        return 0
+    }
+    if (value >= size) {
+        return size - 1
+    }
+    value
 }

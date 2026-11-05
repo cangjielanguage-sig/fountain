@@ -65,6 +65,10 @@ public class SvgDisplayCommand {
     public let clipPath: ?SvgElement
     public let mask: ?SvgElement
     public let clipRect: ?SvgBounds
+    /** `<image>` 的资源定位符；非 image 指令为 `None`。 */
+    public let href: ?String
+    /** `<image>` 的 preserveAspectRatio；缺省由绘制端按 `xMidYMid meet` 处理。 */
+    public let aspect: ?SvgPreserveAspectRatio
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -77,7 +81,9 @@ public class SvgDisplayCommand {
         opacity!: Float64 = 1.0,
         clipPath!: ?SvgElement = None,
         mask!: ?SvgElement = None,
-        clipRect!: ?SvgBounds = None
+        clipRect!: ?SvgBounds = None,
+        href!: ?String = None,
+        aspect!: ?SvgPreserveAspectRatio = None
     ) {
         this.kind = kind
         this.tag = tag
@@ -90,6 +96,8 @@ public class SvgDisplayCommand {
         this.clipPath = clipPath
         this.mask = mask
         this.clipRect = clipRect
+        this.href = href
+        this.aspect = aspect
     }
 }
 
@@ -555,11 +563,18 @@ public class SvgRenderTreeBuilder {
         commands: ArrayList<SvgDisplayCommand>,
         style: SvgComputedStyle
     ): Unit {
-        this.warnings.add("<image> 在 M2 不解码，使用占位矩形")
         let x = lengthOrZero(image.x)
         let y = lengthOrZero(image.y)
         let width = lengthOrZero(image.width)
         let height = lengthOrZero(image.height)
+        match (image.href) {
+            case None => this.warnings.add("<image> 缺少 href，使用占位矩形")
+            case Some(value) =>
+                let trimmed = value.trimAscii()
+                if (trimmed.size > 0 && trimmed[0] == b'#') {
+                    this.warnings.add("<image> 的 href 为片段引用，不能作为图像资源，使用占位矩形")
+                }
+        }
         commands.add(
             SvgDisplayCommand(
                 SvgDisplayCommandKind.Image,
@@ -568,7 +583,11 @@ public class SvgRenderTreeBuilder {
                 style: Some(style),
                 bounds: Some(SvgBounds(x, y, width, height)),
                 opacity: style.opacity(),
-                clipRect: context.clipRect
+                clipPath: this.resolveUrlRef(style.get("clip-path"), context),
+                mask: this.resolveUrlRef(style.get("mask"), context),
+                clipRect: context.clipRect,
+                href: image.href,
+                aspect: image.preserveAspectRatio
             )
         )
     }

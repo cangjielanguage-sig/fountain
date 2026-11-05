@@ -236,3 +236,143 @@ public class SvgRenderer_test {
         @Assert(textPixels > 5)
     }
 }
+
+@Test
+public class SvgImageRenderM3_test {
+    /** data URI 直接绘制，且不再产生占位 warning。 */
+    @TestCase
+    public func dataUriDrawn(): Unit {
+        let uri = m3PngDataUri(m3RedPng(1, 1))
+        let document = svgDoc(
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"10\" height=\"10\"/>",
+            width: 10,
+            height: 10
+        )
+        let renderer = SvgRenderer()
+        let bitmap = renderer.render(document)
+        @Assert(colorNear(bitmap.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
+        for (warning in renderer.warnings) {
+            @Assert(!warning.contains("<image>"))
+        }
+    }
+
+    /** provider 绘制，同一 render 内按 href 只解码一次，跨 render 不共享。 */
+    @TestCase
+    public func providerDrawnAndCached(): Unit {
+        let provider = M3CountingProvider(m3RedPng(4, 4))
+        let document = m3KeepDoc(
+            "<image href=\"mem://red\" x=\"0\" y=\"0\" width=\"5\" height=\"5\"/>" +
+            "<image href=\"mem://red\" x=\"5\" y=\"0\" width=\"5\" height=\"5\"/>",
+            width: 10,
+            height: 5
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(images: Some(provider)))
+        let bitmap = renderer.render(document)
+        @Assert(colorNear(bitmap.pixel(2, 2), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(colorNear(bitmap.pixel(7, 2), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(provider.calls == 1)
+        renderer.render(document)
+        @Assert(provider.calls == 2)
+    }
+
+    /** 未注入 provider：透明占位 + warning。 */
+    @TestCase
+    public func missingProviderPlaceholder(): Unit {
+        let document = m3KeepDoc(
+            "<image href=\"mem://red\" x=\"0\" y=\"0\" width=\"10\" height=\"10\"/>",
+            width: 10,
+            height: 10
+        )
+        let renderer = SvgRenderer()
+        let bitmap = renderer.render(document)
+        @Assert(bitmap.pixel(5, 5).alpha == 0.0)
+        var found = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("image")) {
+                found = true
+            }
+        }
+        @Assert(found)
+    }
+
+    /** preserveAspectRatio 三档映射。 */
+    @TestCase
+    public func preserveAspectRatioModes(): Unit {
+        let uri = m3PngDataUri(m3RedPng(100, 50))
+
+        let meet = svgDoc(
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"50\" height=\"50\" " +
+            "preserveAspectRatio=\"xMidYMid meet\"/>",
+            width: 50,
+            height: 50
+        )
+        let meetBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(meet)
+        @Assert(meetBitmap.pixel(25, 0).alpha == 0.0)
+        @Assert(colorNear(meetBitmap.pixel(25, 25), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(meetBitmap.pixel(25, 49).alpha == 0.0)
+
+        let slice = svgDoc(
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"50\" height=\"50\" " +
+            "preserveAspectRatio=\"xMidYMid slice\"/>",
+            width: 50,
+            height: 50
+        )
+        let sliceBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(slice)
+        @Assert(colorNear(sliceBitmap.pixel(0, 25), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(colorNear(sliceBitmap.pixel(49, 25), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(colorNear(sliceBitmap.pixel(25, 0), SvgColor.fromRgb(255, 0, 0)))
+    }
+
+    /** image-rendering：pixelated 走最近邻，auto 走双线性。 */
+    @TestCase
+    public func imageRenderingModes(): Unit {
+        let bitmap = SvgBitmap(2, 1)
+        bitmap.setPixel(0, 0, SvgColor.fromRgb(255, 0, 0))
+        bitmap.setPixel(1, 0, SvgColor.fromRgb(0, 0, 255))
+        let uri = m3PngDataUri(bitmap.toPngBytes())
+
+        let nearest = svgDoc(
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"40\" height=\"10\" " +
+            "preserveAspectRatio=\"none\" image-rendering=\"pixelated\"/>",
+            width: 40,
+            height: 10
+        )
+        let nearestBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(nearest)
+        @Assert(colorNear(nearestBitmap.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(colorNear(nearestBitmap.pixel(35, 5), SvgColor.fromRgb(0, 0, 255)))
+
+        let smooth = svgDoc(
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"40\" height=\"10\" " +
+            "preserveAspectRatio=\"none\"/>",
+            width: 40,
+            height: 10
+        )
+        let smoothBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(smooth)
+        let mixed = smoothBitmap.pixel(19, 5)
+        @Assert(mixed.red > 0 && mixed.blue > 0)
+    }
+
+    /** opacity 与 clipPath 对 image 生效。 */
+    @TestCase
+    public func opacityAndClip(): Unit {
+        let uri = m3PngDataUri(m3RedPng(4, 4))
+        let translucent = svgDoc(
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"10\" height=\"10\" opacity=\"0.5\"/>",
+            width: 10,
+            height: 10
+        )
+        let faded = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(translucent)
+        let pixel = faded.pixel(5, 5)
+        @Assert(pixel.alpha > 0.4 && pixel.alpha < 0.6)
+
+        let clipped = svgDoc(
+            "<defs><clipPath id=\"c\"><rect x=\"0\" y=\"0\" width=\"5\" height=\"10\"/></clipPath></defs>" +
+            "<image href=\"${uri}\" x=\"0\" y=\"0\" width=\"10\" height=\"10\" clip-path=\"url(#c)\"/>",
+            width: 10,
+            height: 10
+        )
+        let clippedBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(clipped)
+        @Assert(colorNear(clippedBitmap.pixel(2, 5), SvgColor.fromRgb(255, 0, 0)))
+        @Assert(clippedBitmap.pixel(8, 5).alpha == 0.0)
+    }
+}

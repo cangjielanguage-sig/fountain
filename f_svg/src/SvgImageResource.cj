@@ -15,6 +15,9 @@ limitations under the License.
 */
 package fountain::f_svg
 
+import std.collection.*
+import stdx.encoding.base64.*
+
 /** `<image>` 的采样质量。 */
 public enum SvgImageRendering <: Equatable<SvgImageRendering> & ToString {
     | Auto
@@ -62,4 +65,107 @@ public interface SvgImageResourceProvider {
     func resolve(href: String): ?Array<Byte>
 }
 
-// TODO(M3-5): data URI 解析与单次渲染缓存。
+
+/** `data:image/png;base64,` 文本长度上限。 */
+internal let SVG_MAX_BASE64_LENGTH: Int64 = 32 * 1024 * 1024
+private let SVG_DATA_PNG_PREFIX = "data:image/png;base64,"
+
+/**
+ * 单次渲染的图像资源解析器。
+ *
+ * 只接受 `data:image/png;base64,` 与显式注入的 `SvgImageResourceProvider`；
+ * 解码结果按 `href` 原文缓存，实例生命周期即一次 render，跨 render 不复用。
+ * 结构 / 数值错误降级为 `None`，`Limit` 继续向上抛。
+ */
+internal class SvgImageResource {
+    private let provider: ?SvgImageResourceProvider
+    private let budget: SvgDecodeBudget
+    private let decoded = HashMap<String, SvgBitmap>()
+    private let missing = HashMap<String, Bool>()
+
+    init(provider!: ?SvgImageResourceProvider = None, budget!: SvgDecodeBudget) {
+        this.provider = provider
+        this.budget = budget
+    }
+
+    /** 解析并解码；不可用时返回 `None`。 */
+    func load(href: String): ?SvgBitmap {
+        match (this.decoded.get(href)) {
+            case Some(bitmap) => return Some(bitmap)
+            case None => ()
+        }
+        match (this.missing.get(href)) {
+            case Some(_) => return None
+            case None => ()
+        }
+        let bytes = match (this.resourceBytes(href)) {
+            case Some(value) => value
+            case None =>
+                this.missing[href] = true
+                return None
+        }
+        try {
+            let bitmap = SvgPngDecoder.decode(bytes, budget: this.budget)
+            this.decoded[href] = bitmap
+            Some(bitmap)
+        } catch (error: SvgException) {
+            if (error.kind == SvgErrorKind.Limit) {
+                throw error
+            }
+            this.missing[href] = true
+            None
+        }
+    }
+
+    /** 仅解析 `data:image/png;base64,`；超长抛 `Limit`。 */
+    func loadDataUri(text: String, maxBase64Length!: Int64 = SVG_MAX_BASE64_LENGTH): ?SvgBitmap {
+        if (maxBase64Length <= 0) {
+            throw invalidValue("base64 长度上限必须为正，实际 ${maxBase64Length}")
+        }
+        let lower = text.toAsciiLower()
+        if (lower.size <= SVG_DATA_PNG_PREFIX.size ||
+            lower[0..SVG_DATA_PNG_PREFIX.size] != SVG_DATA_PNG_PREFIX) {
+            return None
+        }
+        let payload = text[SVG_DATA_PNG_PREFIX.size..].trimAscii()
+        if (Int64(payload.size) > maxBase64Length) {
+            throw SvgException(
+                "data URI base64 长度 ${payload.size} 超过上限 ${maxBase64Length}",
+                kind: SvgErrorKind.Limit
+            )
+        }
+        let bytes = match (fromBase64String(payload)) {
+            case Some(value) => value
+            case None => return None
+        }
+        try {
+            let bitmap = SvgPngDecoder.decode(bytes, budget: this.budget)
+            this.decoded[text] = bitmap
+            Some(bitmap)
+        } catch (error: SvgException) {
+            if (error.kind == SvgErrorKind.Limit) {
+                throw error
+            }
+            None
+        }
+    }
+
+    private func resourceBytes(href: String): ?Array<Byte> {
+        let lower = href.toAsciiLower()
+        if (lower.size > SVG_DATA_PNG_PREFIX.size &&
+            lower[0..SVG_DATA_PNG_PREFIX.size] == SVG_DATA_PNG_PREFIX) {
+            let payload = href[SVG_DATA_PNG_PREFIX.size..].trimAscii()
+            if (Int64(payload.size) > SVG_MAX_BASE64_LENGTH) {
+                throw SvgException(
+                    "data URI base64 长度 ${payload.size} 超过上限 ${SVG_MAX_BASE64_LENGTH}",
+                    kind: SvgErrorKind.Limit
+                )
+            }
+            return fromBase64String(payload)
+        }
+        match (this.provider) {
+            case Some(value) => value.resolve(href)
+            case None => None
+        }
+    }
+}
