@@ -445,7 +445,7 @@ public class SvgStyleResolver <: ToString {
                         return Some(out.toString())
                     case None => return None
                 }
-            case "clip-path" | "mask" =>
+            case "clip-path" | "mask" | "filter" =>
                 if (lower == "none") {
                     return Some("none")
                 }

@@ -99,6 +99,7 @@ public class SvgRenderer {
             budget: SvgDecodeBudget(SVG_MAX_RENDER_DECODE_PIXELS)
         )
         let patterns = SvgPatternSampler(registry: this.options.fonts, root: Some(list.root))
+        let filters = SvgFilterRenderer(registry: this.options.fonts)
         for (command in list.commands) {
             match (command.kind) {
                 case GroupBegin =>
@@ -142,10 +143,25 @@ public class SvgRenderer {
                         output
                     }
                     let needsLayer = command.clipRect.isSome() || command.clipPath.isSome() ||
-                        command.mask.isSome()
+                        command.mask.isSome() || command.filter.isSome()
                     if (needsLayer) {
-                        let layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
+                        var layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
                         this.renderCommand(layer, command, list, registry, images, patterns)
+                        match (command.filter) {
+                            case Some(filterElement) =>
+                                match (filterElement) {
+                                    case filter: SvgFilter =>
+                                        layer = filters.apply(
+                                            filter,
+                                            layer,
+                                            command.bounds ?? SvgBounds.empty(),
+                                            command.matrix,
+                                            this.options
+                                        )
+                                    case _ => ()
+                                }
+                            case None => ()
+                        }
                         this.applyEffects(
                             layer,
                             command.clipRect,
@@ -162,6 +178,9 @@ public class SvgRenderer {
             }
         }
         for (warning in patterns.warnings) {
+            this.warnings.add(warning)
+        }
+        for (warning in filters.warnings) {
             this.warnings.add(warning)
         }
         output

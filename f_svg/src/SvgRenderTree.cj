@@ -69,6 +69,8 @@ public class SvgDisplayCommand {
     public let href: ?String
     /** `<image>` 的 preserveAspectRatio；缺省由绘制端按 `xMidYMid meet` 处理。 */
     public let aspect: ?SvgPreserveAspectRatio
+    /** 元素引用的 `filter` 元素。 */
+    public let filter: ?SvgElement
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -83,7 +85,8 @@ public class SvgDisplayCommand {
         mask!: ?SvgElement = None,
         clipRect!: ?SvgBounds = None,
         href!: ?String = None,
-        aspect!: ?SvgPreserveAspectRatio = None
+        aspect!: ?SvgPreserveAspectRatio = None,
+        filter!: ?SvgElement = None
     ) {
         this.kind = kind
         this.tag = tag
@@ -98,6 +101,7 @@ public class SvgDisplayCommand {
         this.clipRect = clipRect
         this.href = href
         this.aspect = aspect
+        this.filter = filter
     }
 }
 
@@ -324,7 +328,8 @@ public class SvgRenderTreeBuilder {
                         opacity: style.opacity(),
                         clipPath: this.resolveUrlRef(style.get("clip-path"), context),
                         mask: this.resolveUrlRef(style.get("mask"), context),
-                        clipRect: context.clipRect
+                        clipRect: context.clipRect,
+                        filter: this.resolveUrlRef(style.get("filter"), context)
                     )
                 )
                 return
@@ -563,7 +568,8 @@ public class SvgRenderTreeBuilder {
                     opacity: style.opacity(),
                     clipPath: clipPath,
                     mask: maskElement,
-                    clipRect: context.clipRect
+                    clipRect: context.clipRect,
+                    filter: this.resolveUrlRef(style.get("filter"), context)
                 )
             )
         }
@@ -580,7 +586,8 @@ public class SvgRenderTreeBuilder {
                     opacity: style.opacity(),
                     clipPath: clipPath,
                     mask: maskElement,
-                    clipRect: context.clipRect
+                    clipRect: context.clipRect,
+                    filter: this.resolveUrlRef(style.get("filter"), context)
                 )
             )
         }
@@ -616,7 +623,8 @@ public class SvgRenderTreeBuilder {
                 mask: this.resolveUrlRef(style.get("mask"), context),
                 clipRect: context.clipRect,
                 href: image.href,
-                aspect: image.preserveAspectRatio
+                aspect: image.preserveAspectRatio,
+                filter: this.resolveUrlRef(style.get("filter"), context)
             )
         )
     }

@@ -100,7 +100,8 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("clip-rule", true, "nonzero"),
     SvgPropertySpec("stop-color", false, "black"),
     SvgPropertySpec("stop-opacity", false, "1"),
-    SvgPropertySpec("image-rendering", true, "auto")
+    SvgPropertySpec("image-rendering", true, "auto"),
+    SvgPropertySpec("filter", false, "none")
 ]
 
 internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {

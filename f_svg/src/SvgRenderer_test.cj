@@ -376,3 +376,43 @@ public class SvgImageRenderM3_test {
         @Assert(clippedBitmap.pixel(8, 5).alpha == 0.0)
     }
 }
+
+@Test
+public class SvgFilterRenderM3_test {
+    /** 缺失 filter 引用：按无滤镜渲染并 warning。 */
+    @TestCase
+    public func missingFilterReference(): Unit {
+        let document = svgDoc(
+            "<rect width=\"10\" height=\"10\" fill=\"red\" filter=\"url(#none)\"/>",
+            width: 10,
+            height: 10
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let bitmap = renderer.render(document)
+        @Assert(colorNear(bitmap.pixel(5, 5), SvgColor.fromRgb(255, 0, 0)))
+        var found = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("filter") || warning.contains("none")) {
+                found = true
+            }
+        }
+        @Assert(found)
+    }
+
+    /** 空滤镜链输出与无滤镜逐字节一致。 */
+    @TestCase
+    public func emptyFilterMatchesUnfiltered(): Unit {
+        let plain = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(
+            svgDoc("<rect width=\"10\" height=\"10\" fill=\"red\"/>", width: 10, height: 10)
+        )
+        let filtered = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(
+            svgDoc(
+                "<defs><filter id=\"f\"/></defs>" +
+                "<rect width=\"10\" height=\"10\" fill=\"red\" filter=\"url(#f)\"/>",
+                width: 10,
+                height: 10
+            )
+        )
+        @Assert(plain.pixels == filtered.pixels)
+    }
+}
