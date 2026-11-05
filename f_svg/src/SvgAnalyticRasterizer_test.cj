@@ -373,6 +373,44 @@ public class SvgAnalyticComplexM3_test {
         @Assert(bitmap.pixel(25, 25).alpha == 0.0)
     }
 
+    /** 甜甜圈按同一扁平化几何的 64× 参考图逐像素比较，最大通道差 ≤ 2/255。 */
+    @TestCase
+    public func donutMatchesContourReference(): Unit {
+        let path = polygonCirclePath(25.0, 25.0, 20.0) + " " + polygonCirclePath(25.0, 25.0, 10.0)
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(
+            svgDoc(
+                "<path d=\"${path}\" fill=\"red\" fill-rule=\"evenodd\"/>",
+                width: 50,
+                height: 50
+            )
+        )
+        let reference = denseContourCoverage(
+            flattenPathData(SvgPathData.parse(path), SvgMatrix.identity, 0.25),
+            50,
+            50,
+            SvgFillRule.Evenodd
+        )
+        var worst: Int64 = 0
+        var worstIndex: Int64 = -1
+        for (index in 0..reference.size) {
+            let expected = Int64(round(reference[index] * 255.0))
+            let actual = Int64(bitmap.pixels[index * 4 + 3])
+            let difference = if (actual > expected) { actual - expected } else { expected - actual }
+            if (difference > worst) {
+                worst = difference
+                worstIndex = index
+            }
+        }
+        if (worst > 2) {
+            @Fail(
+                "甜甜圈 worst=${worst} at row=${worstIndex / 50} column=${worstIndex % 50}"
+            )
+        }
+        @Assert(worst <= 2)
+    }
+
     /** 两个分离轮廓与高密度参考逐像素一致。 */
     @TestCase
     public func multipleContoursMatchReference(): Unit {
@@ -437,5 +475,77 @@ public class SvgAnalyticComplexM3_test {
         // 64× 参考图自身的总面积量化误差约 1 px²；再留 2 px² 余量。
         @Assert(abs(Float64(nonzeroArea) / 255.0 - expectedNonzero) <= 3.0)
         @Assert(abs(Float64(evenoddArea) / 255.0 - expectedEvenodd) <= 3.0)
+    }
+
+    /** 自交五角星 nonzero 与 64× 参考图逐像素比较，最大通道差 ≤ 2/255。 */
+    @TestCase
+    public func selfIntersectionNonzeroMatchesDenseReference(): Unit {
+        let path = "M 20 2 L 25 38 L 2 15 L 38 15 L 15 38 Z"
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(
+            svgDoc(
+                "<path d=\"${path}\" fill=\"red\" fill-rule=\"nonzero\"/>",
+                width: 40,
+                height: 40
+            )
+        )
+        let reference = denseContourCoverage(
+            flattenPathData(SvgPathData.parse(path), SvgMatrix.identity, 0.25),
+            40,
+            40,
+            SvgFillRule.Nonzero
+        )
+        var worst: Int64 = 0
+        var worstIndex: Int64 = -1
+        for (index in 0..reference.size) {
+            let expected = Int64(round(reference[index] * 255.0))
+            let actual = Int64(bitmap.pixels[index * 4 + 3])
+            let difference = if (actual > expected) { actual - expected } else { expected - actual }
+            if (difference > worst) {
+                worst = difference
+                worstIndex = index
+            }
+        }
+        if (worst > 2) {
+            @Fail("nonzero 五角星 worst=${worst} at row=${worstIndex / 40} column=${worstIndex % 40}")
+        }
+        @Assert(worst <= 2)
+    }
+
+    /** 自交五角星 evenodd 与 64× 参考图逐像素比较，最大通道差 ≤ 2/255。 */
+    @TestCase
+    public func selfIntersectionEvenoddMatchesDenseReference(): Unit {
+        let path = "M 20 2 L 25 38 L 2 15 L 38 15 L 15 38 Z"
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1, antiAlias: SvgAntiAliasMode.Analytic)
+        ).render(
+            svgDoc(
+                "<path d=\"${path}\" fill=\"red\" fill-rule=\"evenodd\"/>",
+                width: 40,
+                height: 40
+            )
+        )
+        let reference = denseContourCoverage(
+            flattenPathData(SvgPathData.parse(path), SvgMatrix.identity, 0.25),
+            40,
+            40,
+            SvgFillRule.Evenodd
+        )
+        var worst: Int64 = 0
+        var worstIndex: Int64 = -1
+        for (index in 0..reference.size) {
+            let expected = Int64(round(reference[index] * 255.0))
+            let actual = Int64(bitmap.pixels[index * 4 + 3])
+            let difference = if (actual > expected) { actual - expected } else { expected - actual }
+            if (difference > worst) {
+                worst = difference
+                worstIndex = index
+            }
+        }
+        if (worst > 2) {
+            @Fail("evenodd 五角星 worst=${worst} at row=${worstIndex / 40} column=${worstIndex % 40}")
+        }
+        @Assert(worst <= 2)
     }
 }
