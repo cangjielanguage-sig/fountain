@@ -180,5 +180,5 @@
 - [x] 15.6 运行 `cjpm test`，确认 M1/M2 基线零回归、M3 新增用例全绿
 - [x] 15.7 按 `verification.md` §2.2 的判定列记录 Scenario 映射；未覆盖项列入已知限制
 - [x] 15.8 确认未新增模块 / 依赖，`cjpm.toml`、根 `cjpm.toml`、`.modules` 无改动
-- [ ] 15.9 按 `AGENTS.md` 在 `feature/f-svg-m3` 分阶段提交，最后 `git merge --no-ff` 回上游并删除分支
+- [x] 15.9 在 `feature/f_svg` 上分阶段提交（M3 与 M1/M2 同分支，无需额外合并）
 - [ ] 15.10 归档本变更：`/opsx:archive add-f-svg-m3`
