@@ -318,6 +318,22 @@ public class SvgRenderTreeBuilder {
                 }
                 let matrix = context.matrix.multiply(elementTransformMatrix(text))
                 let bounds = SvgGeometry.bounds(text, style: style, fonts: context.fonts)
+                let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
+                let maskElement = this.resolveUrlRef(style.get("mask"), context)
+                let filterElement = this.resolveUrlRef(style.get("filter"), context)
+                if (filterElement.isSome()) {
+                    this.appendFilteredGroupBegin(
+                        commands,
+                        text.tag,
+                        matrix,
+                        style.opacity(),
+                        clipPath,
+                        maskElement,
+                        context.clipRect,
+                        filterElement,
+                        bounds
+                    )
+                }
                 commands.add(
                     SvgDisplayCommand(
                         SvgDisplayCommandKind.Text,
@@ -326,13 +342,16 @@ public class SvgRenderTreeBuilder {
                         textElement: Some(text),
                         style: Some(style),
                         bounds: bounds,
-                        opacity: style.opacity(),
-                        clipPath: this.resolveUrlRef(style.get("clip-path"), context),
-                        mask: this.resolveUrlRef(style.get("mask"), context),
-                        clipRect: context.clipRect,
-                        filter: this.resolveUrlRef(style.get("filter"), context)
+                        opacity: if (filterElement.isSome()) { 1.0 } else { style.opacity() },
+                        clipPath: if (filterElement.isSome()) { None } else { clipPath },
+                        mask: if (filterElement.isSome()) { None } else { maskElement },
+                        clipRect: if (filterElement.isSome()) { None } else { context.clipRect },
+                        filter: None
                     )
                 )
+                if (filterElement.isSome()) {
+                    commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, text.tag, matrix))
+                }
                 return
             case shape: SvgShape =>
                 this.addShape(shape, context, commands, style)
@@ -357,21 +376,9 @@ public class SvgRenderTreeBuilder {
         let matrix = context.matrix.multiply(elementTransformMatrix(container))
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
+        let filterElement = this.resolveUrlRef(style.get("filter"), context)
         let grouped = style.opacity() < 1.0 || clipPath.isSome() || maskElement.isSome() ||
-            context.clipRect.isSome()
-        if (grouped) {
-            commands.add(
-                SvgDisplayCommand(
-                    SvgDisplayCommandKind.GroupBegin,
-                    container.tag,
-                    matrix,
-                    opacity: style.opacity(),
-                    clipPath: clipPath,
-                    mask: maskElement,
-                    clipRect: context.clipRect
-                )
-            )
-        }
+            context.clipRect.isSome() || filterElement.isSome()
         let childContext = SvgRenderTreeContext(
             matrix,
             context.width,
@@ -383,13 +390,14 @@ public class SvgRenderTreeBuilder {
             context.useStack,
             context.fonts
         )
+        let childCommands = ArrayList<SvgDisplayCommand>()
         if (container.kind == SvgContainerKind.Switch) {
             for (node in container.children) {
                 match (node) {
                     case ElementNode(child) =>
                         match (context.styles.get(child)) {
                             case Some(childStyle) => if (childStyle.display() != "none") {
-                                this.walkElement(child, childContext, commands)
+                                this.walkElement(child, childContext, childCommands)
                                 break
                             }
                             case None => ()
@@ -398,7 +406,30 @@ public class SvgRenderTreeBuilder {
                 }
             }
         } else {
-            this.walkChildren(container, childContext, commands)
+            this.walkChildren(container, childContext, childCommands)
+        }
+        let groupBounds: ?SvgBounds = if (filterElement.isSome()) {
+            unionCommandBounds(childCommands, matrix)
+        } else {
+            None
+        }
+        if (grouped) {
+            commands.add(
+                SvgDisplayCommand(
+                    SvgDisplayCommandKind.GroupBegin,
+                    container.tag,
+                    matrix,
+                    opacity: style.opacity(),
+                    clipPath: clipPath,
+                    mask: maskElement,
+                    clipRect: context.clipRect,
+                    bounds: groupBounds,
+                    filter: filterElement
+                )
+            )
+        }
+        for (command in childCommands) {
+            commands.add(command)
         }
         if (grouped) {
             commands.add(
@@ -556,6 +587,21 @@ public class SvgRenderTreeBuilder {
         let bounds = SvgGeometry.bounds(shape, style: style)
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
+        let filterElement = this.resolveUrlRef(style.get("filter"), context)
+        let filtered = filterElement.isSome()
+        if (filtered) {
+            this.appendFilteredGroupBegin(
+                commands,
+                shape.tag,
+                matrix,
+                style.opacity(),
+                clipPath,
+                maskElement,
+                context.clipRect,
+                filterElement,
+                bounds
+            )
+        }
         let fill = style.fill()
         if (fill.kind != SvgPaintKind.None) {
             commands.add(
@@ -566,11 +612,11 @@ public class SvgRenderTreeBuilder {
                     path: Some(path),
                     style: Some(style),
                     bounds: bounds,
-                    opacity: style.opacity(),
-                    clipPath: clipPath,
-                    mask: maskElement,
-                    clipRect: context.clipRect,
-                    filter: this.resolveUrlRef(style.get("filter"), context)
+                    opacity: if (filtered) { 1.0 } else { style.opacity() },
+                    clipPath: if (filtered) { None } else { clipPath },
+                    mask: if (filtered) { None } else { maskElement },
+                    clipRect: if (filtered) { None } else { context.clipRect },
+                    filter: None
                 )
             )
         }
@@ -584,15 +630,44 @@ public class SvgRenderTreeBuilder {
                     path: Some(path),
                     style: Some(style),
                     bounds: bounds,
-                    opacity: style.opacity(),
-                    clipPath: clipPath,
-                    mask: maskElement,
-                    clipRect: context.clipRect,
-                    filter: this.resolveUrlRef(style.get("filter"), context)
+                    opacity: if (filtered) { 1.0 } else { style.opacity() },
+                    clipPath: if (filtered) { None } else { clipPath },
+                    mask: if (filtered) { None } else { maskElement },
+                    clipRect: if (filtered) { None } else { context.clipRect },
+                    filter: None
                 )
             )
         }
         this.addMarkers(shape, context, commands, style)
+        if (filtered) {
+            commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, shape.tag, matrix))
+        }
+    }
+
+    private func appendFilteredGroupBegin(
+        commands: ArrayList<SvgDisplayCommand>,
+        tag: String,
+        matrix: SvgMatrix,
+        opacity: Float64,
+        clipPath: ?SvgElement,
+        mask: ?SvgElement,
+        clipRect: ?SvgBounds,
+        filter: ?SvgElement,
+        bounds: ?SvgBounds
+    ): Unit {
+        commands.add(
+            SvgDisplayCommand(
+                SvgDisplayCommandKind.GroupBegin,
+                tag,
+                matrix,
+                opacity: opacity,
+                clipPath: clipPath,
+                mask: mask,
+                clipRect: clipRect,
+                bounds: bounds,
+                filter: filter
+            )
+        )
     }
 
     private func addMarkers(
@@ -647,22 +722,44 @@ public class SvgRenderTreeBuilder {
                     this.warnings.add("<image> 的 href 为片段引用，不能作为图像资源，使用占位矩形")
                 }
         }
+        let matrix = context.matrix.multiply(elementTransformMatrix(image))
+        let box = SvgBounds(x, y, width, height)
+        let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
+        let maskElement = this.resolveUrlRef(style.get("mask"), context)
+        let filterElement = this.resolveUrlRef(style.get("filter"), context)
+        let filtered = filterElement.isSome()
+        if (filtered) {
+            this.appendFilteredGroupBegin(
+                commands,
+                "image",
+                matrix,
+                style.opacity(),
+                clipPath,
+                maskElement,
+                context.clipRect,
+                filterElement,
+                Some(box)
+            )
+        }
         commands.add(
             SvgDisplayCommand(
                 SvgDisplayCommandKind.Image,
                 "image",
-                context.matrix.multiply(elementTransformMatrix(image)),
+                matrix,
                 style: Some(style),
-                bounds: Some(SvgBounds(x, y, width, height)),
-                opacity: style.opacity(),
-                clipPath: this.resolveUrlRef(style.get("clip-path"), context),
-                mask: this.resolveUrlRef(style.get("mask"), context),
-                clipRect: context.clipRect,
+                bounds: Some(box),
+                opacity: if (filtered) { 1.0 } else { style.opacity() },
+                clipPath: if (filtered) { None } else { clipPath },
+                mask: if (filtered) { None } else { maskElement },
+                clipRect: if (filtered) { None } else { context.clipRect },
                 href: image.href,
                 aspect: image.preserveAspectRatio,
-                filter: this.resolveUrlRef(style.get("filter"), context)
+                filter: None
             )
         )
+        if (filtered) {
+            commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, "image", matrix))
+        }
     }
 
     private func resolveUrlRef(value: ?String, context: SvgRenderTreeContext): ?SvgElement {
@@ -748,4 +845,37 @@ private func arrayContainsSvgString(values: Array<String>, target: String): Bool
         }
     }
     false
+}
+
+/** 把一组指令的包围盒换算到 `groupMatrix` 的本地空间并求并集。 */
+private func unionCommandBounds(
+    commands: ArrayList<SvgDisplayCommand>,
+    groupMatrix: SvgMatrix
+): ?SvgBounds {
+    let inverse = groupMatrix.invert()
+    var result: ?SvgBounds = None
+    for (command in commands) {
+        let box = match (command.bounds) {
+            case Some(value) => value
+            case None => continue
+        }
+        let relative = match (inverse) {
+            case Some(value) => value.multiply(command.matrix)
+            case None => command.matrix
+        }
+        let c0 = relative.apply(SvgPoint(box.x, box.y))
+        let c1 = relative.apply(SvgPoint(box.x + box.width, box.y))
+        let c2 = relative.apply(SvgPoint(box.x + box.width, box.y + box.height))
+        let c3 = relative.apply(SvgPoint(box.x, box.y + box.height))
+        let minimumX = min(min(c0.x, c1.x), min(c2.x, c3.x))
+        let maximumX = max(max(c0.x, c1.x), max(c2.x, c3.x))
+        let minimumY = min(min(c0.y, c1.y), min(c2.y, c3.y))
+        let maximumY = max(max(c0.y, c1.y), max(c2.y, c3.y))
+        let converted = SvgBounds(minimumX, minimumY, maximumX - minimumX, maximumY - minimumY)
+        result = Some(match (result) {
+            case Some(existing) => existing.union(converted)
+            case None => converted
+        })
+    }
+    result
 }

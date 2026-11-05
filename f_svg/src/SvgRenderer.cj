@@ -19,13 +19,14 @@ import std.collection.*
 import std.math.*
 
 private class SvgRenderFrame {
-    let bitmap: SvgBitmap
+    var bitmap: SvgBitmap
     let opacity: Float64
     let clipPath: ?SvgElement
     let mask: ?SvgElement
     let clipRect: ?SvgBounds
     let matrix: SvgMatrix
     let bounds: ?SvgBounds
+    let filter: ?SvgElement
 
     init(
         bitmap: SvgBitmap,
@@ -34,7 +35,8 @@ private class SvgRenderFrame {
         mask: ?SvgElement,
         clipRect: ?SvgBounds,
         matrix: SvgMatrix,
-        bounds: ?SvgBounds
+        bounds: ?SvgBounds,
+        filter: ?SvgElement
     ) {
         this.bitmap = bitmap
         this.opacity = opacity
@@ -43,6 +45,7 @@ private class SvgRenderFrame {
         this.clipRect = clipRect
         this.matrix = matrix
         this.bounds = bounds
+        this.filter = filter
     }
 }
 
@@ -112,7 +115,8 @@ public class SvgRenderer {
                             command.mask,
                             command.clipRect,
                             command.matrix,
-                            command.bounds
+                            command.bounds,
+                            command.filter
                         )
                     )
                 case GroupEnd =>
@@ -121,6 +125,21 @@ public class SvgRenderer {
                     }
                     let frame = frames[frames.size - 1]
                     frames.remove(at: frames.size - 1)
+                    match (frame.filter) {
+                        case Some(filterElement) =>
+                            match (filterElement) {
+                                case filter: SvgFilter =>
+                                    frame.bitmap = filters.apply(
+                                        filter,
+                                        frame.bitmap,
+                                        frame.bounds ?? SvgBounds.empty(),
+                                        frame.matrix,
+                                        this.options
+                                    )
+                                case _ => ()
+                            }
+                        case None => ()
+                    }
                     this.applyEffects(
                         frame.bitmap,
                         frame.clipRect,
