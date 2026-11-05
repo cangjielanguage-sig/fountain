@@ -218,7 +218,7 @@ private class SvgBoundsAccumulator {
     }
 }
 
-private func isFiniteSvgNumber(value: Float64): Bool {
+internal func isFiniteSvgNumber(value: Float64): Bool {
     !value.isNaN() && !value.isInf()
 }
 
