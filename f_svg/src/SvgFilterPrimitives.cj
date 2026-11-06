@@ -505,9 +505,13 @@ internal func dropShadowFilterBuffer(
         sigmaY = deviations[1]
     }
     if (sigmaX < 0.0 || sigmaY < 0.0) {
-        warnings.add("feDropShadow 的 stdDeviation 含负值，按 0 处理")
-        sigmaX = max(0.0, sigmaX)
-        sigmaY = max(0.0, sigmaY)
+        warnings.add("feDropShadow 的 stdDeviation 含负值，回退缺省值 2")
+        if (sigmaX < 0.0) {
+            sigmaX = 2.0
+        }
+        if (sigmaY < 0.0) {
+            sigmaY = 2.0
+        }
     }
     let blurred = blurFilterBuffer(input, sigmaX * scaleX, sigmaY * scaleY)
     let offset = offsetFilterBuffer(
@@ -515,8 +519,18 @@ internal func dropShadowFilterBuffer(
         Int64(round(shadow.dx.value * scaleX)),
         Int64(round(shadow.dy.value * scaleY))
     )
-    let color = match (shadow.floodColor.color) {
-        case Some(value) => value
+    let color = match (shadow.attr("flood-color")) {
+        case Some(text) =>
+            match (tryParseSvgPaint(text)) {
+                case Some(paint) =>
+                    match (paint.color) {
+                        case Some(value) => value
+                        case None => SvgColor.Black
+                    }
+                case None =>
+                    warnings.add("feDropShadow 的 flood-color「${text}」不合法，回退黑色")
+                    SvgColor.Black
+            }
         case None => SvgColor.Black
     }
     let flooded = floodFilterBuffer(input.width, input.height, color, shadow.floodOpacity)

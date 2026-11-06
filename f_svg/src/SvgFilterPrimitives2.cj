@@ -562,7 +562,7 @@ public class SvgFeConvolveMatrix <: SvgFilterPrimitive {
         set(value) {
             match (value) {
                 case Some(number) => writeFloat(this, "targetX", Some(Float64(number)))
-                case None => writeFloat(this, "targetX", None)
+                case None => writeFloat(this, "targetX", Option<Float64>.None)
             }
         }
     }
@@ -577,7 +577,7 @@ public class SvgFeConvolveMatrix <: SvgFilterPrimitive {
         set(value) {
             match (value) {
                 case Some(number) => writeFloat(this, "targetY", Some(Float64(number)))
-                case None => writeFloat(this, "targetY", None)
+                case None => writeFloat(this, "targetY", Option<Float64>.None)
             }
         }
     }

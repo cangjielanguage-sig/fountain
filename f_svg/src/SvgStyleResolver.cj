@@ -100,7 +100,7 @@ public class SvgStyleResolver <: ToString {
             this.fontFaces.add(face)
         }
         let tree = SvgComputedStyleTree()
-        this.computeSubtree(root, None, tree)
+        this.computeSubtree(root, Option<SvgComputedStyle>.None, tree)
         tree
     }
 
@@ -121,7 +121,7 @@ public class SvgStyleResolver <: ToString {
     ): SvgComputedStyle {
         this.mediaWidth = mediaWidth
         this.mediaHeight = mediaHeight
-        this.prepare(None)
+        this.prepare(Option<SvgElement>.None)
         this.cascade(element, parent)
     }
 
@@ -734,7 +734,7 @@ public class SvgStyleResolver <: ToString {
                     case Some(rendering) => return Some(rendering.toString())
                     case None => return None
                 }
-            case "paint-order" => return normalizeCssPaintOrder(textLower)
+            case "paint-order" => return normalizeCssPaintOrder(textLower, this.warnings)
             case "mix-blend-mode" =>
                 match (textLower) {
                     case "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten" |

@@ -77,4 +77,22 @@ public class SvgPaintOrderM5_test {
         @Assert(order.toString() == "markers fill stroke")
         @Assert(SvgPaintOrder.parse(order.toString()).toString() == order.toString())
     }
+
+    /** 计算样式中的未知关键字逐项丢弃，合法项保留。 */
+    @TestCase
+    public func unknownKeywordIsDroppedInComputedStyle(): Unit {
+        let (document, tree, resolver) = m5ComputeStyles(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>" +
+            "rect { paint-order: stroke shadows fill }</style><rect id=\"r\"/></svg>"
+        )
+        let style = m5StyleOf(tree, document.elementById("r"))
+        @Assert(style.get("paint-order") == Some("stroke fill markers"))
+        var sawShadows = false
+        for (warning in resolver.warnings) {
+            if (warning.contains("shadows")) {
+                sawShadows = true
+            }
+        }
+        @Assert(sawShadows)
+    }
 }

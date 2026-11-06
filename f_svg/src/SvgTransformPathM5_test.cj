@@ -99,4 +99,27 @@ public class SvgTransformPathM5_test {
         let right = matrix.apply(SvgPoint(17.0, 23.0))
         @Assert(m5PointNear(left, right.x, right.y))
     }
+
+    /** `screenCTM` 支持可选样式上下文，与 `ctm` 对齐。 */
+    @TestCase
+    public func screenCtmAcceptsStyles(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\">" +
+            "<rect id=\"r\" x=\"10\" y=\"20\" width=\"20\" height=\"10\" " +
+            "transform=\"rotate(30)\" transform-origin=\"50% 50%\" transform-box=\"fill-box\"/></svg>"
+        )
+        let element = document.elementById("r") ?? throw invalidValue("缺少矩形")
+        let tree = SvgStyleResolver().compute(document.root, mediaWidth: 64.0, mediaHeight: 64.0)
+        let viewport = SvgViewportTransform(64.0, 64.0, SvgMatrix.identity, 1.0)
+        let screen = SvgGeometry.screenCTM(element, viewport, styles: tree)
+        let expected = SvgGeometry.ctm(
+            element,
+            styles: tree,
+            viewportWidth: 64.0,
+            viewportHeight: 64.0
+        )
+        let left = screen.apply(SvgPoint(17.0, 23.0))
+        let right = expected.apply(SvgPoint(17.0, 23.0))
+        @Assert(m5PointNear(left, right.x, right.y))
+    }
 }

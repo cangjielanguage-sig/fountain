@@ -330,8 +330,9 @@ let ctm = SvgGeometry.ctm(document.elementsByTag("rect")[0])
 ### M4 limitations
 
 - `pattern` `overflow="visible"` does not extend into adjacent tiles; the tile remains the sampling period.
-- TTF supports TrueType outlines only: CFF / OTF raises `Unsupported`. Hinting, `GSUB`, `GPOS` and `kern`
-  are not parsed; spacing comes from `hmtx` only. The library never opens paths on its own:
+- TTF supports TrueType outlines only: CFF / OTF raises `Unsupported`. Hinting is not parsed.
+  Per-glyph `advance` still comes from `hmtx` only; since M5, text layout parses the `kern`
+  feature in `GPOS` and the `liga` feature in `GSUB`. The library never opens paths on its own:
   `SvgTrueTypeFont.load(path)` is the only file entry, while `parse(bytes)` and rendering do not
   touch the file system.
 - `feImage` accepts only `data:image/png` and providers, sharing the per-render decode budget with `<image>`.

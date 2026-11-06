@@ -15,4 +15,46 @@ limitations under the License.
 */
 package fountain::f_svg
 
-// TODO(M5): SvgContextPaint
+import std.collection.*
+
+/** `use` 目标元素的计算画笔作为上下文帧；自身为 `context-*` 时视为无帧。 */
+internal func useContextFrame(
+    styles: SvgComputedStyleTree,
+    target: SvgElement,
+    isFill: Bool
+): ?SvgPaint {
+    let style = match (styles.get(target)) {
+        case Some(value) => value
+        case None => return Option<SvgPaint>.None
+    }
+    let paint = if (isFill) { style.fill() } else { style.stroke() }
+    match (paint.kind) {
+        case ContextFill | ContextStroke => Option<SvgPaint>.None
+        case _ => Some(paint)
+    }
+}
+
+/** 解析 `context-fill` / `context-stroke`；无帧时回退 none 并告警。 */
+internal func resolveContextPaintOf(
+    paint: SvgPaint,
+    frame: ?SvgPaint,
+    expected: SvgPaintKind,
+    keyword: String,
+    warnings: ArrayList<String>
+): SvgPaint {
+    if (paint.kind != expected) {
+        return paint
+    }
+    match (frame) {
+        case Some(value) =>
+            match (value.kind) {
+                case ContextFill | ContextStroke =>
+                    warnings.add("${keyword} 没有可用的 use 上下文，按 none 处理")
+                    SvgPaint.None
+                case _ => value
+            }
+        case None =>
+            warnings.add("${keyword} 没有可用的 use 上下文，按 none 处理")
+            SvgPaint.None
+    }
+}

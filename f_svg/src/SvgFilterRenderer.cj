@@ -431,6 +431,12 @@ private func dropShadowRegionMargin(filter: SvgFilter): Float64 {
                     sigmaX = deviations[0]
                     sigmaY = deviations[1]
                 }
+                if (sigmaX < 0.0) {
+                    sigmaX = 2.0
+                }
+                if (sigmaY < 0.0) {
+                    sigmaY = 2.0
+                }
                 let dx = if (shadow.dx.value < 0.0) { -shadow.dx.value } else { shadow.dx.value }
                 let dy = if (shadow.dy.value < 0.0) { -shadow.dy.value } else { shadow.dy.value }
                 let candidate = max(dx + 3.0 * max(0.0, sigmaX), dy + 3.0 * max(0.0, sigmaY))

@@ -279,19 +279,6 @@ public class SvgTrueTypeFont <: SvgFont {
         this.gposPairs.isSome() || this.kernPairs.isSome()
     }
 
-    /** 相邻字形的 x advance 调整（设计单位换算到目标字号）。 */
-    internal func kerningAdjust(left: Int64, right: Int64, fontSize: Float64): Float64 {
-        let leftGlyph = match (this.glyphIndex(left)) {
-            case Some(value) => value
-            case None => return 0.0
-        }
-        let rightGlyph = match (this.glyphIndex(right)) {
-            case Some(value) => value
-            case None => return 0.0
-        }
-        this.kerningAdjustByIds(leftGlyph, rightGlyph, fontSize)
-    }
-
     /** 按整形后的字形 id 调整 x advance。 */
     internal func kerningAdjustByIds(leftGlyph: Int64, rightGlyph: Int64, fontSize: Float64): Float64 {
         let units = match (this.gposPairs) {

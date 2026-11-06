@@ -79,24 +79,27 @@ public enum SvgUnicodeBidi <: Equatable<SvgUnicodeBidi> & ToString {
     }
 }
 
-/** `font-kerning` 的取值；实现为值类型以提供 `None` 常量而不污染 `Option.None`。 */
-public struct SvgFontKerning <: Equatable<SvgFontKerning> & ToString {
-    private let name: String
-
-    private init(name: String) {
-        this.name = name
-    }
-
-    public static let Auto = SvgFontKerning("auto")
-    public static let Normal = SvgFontKerning("normal")
-    public static let None = SvgFontKerning("none")
-
-    public func toString(): String {
-        this.name
-    }
+/** `font-kerning` 的取值。 */
+public enum SvgFontKerning <: Equatable<SvgFontKerning> & ToString {
+    | Auto
+    | Normal
+    | None
 
     public operator func ==(that: SvgFontKerning): Bool {
-        this.name == that.name
+        match ((this, that)) {
+            case (Auto, Auto) => true
+            case (Normal, Normal) => true
+            case (None, None) => true
+            case _ => false
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Auto => "auto"
+            case Normal => "normal"
+            case None => "none"
+        }
     }
 
     public static func fromName(name: String): ?SvgFontKerning {
@@ -354,12 +357,3 @@ private func reverseBidiRange(order: ArrayList<Int64>, start: Int64, end: Int64)
     }
 }
 
-/** 强制方向（`bidi-override`）：所有字符取段落方向，仅做 L2 反转。 */
-internal func svgBidiOverrideLevels(codePoints: Array<Int64>, paragraphRtl: Bool): Array<Int64> {
-    let base: Int64 = if (paragraphRtl) { 1 } else { 0 }
-    let levels = ArrayList<Int64>()
-    for (_ in codePoints) {
-        levels.add(base)
-    }
-    levels.toArray()
-}

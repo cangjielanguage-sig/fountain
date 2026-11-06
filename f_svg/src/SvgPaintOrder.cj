@@ -109,51 +109,17 @@ private func containsPaintLayer(layers: ArrayList<SvgPaintLayer>, layer: SvgPain
     false
 }
 
-private let CSS_PAINT_LAYER_NAMES: Array<String> = ["fill", "stroke", "markers"]
-
 /**
  * `paint-order` 的字符串归一化：去重、按默认顺序补齐缺失层。
  *
- * 未知关键字使整条声明无效（返回 `None`，由调用方回退初始值并告警）。
+ * 未知关键字逐项丢弃并记 warning，合法项保留；空白值返回 `None`。
  */
-internal func normalizeCssPaintOrder(text: String): ?String {
+internal func normalizeCssPaintOrder(text: String, warnings: ArrayList<String>): ?String {
     let tokens = splitCssWhitespaceWords(text.toAsciiLower())
     if (tokens.size == 0) {
         return None
     }
-    let layers = ArrayList<String>()
-    for (token in tokens) {
-        if (!isCssPaintLayerName(token)) {
-            return None
-        }
-        if (!containsCssPaintLayer(layers, token)) {
-            layers.add(token)
-        }
-    }
-    for (name in CSS_PAINT_LAYER_NAMES) {
-        if (!containsCssPaintLayer(layers, name)) {
-            layers.add(name)
-        }
-    }
-    joinCssStrings(layers, " ")
-}
-
-internal func isCssPaintLayerName(name: String): Bool {
-    for (candidate in CSS_PAINT_LAYER_NAMES) {
-        if (candidate == name) {
-            return true
-        }
-    }
-    false
-}
-
-private func containsCssPaintLayer(layers: ArrayList<String>, name: String): Bool {
-    for (item in layers) {
-        if (item == name) {
-            return true
-        }
-    }
-    false
+    SvgPaintOrder.parse(text, warnings).toString()
 }
 
 /** 计算样式值转回绘制层序列；非法值返回缺省顺序。 */

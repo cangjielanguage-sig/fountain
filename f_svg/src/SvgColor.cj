@@ -241,7 +241,7 @@ private func splitColorArgs(content: String): SvgColorArgs {
             parts.add(part.trimAscii())
         }
         match (parts.size) {
-            case 3 => SvgColorArgs(parts, None)
+            case 3 => SvgColorArgs(parts, Option<String>.None)
             case 4 =>
                 let alpha = parts[3]
                 parts.remove(at: 3)

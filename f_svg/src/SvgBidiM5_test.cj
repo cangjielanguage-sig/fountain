@@ -76,16 +76,6 @@ public class SvgBidiM5_test {
         @Assert(spaced[1] == 1)
     }
 
-    /** bidi-override 按段落方向强制排列。 */
-    @TestCase
-    public func override(): Unit {
-        let levels = svgBidiOverrideLevels(m5CodePoints("abc"), true)
-        @Assert(levels == [1, 1, 1])
-        @Assert(svgBidiVisualOrder(levels) == [2, 1, 0])
-        let ltrLevels = svgBidiOverrideLevels(m5CodePoints("אב"), false)
-        @Assert(svgBidiVisualOrder(ltrLevels) == [0, 1])
-    }
-
     /** 单层括号镜像。 */
     @TestCase
     public func mirroring(): Unit {

@@ -281,7 +281,7 @@ public class SvgRenderTreeBuilder {
                         matrix,
                         logicalWidth,
                         logicalHeight,
-                        None,
+                        Option<SvgBounds>.None,
                         styles,
                         root,
                         0,
@@ -377,7 +377,7 @@ public class SvgRenderTreeBuilder {
             matrix,
             Float64(width),
             Float64(height),
-            None,
+            Option<SvgBounds>.None,
             styles,
             element,
             0,
@@ -514,11 +514,11 @@ public class SvgRenderTreeBuilder {
                         bounds: bounds,
                         clipBounds: clipBounds,
                         opacity: if (grouped) { 1.0 } else { style.opacity() },
-                        clipPath: if (filtered) { None } else { clipPath },
-                        mask: if (filtered) { None } else { maskElement },
-                        clipRect: if (filtered) { None } else { context.clipRect },
-                        filter: None,
-                        clip: if (filtered) { None } else { clip },
+                        clipPath: if (filtered) { Option<SvgElement>.None } else { clipPath },
+                        mask: if (filtered) { Option<SvgElement>.None } else { maskElement },
+                        clipRect: if (filtered) { Option<SvgBounds>.None } else { context.clipRect },
+                        filter: Option<SvgElement>.None,
+                        clip: if (filtered) { Option<SvgClipRect>.None } else { clip },
                         clipQuads: context.clipQuads
                     )
                 )
@@ -581,7 +581,7 @@ public class SvgRenderTreeBuilder {
             matrix,
             context.width,
             context.height,
-            None,
+            Option<SvgBounds>.None,
             context.styles,
             context.root,
             context.depth,
@@ -902,11 +902,11 @@ public class SvgRenderTreeBuilder {
                     style: Some(style),
                     bounds: bounds,
                     opacity: if (grouped) { 1.0 } else { style.opacity() },
-                    clipPath: if (filtered) { None } else { clipPath },
-                    mask: if (filtered) { None } else { maskElement },
-                    clipRect: if (filtered) { None } else { context.clipRect },
-                    filter: None,
-                    clip: if (filtered) { None } else { clip },
+                    clipPath: if (filtered) { Option<SvgElement>.None } else { clipPath },
+                    mask: if (filtered) { Option<SvgElement>.None } else { maskElement },
+                    clipRect: if (filtered) { Option<SvgBounds>.None } else { context.clipRect },
+                    filter: Option<SvgElement>.None,
+                    clip: if (filtered) { Option<SvgClipRect>.None } else { clip },
                     clipQuads: context.clipQuads,
                     paintOverride: Some(fill)
                 )
@@ -929,11 +929,11 @@ public class SvgRenderTreeBuilder {
                     style: Some(style),
                     bounds: bounds,
                     opacity: if (grouped) { 1.0 } else { style.opacity() },
-                    clipPath: if (filtered) { None } else { clipPath },
-                    mask: if (filtered) { None } else { maskElement },
-                    clipRect: if (filtered) { None } else { context.clipRect },
-                    filter: None,
-                    clip: if (filtered) { None } else { clip },
+                    clipPath: if (filtered) { Option<SvgElement>.None } else { clipPath },
+                    mask: if (filtered) { Option<SvgElement>.None } else { maskElement },
+                    clipRect: if (filtered) { Option<SvgBounds>.None } else { context.clipRect },
+                    filter: Option<SvgElement>.None,
+                    clip: if (filtered) { Option<SvgClipRect>.None } else { clip },
                     nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke,
                     clipQuads: context.clipQuads,
                     paintOverride: Some(stroke)
@@ -1174,13 +1174,13 @@ public class SvgRenderTreeBuilder {
                 style: Some(style),
                 bounds: Some(box),
                 opacity: if (grouped) { 1.0 } else { style.opacity() },
-                clipPath: if (filtered) { None } else { clipPath },
-                mask: if (filtered) { None } else { maskElement },
-                clipRect: if (filtered) { None } else { context.clipRect },
+                clipPath: if (filtered) { Option<SvgElement>.None } else { clipPath },
+                mask: if (filtered) { Option<SvgElement>.None } else { maskElement },
+                clipRect: if (filtered) { Option<SvgBounds>.None } else { context.clipRect },
                 href: image.href,
                 aspect: image.preserveAspectRatio,
-                filter: None,
-                clip: if (filtered) { None } else { clip },
+                filter: Option<SvgElement>.None,
+                clip: if (filtered) { Option<SvgClipRect>.None } else { clip },
                 clipQuads: context.clipQuads
             )
         )
@@ -1519,44 +1519,3 @@ private func deriveRenderFonts(
     SvgFontRegistry.derived(base, faces.toArray(), warnings: warnings)
 }
 
-/** `use` 目标元素的计算画笔作为上下文帧；自身为 `context-*` 时视为无帧。 */
-private func useContextFrame(
-    styles: SvgComputedStyleTree,
-    target: SvgElement,
-    isFill: Bool
-): ?SvgPaint {
-    let style = match (styles.get(target)) {
-        case Some(value) => value
-        case None => return Option<SvgPaint>.None
-    }
-    let paint = if (isFill) { style.fill() } else { style.stroke() }
-    match (paint.kind) {
-        case ContextFill | ContextStroke => Option<SvgPaint>.None
-        case _ => Some(paint)
-    }
-}
-
-/** 解析 `context-fill` / `context-stroke`；无帧时回退 none 并告警。 */
-private func resolveContextPaintOf(
-    paint: SvgPaint,
-    frame: ?SvgPaint,
-    expected: SvgPaintKind,
-    keyword: String,
-    warnings: ArrayList<String>
-): SvgPaint {
-    if (paint.kind != expected) {
-        return paint
-    }
-    match (frame) {
-        case Some(value) =>
-            match (value.kind) {
-                case ContextFill | ContextStroke =>
-                    warnings.add("${keyword} 没有可用的 use 上下文，按 none 处理")
-                    SvgPaint.None
-                case _ => value
-            }
-        case None =>
-            warnings.add("${keyword} 没有可用的 use 上下文，按 none 处理")
-            SvgPaint.None
-    }
-}

@@ -69,7 +69,7 @@ internal func svgStyleFor(element: SvgElement, styles: ?SvgComputedStyleTree): S
             }
         case None => ()
     }
-    SvgStyleResolver().computeElement(element, None)
+    SvgStyleResolver().computeElement(element, Option<SvgComputedStyle>.None)
 }
 
 /** `getBBox` 递归所需的只读上下文。 */

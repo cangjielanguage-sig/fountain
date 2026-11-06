@@ -331,8 +331,9 @@ let ctm = SvgGeometry.ctm(document.elementsByTag("rect")[0])
 ### M4 限制
 
 - `pattern` 的 `overflow="visible"` 不向相邻 tile 扩展；tile 仍是采样周期。
-- TTF 只支持 TrueType 轮廓：CFF / OTF 抛 `Unsupported`；不解析 hinting / `GSUB` / `GPOS` / `kern`，
-  字距只来自 `hmtx`。库内不打开路径，`SvgTrueTypeFont.load(path)` 是唯一文件入口；
+- TTF 只支持 TrueType 轮廓：CFF / OTF 抛 `Unsupported`；不解析 hinting。单字形 `advance`
+  仍只来自 `hmtx`；M5 起在文本布局阶段解析 `kern` / `GPOS` 的 `kern` 特性与 `GSUB` 的
+  `liga` 特性。库内不打开路径，`SvgTrueTypeFont.load(path)` 是唯一文件入口；
   `parse(bytes)` 与渲染过程都不访问文件系统，字体必须由调用方显式加载。
 - `feImage` 只接受 `data:image/png` 与 provider，并与 `<image>` 共享单次渲染解码预算。
 - `ctm` 不计入 `use` 实例化产生的额外变换。

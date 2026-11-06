@@ -143,7 +143,7 @@ public class CssStyleSheet <: ToString {
     public static func parse(text: String, warnings: ArrayList<String>): CssStyleSheet {
         let tokens = CssLexer(text).tokenize()
         let state = CssSheetParseState(warnings)
-        parseCssRuleBlock(tokens, 0, tokens.size, None, state)
+        parseCssRuleBlock(tokens, 0, tokens.size, Option<CssMediaQuery>.None, state)
         CssStyleSheet(state.rules.toArray(), fontFaces: state.fontFaces.toArray())
     }
 

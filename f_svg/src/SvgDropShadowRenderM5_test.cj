@@ -135,4 +135,60 @@ public class SvgDropShadowRenderM5_test {
         @Assert(m5ColorNear(bitmap.pixel(5, 5), 255, 0, 0))
         @Assert(bitmap.pixel(60, 60).alpha == 0.0)
     }
+
+    /** 负 stdDeviation 回退缺省值 2，而不是按 0 处理。 */
+    @TestCase
+    public func negativeDeviationFallsBackToDefault(): Unit {
+        let negative = m5RenderSvg(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"60\" height=\"60\">" +
+            "<defs><filter id=\"f\"><feDropShadow dx=\"4\" dy=\"0\" stdDeviation=\"-1\"/>" +
+            "</filter></defs>" +
+            "<rect x=\"10\" y=\"20\" width=\"20\" height=\"20\" fill=\"red\" " +
+            "filter=\"url(#f)\"/></svg>"
+        )
+        let defaulted = m5RenderSvg(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"60\" height=\"60\">" +
+            "<defs><filter id=\"f\"><feDropShadow dx=\"4\" dy=\"0\" stdDeviation=\"2\"/>" +
+            "</filter></defs>" +
+            "<rect x=\"10\" y=\"20\" width=\"20\" height=\"20\" fill=\"red\" " +
+            "filter=\"url(#f)\"/></svg>"
+        )
+        @Assert(negative.pixels == defaulted.pixels)
+    }
+
+    /** 非法 flood-color 回退黑色并告警。 */
+    @TestCase
+    public func invalidFloodColorFallsBackToBlack(): Unit {
+        let invalid = m5RenderSvg(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"60\" height=\"60\">" +
+            "<defs><filter id=\"f\"><feDropShadow dx=\"4\" dy=\"0\" stdDeviation=\"0\" " +
+            "flood-color=\"not-a-color\"/></filter></defs>" +
+            "<rect x=\"10\" y=\"20\" width=\"20\" height=\"20\" fill=\"red\" " +
+            "filter=\"url(#f)\"/></svg>"
+        )
+        let black = m5RenderSvg(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"60\" height=\"60\">" +
+            "<defs><filter id=\"f\"><feDropShadow dx=\"4\" dy=\"0\" stdDeviation=\"0\"/>" +
+            "</filter></defs>" +
+            "<rect x=\"10\" y=\"20\" width=\"20\" height=\"20\" fill=\"red\" " +
+            "filter=\"url(#f)\"/></svg>"
+        )
+        @Assert(invalid.pixels == black.pixels)
+
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"60\" height=\"60\">" +
+            "<defs><filter id=\"f\"><feDropShadow flood-color=\"not-a-color\"/></filter></defs>" +
+            "<rect x=\"10\" y=\"20\" width=\"20\" height=\"20\" fill=\"red\" " +
+            "filter=\"url(#f)\"/></svg>"
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(document)
+        var sawColor = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("flood-color")) {
+                sawColor = true
+            }
+        }
+        @Assert(sawColor)
+    }
 }
