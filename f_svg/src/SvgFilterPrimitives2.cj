@@ -1225,8 +1225,13 @@ private func svgGradientDot(
 }
 
 private func svgNoiseHash(x: Int64, y: Int64, seed: Int64): Int64 {
-    var hash = x * 374761393 + y * 668265263 + seed * 69069
-    hash = (hash ^ (hash >> 13)) * 1274126177
+    let xx = x & 0xFFFF
+    let yy = y & 0xFFFF
+    let ss = seed & 0xFFFF
+    var hash = (xx * 374761393) & 0xFFFFFFFF
+    hash = (hash + yy * 668265263) & 0xFFFFFFFF
+    hash = (hash + ss * 69069) & 0xFFFFFFFF
+    hash = ((hash ^ (hash >> 13)) * 1274126177) & 0xFFFFFFFF
     hash ^ (hash >> 16)
 }
 
