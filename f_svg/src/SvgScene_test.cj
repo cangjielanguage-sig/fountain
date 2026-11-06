@@ -120,52 +120,64 @@ public class SvgSceneM3_test {
 }
 
 
-/** M1/M2 默认渲染的逐字节基线：容差 0。 */
-@Test
-public class SvgSceneByteBaseline_test {
-    private func compareExact(bitmap: SvgBitmap, name: String): Unit {
-        let path = Path("${SCENE_DIR}/${name}.rgba")
-        if (!exists(path)) {
-            @Fail("场景快照 ${name}.rgba 缺失")
-        }
-        let expected = File.readFrom(path)
-        @Assert(expected.size == bitmap.pixels.size)
-        for (index in 0..expected.size) {
-            if (expected[index] != bitmap.pixels[index]) {
-                let pixelIndex = index / 4
-                let x = pixelIndex % bitmap.width
-                let y = pixelIndex / bitmap.width
-                @Fail(
-                    "场景 ${name} 字节漂移在 (${x},${y}) 偏移 ${index}：" +
-                    "实际 ${bitmap.pixels[index]}，期望 ${expected[index]}"
-                )
-            }
+/** 返回逐字节差异说明；完全一致返回 `None`。 */
+internal func sceneExactMismatch(bitmap: SvgBitmap, name: String): ?String {
+    let path = Path("${SCENE_DIR}/${name}.rgba")
+    if (!exists(path)) {
+        return Some("场景快照 ${name}.rgba 缺失，请从版本库恢复，测试不会自动生成期望值")
+    }
+    let expected = File.readFrom(path)
+    if (expected.size != bitmap.pixels.size) {
+        return Some("场景快照 ${name}.rgba 尺寸不匹配：期望 ${expected.size} 字节，实际 ${bitmap.pixels.size} 字节")
+    }
+    for (index in 0..expected.size) {
+        if (expected[index] != bitmap.pixels[index]) {
+            let pixelIndex = index / 4
+            let x = pixelIndex % bitmap.width
+            let y = pixelIndex / bitmap.width
+            return Some(
+                "场景 ${name} 字节漂移在 (${x},${y}) 偏移 ${index}：" +
+                "实际 ${bitmap.pixels[index]}，期望 ${expected[index]}"
+            )
         }
     }
+    None
+}
+
+internal func compareSceneExact(bitmap: SvgBitmap, name: String): Unit {
+    match (sceneExactMismatch(bitmap, name)) {
+        case Some(message) => @Fail(message)
+        case None => ()
+    }
+}
+
+/** M1–M3 默认渲染的逐字节基线：容差 0。 */
+@Test
+public class SvgSceneByteBaseline_test {
 
     @TestCase
     public func basicExact(): Unit {
-        compareExact(SvgRenderer().render(loadScene("basic")), "basic")
+        compareSceneExact(SvgRenderer().render(loadScene("basic")), "basic")
     }
 
     @TestCase
     public func gradientExact(): Unit {
-        compareExact(SvgRenderer().render(loadScene("gradient")), "gradient")
+        compareSceneExact(SvgRenderer().render(loadScene("gradient")), "gradient")
     }
 
     @TestCase
     public func strokeExact(): Unit {
-        compareExact(SvgRenderer().render(loadScene("stroke")), "stroke")
+        compareSceneExact(SvgRenderer().render(loadScene("stroke")), "stroke")
     }
 
     @TestCase
     public func clipExact(): Unit {
-        compareExact(SvgRenderer().render(loadScene("clip")), "clip")
+        compareSceneExact(SvgRenderer().render(loadScene("clip")), "clip")
     }
 
     @TestCase
     public func textExact(): Unit {
-        compareExact(SvgRenderer().render(loadScene("text")), "text")
+        compareSceneExact(SvgRenderer().render(loadScene("text")), "text")
     }
 
     @TestCase
@@ -173,8 +185,46 @@ public class SvgSceneByteBaseline_test {
         let document = loadScene("animation")
         let timeline = SvgTimeline(document)
         let renderer = SvgRenderer()
-        compareExact(renderer.render(timeline.sample(0.0)), "animation-0")
-        compareExact(renderer.render(timeline.sample(0.5)), "animation-05")
-        compareExact(renderer.render(timeline.sample(1.0)), "animation-1")
+        compareSceneExact(renderer.render(timeline.sample(0.0)), "animation-0")
+        compareSceneExact(renderer.render(timeline.sample(0.5)), "animation-05")
+        compareSceneExact(renderer.render(timeline.sample(1.0)), "animation-1")
+    }
+
+    @TestCase
+    public func m3FilterExact(): Unit {
+        compareSceneExact(SvgRenderer().render(loadScene("m3-filter")), "m3-filter")
+    }
+
+    @TestCase
+    public func m3PatternExact(): Unit {
+        compareSceneExact(SvgRenderer().render(loadScene("m3-pattern")), "m3-pattern")
+    }
+
+    @TestCase
+    public func m3ImageExact(): Unit {
+        compareSceneExact(SvgRenderer().render(loadScene("m3-image")), "m3-image")
+    }
+
+    @TestCase
+    public func m3TextPathExact(): Unit {
+        compareSceneExact(SvgRenderer().render(loadScene("m3-textpath")), "m3-textpath")
+    }
+
+    @TestCase
+    public func m3MarkerExact(): Unit {
+        compareSceneExact(SvgRenderer().render(loadScene("m3-marker")), "m3-marker")
+    }
+
+    /** 人为改动一个字节时，逐字节比较必须报告差异。 */
+    @TestCase
+    public func exactMismatchDetected(): Unit {
+        let rendered = SvgRenderer().render(loadScene("m3-filter"))
+        let mutated = SvgBitmap(rendered.width, rendered.height)
+        for (index in 0..rendered.pixels.size) {
+            mutated.pixels[index] = rendered.pixels[index]
+        }
+        let target = mutated.pixels.size / 2
+        mutated.pixels[target] = UInt8((Int64(mutated.pixels[target]) + 1) % 256)
+        @Assert(sceneExactMismatch(mutated, "m3-filter").isSome())
     }
 }

@@ -188,7 +188,11 @@ public class SvgRenderer {
                     } else {
                         output
                     }
-                    let needsLayer = command.clipRect.isSome() || command.clipPath.isSome() ||
+                    let clipRectEffective = match (command.clipRect) {
+                        case Some(rect) => !clipRectCoversCommand(command, rect)
+                        case None => false
+                    }
+                    let needsLayer = clipRectEffective || command.clipPath.isSome() ||
                         command.mask.isSome() || command.filter.isSome() || command.clip.isSome()
                     if (needsLayer) {
                         var layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
@@ -591,6 +595,56 @@ public class SvgRenderer {
             case None => ()
         }
     }
+}
+
+/**
+ * 裁剪矩形是否完整覆盖该指令的设备空间包围盒。
+ *
+ * 覆盖时矩形裁剪不改变像素，可跳过离屏层，避免组合成的二次量化
+ * 造成与 M3 的 1 级字节漂移；描边指令按描边宽度放宽边界。
+ */
+private func clipRectCoversCommand(command: SvgDisplayCommand, rect: SvgBounds): Bool {
+    let box = match (command.bounds) {
+        case Some(value) => value
+        case None =>
+            match (command.path) {
+                case Some(path) =>
+                    match (pathDataBounds(path)) {
+                        case Some(value) => value
+                        case None => return false
+                    }
+                case None => return false
+            }
+    }
+    var margin = 1.0
+    if (command.kind == SvgDisplayCommandKind.StrokePath) {
+        match (command.style) {
+            case Some(style) =>
+                let sx = sqrt(command.matrix.a * command.matrix.a + command.matrix.b * command.matrix.b)
+                let sy = sqrt(command.matrix.c * command.matrix.c + command.matrix.d * command.matrix.d)
+                margin += style.strokeWidth().value * max(sx, sy)
+            case None => ()
+        }
+    }
+    let corners: Array<SvgPoint> = [
+        command.matrix.apply(SvgPoint(box.x, box.y)),
+        command.matrix.apply(SvgPoint(box.x + box.width, box.y)),
+        command.matrix.apply(SvgPoint(box.x + box.width, box.y + box.height)),
+        command.matrix.apply(SvgPoint(box.x, box.y + box.height))
+    ]
+    var left = corners[0].x
+    var right = corners[0].x
+    var top = corners[0].y
+    var bottom = corners[0].y
+    for (index in 1..4) {
+        left = min(left, corners[index].x)
+        right = max(right, corners[index].x)
+        top = min(top, corners[index].y)
+        bottom = max(bottom, corners[index].y)
+    }
+    left - margin >= rect.x - 1.0e-6 && top - margin >= rect.y - 1.0e-6 &&
+        right + margin <= rect.x + rect.width + 1.0e-6 &&
+        bottom + margin <= rect.y + rect.height + 1.0e-6
 }
 
 private func clipBitmapToRect(bitmap: SvgBitmap, rect: SvgBounds): Unit {
