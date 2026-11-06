@@ -720,7 +720,8 @@ public class SvgFeDisplacementMap <: SvgFilterPrimitive {
 
     public mut prop scale: Float64 {
         get() {
-            this.scaleCache.get(this.attributesVersion, {=> readFloat(this, "scale")}) ?? 0.0
+            this.scaleCache.get(this.attributesVersion, {=> readDisplacementFloat(this, "scale")}) ??
+                0.0
         }
         set(value) {
             writeFloat(this, "scale", Some(value))
@@ -885,6 +886,20 @@ private func transferChannel(
                 let base = if (value > 0.0) { value } else { 0.0 }
                 amplitude * pow(base, exponent) + offset
             }
+    }
+}
+
+/** 读取位移 scale；显式接受 `nan` / `inf`，交给渲染端降级并 warning。 */
+private func readDisplacementFloat(element: SvgElement, name: String): ?Float64 {
+    match (element.attr(name)) {
+        case Some(text) =>
+            match (text.trimAscii().toAsciiLower()) {
+                case "nan" => Some(Float64.NaN)
+                case "inf" | "infinity" => Some(Float64.Inf)
+                case "-inf" | "-infinity" => Some(-Float64.Inf)
+                case _ => tryParseSvgFloat(text)
+            }
+        case None => None
     }
 }
 

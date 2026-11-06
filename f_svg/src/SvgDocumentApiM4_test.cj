@@ -141,6 +141,21 @@ public class SvgSwitchM4_test {
         @Assert(defaultBitmap.pixel(5, 5).red > 200)
     }
 
+    /** 多语言优先级按子元素顺序，不按 languages 顺序。 */
+    @TestCase
+    public func multiLanguagePriority(): Unit {
+        let document = svgDoc(
+            '<switch><rect systemLanguage="zh" width="10" height="10" fill="blue"/>' +
+            '<rect systemLanguage="en" width="10" height="10" fill="red"/></switch>',
+            width: 10,
+            height: 10
+        )
+        let bitmap = SvgRenderer(
+            options: SvgRenderOptions(languages: ["en", "zh"], samplesPerPixel: 1)
+        ).render(document)
+        @Assert(bitmap.pixel(5, 5).blue > 200 && bitmap.pixel(5, 5).red < 60)
+    }
+
     /** requiredFeatures / requiredExtensions / 全部不满足 / display 交互。 */
     @TestCase
     public func conditions(): Unit {

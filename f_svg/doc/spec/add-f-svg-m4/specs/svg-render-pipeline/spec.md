@@ -55,7 +55,7 @@
 #### Scenario: 多语言优先级
 
 - **WHEN** `languages = ["en", "zh"]`，两个子元素分别为 `"zh"` 与 `"en"`
-- **THEN** 选择 `en` 项（按子元素顺序，不按 languages 顺序）
+- **THEN** 选择 `zh` 项（按子元素顺序，不按 languages 顺序）
 
 #### Scenario: 新字段默认值
 

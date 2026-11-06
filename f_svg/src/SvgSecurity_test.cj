@@ -169,6 +169,39 @@ public class SvgSecurity_test {
         @Assert(error.kind == SvgErrorKind.Limit)
     }
 
+    /** `switch` 子元素同样计入 maxElements，不能绕过上限。 */
+    @TestCase
+    public func switchChildrenCountTowardMaxElements(): Unit {
+        let options = SvgParseOptions(security: SvgSecurityOptions(maxElements: 3))
+        let error = expectSvgException({=>
+            SvgParser.parse(
+                "<svg><switch><rect/><rect/></switch></svg>",
+                options: options
+            )
+        })
+        @Assert(error.kind == SvgErrorKind.Limit)
+    }
+
+    /** 字体族为文件 URL 时渲染器不读取文件，只按缺失字体降级。 */
+    @TestCase
+    public func renderDoesNotLoadFontFiles(): Unit {
+        let document = SvgParser.parse(
+            "<svg width=\"20\" height=\"20\">" +
+            "<text x=\"0\" y=\"15\" font-family=\"file:///etc/fonts/not-a-font.ttf\" " +
+            "font-size=\"12\">A</text></svg>"
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        let bitmap = renderer.render(document)
+        @Assert(bitmap.width == 20 && bitmap.height == 20)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("未找到字体")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
     /** 默认上限 1,000,000：1,000,001 个元素触发 Limit。 */
     @TestCase
     public func elementCountAtDefaultLimit(): Unit {

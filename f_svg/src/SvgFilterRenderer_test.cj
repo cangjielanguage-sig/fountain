@@ -227,6 +227,34 @@ public class SvgFilterRenderer_test {
             @Assert(difference <= 1 && difference >= -1)
         }
     }
+
+    /** 零尺寸滤镜区域输出透明并追加 warning。 */
+    @TestCase
+    public func zeroSizeRegionWarns(): Unit {
+        let document = SvgParser.parse(
+            "<svg><defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" " +
+            "x=\"100\" y=\"100\" width=\"10\" height=\"10\">" +
+            "<feOffset dx=\"1\"/></filter></defs></svg>"
+        )
+        let renderer = SvgFilterRenderer()
+        let output = renderer.apply(
+            filterOf(document),
+            SvgBitmap(10, 10),
+            SvgBounds(0.0, 0.0, 10.0, 10.0),
+            SvgMatrix.identity,
+            SvgRenderOptions()
+        )
+        for (byte in output.pixels) {
+            @Assert(byte == 0)
+        }
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("滤镜区域") && warning.contains("0")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
 }
 
 @Test

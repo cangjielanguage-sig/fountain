@@ -78,6 +78,22 @@ public class SvgTextWritingModeM4_test {
         @Assert(near(layout.glyphs[3].y, layout.glyphs[2].advance))
     }
 
+    /** 无显式 x 时保持单列，列内 y 按 advance 推进。 */
+    @TestCase
+    public func verticalWithoutExplicitX(): Unit {
+        let text = makeText("ABCD", size: 20.0)
+        text.setAttr("writing-mode", "tb-rl")
+        let layout = m4VerticalLayout(text)
+        @Assert(layout.glyphs.size == 4)
+        for (glyph in layout.glyphs) {
+            @Assert(near(glyph.x, 0.0))
+        }
+        @Assert(near(layout.glyphs[0].y, 0.0))
+        @Assert(near(layout.glyphs[1].y, layout.glyphs[0].advance))
+        @Assert(near(layout.glyphs[2].y, layout.glyphs[0].advance * 2.0))
+        @Assert(near(layout.glyphs[3].y, layout.glyphs[0].advance * 3.0))
+    }
+
     /** text-anchor 沿列方向生效。 */
     @TestCase
     public func verticalAnchor(): Unit {

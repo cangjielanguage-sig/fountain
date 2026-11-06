@@ -110,6 +110,16 @@ public class SvgFilterNoiseM4_test {
         @Assert(m4AlphaAt(result, 0, 1) == 0)
         @Assert(m4AlphaAt(result, 7, 1) > 0)
         @Assert(m4AlphaAt(result, 8, 1) > 0)
+
+        let nonFinite = SvgFeDisplacementMap()
+        nonFinite.setAttr("scale", "nan")
+        let nanWarnings = ArrayList<String>()
+        @Assert(m4BuffersEqual(
+            input,
+            displacementFilterBuffer(input, map, nonFinite, 1.0, 1.0, nanWarnings)
+        ))
+        @Assert(nanWarnings.size > 0)
+        @Assert(nanWarnings[0].contains("scale"))
     }
 
     /** feImage：provider、data URI、不可用、缺 href、单次解码、映射。 */
@@ -179,5 +189,19 @@ public class SvgFilterNoiseM4_test {
             feImageFilterBuffer(input, budgetImage, tinyBudget, ArrayList<String>())
         })
         @Assert(error.kind == SvgErrorKind.Limit)
+
+        // <image> 与 feImage 共用同一个 SvgImageResource：先解码 4 像素，
+        // 再用不同 href 解码 4 像素时累计超限。
+        let sharedData = "data:image/png;base64," + toBase64String(png)
+        let otherPng = m4SamplePng(2, 2, SvgColor.fromRgb(255, 0, 0))
+        let otherData = "data:image/png;base64," + toBase64String(otherPng)
+        let shared = SvgImageResource(budget: SvgDecodeBudget(4))
+        @Assert(shared.load(sharedData).isSome())
+        let sharedImage = SvgFeImage()
+        sharedImage.href = otherData
+        let sharedError = expectSvgException({=>
+            feImageFilterBuffer(input, sharedImage, shared, ArrayList<String>())
+        })
+        @Assert(sharedError.kind == SvgErrorKind.Limit)
     }
 }

@@ -208,6 +208,21 @@ public class SvgFilterPrimitives2M4_test {
         @Assert(m4AlphaAt(scaledErosion, 7, 7) == 255)
     }
 
+    /** 锐化核在边缘产生上升过冲，内部保持原值。 */
+    @TestCase
+    public func sharpenKernel(): Unit {
+        let input = m4TransparentBuffer(5, 5)
+        m4FillRect(input, 0, 0, 2, 5, m4ColorLevel(50))
+        m4FillRect(input, 2, 0, 3, 5, m4ColorLevel(150))
+        let sharpen = SvgFeConvolveMatrix()
+        sharpen.kernelMatrix = [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]
+        sharpen.divisor = Some(1.0)
+        let warnings = ArrayList<String>()
+        let output = convolveFilterBuffer(input, sharpen, warnings)
+        @Assert(m4ChannelAt(output, 2, 2, 0) > m4ChannelAt(output, 4, 2, 0))
+        @Assert(m4ChannelAt(output, 4, 2, 0) == 150)
+    }
+
     /** 单位核、divisor/bias、edgeMode、preserveAlpha。 */
     @TestCase
     public func convolve(): Unit {

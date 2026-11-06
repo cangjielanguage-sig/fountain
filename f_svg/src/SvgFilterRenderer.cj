@@ -109,6 +109,9 @@ public class SvgFilterRenderer {
         let width = right - left
         let height = bottom - top
         if (width <= 0 || height <= 0) {
+            this.warnings.add(
+                "滤镜区域尺寸 ${width}×${height} 为零，输出透明（元素「${filter.tag}」）"
+            )
             return SvgBitmap(source.width, source.height)
         }
         // 先做除法判定再分配区域缓冲与输出位图，保证超限时不发生大块分配。
