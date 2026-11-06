@@ -232,6 +232,33 @@ public class SvgOverflowM4_test {
         @Assert(!m4OpaqueRed(bitmap, 77, 77))
     }
 
+    /** 文本装饰线越出紧贴视口时不能被裁剪快路径放过。 */
+    @TestCase
+    public func nestedSvgClipsTextDecoration(): Unit {
+        let unclipped = svgDoc(
+            '<text x="2" y="20" font-family="Hershey" font-size="20" fill="red" ' +
+            'text-decoration="underline">A</text>',
+            width: 40,
+            height: 40
+        )
+        @Assert(m4OpaqueRed(
+            SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(unclipped),
+            5,
+            22
+        ))
+        let document = svgDoc(
+            '<svg x="0" y="0" width="20" height="21" viewBox="0 0 20 21">' +
+            '<text x="2" y="20" font-family="Hershey" font-size="20" fill="red" ' +
+            'text-decoration="underline">A</text></svg>',
+            width: 40,
+            height: 40
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 5, 17))
+        // 下划线位于基线下方 2 单位，落在 0..21 视口之外。
+        @Assert(!m4OpaqueRed(bitmap, 5, 22))
+    }
+
     /** pattern overflow="visible" 不向相邻 tile 扩展。 */
     @TestCase
     public func patternTileBoundary(): Unit {

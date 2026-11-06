@@ -108,7 +108,22 @@ public class SvgGeometry {
                     case Some(value) => value
                     case None => SvgFontRegistry.defaultRegistry()
                 }
-                SvgTextRenderer(registry: registry).layout(text, style: style, root: root).bounds
+                let renderer = SvgTextRenderer(registry: registry)
+                var bounds = renderer.layout(text, style: style, root: root).bounds
+                // 装饰线在基线之外，必须并入渲染包围盒，否则裁剪快路径会漏裁。
+                match (renderer.decorationOutline(text, style: style, root: root)) {
+                    case Some(path) =>
+                        match (pathDataBounds(path)) {
+                            case Some(decoration) =>
+                                bounds = match (bounds) {
+                                    case Some(existing) => Some(existing.union(decoration))
+                                    case None => Some(decoration)
+                                }
+                            case None => ()
+                        }
+                    case None => ()
+                }
+                bounds
             case _ => bounds(element, style: style, fonts: fonts)
         }
     }
