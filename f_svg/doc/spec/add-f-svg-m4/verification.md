@@ -394,3 +394,24 @@ CRITICAL=5
 - CI 接入（S1）仍未执行，逐字节基线目前只由 `cjpm test` 承载。
 - W7 的裁剪精度之外的性能项未继续优化；四边形蒙版已按设备 AABB 限界并共用缓冲，但每个指令仍会做一次交集外的 alpha 清零。
 - 与上表重复的 SUGGESTION 不再单独处理。
+
+## 9. 第三轮修复结果（2026-11-06）
+
+执行依据：`verification-3.md` 与 `fix-plan-3.md`。分支 `feature/f_svg`；只处理 N2、N3、N5、N6 四项 WARNING。N1 / N4 已由主流程完成，本轮未再修改 `openspec/changes` 的规格与计数。每项均先写失败用例、确认失败原因，再实现并跑全量测试后独立提交。
+
+| 编号 | 状态 | 修复内容与证据 |
+|---|---|---|
+| N2 | 已清除 | `SvgDisplayCommand` 拆分 `bounds`（绘制，文本不含装饰线）与 `clipBounds`（裁剪 / 滤镜，文本含装饰线）。`SvgGeometry.renderBounds` 退回纯布局包围盒，新增 `renderClipBounds` 并入装饰线；渲染树文本命令分别填充两字段，滤镜组与 `clipRectCoversCommand` 使用 `clipBounds`，渐变与图案仍用 `bounds`。新增 `decorationKeepsTextFillBounds`：带 / 不带 `text-decoration` 的 Text 命令 `bounds` 完全相等，且同一点渐变像素逐字节一致；NEW-W1 的紧视口下划线用例继续通过 |
+| N3 | 已清除 | 新增 `SvgTextLayoutCache`，键为「元素身份 + 计算样式树版本 + 根元素身份」；`SvgComputedStyleTree` 增加单调递增内部版本。缓存由 `SvgRenderTreeBuilder` 创建、`SvgDisplayList` 持有、`SvgRenderer` 复用，构建与光栅化共享同一次 layout，不跨渲染。新增 `SvgTextLayoutCacheM4_test`：单文本整次渲染只调用 1 次 `advance`；带装饰线文本的布局次数不超过不带装饰线的 1.5 倍；第二次渲染重新布局 |
+| N5 | 已清除 | `markerContentFitsIn` 对声明 `marker-start` / `marker-mid` / `marker-end` 的元素直接返回「需要裁剪」，覆盖子形状与容器子树。新增 `nestedMarkerContentStillClips`：外层 marker 视口 10×10，内容路径带 `marker-end` 指向 20×20 的内层 marker，内层实例在外层视口外被裁掉，视口内保留 |
+| N6 | 已清除（可执行证明） | 新增内部 `SvgFontFileAccess` 读取探针，`SvgTrueTypeFont.load(path)` 改为唯一经过该入口的文件读取；`count` / `reset` 标注 `@When[test]`，库构建不产生 unused warning。新增 `fontFileAccessConfinedToExplicitLoad`：内存 `parse(bytes)` 正常；渲染含 `file:///...` 字体族的文档时探针计数为 0；显式 `load` 不存在路径时计数为 1 且抛 `Syntax`。中英文 README 与 M4 设计文档补充「`load(path)` 是库内唯一文件入口，`parse(bytes)` 与渲染链不访问文件系统」 |
+
+实跑结果：
+
+- `cjpm test`：`TOTAL: 710 / PASSED: 710 / FAILED: 0`，约 11.94 s。
+- `cjpm build`：成功；`f_svg/src` 0 warning（22 条 warning 均来自依赖模块 `f_base` / `f_xml` 的既有代码）。
+- M1–M3 逐字节基线：13 个 `.rgba` 快照的 `git diff a39db449..HEAD` 为空；`SvgSceneByteBaseline_test` 的 11 个 `*Exact` 用例（`animationExact` 覆盖 3 帧，共 13 个快照）与 `exactMismatchDetected` 全部通过。
+- 公开 API：未改动 M1–M3 语义；N2 仅新增 `SvgDisplayCommand.clipBounds`（默认回退到 `bounds`）；N3 的缓存类型与构造均为 internal；N6 的探针为 internal，测试接口限定 test 构建。
+- 提交：`aea94a7a`（N2）、`f62f1ae8`（N3）、`faa07b9b`（N5）、`3b6a3963` + `c5cce566`（N6）。
+
+结论：本轮计划内 `CRITICAL=0`、WARNING 0（N2 / N3 / N5 / N6 全部清除）；第一轮、第二轮与第三轮已记录的已知限制不变。
