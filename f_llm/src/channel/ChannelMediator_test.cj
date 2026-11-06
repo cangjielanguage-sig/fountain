@@ -179,4 +179,50 @@ class ChannelMediator_test {
         @Expect(ChannelPlatforms.isReserved('wecom'), true)
         @Expect(ChannelPlatforms.isReserved('email'), false)
     }
+
+    /** 同键替换：旧实例必须被 close */
+    @TestCase
+    func testRegisterReplacesAndClosesOld(): Unit {
+        ChannelMediator.reset()
+        let first = FakeChannel('email', 'work')
+        ChannelMediator.register(first)
+        let second = FakeChannel('email', 'work')
+        ChannelMediator.register(second)
+
+        @Expect(first.closed, true)
+        @Expect(second.closed, false)
+        @Expect(ChannelMediator.accounts('email').size, 1)
+        ChannelMediator.reset()
+    }
+
+    /** 空账号重复注册：必须报错，不能互相覆盖 */
+    @TestCase
+    func testRegisterBlankAccountTwiceThrows(): Unit {
+        ChannelMediator.reset()
+        ChannelMediator.register(FakeChannel('twitter', ''))
+        var message = ''
+        try {
+            ChannelMediator.register(FakeChannel('twitter', ''))
+        } catch (e: ChannelException) {
+            message = e.message
+        }
+        @Expect(message.contains('account'), true)
+        ChannelMediator.reset()
+    }
+
+    /** closeAll：关闭每个实例并清空注册表 */
+    @TestCase
+    func testCloseAllClosesEveryInstance(): Unit {
+        ChannelMediator.reset()
+        let first = FakeChannel('email', 'a')
+        let second = FakeChannel('email', 'b')
+        ChannelMediator.register(first)
+        ChannelMediator.register(second)
+
+        ChannelMediator.closeAll()
+
+        @Expect(first.closed, true)
+        @Expect(second.closed, true)
+        @Expect(ChannelMediator.accounts('email').size, 0)
+    }
 }

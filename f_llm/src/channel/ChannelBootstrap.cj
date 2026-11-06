@@ -65,11 +65,12 @@ public class ChannelBootstrap {
                 if (platform.trimAscii().isEmpty()) {
                     throw ChannelException('channel entry missing platform')
                 }
-                let channel = ChannelMediator.create(
-                    ChannelAccountConf(platform, account: strOf(obj, 'account'), from: strOf(obj, 'from'),
-                        user: strOf(obj, 'user'), password: strOf(obj, 'password'), smtpHost: strOf(obj, 'smtpHost'),
-                        smtpPort: portOf(obj, 'smtpPort', 465), imapHost: strOf(obj, 'imapHost'),
-                        imapPort: portOf(obj, 'imapPort', 993), tls: strOf(obj, 'tls')))
+                let conf = ChannelAccountConf(platform, account: strOf(obj, 'account'), from: strOf(obj, 'from'),
+                    user: strOf(obj, 'user'), password: strOf(obj, 'password'), smtpHost: strOf(obj, 'smtpHost'),
+                    smtpPort: portOf(obj, 'smtpPort', 465), imapHost: strOf(obj, 'imapHost'),
+                    imapPort: portOf(obj, 'imapPort', 993), tls: strOf(obj, 'tls'))
+                validate(conf)
+                let channel = ChannelMediator.create(conf)
                 ChannelMediator.register(channel)
                 report.installed++
             } catch (e: Exception) {
@@ -80,31 +81,66 @@ public class ChannelBootstrap {
         report
     }
 
-    /** 读配置项 `llm_channels` 再装配 */
+    /** 读配置项 `llm_channels` 再装配；配置源异常也转成报告里的错误，不中断装配 */
     public static func installFromConfig(): ChannelInstallReport {
-        install(LLMConfig.channelsJson())
+        try {
+            install(LLMConfig.channelsJson())
+        } catch (e: Exception) {
+            let report = ChannelInstallReport()
+            report.errors.add('read llm_channels failed: ${e.message}')
+            report
+        }
     }
 
     private static func strOf(args: JsonObject, key: String): String {
         match (args.get(key)) {
             case Some(value) => match (value as JsonString) {
                 case Some(text) => text.value
-                case None => value.toString()
+                // null 是「没给」，不能变成字面量 "null"
+                case None =>
+                    if (value is JsonNull) {
+                        ''
+                    } else {
+                        value.toString()
+                    }
             }
             case None => ''
         }
     }
 
+    /**
+     * 必填与取值校验：宁可跳过一条并记错，也不要装上一个「能创建、一用就炸」的实例。
+     *
+     * 目前只有 email 有实现，其它平台的校验留给 provider 自己（`create` 会报「不支持」）。
+     */
+    private static func validate(conf: ChannelAccountConf): Unit {
+        if (conf.platform.trimAscii().toAsciiLower() != ChannelPlatforms.EMAIL) {
+            return
+        }
+        if (conf.smtpHost.trimAscii().isEmpty()) {
+            throw ChannelException('channel entry missing smtpHost')
+        }
+        if (conf.user.trimAscii().isEmpty()) {
+            throw ChannelException('channel entry missing user')
+        }
+        let tls = conf.tls.trimAscii().toAsciiLower()
+        if (!tls.isEmpty() && tls != 'ssl') {
+            throw ChannelException('channel tls=${conf.tls} is not supported yet (only default SSL)')
+        }
+    }
+
     private static func portOf(args: JsonObject, key: String, fallback: UInt16): UInt16 {
-        let text = strOf(args, key)
+        let text = strOf(args, key).trimAscii()
+        if (text.isEmpty()) {
+            return fallback
+        }
         match (Int64.tryParse(text)) {
             case Some(number) =>
-                if (number > 0) {
-                    UInt16(number)
-                } else {
-                    fallback
+                if (number < 1 || number > 65535) {
+                    throw ChannelException('channel ${key} out of range: ${text}')
                 }
-            case None => fallback
+                return UInt16(number)
+            case None => throw ChannelException('channel ${key} must be a number: ${text}')
         }
     }
 }

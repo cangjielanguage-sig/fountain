@@ -96,6 +96,20 @@ public class ChannelMediator {
     public static func register(channel: Channel): Unit {
         let key = keyOf(channel.platform, channel.account)
         synchronized(mutex) {
+            // 空账号是「该平台唯一实例」的简写：再来一个就分不清谁是谁，直接拒绝
+            if (channel.account.trimAscii().isEmpty() && instances.contains(key)) {
+                throw ChannelException(
+                    'channel account must be specified when registering a second instance for ${channel.platform}')
+            }
+            // 同键替换：旧连接的 IMAP/SMTP 会话必须先释放，否则重装配会漏连接
+            match (instances.get(key)) {
+                case Some(previous) => try {
+                    previous.close()
+                } catch (e: Exception) {
+                    ()
+                }
+                case None => ()
+            }
             instances[key] = channel
         }
     }
@@ -188,6 +202,20 @@ public class ChannelMediator {
 
     public static func receive(platform: String, account: String, limit: Int64, downloadDir!: String = ''): ArrayList<InboundMessage> {
         channel(platform, account).receive(limit, downloadDir)
+    }
+
+    /** 关闭并清空全部实例（进程退出 / 重装配用） */
+    public static func closeAll(): Unit {
+        synchronized(mutex) {
+            for ((_, channel) in instances) {
+                try {
+                    channel.close()
+                } catch (e: Exception) {
+                    ()
+                }
+            }
+            instances.clear()
+        }
     }
 
     /** 清空实例、保留 provider（重装配 / 测试用）——静态注册不能被清掉 */

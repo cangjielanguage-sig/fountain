@@ -300,4 +300,23 @@ class EmailChannel_test {
     func testEmailProviderIsRegisteredOnLoad(): Unit {
         @Expect(ChannelMediator.providerPlatforms().contains('email'), true)
     }
+
+    /** 单个附件读取失败不应中断整批收信 */
+    @TestCase
+    func testAttachmentReadFailureDoesNotBreakBatch(): Unit {
+        let transport = FakeEmailTransport()
+        let broken = ArrayList<ReceivedAttachment>()
+        broken.add(ReceivedAttachment('bad.txt', 3, { => throw IllegalStateException('imap body lost') }))
+        transport.inbox.add(ReceivedMail('1', 'x@y.z', '第一封', text: 'a', attachments: broken))
+        transport.inbox.add(ReceivedMail('2', 'x@y.z', '第二封', text: 'b'))
+
+        let channel = EmailChannel('work', 'bot@example.com', transport)
+        // 给下载目录才会真正调用 read()，从而触发「单条读到一半失败」
+        let messages = channel.receive(10, tempDir('read-fail'))
+
+        @Expect(messages.size, 2)
+        @Expect(messages[0].attachments.size, 1)
+        @Expect(messages[0].attachments[0].error.contains('imap body lost'), true)
+        @Expect(messages[1].subject, '第二封')
+    }
 }

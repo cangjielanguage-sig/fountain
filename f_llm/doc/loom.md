@@ -54,6 +54,9 @@ export llm_channels='[{"platform":"email","account":"work","from":"bot@example.c
 
 - 发送：按**路径**给出，且必须落在 `llm_channelSendRoots`（或回落 `llm_fileSandboxPath`）内、是普通文件；路径不存在或越界都整封失败，不发出缺附件的信。
 - 接收：默认只给元数据；给 `downloadDir` 才落盘，文件名只取最后一段（`/`、`\` 都当分隔符），同名顺延 `-2`，不覆盖已有文件；进程内并发落盘由 `AttachmentSink` 的锁串行化。
+- 收信失败：一封都没取到就抛异常（工具层转 `ok:false`）；已取到部分时保留部分，不丢已读内容。
+- 单条附件读取或落盘失败只标记该附件（`saved=false` + `error`），不中断整批。
+- 装配：`null` 按空串处理；端口必须落在 `1..65535`；email 必填 `user` / `smtpHost`；`tls` 只接受空串或 `ssl`。任一条不满足就**跳过该条并记错**，不装坏实例。
 
 平台 `wechat` / `wecom` / `dingtalk` / `feishu` 只有常量、没有实现：`platforms()` 不列它们，调用时报 `channel platform not supported`。
 

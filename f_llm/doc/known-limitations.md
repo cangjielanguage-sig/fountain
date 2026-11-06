@@ -128,3 +128,7 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 `AttachmentSink` 用进程内 `Mutex` 串行化「选名 + 创建」，同一进程的多路收信不会互相覆盖。
 两个进程同时往一个下载目录落同名附件时仍可能覆盖——需要文件锁，`std.fs` 目前没有稳定 API。单进程部署下可忽略。
 
+## 10. 邮件通道的 TLS 只有默认行为
+
+`FEmailTransport` 用 `f_email` 的默认 SSL 直连，没有 starttls 入口。装配时 `tls` 只接受空串或 `ssl`，其它取值（含 `starttls`）会被跳过并记录错误——不做静默忽略。
+

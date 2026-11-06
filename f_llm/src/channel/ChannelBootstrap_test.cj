@@ -95,4 +95,60 @@ class ChannelBootstrap_test {
         @Expect(report.installed, 0)
         @Expect(report.skipped, 0)
     }
+
+    /** JSON null 按空串处理，不能变成字面量 "null" */
+    @TestCase
+    func testNullFieldTreatedAsEmpty(): Unit {
+        ChannelMediator.reset()
+        let json = '[{"platform":"email","account":null,"from":"bot@example.com",' +
+            '"user":"bot@example.com","password":"p","smtpHost":"smtp.example.com"}]'
+        let report = ChannelBootstrap.install(json)
+
+        @Expect(report.installed, 1)
+        let accounts = ChannelMediator.accounts('email')
+        @Expect(accounts.size, 1)
+        @Expect(accounts[0], '')
+        ChannelMediator.reset()
+    }
+
+    /** 端口越界：跳过并说明，不能静默截断 */
+    @TestCase
+    func testPortOutOfRangeIsSkipped(): Unit {
+        ChannelMediator.reset()
+        let json = '[{"platform":"email","account":"work","user":"bot@example.com",' +
+            '"smtpHost":"smtp.example.com","smtpPort":70000}]'
+        let report = ChannelBootstrap.install(json)
+
+        @Expect(report.installed, 0)
+        @Expect(report.skipped, 1)
+        @Expect(report.errors[0].contains('smtpPort'), true)
+        ChannelMediator.reset()
+    }
+
+    /** 必填缺失：email 没有 smtpHost，跳过 */
+    @TestCase
+    func testMissingRequiredFieldIsSkipped(): Unit {
+        ChannelMediator.reset()
+        let json = '[{"platform":"email","account":"work","user":"bot@example.com"}]'
+        let report = ChannelBootstrap.install(json)
+
+        @Expect(report.installed, 0)
+        @Expect(report.skipped, 1)
+        @Expect(report.errors[0].contains('smtpHost'), true)
+        ChannelMediator.reset()
+    }
+
+    /** tls=starttls 暂未实现：明确拒绝而不是假装支持 */
+    @TestCase
+    func testStartTlsIsRejected(): Unit {
+        ChannelMediator.reset()
+        let json = '[{"platform":"email","account":"work","user":"bot@example.com",' +
+            '"smtpHost":"smtp.example.com","tls":"starttls"}]'
+        let report = ChannelBootstrap.install(json)
+
+        @Expect(report.installed, 0)
+        @Expect(report.skipped, 1)
+        @Expect(report.errors[0].contains('starttls'), true)
+        ChannelMediator.reset()
+    }
 }

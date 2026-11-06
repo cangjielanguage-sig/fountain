@@ -264,7 +264,12 @@ public class EmailChannel <: Channel {
                     attachments.add(InboundAttachment(item.filename, item.size))
                     continue
                 }
-                let (path, error) = AttachmentSink.save(downloadDir, item.filename, item.read())
+                // 单条附件失败只影响这一条：正文与其它邮件照常返回
+                let (path, error) = try {
+                    AttachmentSink.save(downloadDir, item.filename, item.read())
+                } catch (e: Exception) {
+                    ('', 'read attachment failed: ${e.message}')
+                }
                 if (error.isEmpty()) {
                     attachments.add(InboundAttachment(item.filename, item.size, path: path, saved: true))
                 } else {
@@ -359,8 +364,11 @@ public class FEmailTransport <: EmailTransport {
                         unread: summary.isUnread(), attachments: attachments))
             }
         } catch (e: Exception) {
-            // 收信失败不抛给流程：返回空列表，调用方可从工具结果看到 0 条
-            return result
+            // 一封都没取到才抛：配置错（主机/密码/TLS）不该被伪装成「0 封邮件」；
+            // 已取到部分时保留部分，避免丢掉已经读到的内容。
+            if (result.isEmpty()) {
+                throw ChannelException('email receive failed: ${e.message}')
+            }
         }
         result
     }
