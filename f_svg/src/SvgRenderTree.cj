@@ -460,7 +460,10 @@ public class SvgRenderTreeBuilder {
                 let maskElement = this.resolveUrlRef(style.get("mask"), context)
                 let filterElement = this.resolveUrlRef(style.get("filter"), context)
                 let clip = style.clipRect()
-                if (filterElement.isSome()) {
+                let filtered = filterElement.isSome()
+                let elementBlend = svgMixBlendModeOf(style)
+                let isolated = style.get("isolation") == Some("isolate")
+                if (filtered) {
                     this.appendFilteredGroupBegin(
                         commands,
                         text.tag,
@@ -473,9 +476,24 @@ public class SvgRenderTreeBuilder {
                         clipBounds,
                         clip,
                         context.clipQuads,
-                        blendMode: svgMixBlendModeOf(style)
+                        blendMode: elementBlend
                     )
                 }
+                let elementGroup = !filtered && (elementBlend != SvgMixBlendMode.Normal || isolated)
+                if (elementGroup) {
+                    commands.add(
+                        SvgDisplayCommand(
+                            SvgDisplayCommandKind.GroupBegin,
+                            text.tag,
+                            matrix,
+                            opacity: style.opacity(),
+                            bounds: clipBounds,
+                            blendMode: elementBlend,
+                            isolated: isolated
+                        )
+                    )
+                }
+                let grouped = filtered || elementGroup
                 commands.add(
                     SvgDisplayCommand(
                         SvgDisplayCommandKind.Text,
@@ -485,16 +503,16 @@ public class SvgRenderTreeBuilder {
                         style: Some(style),
                         bounds: bounds,
                         clipBounds: clipBounds,
-                        opacity: if (filterElement.isSome()) { 1.0 } else { style.opacity() },
-                        clipPath: if (filterElement.isSome()) { None } else { clipPath },
-                        mask: if (filterElement.isSome()) { None } else { maskElement },
-                        clipRect: if (filterElement.isSome()) { None } else { context.clipRect },
+                        opacity: if (grouped) { 1.0 } else { style.opacity() },
+                        clipPath: if (filtered) { None } else { clipPath },
+                        mask: if (filtered) { None } else { maskElement },
+                        clipRect: if (filtered) { None } else { context.clipRect },
                         filter: None,
-                        clip: if (filterElement.isSome()) { None } else { clip },
+                        clip: if (filtered) { None } else { clip },
                         clipQuads: context.clipQuads
                     )
                 )
-                if (filterElement.isSome()) {
+                if (grouped) {
                     commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, text.tag, matrix))
                 }
                 return
@@ -778,6 +796,8 @@ public class SvgRenderTreeBuilder {
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
         let clip = style.clipRect()
         let filtered = filterElement.isSome()
+        let elementBlend = svgMixBlendModeOf(style)
+        let isolated = style.get("isolation") == Some("isolate")
         if (filtered) {
             this.appendFilteredGroupBegin(
                 commands,
@@ -791,9 +811,24 @@ public class SvgRenderTreeBuilder {
                 bounds,
                 clip,
                 context.clipQuads,
-                blendMode: svgMixBlendModeOf(style)
+                blendMode: elementBlend
             )
         }
+        let elementGroup = !filtered && (elementBlend != SvgMixBlendMode.Normal || isolated)
+        if (elementGroup) {
+            commands.add(
+                SvgDisplayCommand(
+                    SvgDisplayCommandKind.GroupBegin,
+                    shape.tag,
+                    matrix,
+                    opacity: style.opacity(),
+                    bounds: bounds,
+                    blendMode: elementBlend,
+                    isolated: isolated
+                )
+            )
+        }
+        let grouped = filtered || elementGroup
         let paintOrder = svgPaintOrderOf(style.get("paint-order"))
         let fillCommands = ArrayList<SvgDisplayCommand>()
         let strokeCommands = ArrayList<SvgDisplayCommand>()
@@ -814,14 +849,13 @@ public class SvgRenderTreeBuilder {
                     path: Some(path),
                     style: Some(style),
                     bounds: bounds,
-                    opacity: if (filtered) { 1.0 } else { style.opacity() },
+                    opacity: if (grouped) { 1.0 } else { style.opacity() },
                     clipPath: if (filtered) { None } else { clipPath },
                     mask: if (filtered) { None } else { maskElement },
                     clipRect: if (filtered) { None } else { context.clipRect },
                     filter: None,
                     clip: if (filtered) { None } else { clip },
                     clipQuads: context.clipQuads,
-                    blendMode: svgMixBlendModeOf(style),
                     paintOverride: Some(fill)
                 )
             )
@@ -842,7 +876,7 @@ public class SvgRenderTreeBuilder {
                     path: Some(path),
                     style: Some(style),
                     bounds: bounds,
-                    opacity: if (filtered) { 1.0 } else { style.opacity() },
+                    opacity: if (grouped) { 1.0 } else { style.opacity() },
                     clipPath: if (filtered) { None } else { clipPath },
                     mask: if (filtered) { None } else { maskElement },
                     clipRect: if (filtered) { None } else { context.clipRect },
@@ -850,7 +884,6 @@ public class SvgRenderTreeBuilder {
                     clip: if (filtered) { None } else { clip },
                     nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke,
                     clipQuads: context.clipQuads,
-                    blendMode: svgMixBlendModeOf(style),
                     paintOverride: Some(stroke)
                 )
             )
@@ -869,7 +902,7 @@ public class SvgRenderTreeBuilder {
                 }
             }
         }
-        if (filtered) {
+        if (grouped) {
             commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, shape.tag, matrix))
         }
     }
@@ -1048,6 +1081,8 @@ public class SvgRenderTreeBuilder {
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
         let clip = style.clipRect()
         let filtered = filterElement.isSome()
+        let elementBlend = svgMixBlendModeOf(style)
+        let isolated = style.get("isolation") == Some("isolate")
         if (filtered) {
             this.appendFilteredGroupBegin(
                 commands,
@@ -1061,9 +1096,24 @@ public class SvgRenderTreeBuilder {
                 Some(box),
                 clip,
                 context.clipQuads,
-                blendMode: svgMixBlendModeOf(style)
+                blendMode: elementBlend
             )
         }
+        let elementGroup = !filtered && (elementBlend != SvgMixBlendMode.Normal || isolated)
+        if (elementGroup) {
+            commands.add(
+                SvgDisplayCommand(
+                    SvgDisplayCommandKind.GroupBegin,
+                    "image",
+                    matrix,
+                    opacity: style.opacity(),
+                    bounds: Some(box),
+                    blendMode: elementBlend,
+                    isolated: isolated
+                )
+            )
+        }
+        let grouped = filtered || elementGroup
         commands.add(
             SvgDisplayCommand(
                 SvgDisplayCommandKind.Image,
@@ -1071,7 +1121,7 @@ public class SvgRenderTreeBuilder {
                 matrix,
                 style: Some(style),
                 bounds: Some(box),
-                opacity: if (filtered) { 1.0 } else { style.opacity() },
+                opacity: if (grouped) { 1.0 } else { style.opacity() },
                 clipPath: if (filtered) { None } else { clipPath },
                 mask: if (filtered) { None } else { maskElement },
                 clipRect: if (filtered) { None } else { context.clipRect },
@@ -1082,7 +1132,7 @@ public class SvgRenderTreeBuilder {
                 clipQuads: context.clipQuads
             )
         )
-        if (filtered) {
+        if (grouped) {
             commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, "image", matrix))
         }
     }

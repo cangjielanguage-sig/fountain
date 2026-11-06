@@ -30,7 +30,7 @@ internal func m5ColorNear(actual: SvgColor, red: Int64, green: Int64, blue: Int6
 
 @Test
 public class SvgBlendLayerM5_test {
-    /** 显示命令携带混合模式。 */
+    /** 非 normal 的元素在元素级组上携带混合模式。 */
     @TestCase
     public func commandsCarryBlendMode(): Unit {
         let document = SvgParser.parse(
@@ -38,14 +38,19 @@ public class SvgBlendLayerM5_test {
             "<rect width=\"20\" height=\"20\" fill=\"red\" style=\"mix-blend-mode: multiply\"/></svg>"
         )
         let list = SvgRenderTreeBuilder().build(document)
-        @Assert(list.commands.size == 1)
+        @Assert(list.commands.size == 3)
+        @Assert(list.commands[0].kind == SvgDisplayCommandKind.GroupBegin)
         @Assert(list.commands[0].blendMode == SvgMixBlendMode.Multiply)
+        @Assert(list.commands[1].kind == SvgDisplayCommandKind.FillPath)
+        @Assert(list.commands[1].blendMode == SvgMixBlendMode.Normal)
+        @Assert(list.commands[2].kind == SvgDisplayCommandKind.GroupEnd)
         let plain = SvgRenderTreeBuilder().build(
             SvgParser.parse(
                 "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">" +
                 "<rect width=\"20\" height=\"20\" fill=\"red\"/></svg>"
             )
         )
+        @Assert(plain.commands.size == 1)
         @Assert(plain.commands[0].blendMode == SvgMixBlendMode.Normal)
     }
 
