@@ -8,7 +8,8 @@
 
 - `feConvolveMatrix` 的 `order` 任一维超过 9；
 - `feTurbulence` 的 `numOctaves` 超过 8；
-- `feMorphology` 的像素半径任一维超过 `min(4096, max(区域宽, 区域高))`；
+- `feMorphology` 的像素半径任一维超过 16；
+- `feMorphology` 的 `区域宽 × 区域高 × (2rx+1) × (2ry+1)` 超过 `64 × 1024 × 1024`；
 - `feImage` 与 `<image>` 共享单次渲染累计解码像素预算，超出时抛 `Limit`。
 
 `feImage` 的 `data:` 长度 SHALL 复用 `<image>` 的 base64 长度上限；非法参数与不可用资源 SHALL 降级为 warning，不抛异常。
@@ -27,6 +28,11 @@
 
 - **WHEN** `radius="1000000000"`，滤镜区域 100×100
 - **THEN** 抛 `SvgException(kind: Limit)`，不进入半径循环
+
+#### Scenario: 形态学运算预算超限
+
+- **WHEN** 滤镜区域 512×512、`radius="16"`
+- **THEN** `512 × 512 × 33 × 33` 超过采样预算，抛 `SvgException(kind: Limit)`，不进入半径循环
 
 #### Scenario: 解码预算共享
 

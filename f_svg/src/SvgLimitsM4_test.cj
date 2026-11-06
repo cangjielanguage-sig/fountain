@@ -74,6 +74,56 @@ public class SvgLimitsM4_test {
         }).kind == SvgErrorKind.Limit)
     }
 
+    /** 形态学固定像素半径 16：32×32 区域上的 radius 20 超过新上限。 */
+    @TestCase
+    public func morphologyFixedRadiusLimit(): Unit {
+        let warnings = ArrayList<String>()
+        let morphology = SvgFeMorphology()
+        morphology.radius = SvgNumberList([20.0])
+        @Assert(expectSvgException({=>
+            morphologyFilterBuffer(m4Buffer(32, 32, SvgColor.White), morphology, 1.0, 1.0, warnings)
+        }).kind == SvgErrorKind.Limit)
+
+        let huge = SvgFeMorphology()
+        huge.radius = SvgNumberList([512.0])
+        @Assert(expectSvgException({=>
+            morphologyFilterBuffer(m4Buffer(512, 512, SvgColor.White), huge, 1.0, 1.0, warnings)
+        }).kind == SvgErrorKind.Limit)
+    }
+
+    /** 形态学运算预算：256×256 + radius 16 超过 64 Mi 采样上限。 */
+    @TestCase
+    public func morphologyComplexityLimit(): Unit {
+        let warnings = ArrayList<String>()
+        let morphology = SvgFeMorphology()
+        morphology.radius = SvgNumberList([16.0])
+        @Assert(expectSvgException({=>
+            morphologyFilterBuffer(m4Buffer(256, 256, SvgColor.White), morphology, 1.0, 1.0, warnings)
+        }).kind == SvgErrorKind.Limit)
+
+        let large = SvgFeMorphology()
+        large.radius = SvgNumberList([16.0])
+        @Assert(expectSvgException({=>
+            morphologyFilterBuffer(m4Buffer(512, 512, SvgColor.White), large, 1.0, 1.0, warnings)
+        }).kind == SvgErrorKind.Limit)
+    }
+
+    /** 小区域的小半径仍在预算内。 */
+    @TestCase
+    public func morphologySmallRadiusAllowed(): Unit {
+        let warnings = ArrayList<String>()
+        let morphology = SvgFeMorphology()
+        morphology.radius = SvgNumberList([4.0])
+        let result = morphologyFilterBuffer(
+            m4Buffer(64, 64, SvgColor.White),
+            morphology,
+            1.0,
+            1.0,
+            warnings
+        )
+        @Assert(result.width == 64 && result.height == 64)
+    }
+
     /** M4 warning 含属性名或元素路径，且 Renderer / Document 均累积。 */
     @TestCase
     public func warningAudit(): Unit {

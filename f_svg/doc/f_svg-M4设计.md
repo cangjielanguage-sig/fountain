@@ -285,6 +285,8 @@ public static func screenCTM(element: SvgElement, viewport: SvgViewportTransform
 |---|---|---|
 | 卷积核 `order` | 9 × 9 | `Limit` |
 | 湍流 `numOctaves` | 8 | `Limit` |
+| 形态学像素半径 | 16 | `Limit` |
+| 形态学采样量 | `区域像素 × (2rx+1)(2ry+1) ≤ 64 × 1024 × 1024` | `Limit` |
 | TTF 表数 | 64 | `Limit` |
 | TTF 单表长度 | 16 MiB | `Limit` |
 | TTF 单字形点数 | 10000 | `Limit` |

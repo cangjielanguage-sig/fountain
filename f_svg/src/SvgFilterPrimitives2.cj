@@ -18,6 +18,11 @@ package fountain::f_svg
 import std.collection.*
 import std.math.*
 
+/** `feMorphology` 固定像素半径上限。 */
+internal let SVG_FE_MORPHOLOGY_MAX_RADIUS: Float64 = 16.0
+/** `feMorphology` 单次采样预算（区域像素 × 核面积）。 */
+internal let SVG_FE_MORPHOLOGY_SAMPLE_BUDGET: Int64 = 64 * 1024 * 1024
+
 /** `feFunc*` 的传递函数类型。 */
 public enum SvgTransferFunctionType <: Equatable<SvgTransferFunctionType> & ToString {
     | Identity
@@ -923,20 +928,28 @@ internal func morphologyFilterBuffer(
         radiusX = if (radiusX > 0.0) { radiusX } else { 0.0 }
         radiusY = if (radiusY > 0.0) { radiusY } else { 0.0 }
     }
-    let pixelLimit = min(4096, max(input.width, input.height))
     let scaledRadiusX = radiusX * scaleX
     let scaledRadiusY = radiusY * scaleY
-    // 半径上限与滤镜区域相称，避免不可信文档用巨大半径制造 O(r²) 计算。
+    // 固定小核上限：不可信文档不能用大半径制造 O(r²) 计算。
     if (!isFiniteSvgNumber(scaledRadiusX) || !isFiniteSvgNumber(scaledRadiusY) ||
-        scaledRadiusX > Float64(pixelLimit) + 0.5 ||
-        scaledRadiusY > Float64(pixelLimit) + 0.5) {
+        scaledRadiusX > SVG_FE_MORPHOLOGY_MAX_RADIUS + 0.5 ||
+        scaledRadiusY > SVG_FE_MORPHOLOGY_MAX_RADIUS + 0.5) {
         throw SvgException(
-            "feMorphology 的像素半径超过上限 ${pixelLimit}",
+            "feMorphology 的像素半径超过上限 ${SVG_FE_MORPHOLOGY_MAX_RADIUS}",
             kind: SvgErrorKind.Limit
         )
     }
     let pixelRadiusX = Int64(round(scaledRadiusX))
     let pixelRadiusY = Int64(round(scaledRadiusY))
+    // 运算预算：区域像素 × 核面积，任何维度超限都在循环前失败。
+    let sampleBudget = Int64(input.width) * Int64(input.height) *
+        (pixelRadiusX * 2 + 1) * (pixelRadiusY * 2 + 1)
+    if (sampleBudget > SVG_FE_MORPHOLOGY_SAMPLE_BUDGET) {
+        throw SvgException(
+            "feMorphology 的采样量 ${sampleBudget} 超过上限 ${SVG_FE_MORPHOLOGY_SAMPLE_BUDGET}",
+            kind: SvgErrorKind.Limit
+        )
+    }
     if (pixelRadiusX <= 0 && pixelRadiusY <= 0) {
         return input.copy()
     }
