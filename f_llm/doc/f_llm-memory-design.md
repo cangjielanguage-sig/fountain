@@ -49,6 +49,7 @@
 |---|---|---|
 | 流程结束提炼 | `LoomMemoryExtractor.extract` | 标题 `流程 <name> 记忆`，`kind=note` |
 | 流程内显式写 | `loomStore("memory","add")` / `memoryCall` | 调用方指定的 title/content/kind |
+| 会话摘要 | `Memory.remember(session, summary)` | 默认 `namespace=loom`、`kind=session`，可传参覆盖；优先走装配的存储网关，未装配回落适配器 |
 | 内容族 API | `MemoryStore.add(MemoryWrite)` | 同上，不经提炼 |
 
 ### 2.3 摘要格式与截断

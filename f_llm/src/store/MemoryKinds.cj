@@ -12,11 +12,10 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.store
 
 import std.collection.*
-
 import fountain::f_log.*
 
 /**
@@ -48,6 +47,10 @@ public class MemoryKinds {
     public static let DOC = 'doc'
     public static let KNOWLEDGE = 'knowledge'
     public static let SESSION = 'session'
+    /** 流程成功结束提炼出的经验 */
+    public static let EXPERIENCE = 'experience'
+    /** 流程失败时提炼的经验 */
+    public static let EXPERIENCE_FAILED = 'experience_failed'
 
     private static let CUSTOM = HashMap<Int64, ArrayList<String>>()
     private static var persistence: ?KindPersistence = None
@@ -60,15 +63,15 @@ public class MemoryKinds {
     public static func attach(value: KindPersistence): Unit {
         persistence = Some(value)
         CUSTOM.clear()
-        for((userId, kinds) in value.allCustom()){
+        for ((userId, kinds) in value.allCustom()) {
             let kept = ArrayList<String>()
-            for(kind in kinds){
-                if(contains(predefined(), kind)){
+            for (kind in kinds) {
+                if (contains(predefined(), kind)) {
                     continue
                 }
                 kept.add(kind)
             }
-            if(!kept.isEmpty()){
+            if (!kept.isEmpty()) {
                 CUSTOM[userId] = kept
             }
         }
@@ -83,19 +86,20 @@ public class MemoryKinds {
         kinds.add(DOC)
         kinds.add(KNOWLEDGE)
         kinds.add(SESSION)
+        kinds.add(EXPERIENCE)
+        kinds.add(EXPERIENCE_FAILED)
         kinds
     }
 
     /** 预定义 + 该用户的自定义（去重、保序） */
     public static func all(userId: Int64): ArrayList<String> {
         let kinds = predefined()
-        match(CUSTOM.get(userId)){
-            case Some(custom) =>
-                for(kind in custom){
-                    if(!contains(kinds, kind)){
-                        kinds.add(kind)
-                    }
+        match (CUSTOM.get(userId)) {
+            case Some(custom) => for (kind in custom) {
+                if (!contains(kinds, kind)) {
+                    kinds.add(kind)
                 }
+            }
             case None => ()
         }
         kinds
@@ -104,12 +108,12 @@ public class MemoryKinds {
     /** 新增自定义 kind；预定义或已存在返回 false；非法字符抛 IllegalArgumentException */
     public static func register(userId: Int64, kind: String): Bool {
         check(kind)
-        if(contains(predefined(), kind)){
+        if (contains(predefined(), kind)) {
             return false
         }
-        match(CUSTOM.get(userId)){
+        match (CUSTOM.get(userId)) {
             case Some(custom) =>
-                if(contains(custom, kind)){
+                if (contains(custom, kind)) {
                     return false
                 }
                 custom.add(kind)
@@ -124,42 +128,40 @@ public class MemoryKinds {
 
     /** 写库失败不阻断内存登记，只告警（kind 注册属辅助能力） */
     private static func persistInsert(userId: Int64, kind: String): Unit {
-        match(persistence){
-            case Some(store) =>
-                try{
-                    store.insertCustom(userId, kind)
-                }catch(e: Exception){
-                    log.warn('custom kind persist failed: ${e.message}')
-                }
+        match (persistence) {
+            case Some(store) => try {
+                store.insertCustom(userId, kind)
+            } catch (e: Exception) {
+                log.warn('custom kind persist failed: ${e.message}')
+            }
             case None => ()
         }
     }
 
     private static func persistDelete(userId: Int64, kind: String): Unit {
-        match(persistence){
-            case Some(store) =>
-                try{
-                    store.deleteCustom(userId, kind)
-                }catch(e: Exception){
-                    log.warn('custom kind delete failed: ${e.message}')
-                }
+        match (persistence) {
+            case Some(store) => try {
+                store.deleteCustom(userId, kind)
+            } catch (e: Exception) {
+                log.warn('custom kind delete failed: ${e.message}')
+            }
             case None => ()
         }
     }
 
     /** 只删自己的自定义 kind；预定义抛异常；不存在或属于他人返回 false */
     public static func remove(userId: Int64, kind: String): Bool {
-        if(contains(predefined(), kind)){
+        if (contains(predefined(), kind)) {
             throw IllegalArgumentException('predefined memory kind cannot be removed: ${kind}')
         }
-        match(CUSTOM.get(userId)){
+        match (CUSTOM.get(userId)) {
             case Some(custom) =>
-                if(!contains(custom, kind)){
+                if (!contains(custom, kind)) {
                     return false
                 }
                 let kept = ArrayList<String>()
-                for(item in custom){
-                    if(item != kind){
+                for (item in custom) {
+                    if (item != kind) {
                         kept.add(item)
                     }
                 }
@@ -174,26 +176,29 @@ public class MemoryKinds {
      * 固定权重（§5.4）：人工记忆优先于自动记忆，不提供请求级/集合级覆盖。
      */
     public static func weightOf(kind: String): Float64 {
-        if(kind == FACT || kind == PREFERENCE){
+        if (kind == FACT || kind == PREFERENCE) {
             1.0
-        }else if(kind == NOTE){
+        } else if (kind == NOTE) {
             0.9
-        }else if(kind == DOC || kind == KNOWLEDGE){
+        } else if (kind == DOC || kind == KNOWLEDGE) {
             0.8
-        }else if(kind == TASK){
+        } else if (kind == TASK) {
             0.6
-        }else if(kind == SESSION){
+        } else if (kind == SESSION) {
             0.3
-        }else{
+        } else if (kind == EXPERIENCE || kind == EXPERIENCE_FAILED) {
+            // 与纳入预定义前一致：沿用默认权重，不改变既有排序
+            0.8
+        } else {
             0.8
         }
     }
 
     public static func validate(userId: Int64, kind: String): Bool {
-        if(contains(predefined(), kind)){
+        if (contains(predefined(), kind)) {
             return true
         }
-        match(CUSTOM.get(userId)){
+        match (CUSTOM.get(userId)) {
             case Some(custom) => contains(custom, kind)
             case None => false
         }
@@ -204,8 +209,8 @@ public class MemoryKinds {
      * 幂等由 `has` 保证：重复调用不会产生重复行。
      */
     public static func seed(persistence: KindPersistence): Unit {
-        for(kind in predefined()){
-            if(!persistence.has(kind)){
+        for (kind in predefined()) {
+            if (!persistence.has(kind)) {
                 persistence.insert(kind, true)
             }
         }
@@ -217,24 +222,22 @@ public class MemoryKinds {
     }
 
     private static func check(kind: String): Unit {
-        if(kind.isEmpty() || kind.size > 32){
+        if (kind.isEmpty() || kind.size > 32) {
             throw IllegalArgumentException('invalid memory kind: ${kind}')
         }
-        for(index in 0..kind.size){
+        for (index in 0..kind.size) {
             let ch = kind[index]
-            let ok = (ch >= b'a' && ch <= b'z') ||
-                     (ch >= b'A' && ch <= b'Z') ||
-                     (ch >= b'0' && ch <= b'9') ||
-                     ch == b'_' || ch == b'-'
-            if(!ok){
+            let ok = (ch >= b'a' && ch <= b'z') || (ch >= b'A' && ch <= b'Z') || (ch >= b'0' && ch <= b'9') || ch == b'_' ||
+                ch == b'-'
+            if (!ok) {
                 throw IllegalArgumentException('invalid memory kind: ${kind}')
             }
         }
     }
 
     private static func contains(values: ArrayList<String>, target: String): Bool {
-        for(value in values){
-            if(value == target){
+        for (value in values) {
+            if (value == target) {
                 return true
             }
         }

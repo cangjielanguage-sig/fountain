@@ -15,31 +15,64 @@ limitations under the License.
 */
 package fountain::f_llm.memory
 
+import std.collection.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_config.Config
-
+import fountain::f_llm.loom.{LoomHostApi, LoomStoreGateway}
 import fountain::f_llm.store.*
 
-/** 5.1：摘要写入走 Stores.content().memory（kind=session）。 */
+/** 记录网关调用，便于断言 remember 走了哪条路 */
+class RememberRecorder {
+    public var payloads: ArrayList<String> = ArrayList<String>()
+}
+
 @Test
 public class MemoryRememberTest {
-
+    /** 端到端：remember → 网关 → 内容族，默认 namespace=loom、kind=session */
     @TestCase
-    func testRememberWritesSessionMemory(): Unit {
-        // 共享同一个内容族实例，保证写入后能立刻读回
+    func testRememberWritesThroughGateway(): Unit {
         let shared = InMemoryContentStore()
-        Stores.registerContent('inMemoryShared', { => shared })
-        Config.set<String>([('llm_memoryStore', 'inMemoryShared')])
+        let recorder = RememberRecorder()
+        let gateway = LoomStoreGateway(shared, InMemoryMetaStore())
+        LoomHostApi.installStore({
+            kind, op, payload =>
+                recorder.payloads.add('${kind}|${op}|${payload}')
+                gateway.call(kind, op, payload)
+        })
+        try{
+            Memory.remember('session-1', '用户偏好简洁回答')
 
-        Memory.remember('session-1', '用户偏好简洁回答')
+            @Expect(recorder.payloads.size, 1)
+            @Expect(recorder.payloads[0].contains('"namespace":"loom"'), true)
+            @Expect(recorder.payloads[0].contains('"kind":"session"'), true)
 
-        let records = shared.memory.list(0, 'global', 0, 10)
-        @Expect(records.size, 1)
-        @Expect(records[0].kind, 'session')
-        @Expect(records[0].title, 'session-1')
-        @Expect(records[0].content, '用户偏好简洁回答')
+            let records = shared.memory.list(0, 'loom', 0, 10)
+            @Expect(records.size, 1)
+            @Expect(records[0].title, 'session-1')
+            @Expect(records[0].content, '用户偏好简洁回答')
+        }finally{
+            LoomHostApi.installStore({ kind, op, payload => '[]' })
+        }
     }
 
+    /** 调用方可指定命名空间与 kind */
+    @TestCase
+    func testRememberCustomNamespaceAndKind(): Unit {
+        let recorder = RememberRecorder()
+        LoomHostApi.installStore({
+            kind, op, payload =>
+                recorder.payloads.add('${kind}|${op}|${payload}')
+                'id-1'
+        })
+        try{
+            Memory.remember('s2', '摘要', namespace: 'work', kind: 'note')
+            @Expect(recorder.payloads.size, 1)
+            @Expect(recorder.payloads[0].contains('"namespace":"work"'), true)
+            @Expect(recorder.payloads[0].contains('"kind":"note"'), true)
+        }finally{
+            LoomHostApi.installStore({ kind, op, payload => '[]' })
+        }
+    }
 }

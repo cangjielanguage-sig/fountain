@@ -75,9 +75,11 @@ public class MemoryKindsTest {
     func testPredefinedAreFixed(): Unit {
         MemoryKinds.resetForTest()
         let kinds = MemoryKinds.predefined()
-        @Expect(kinds.size, 7)
+        @Expect(kinds.size, 9)
         @Expect(kinds[0], 'note')
         @Expect(kinds[6], 'session')
+        @Expect(kinds[7], 'experience')
+        @Expect(kinds[8], 'experience_failed')
     }
 
     @TestCase
@@ -125,9 +127,9 @@ public class MemoryKindsTest {
         MemoryKinds.resetForTest()
         let persistence = FakeKindPersistence()
         MemoryKinds.seed(persistence)
-        @Expect(persistence.inserted, 7)
+        @Expect(persistence.inserted, Int64(MemoryKinds.predefined().size))
         MemoryKinds.seed(persistence)
-        @Expect(persistence.inserted, 7)
+        @Expect(persistence.inserted, Int64(MemoryKinds.predefined().size))
     }
 
     @TestCase
@@ -140,6 +142,22 @@ public class MemoryKindsTest {
             thrown = true
         }
         @Expect(thrown, true)
+    }
+    /** 经验 kind 是预定义集合的一部分 */
+    @TestCase
+    func testExperienceKindsArePredefined(): Unit {
+        let kinds = MemoryKinds.predefined()
+        @Expect(kinds.contains('experience'), true)
+        @Expect(kinds.contains('experience_failed'), true)
+        @Expect(MemoryKinds.validate(0, 'experience'), true)
+        @Expect(MemoryKinds.validate(0, 'experience_failed'), true)
+    }
+
+    /** 纳入预定义不改变权重：两者都是 0.8 */
+    @TestCase
+    func testExperienceKindWeightUnchanged(): Unit {
+        @Expect(MemoryKinds.weightOf('experience'), 0.8)
+        @Expect(MemoryKinds.weightOf('experience_failed'), 0.8)
     }
 }
 
