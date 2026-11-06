@@ -412,7 +412,7 @@ CRITICAL=0；第 2 节要求的 WARNING 全部落地；第 3 节 SUGGESTION 已�
 
 - 执行日期：2026-11-07
 - 分支：`feature/f_svg`
-- 修复基线：`8555821b`；修复提交：`d56b44cc` … `dfecdaa8`
+- 修复基线：`8555821b`；代码/测试/文档修复提交：`d56b44cc` … `fa0bc1c5`
 - 纪律：每项先加失败用例并确认失败原因，再实现；`cjpm test` 全绿后独立提交
 - 说明：`openspec/` 被 `.gitignore` 忽略，N2/N5 的规范修改仅在工作树生效，归档步骤再并入主规格
 
@@ -431,7 +431,7 @@ CRITICAL=0；第 2 节要求的 WARNING 全部落地；第 3 节 SUGGESTION 已�
 | N4 | **已落地** | `nestedSvgClipRect` 使用 `viewBox.minX/minY/width/height`。用例：`SvgBBoxM5_test.nestedViewBoxClipUsesOrigin`（`viewBox="10 10 100 100"`） |
 | N5 | **已落地** | delta `svg-css` 明确几何属性百分比按视口对应轴换算、允许与绝对长度混合，其余属性仍无效。用例：`CssGeometryCalcM5_test.mixedUnitsUseViewportAxes`（x/width 用宽、y/height 用高） |
 | N6 | **已落地** | GSUB 深度改为 Extension lookup（Type 7）链的真实嵌套层级，特性直接引用为第 1 层；第 9 层停止并 warning。用例：`SvgGsubM5_test.nestedLookupDepthTwo`、`lookupDepthLimit`（7 层包装 + 第 8 层连字正常，8 层包装 + 第 9 层停止） |
-| N8 | **已落地** | `getCTM` 的容器 fill-box 退化为 `svgBBoxOf` 内容包围盒，与渲染路径一致。用例：`SvgTransformPathM5_test.ctmContainerFillBoxMatchesRender` |
+| N8 | **已落地** | `getCTM` 的容器 / image fill-box 退化为 `svgBBoxOf` 包围盒，与渲染路径一致；`<use>` 自身样式尚未接入渲染（N7，M6），保持 view-box 参考。用例：`SvgTransformPathM5_test.ctmContainerFillBoxMatchesRender` |
 | N9 | **已落地** | `markerContentFitsIn` 改用 `effectiveElementTransform`（传样式、包围盒与视口）。用例：`SvgTransformPathM5_test.markerTransformOriginKeepsClip`（scale 原点导致内容越界时必须裁剪） |
 | N10 | **已落地** | `README.md` / `README_en.md` 的元素级 API 代码块补 `mediaWidth` / `mediaHeight`，与 `SvgElement.cj` 实现一致 |
 | N11 | **已落地** | 恢复 `svgBidiOverrideLevels` 并用于 `bidiSegmentLevels`；直接用例 `SvgBidiM5_test.override` 断言 RTL/LTR 强制层级与视觉顺序 |
