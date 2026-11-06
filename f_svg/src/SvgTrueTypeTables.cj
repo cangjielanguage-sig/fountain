@@ -37,8 +37,7 @@ internal struct SvgTtfTable {
 }
 
 /** 读取 1 字节；越界抛 Syntax。 */
-internal func readTtfU8(bytes: Array<Byte>, offset: Int64): Int64 {
-    if (offset < 0 || offset >= Int64(bytes.size)) {
+internal func readTtfU8(bytes: Array<Byte>, offset: Int64): Int64 {    if (offset < 0 || offset >= Int64(bytes.size)) {
         throw SvgException("TTF 数据在偏移 ${offset} 处截断", kind: SvgErrorKind.Syntax)
     }
     Int64(bytes[offset])
@@ -66,6 +65,94 @@ internal func readTtfU32(bytes: Array<Byte>, offset: Int64): Int64 {
     }
     Int64(bytes[offset]) * 16777216 + Int64(bytes[offset + 1]) * 65536 +
         Int64(bytes[offset + 2]) * 256 + Int64(bytes[offset + 3])
+}
+
+/**
+ * 以单个 sfnt 表为边界的读取器。
+ *
+ * 所有偏移都是相对表起点；任何越界都抛 `SvgException(kind: Syntax)`，
+ * 防止恶意长度字段把读取带到相邻表。
+ */
+internal class SvgTtfTableReader {
+    let data: Array<Byte>
+    let table: SvgTtfTable
+
+    init(data: Array<Byte>, table: SvgTtfTable) {
+        this.data = data
+        this.table = table
+    }
+
+    prop length: Int64 {
+        get() {
+            this.table.length
+        }
+    }
+
+    func require(offset: Int64, size: Int64): Unit {
+        if (offset < 0 || size < 0 || offset + size > this.table.length) {
+            throw SvgException(
+                "TTF 表「${this.table.tag}」在偏移 ${offset} 处截断",
+                kind: SvgErrorKind.Syntax
+            )
+        }
+    }
+
+    func u8(offset: Int64): Int64 {
+        this.require(offset, 1)
+        readTtfU8(this.data, this.table.offset + offset)
+    }
+
+    func u16(offset: Int64): Int64 {
+        this.require(offset, 2)
+        readTtfU16(this.data, this.table.offset + offset)
+    }
+
+    func i16(offset: Int64): Int64 {
+        let value = this.u16(offset)
+        if (value >= 32768) {
+            value - 65536
+        } else {
+            value
+        }
+    }
+
+    func i8(offset: Int64): Int64 {
+        let value = this.u8(offset)
+        if (value >= 128) {
+            value - 256
+        } else {
+            value
+        }
+    }
+
+    func u32(offset: Int64): Int64 {
+        this.require(offset, 4)
+        readTtfU32(this.data, this.table.offset + offset)
+    }
+
+    /** 派生子区间读取器；基址与长度都相对当前表。 */
+    func slice(offset: Int64, length: Int64): SvgTtfTableReader {
+        this.require(offset, length)
+        SvgTtfTableReader(
+            this.data,
+            SvgTtfTable(this.table.tag, this.table.offset + offset, length)
+        )
+    }
+}
+
+/** 读取 4 字节表 tag；只接受可打印 ASCII，避免非法 UTF-8 抛非 SvgException。 */
+private func readTtfTag(bytes: Array<Byte>, offset: Int64): String {
+    var value = ""
+    var index = offset
+    while (index < offset + 4) {
+        let byte = Int64(bytes[index])
+        if (byte < 0x20 || byte > 0x7E) {
+            throw SvgException("TTF 表 tag 含非法字节 ${byte}", kind: SvgErrorKind.Syntax)
+        }
+        value += String.fromUtf8([UInt8(byte)])
+        index++
+    }
+    value
 }
 
 /** sfnt 表目录；所有偏移在读表体前完成校验。 */
@@ -113,7 +200,7 @@ internal class SvgTtfTableDirectory {
         var index: Int64 = 0
         while (index < numTables) {
             let entry = 12 + index * 16
-            let tag = String.fromUtf8(bytes[entry..entry + 4])
+            let tag = readTtfTag(bytes, entry)
             let offset = readTtfU32(bytes, entry + 8)
             let length = readTtfU32(bytes, entry + 12)
             if (length > SVG_TTF_MAX_TABLE_BYTES) {

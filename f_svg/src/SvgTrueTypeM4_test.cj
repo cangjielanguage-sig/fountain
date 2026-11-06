@@ -245,6 +245,24 @@ internal func m4BuildTtf(
     writer.toArray()
 }
 
+private func m4TableEntryOffset(tag: String): Int64 {
+    var index = 0
+    while (index < M4_TTF_TABLES.size) {
+        if (M4_TTF_TABLES[index] == tag) {
+            return 12 + Int64(index) * 16
+        }
+        index++
+    }
+    -1
+}
+
+private func m4WriteU32(target: Array<Byte>, offset: Int64, value: Int64): Unit {
+    target[offset] = UInt8((value >> 24) & 0xFF)
+    target[offset + 1] = UInt8((value >> 16) & 0xFF)
+    target[offset + 2] = UInt8((value >> 8) & 0xFF)
+    target[offset + 3] = UInt8(value & 0xFF)
+}
+
 @Test
 public class SvgTrueTypeTablesM4_test {
     /** 表目录、be16 / be32 / i16 边界读取与截断。 */
@@ -307,6 +325,52 @@ public class SvgTrueTypeTablesM4_test {
         tooLong[27] = UInt8(huge & 0xFF)
         let lengthError = expectSvgException({=> SvgTtfTableDirectory.parse(tooLong)})
         @Assert(lengthError.kind == SvgErrorKind.Limit)
+    }
+
+    /** 表 tag 必须是 4 字节 ASCII；非法 tag 抛 Syntax 而非运行时异常。 */
+    @TestCase
+    public func nonAsciiTag(): Unit {
+        let bytes = m4BuildTtf()
+        bytes[12] = 0xFF
+        let error = expectSvgException({=> SvgTtfTableDirectory.parse(bytes)})
+        @Assert(error.kind == SvgErrorKind.Syntax)
+    }
+
+    /** head / hhea / maxp 的声明长度不足必须在读取字段前抛 Syntax。 */
+    @TestCase
+    public func declaredTableLengths(): Unit {
+        for (tag in ["head", "hhea", "maxp"]) {
+            let bytes = m4BuildTtf()
+            let entry = m4TableEntryOffset(tag)
+            m4WriteU32(bytes, entry + 12, 0)
+            let error = expectSvgException({=> SvgTrueTypeFont.parse(bytes)})
+            @Assert(error.kind == SvgErrorKind.Syntax)
+        }
+    }
+
+    /** cmap 子表声明长度不足必须在解析段表前抛 Syntax。 */
+    @TestCase
+    public func cmapSubtableLength(): Unit {
+        let bytes = m4BuildTtf()
+        let directory = SvgTtfTableDirectory.parse(bytes)
+        let cmap = directory.table("cmap").getOrThrow()
+        // cmap 头 4 字节 + 1 条记录 8 字节，子表从记录中的偏移 12 开始。
+        let subtable = cmap.offset + 12
+        bytes[subtable + 2] = 0
+        bytes[subtable + 3] = 10
+        let error = expectSvgException({=> SvgTrueTypeFont.parse(bytes)})
+        @Assert(error.kind == SvgErrorKind.Syntax)
+    }
+
+    /** 文件在 loca 表中间被截断。 */
+    @TestCase
+    public func locaTruncatedInMiddle(): Unit {
+        let bytes = m4BuildTtf()
+        let directory = SvgTtfTableDirectory.parse(bytes)
+        let loca = directory.table("loca").getOrThrow()
+        let truncated = bytes[0..loca.offset + 3]
+        let error = expectSvgException({=> SvgTrueTypeFont.parse(truncated)})
+        @Assert(error.kind == SvgErrorKind.Syntax)
     }
 }
 
@@ -410,6 +474,26 @@ public class SvgTrueTypeFontM4_test {
         let deep = SvgTrueTypeFont.parse(m4BuildTtf(selfComposite: true))
         let depthError = expectSvgException({=> deep.glyphPath(66, 1000.0)})
         @Assert(depthError.kind == SvgErrorKind.Limit)
+    }
+
+    /** 非单调 endPtsOfContours 不得触发数组越界，必须抛 Syntax。 */
+    @TestCase
+    public func malformedEndPoints(): Unit {
+        let bytes = m4BuildTtf()
+        let directory = SvgTtfTableDirectory.parse(bytes)
+        let glyf = directory.table("glyf").getOrThrow()
+        // 声明 2 个 contour，endPts = [1000, 1]。
+        bytes[glyf.offset] = 0
+        bytes[glyf.offset + 1] = 2
+        bytes[glyf.offset + 10] = 0x03
+        bytes[glyf.offset + 11] = 0xE8
+        bytes[glyf.offset + 12] = 0
+        bytes[glyf.offset + 13] = 1
+        bytes[glyf.offset + 14] = 0
+        bytes[glyf.offset + 15] = 0
+        let font = SvgTrueTypeFont.parse(bytes)
+        let error = expectSvgException({=> font.glyphPath(65, 1000.0)})
+        @Assert(error.kind == SvgErrorKind.Syntax)
     }
 
     /** 注册到 SvgFontRegistry 后渲染文本。 */

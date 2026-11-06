@@ -64,52 +64,46 @@ private struct SvgCmapGroup {
  * 不解析 hinting、GSUB / GPOS / kern；坐标按 `unitsPerEm` 缩放并翻转 y 轴。
  */
 public class SvgTrueTypeFont <: SvgFont {
-    private let data: Array<Byte>
     private let unitsPerEmValue: Int64
     private let ascenderValue: Int64
     private let descenderValue: Int64
     private let glyphCount: Int64
     private let longLoca: Bool
-    private let hmtxOffset: Int64
-    private let hmtxLength: Int64
     private let numberOfHMetrics: Int64
-    private let locaOffset: Int64
-    private let glyfOffset: Int64
-    private let glyfLength: Int64
+    private let hmtxReader: SvgTtfTableReader
+    private let locaReader: SvgTtfTableReader
+    private let glyfReader: SvgTtfTableReader
     private let cmapFormat: Int64
+    private let cmapSubReader: SvgTtfTableReader
     private let cmapSegments: ArrayList<SvgCmapSegment>
     private let cmapGroups: ArrayList<SvgCmapGroup>
 
     private init(
-        data: Array<Byte>,
         unitsPerEmValue: Int64,
         ascenderValue: Int64,
         descenderValue: Int64,
         glyphCount: Int64,
         longLoca: Bool,
-        hmtxOffset: Int64,
-        hmtxLength: Int64,
         numberOfHMetrics: Int64,
-        locaOffset: Int64,
-        glyfOffset: Int64,
-        glyfLength: Int64,
+        hmtxReader: SvgTtfTableReader,
+        locaReader: SvgTtfTableReader,
+        glyfReader: SvgTtfTableReader,
         cmapFormat: Int64,
+        cmapSubReader: SvgTtfTableReader,
         cmapSegments: ArrayList<SvgCmapSegment>,
         cmapGroups: ArrayList<SvgCmapGroup>
     ) {
-        this.data = data
         this.unitsPerEmValue = unitsPerEmValue
         this.ascenderValue = ascenderValue
         this.descenderValue = descenderValue
         this.glyphCount = glyphCount
         this.longLoca = longLoca
-        this.hmtxOffset = hmtxOffset
-        this.hmtxLength = hmtxLength
         this.numberOfHMetrics = numberOfHMetrics
-        this.locaOffset = locaOffset
-        this.glyfOffset = glyfOffset
-        this.glyfLength = glyfLength
+        this.hmtxReader = hmtxReader
+        this.locaReader = locaReader
+        this.glyfReader = glyfReader
         this.cmapFormat = cmapFormat
+        this.cmapSubReader = cmapSubReader
         this.cmapSegments = cmapSegments
         this.cmapGroups = cmapGroups
     }
@@ -136,22 +130,39 @@ public class SvgTrueTypeFont <: SvgFont {
         let cmap = requireTtfTable(directory, "cmap")
         let glyf = requireTtfTable(directory, "glyf")
 
-        let unitsPerEm = readTtfU16(bytes, head.offset + 18)
+        let headReader = SvgTtfTableReader(bytes, head)
+        let hheaReader = SvgTtfTableReader(bytes, hhea)
+        let maxpReader = SvgTtfTableReader(bytes, maxp)
+        let hmtxReader = SvgTtfTableReader(bytes, hmtx)
+        let locaReader = SvgTtfTableReader(bytes, loca)
+        let cmapReader = SvgTtfTableReader(bytes, cmap)
+        let glyfReader = SvgTtfTableReader(bytes, glyf)
+
+        if (head.length < 54) {
+            throw SvgException("head 表截断", kind: SvgErrorKind.Syntax)
+        }
+        if (hhea.length < 36) {
+            throw SvgException("hhea 表截断", kind: SvgErrorKind.Syntax)
+        }
+        if (maxp.length < 6) {
+            throw SvgException("maxp 表截断", kind: SvgErrorKind.Syntax)
+        }
+        let unitsPerEm = headReader.u16(18)
         if (unitsPerEm <= 0) {
             throw SvgException("head.unitsPerEm 非法", kind: SvgErrorKind.Syntax)
         }
-        let locaFormat = readTtfI16(bytes, head.offset + 50)
+        let locaFormat = headReader.i16(50)
         if (locaFormat != 0 && locaFormat != 1) {
             throw SvgException("head.indexToLocFormat 非法", kind: SvgErrorKind.Syntax)
         }
-        let glyphCount = readTtfU16(bytes, maxp.offset + 4)
-        let ascender = readTtfI16(bytes, hhea.offset + 4)
-        let descender = readTtfI16(bytes, hhea.offset + 6)
-        let numberOfHMetrics = readTtfU16(bytes, hhea.offset + 34)
+        let glyphCount = maxpReader.u16(4)
+        let ascender = hheaReader.i16(4)
+        let descender = hheaReader.i16(6)
+        let numberOfHMetrics = hheaReader.u16(34)
         if (numberOfHMetrics <= 0 || numberOfHMetrics > glyphCount) {
             throw SvgException("hhea.numberOfHMetrics 非法", kind: SvgErrorKind.Syntax)
         }
-        if (hmtx.offset + numberOfHMetrics * 4 > hmtx.offset + hmtx.length) {
+        if (numberOfHMetrics * 4 > hmtx.length) {
             throw SvgException("hmtx 表截断", kind: SvgErrorKind.Syntax)
         }
         let longLoca = locaFormat == 1
@@ -168,9 +179,9 @@ public class SvgTrueTypeFont <: SvgFont {
         var index: Int64 = 0
         while (index <= glyphCount) {
             let value = if (longLoca) {
-                readTtfU32(bytes, loca.offset + index * 4)
+                locaReader.u32(index * 4)
             } else {
-                readTtfU16(bytes, loca.offset + index * 2) * 2
+                locaReader.u16(index * 2) * 2
             }
             if (index > 0 && value < previous) {
                 throw SvgException("loca 表非单调", kind: SvgErrorKind.Syntax)
@@ -184,21 +195,19 @@ public class SvgTrueTypeFont <: SvgFont {
 
         let segments = ArrayList<SvgCmapSegment>()
         let groups = ArrayList<SvgCmapGroup>()
-        let format = SvgTrueTypeFont.parseCmap(bytes, cmap, segments, groups)
+        let cmapParsed = SvgTrueTypeFont.parseCmap(cmapReader, segments, groups)
         SvgTrueTypeFont(
-            bytes,
             unitsPerEm,
             ascender,
             descender,
             glyphCount,
             longLoca,
-            hmtx.offset,
-            hmtx.length,
             numberOfHMetrics,
-            loca.offset,
-            glyf.offset,
-            glyf.length,
-            format,
+            hmtxReader,
+            locaReader,
+            glyfReader,
+            cmapParsed.format,
+            cmapParsed.reader,
             segments,
             groups
         )
@@ -219,7 +228,7 @@ public class SvgTrueTypeFont <: SvgFont {
             case None => return 0.0
         }
         let metricIndex = if (gid < this.numberOfHMetrics) { gid } else { this.numberOfHMetrics - 1 }
-        let advance = readTtfU16(this.data, this.hmtxOffset + metricIndex * 4)
+        let advance = this.hmtxReader.u16(metricIndex * 4)
         Float64(advance) * fontSize / Float64(this.unitsPerEmValue)
     }
 
@@ -277,7 +286,7 @@ public class SvgTrueTypeFont <: SvgFont {
             }
             let address = segment.glyphArrayBase + segment.idRangeOffset +
                 2 * (codePoint - segment.startCode)
-            let glyph = readTtfU16(this.data, address)
+            let glyph = this.cmapSubReader.u16(address)
             return Some(positiveTtfMod(glyph + segment.idDelta, 65536))
         }
         None
@@ -285,9 +294,9 @@ public class SvgTrueTypeFont <: SvgFont {
 
     private func locaAt(index: Int64): Int64 {
         if (this.longLoca) {
-            readTtfU32(this.data, this.locaOffset + index * 4)
+            this.locaReader.u32(index * 4)
         } else {
-            readTtfU16(this.data, this.locaOffset + index * 2) * 2
+            this.locaReader.u16(index * 2) * 2
         }
     }
 
@@ -306,28 +315,28 @@ public class SvgTrueTypeFont <: SvgFont {
         if (start == end) {
             return Array<SvgPathCommand>()
         }
-        if (start < 0 || end > this.glyfLength || start > end) {
+        if (start < 0 || end > this.glyfReader.length || start > end) {
             throw SvgException("glyf 数据截断", kind: SvgErrorKind.Syntax)
         }
-        let offset = this.glyfOffset + start
-        let contours = readTtfI16(this.data, offset)
+        let glyph = this.glyfReader.slice(start, end - start)
+        let contours = glyph.i16(0)
         if (contours >= 0) {
-            return this.parseSimpleGlyph(offset, contours)
+            return this.parseSimpleGlyph(glyph, contours)
         }
         if (contours == -1) {
-            return this.parseCompositeGlyph(offset, depth)
+            return this.parseCompositeGlyph(glyph, depth)
         }
         throw SvgException("字形 numberOfContours 非法", kind: SvgErrorKind.Syntax)
     }
 
-    private func parseSimpleGlyph(offset: Int64, numberOfContours: Int64): Array<SvgPathCommand> {
+    private func parseSimpleGlyph(glyph: SvgTtfTableReader, numberOfContours: Int64): Array<SvgPathCommand> {
         if (numberOfContours == 0) {
             return Array<SvgPathCommand>()
         }
         let endPoints = Array<Int64>(numberOfContours, repeat: 0)
         var contourIndex: Int64 = 0
         while (contourIndex < numberOfContours) {
-            endPoints[contourIndex] = readTtfU16(this.data, offset + 10 + contourIndex * 2)
+            endPoints[contourIndex] = glyph.u16(10 + contourIndex * 2)
             contourIndex++
         }
         let pointCount = endPoints[numberOfContours - 1] + 1
@@ -337,19 +346,26 @@ public class SvgTrueTypeFont <: SvgFont {
                 kind: SvgErrorKind.Limit
             )
         }
-        var cursor = offset + 10 + numberOfContours * 2
-        let instructionLength = readTtfU16(this.data, cursor)
+        contourIndex = 1
+        while (contourIndex < numberOfContours) {
+            if (endPoints[contourIndex] <= endPoints[contourIndex - 1]) {
+                throw SvgException("字形 endPtsOfContours 非严格递增", kind: SvgErrorKind.Syntax)
+            }
+            contourIndex++
+        }
+        var cursor = 10 + numberOfContours * 2
+        let instructionLength = glyph.u16(cursor)
         cursor += 2 + instructionLength
 
         let flags = Array<Int64>(pointCount, repeat: 0)
         var flagIndex: Int64 = 0
         while (flagIndex < pointCount) {
-            let flag = readTtfU8(this.data, cursor)
+            let flag = glyph.u8(cursor)
             cursor++
             flags[flagIndex] = flag
             flagIndex++
             if ((flag & 0x08) != 0) {
-                var repeat = readTtfU8(this.data, cursor)
+                var repeat = glyph.u8(cursor)
                 cursor++
                 while (repeat > 0 && flagIndex < pointCount) {
                     flags[flagIndex] = flag
@@ -368,7 +384,7 @@ public class SvgTrueTypeFont <: SvgFont {
             let flag = flags[index]
             var delta: Int64
             if ((flag & 0x02) != 0) {
-                delta = readTtfU8(this.data, cursor)
+                delta = glyph.u8(cursor)
                 cursor++
                 if ((flag & 0x10) == 0) {
                     delta = -delta
@@ -376,7 +392,7 @@ public class SvgTrueTypeFont <: SvgFont {
             } else if ((flag & 0x10) != 0) {
                 delta = 0
             } else {
-                delta = readTtfI16(this.data, cursor)
+                delta = glyph.i16(cursor)
                 cursor += 2
             }
             x += delta
@@ -388,7 +404,7 @@ public class SvgTrueTypeFont <: SvgFont {
             let flag = flags[index]
             var delta: Int64
             if ((flag & 0x04) != 0) {
-                delta = readTtfU8(this.data, cursor)
+                delta = glyph.u8(cursor)
                 cursor++
                 if ((flag & 0x20) == 0) {
                     delta = -delta
@@ -396,7 +412,7 @@ public class SvgTrueTypeFont <: SvgFont {
             } else if ((flag & 0x20) != 0) {
                 delta = 0
             } else {
-                delta = readTtfI16(this.data, cursor)
+                delta = glyph.i16(cursor)
                 cursor += 2
             }
             y += delta
@@ -416,24 +432,24 @@ public class SvgTrueTypeFont <: SvgFont {
         commands.toArray()
     }
 
-    private func parseCompositeGlyph(offset: Int64, depth: Int64): Array<SvgPathCommand> {
+    private func parseCompositeGlyph(glyph: SvgTtfTableReader, depth: Int64): Array<SvgPathCommand> {
         let commands = ArrayList<SvgPathCommand>()
-        var cursor = offset + 10
+        var cursor: Int64 = 10
         var more = true
         var flags: Int64 = 0
         while (more) {
-            flags = readTtfU16(this.data, cursor)
-            let component = readTtfU16(this.data, cursor + 2)
+            flags = glyph.u16(cursor)
+            let component = glyph.u16(cursor + 2)
             cursor += 4
             var argument1: Int64
             var argument2: Int64
             if ((flags & 0x0001) != 0) {
-                argument1 = readTtfI16(this.data, cursor)
-                argument2 = readTtfI16(this.data, cursor + 2)
+                argument1 = glyph.i16(cursor)
+                argument2 = glyph.i16(cursor + 2)
                 cursor += 4
             } else {
-                argument1 = readTtfSignedByte(this.data, cursor)
-                argument2 = readTtfSignedByte(this.data, cursor + 1)
+                argument1 = glyph.i8(cursor)
+                argument2 = glyph.i8(cursor + 1)
                 cursor += 2
             }
             let dx = if ((flags & 0x0002) != 0) { argument1 } else { 0 }
@@ -443,19 +459,19 @@ public class SvgTrueTypeFont <: SvgFont {
             var c = 0.0
             var d = 1.0
             if ((flags & 0x0008) != 0) {
-                let scale = Float64(readTtfI16(this.data, cursor)) / 16384.0
+                let scale = Float64(glyph.i16(cursor)) / 16384.0
                 a = scale
                 d = scale
                 cursor += 2
             } else if ((flags & 0x0040) != 0) {
-                a = Float64(readTtfI16(this.data, cursor)) / 16384.0
-                d = Float64(readTtfI16(this.data, cursor + 2)) / 16384.0
+                a = Float64(glyph.i16(cursor)) / 16384.0
+                d = Float64(glyph.i16(cursor + 2)) / 16384.0
                 cursor += 4
             } else if ((flags & 0x0080) != 0) {
-                a = Float64(readTtfI16(this.data, cursor)) / 16384.0
-                b = Float64(readTtfI16(this.data, cursor + 2)) / 16384.0
-                c = Float64(readTtfI16(this.data, cursor + 4)) / 16384.0
-                d = Float64(readTtfI16(this.data, cursor + 6)) / 16384.0
+                a = Float64(glyph.i16(cursor)) / 16384.0
+                b = Float64(glyph.i16(cursor + 2)) / 16384.0
+                c = Float64(glyph.i16(cursor + 4)) / 16384.0
+                d = Float64(glyph.i16(cursor + 6)) / 16384.0
                 cursor += 8
             }
             let child = this.parseGlyph(component, depth + 1)
@@ -465,90 +481,137 @@ public class SvgTrueTypeFont <: SvgFont {
             more = (flags & 0x0020) != 0
         }
         if ((flags & 0x0100) != 0) {
-            let instructionLength = readTtfU16(this.data, cursor)
+            let instructionLength = glyph.u16(cursor)
             cursor += 2 + instructionLength
         }
         commands.toArray()
     }
 
     private static func parseCmap(
-        bytes: Array<Byte>,
-        cmap: SvgTtfTable,
+        cmap: SvgTtfTableReader,
         segments: ArrayList<SvgCmapSegment>,
         groups: ArrayList<SvgCmapGroup>
-    ): Int64 {
+    ): SvgCmapParseResult {
         if (cmap.length < 4) {
             throw SvgException("cmap 表截断", kind: SvgErrorKind.Syntax)
         }
-        let count = readTtfU16(bytes, cmap.offset + 2)
+        let count = cmap.u16(2)
+        if (4 + count * 8 > cmap.length) {
+            throw SvgException("cmap 编码记录截断", kind: SvgErrorKind.Syntax)
+        }
         var chosenFormat: Int64 = 0
         var chosenOffset: Int64 = 0
+        var chosenLength: Int64 = 0
         var index: Int64 = 0
         while (index < count) {
-            let record = cmap.offset + 4 + index * 8
-            let subtable = cmap.offset + readTtfU32(bytes, record + 4)
-            if (subtable + 2 > cmap.offset + cmap.length) {
+            let record = 4 + index * 8
+            let subtableOffset = cmap.u32(record + 4)
+            if (subtableOffset + 4 > cmap.length) {
                 throw SvgException("cmap 子表越界", kind: SvgErrorKind.Syntax)
             }
-            let format = readTtfU16(bytes, subtable)
+            let format = cmap.u16(subtableOffset)
+            let declaredLength = if (format == 12) {
+                if (subtableOffset + 8 > cmap.length) {
+                    throw SvgException("cmap 子表越界", kind: SvgErrorKind.Syntax)
+                }
+                cmap.u32(subtableOffset + 4)
+            } else {
+                cmap.u16(subtableOffset + 2)
+            }
+            if (declaredLength <= 0 || subtableOffset + declaredLength > cmap.length) {
+                throw SvgException("cmap 子表长度越界", kind: SvgErrorKind.Syntax)
+            }
             if (format == 12) {
                 chosenFormat = 12
-                chosenOffset = subtable
+                chosenOffset = subtableOffset
+                chosenLength = declaredLength
                 break
             }
             if (format == 4 && chosenFormat == 0) {
                 chosenFormat = 4
-                chosenOffset = subtable
+                chosenOffset = subtableOffset
+                chosenLength = declaredLength
             }
             index++
         }
+        if (chosenFormat == 0) {
+            throw SvgException("cmap 缺少支持的 format 4 / 12", kind: SvgErrorKind.Syntax)
+        }
+        let subtable = cmap.slice(chosenOffset, chosenLength)
         if (chosenFormat == 4) {
-            let segCountX2 = readTtfU16(bytes, chosenOffset + 6)
+            if (subtable.length < 14) {
+                throw SvgException("cmap format 4 子表截断", kind: SvgErrorKind.Syntax)
+            }
+            let segCountX2 = subtable.u16(6)
             let segCount = segCountX2 / 2
-            let endCodes = chosenOffset + 14
+            let required = 16 + segCountX2 * 4
+            if (required > subtable.length) {
+                throw SvgException("cmap format 4 段表截断", kind: SvgErrorKind.Syntax)
+            }
+            let endCodes = 14
             let startCodes = endCodes + segCountX2 + 2
             let idDeltas = startCodes + segCountX2
             let idRangeOffsets = idDeltas + segCountX2
             var segmentIndex: Int64 = 0
             while (segmentIndex < segCount) {
+                let endCode = subtable.u16(endCodes + segmentIndex * 2)
+                let startCode = subtable.u16(startCodes + segmentIndex * 2)
+                let idDelta = subtable.i16(idDeltas + segmentIndex * 2)
+                let rangeOffsetAddress = idRangeOffsets + segmentIndex * 2
+                let idRangeOffset = subtable.u16(rangeOffsetAddress)
+                if (startCode > endCode) {
+                    throw SvgException("cmap format 4 段范围非法", kind: SvgErrorKind.Syntax)
+                }
+                if (idRangeOffset != 0) {
+                    let glyphAddress = rangeOffsetAddress + idRangeOffset
+                    if (glyphAddress + (endCode - startCode + 1) * 2 > subtable.length) {
+                        throw SvgException("cmap format 4 字形数组越界", kind: SvgErrorKind.Syntax)
+                    }
+                }
                 segments.add(
                     SvgCmapSegment(
-                        readTtfU16(bytes, endCodes + segmentIndex * 2),
-                        readTtfU16(bytes, startCodes + segmentIndex * 2),
-                        readTtfI16(bytes, idDeltas + segmentIndex * 2),
-                        readTtfU16(bytes, idRangeOffsets + segmentIndex * 2),
-                        idRangeOffsets + segmentIndex * 2
+                        endCode,
+                        startCode,
+                        idDelta,
+                        idRangeOffset,
+                        rangeOffsetAddress
                     )
                 )
                 segmentIndex++
             }
-        } else if (chosenFormat == 12) {
-            let groupCount = readTtfU32(bytes, chosenOffset + 12)
+        } else {
+            if (subtable.length < 16) {
+                throw SvgException("cmap format 12 子表截断", kind: SvgErrorKind.Syntax)
+            }
+            let groupCount = subtable.u32(12)
+            if (16 + groupCount * 12 > subtable.length) {
+                throw SvgException("cmap format 12 分组截断", kind: SvgErrorKind.Syntax)
+            }
             var groupIndex: Int64 = 0
             while (groupIndex < groupCount) {
-                let base = chosenOffset + 16 + groupIndex * 12
+                let base = 16 + groupIndex * 12
+                let startChar = subtable.u32(base)
+                let endChar = subtable.u32(base + 4)
+                if (startChar > endChar) {
+                    throw SvgException("cmap format 12 分组范围非法", kind: SvgErrorKind.Syntax)
+                }
                 groups.add(
-                    SvgCmapGroup(
-                        readTtfU32(bytes, base),
-                        readTtfU32(bytes, base + 4),
-                        readTtfU32(bytes, base + 8)
-                    )
+                    SvgCmapGroup(startChar, endChar, subtable.u32(base + 8))
                 )
                 groupIndex++
             }
-        } else {
-            throw SvgException("cmap 缺少支持的 format 4 / 12", kind: SvgErrorKind.Syntax)
         }
-        chosenFormat
+        SvgCmapParseResult(chosenFormat, subtable)
     }
 }
 
-private func readTtfSignedByte(bytes: Array<Byte>, offset: Int64): Int64 {
-    let value = readTtfU8(bytes, offset)
-    if (value >= 128) {
-        value - 256
-    } else {
-        value
+internal class SvgCmapParseResult {
+    let format: Int64
+    let reader: SvgTtfTableReader
+
+    init(format: Int64, reader: SvgTtfTableReader) {
+        this.format = format
+        this.reader = reader
     }
 }
 
@@ -575,6 +638,10 @@ private func appendTtfContour(
     startPoint: Int64,
     endPoint: Int64
 ): Unit {
+    if (startPoint < 0 || endPoint < startPoint || endPoint >= xs.size ||
+        endPoint >= ys.size || endPoint >= flags.size) {
+        throw SvgException("字形轮廓端点越界", kind: SvgErrorKind.Syntax)
+    }
     let count = endPoint - startPoint + 1
     if (count <= 0) {
         return
