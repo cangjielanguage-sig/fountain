@@ -83,13 +83,22 @@ public class SvgGeometry {
         element: SvgElement,
         style!: SvgComputedStyle,
         fonts!: ?SvgFontRegistry = None,
-        styles!: ?SvgComputedStyleTree = None
+        styles!: ?SvgComputedStyleTree = None,
+        viewportWidth!: Float64 = 300.0,
+        viewportHeight!: Float64 = 150.0
     ): ?SvgBounds {
         let base = match (bounds(element, style: style, fonts: fonts)) {
             case Some(box) => box
             case None => return None
         }
-        Some(base.transform(ancestorTransform(element, styles: styles)))
+        Some(base.transform(
+            ancestorTransform(
+                element,
+                styles: styles,
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight
+            )
+        ))
     }
 
     /**
@@ -179,7 +188,9 @@ public class SvgGeometry {
      */
     public static func ctm(
         element: SvgElement,
-        styles!: ?SvgComputedStyleTree = None
+        styles!: ?SvgComputedStyleTree = None,
+        viewportWidth!: ?Float64 = None,
+        viewportHeight!: ?Float64 = None
     ): SvgMatrix {
         let chain = ArrayList<SvgElement>()
         var current: ?SvgElement = Some(element)
@@ -199,7 +210,11 @@ public class SvgGeometry {
             case value: SvgRoot => value
             case _ => return SvgMatrix.identity
         }
-        let viewport = SvgViewport.from(root, 300.0, 150.0)
+        let viewport = SvgViewport.from(
+            root,
+            viewportWidth ?? 300.0,
+            viewportHeight ?? 150.0
+        )
         var width = viewport.width
         var height = viewport.height
         var matrix = SvgMatrix.identity
@@ -226,10 +241,14 @@ public class SvgGeometry {
     }
 
     /** `scale(dpr) × viewport.matrix × ctm(element)`，与渲染器的设备矩阵顺序一致。 */
-    public static func screenCTM(element: SvgElement, viewport: SvgViewportTransform): SvgMatrix {
+    public static func screenCTM(
+        element: SvgElement,
+        viewport: SvgViewportTransform,
+        styles!: ?SvgComputedStyleTree = None
+    ): SvgMatrix {
         SvgMatrix.scale(viewport.devicePixelRatio, viewport.devicePixelRatio)
             .multiply(viewport.matrix)
-            .multiply(ctm(element))
+            .multiply(ctm(element, styles: styles))
     }
 }
 
@@ -948,7 +967,9 @@ private func elementMatrix(
 
 private func ancestorTransform(
     element: SvgElement,
-    styles!: ?SvgComputedStyleTree = None
+    styles!: ?SvgComputedStyleTree = None,
+    viewportWidth!: Float64 = 300.0,
+    viewportHeight!: Float64 = 150.0
 ): SvgMatrix {
     let chain = ArrayList<SvgElement>()
     var current: ?SvgElement = Some(element)
@@ -963,7 +984,9 @@ private func ancestorTransform(
     var matrix = SvgMatrix.identity
     var index = chain.size - 1
     while (index >= 0) {
-        matrix = matrix.multiply(elementMatrix(chain[index], styles, 300.0, 150.0))
+        matrix = matrix.multiply(
+            elementMatrix(chain[index], styles, viewportWidth, viewportHeight)
+        )
         index--
     }
     matrix

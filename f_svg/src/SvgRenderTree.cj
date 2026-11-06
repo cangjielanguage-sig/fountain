@@ -260,9 +260,18 @@ public class SvgRenderTreeBuilder {
         let ratio = options.devicePixelRatio
         let outputWidth = maxInt64(1, ceilSvgPixel(logicalWidth * ratio))
         let outputHeight = maxInt64(1, ceilSvgPixel(logicalHeight * ratio))
+        let rootBounds = SvgBounds(0.0, 0.0, logicalWidth, logicalHeight)
         let matrix = SvgMatrix.scale(ratio, ratio)
             .multiply(viewport.transform(root))
-            .multiply(elementTransformMatrix(root))
+            .multiply(
+                elementTransformMatrix(
+                    root,
+                    style: styles.get(root),
+                    bounds: Some(rootBounds),
+                    viewportWidth: logicalWidth,
+                    viewportHeight: logicalHeight
+                )
+            )
         let commands = ArrayList<SvgDisplayCommand>()
         let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces, this.warnings)
         match (styles.get(root)) {
@@ -432,14 +441,6 @@ public class SvgRenderTreeBuilder {
                 if (style.visibility() == "hidden") {
                     return
                 }
-                let matrix = context.matrix.multiply(
-                    elementTransformMatrix(
-                        text,
-                        style: style,
-                        viewportWidth: context.width,
-                        viewportHeight: context.height
-                    )
-                )
                 let bounds = SvgGeometry.renderBounds(
                     text,
                     style: style,
@@ -447,6 +448,15 @@ public class SvgRenderTreeBuilder {
                     root: Some(context.root),
                     styles: Some(context.styles),
                     layoutCache: this.textLayouts
+                )
+                let matrix = context.matrix.multiply(
+                    elementTransformMatrix(
+                        text,
+                        style: style,
+                        bounds: bounds,
+                        viewportWidth: context.width,
+                        viewportHeight: context.height
+                    )
                 )
                 let clipBounds = SvgGeometry.renderClipBounds(
                     text,
@@ -536,10 +546,24 @@ public class SvgRenderTreeBuilder {
             case Defs | Symbol | Marker | Pattern | ClipPath | Mask => return
             case _ => ()
         }
+        let containerBounds = if (style.transformBox() == SvgTransformBox.FillBox) {
+            svgBBoxOf(
+                container,
+                SvgBBoxRequest(
+                    SvgBBoxOptions(),
+                    context.styles,
+                    viewportWidth: context.width,
+                    viewportHeight: context.height
+                )
+            )
+        } else {
+            Option<SvgBounds>.None
+        }
         let matrix = context.matrix.multiply(
             elementTransformMatrix(
                 container,
                 style: style,
+                bounds: containerBounds,
                 viewportWidth: context.width,
                 viewportHeight: context.height
             )
@@ -619,11 +643,20 @@ public class SvgRenderTreeBuilder {
             throw SvgException("嵌套 svg 深度超过 64", kind: SvgErrorKind.Limit)
         }
         let viewport = SvgViewport.nestedViewport(svg, context.width, context.height)
+        let svgStyle = context.styles.get(svg)
+        let svgBounds = SvgBounds(0.0, 0.0, viewport.width, viewport.height)
+        let svgTransform = elementTransformMatrix(
+            svg,
+            style: svgStyle,
+            bounds: Some(svgBounds),
+            viewportWidth: viewport.width,
+            viewportHeight: viewport.height
+        )
         var matrix = SvgViewport.nestedTransform(context.matrix, svg, context.width, context.height)
-        matrix = matrix.multiply(elementTransformMatrix(svg))
+        matrix = matrix.multiply(svgTransform)
         let originX = lengthOrZero(svg.x)
         let originY = lengthOrZero(svg.y)
-        let clipMatrix = context.matrix.multiply(elementTransformMatrix(svg))
+        let clipMatrix = context.matrix.multiply(svgTransform)
         let clip = transformedRectBounds(
             clipMatrix,
             originX,
@@ -741,7 +774,26 @@ public class SvgRenderTreeBuilder {
                 }
             case _ => ()
         }
-        matrix = matrix.multiply(elementTransformMatrix(target))
+        let targetStyle = context.styles.get(target)
+        let targetBounds = match (svgBBoxOf(target, SvgBBoxRequest(
+            SvgBBoxOptions(),
+            context.styles,
+            viewportWidth: context.width,
+            viewportHeight: context.height,
+            useStack: [targetId]
+        ))) {
+            case Some(value) => Some(value)
+            case None => Option<SvgBounds>.None
+        }
+        matrix = matrix.multiply(
+            elementTransformMatrix(
+                target,
+                style: targetStyle,
+                bounds: targetBounds,
+                viewportWidth: context.width,
+                viewportHeight: context.height
+            )
+        )
         let nextStack = ArrayList<String>()
         for (id in context.useStack) {
             nextStack.add(id)

@@ -325,23 +325,55 @@ public open class SvgElement <: ToString {
         out.toString()
     }
 
-    /** 元素自身用户空间包围盒；定义型或几何无效元素返回 `None`。 */
-    public func getBBox(options!: SvgBBoxOptions = SvgBBoxOptions()): ?SvgBounds {
+    /**
+     * 元素自身用户空间包围盒；定义型或几何无效元素返回 `None`。
+     *
+     * `mediaWidth` / `mediaHeight` 用于与渲染选项一致的 `@media` 与百分比几何求值。
+     */
+    public func getBBox(
+        options!: SvgBBoxOptions = SvgBBoxOptions(),
+        mediaWidth!: ?Float64 = None,
+        mediaHeight!: ?Float64 = None
+    ): ?SvgBounds {
+        let width = mediaWidth ?? 300.0
+        let height = mediaHeight ?? 150.0
         let styles = match (svgRootOf(this)) {
-            case Some(root) => Some(SvgStyleResolver().compute(root))
+            case Some(root) => Some(
+                SvgStyleResolver().compute(root, mediaWidth: width, mediaHeight: height)
+            )
             case None => Option<SvgComputedStyleTree>.None
         }
-        svgBBoxOf(this, options, styles)
+        svgBBoxOf(
+            this,
+            SvgBBoxRequest(
+                options,
+                styles,
+                viewportWidth: width,
+                viewportHeight: height
+            )
+        )
     }
 
     /** 元素到根用户空间的矩阵；未挂载时为单位矩阵。 */
-    public func getCTM(): SvgMatrix {
-        svgElementCtm(this)
+    public func getCTM(
+        mediaWidth!: ?Float64 = None,
+        mediaHeight!: ?Float64 = None
+    ): SvgMatrix {
+        svgElementCtm(this, mediaWidth: mediaWidth, mediaHeight: mediaHeight)
     }
 
     /** 元素到设备空间的矩阵；`viewport` 为空时按根尺寸与 DPR 1 构造。 */
-    public func getScreenCTM(viewport!: ?SvgViewportTransform = None): SvgMatrix {
-        svgElementScreenCtm(this, viewport)
+    public func getScreenCTM(
+        viewport!: ?SvgViewportTransform = None,
+        mediaWidth!: ?Float64 = None,
+        mediaHeight!: ?Float64 = None
+    ): SvgMatrix {
+        svgElementScreenCtm(
+            this,
+            viewport,
+            mediaWidth: mediaWidth,
+            mediaHeight: mediaHeight
+        )
     }
 
     /** 后代中 `class` 含指定词的第一个集合（文档顺序，不含自身）。 */

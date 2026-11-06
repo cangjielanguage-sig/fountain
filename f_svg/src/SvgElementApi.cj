@@ -72,18 +72,64 @@ internal func svgStyleFor(element: SvgElement, styles: ?SvgComputedStyleTree): S
     SvgStyleResolver().computeElement(element, None)
 }
 
+/** `getBBox` 递归所需的只读上下文。 */
+internal class SvgBBoxRequest {
+    let options: SvgBBoxOptions
+    let styles: ?SvgComputedStyleTree
+    let viewportWidth: Float64
+    let viewportHeight: Float64
+    let useStack: Array<String>
+
+    init(
+        options: SvgBBoxOptions,
+        styles: ?SvgComputedStyleTree,
+        viewportWidth!: Float64 = 300.0,
+        viewportHeight!: Float64 = 150.0,
+        useStack!: Array<String> = Array<String>()
+    ) {
+        this.options = options
+        this.styles = styles
+        this.viewportWidth = viewportWidth
+        this.viewportHeight = viewportHeight
+        this.useStack = useStack
+    }
+
+    func withUse(id: String): SvgBBoxRequest {
+        let stack = ArrayList<String>()
+        for (value in this.useStack) {
+            stack.add(value)
+        }
+        stack.add(id)
+        SvgBBoxRequest(
+            this.options,
+            this.styles,
+            viewportWidth: this.viewportWidth,
+            viewportHeight: this.viewportHeight,
+            useStack: stack.toArray()
+        )
+    }
+
+    func containsUse(id: String): Bool {
+        for (value in this.useStack) {
+            if (value == id) {
+                return true
+            }
+        }
+        false
+    }
+}
+
 /** 元素用户空间包围盒；计算样式与字体上下文由调用方提供。 */
-internal func svgBBoxOf(
-    element: SvgElement,
-    options: SvgBBoxOptions,
-    styles: ?SvgComputedStyleTree
-): ?SvgBounds {
+internal func svgBBoxOf(element: SvgElement, request: SvgBBoxRequest): ?SvgBounds {
     match (element.tag) {
-        case "defs" | "symbol" | "marker" | "pattern" | "clipPath" | "mask" | "linearGradient" |
+        case "defs" | "marker" | "pattern" | "clipPath" | "mask" | "linearGradient" |
             "radialGradient" | "filter" | "style" | "stop" => return Option<SvgBounds>.None
         case _ => ()
     }
-    let style = svgStyleFor(element, styles)
+    let style = svgStyleFor(element, request.styles)
+    if (style.display() == "none") {
+        return Option<SvgBounds>.None
+    }
     match (element) {
         case image: SvgImage =>
             let x = lengthOrZero(svgStyledLength(Some(style), "x", image.x))
@@ -95,38 +141,40 @@ internal func svgBBoxOf(
             }
             return Some(SvgBounds(x, y, width, height))
         case use: SvgUse =>
-            return svgUseBBox(use, options, styles)
+            return svgUseBBox(use, request)
         case container: SvgContainer =>
-            return svgContainerBBox(container, options, styles)
+            return svgContainerBBox(container, request)
         case root: SvgRoot =>
-            return svgContainerBBox(root, options, styles)
+            return svgContainerBBox(root, request)
         case _ => ()
     }
-    let base = if (options.stroke) {
-        SvgGeometry.strokeBounds(element, style: style, fonts: options.fonts)
+    if (style.visibility() == "hidden") {
+        return Option<SvgBounds>.None
+    }
+    let base = if (request.options.stroke) {
+        SvgGeometry.strokeBounds(element, style: style, fonts: request.options.fonts)
     } else {
-        SvgGeometry.bounds(element, style: style, fonts: options.fonts)
+        SvgGeometry.bounds(element, style: style, fonts: request.options.fonts)
     }
     match (base) {
-        case Some(box) => Some(applyBBoxClip(element, box, options))
+        case Some(box) => Some(applyBBoxClip(element, box, request))
         case None => Option<SvgBounds>.None
     }
 }
 
 private func svgContainerBBox(
     container: SvgElement,
-    options: SvgBBoxOptions,
-    styles: ?SvgComputedStyleTree
+    request: SvgBBoxRequest
 ): ?SvgBounds {
     var result: ?SvgBounds = None
     for (node in container.children) {
         match (node) {
             case ElementNode(child) =>
-                let childBox = match (svgBBoxOf(child, options, styles)) {
+                let childBox = match (svgBBoxOf(child, request)) {
                     case Some(value) => value
                     case None => continue
                 }
-                let transformed = childBox.transform(svgChildTransform(child))
+                let transformed = childBox.transform(svgChildTransform(child, request, childBox))
                 result = match (result) {
                     case Some(existing) => Some(existing.union(transformed))
                     case None => Some(transformed)
@@ -135,30 +183,34 @@ private func svgContainerBBox(
         }
     }
     match (result) {
-        case Some(box) => Some(applyBBoxClip(container, box, options))
+        case Some(box) => Some(applyBBoxClip(container, box, request))
         case None => Option<SvgBounds>.None
     }
 }
 
 /** 子元素自身的变换（不含祖先），供容器包围盒并集使用。 */
-private func svgChildTransform(element: SvgElement): SvgMatrix {
-    match (element.transform) {
-        case Some(transform) => transform.toMatrix()
-        case None => SvgMatrix.identity
-    }
+private func svgChildTransform(
+    element: SvgElement,
+    request: SvgBBoxRequest,
+    bounds: ?SvgBounds
+): SvgMatrix {
+    let style = svgStyleFor(element, request.styles)
+    effectiveElementTransform(
+        element,
+        style: Some(style),
+        bounds: bounds,
+        viewportWidth: request.viewportWidth,
+        viewportHeight: request.viewportHeight
+    )
 }
 
-private func svgUseBBox(
-    use: SvgUse,
-    options: SvgBBoxOptions,
-    styles: ?SvgComputedStyleTree
-): ?SvgBounds {
+private func svgUseBBox(use: SvgUse, request: SvgBBoxRequest): ?SvgBounds {
     let href = readSvgHref(use)
     let id = match (href) {
         case Some(value) => stripSvgHash(value)
         case None => ""
     }
-    if (id.size == 0) {
+    if (id.size == 0 || request.containsUse(id)) {
         return Option<SvgBounds>.None
     }
     let root = match (svgRootOf(use)) {
@@ -169,10 +221,19 @@ private func svgUseBBox(
         case Some(value) => value
         case None => return Option<SvgBounds>.None
     }
-    let base = match (svgBBoxOf(target, options, styles)) {
-        case Some(value) => value
-        case None => return Option<SvgBounds>.None
+    let nestedRequest = request.withUse(id)
+    let base = if (target.tag == "symbol") {
+        match (svgContainerBBox(target, nestedRequest)) {
+            case Some(value) => value
+            case None => return Option<SvgBounds>.None
+        }
+    } else {
+        match (svgBBoxOf(target, nestedRequest)) {
+            case Some(value) => value
+            case None => return Option<SvgBounds>.None
+        }
     }
+    let targetTransform = svgChildTransform(target, nestedRequest, Some(base))
     let x = match (use.x) {
         case Some(value) => value.value
         case None => 0.0
@@ -181,13 +242,14 @@ private func svgUseBBox(
         case Some(value) => value.value
         case None => 0.0
     }
-    let translated = base.transform(SvgMatrix.translate(x, y))
-    Some(applyBBoxClip(use, translated, options))
+    let translated = base.transform(targetTransform)
+        .transform(SvgMatrix.translate(x, y))
+    Some(applyBBoxClip(use, translated, request))
 }
 
-/** `clipped` 与祖先视口矩形求交；只处理根与非嵌套 svg 视口。 */
-private func applyBBoxClip(element: SvgElement, box: SvgBounds, options: SvgBBoxOptions): SvgBounds {
-    if (!options.clipped) {
+/** `clipped` 与祖先视口矩形求交；嵌套 svg 有 viewBox 时使用 viewBox 尺寸。 */
+private func applyBBoxClip(element: SvgElement, box: SvgBounds, request: SvgBBoxRequest): SvgBounds {
+    if (!request.options.clipped) {
         return box
     }
     var clip: ?SvgBounds = None
@@ -197,8 +259,16 @@ private func applyBBoxClip(element: SvgElement, box: SvgBounds, options: SvgBBox
             case Some(node) =>
                 match (node) {
                     case root: SvgRoot =>
-                        let viewport = SvgViewport.from(root, 300.0, 150.0)
-                        let rect = SvgBounds(0.0, 0.0, viewport.width, viewport.height)
+                        let rect = if (node.parent.isNone()) {
+                            let viewport = SvgViewport.from(
+                                root,
+                                request.viewportWidth,
+                                request.viewportHeight
+                            )
+                            SvgBounds(0.0, 0.0, viewport.width, viewport.height)
+                        } else {
+                            nestedSvgClipRect(root, request)
+                        }
                         clip = match (clip) {
                             case Some(existing) => Some(existing.intersect(rect))
                             case None => Some(rect)
@@ -215,18 +285,47 @@ private func applyBBoxClip(element: SvgElement, box: SvgBounds, options: SvgBBox
     }
 }
 
+private func nestedSvgClipRect(root: SvgRoot, request: SvgBBoxRequest): SvgBounds {
+    match (root.attr("viewBox")) {
+        case Some(text) =>
+            match (tryParseSvgViewBox(text)) {
+                case Some(viewBox) => SvgBounds(0.0, 0.0, viewBox.width, viewBox.height)
+                case None => SvgBounds(0.0, 0.0, request.viewportWidth, request.viewportHeight)
+            }
+        case None =>
+            let viewport = SvgViewport.nestedViewport(root, request.viewportWidth, request.viewportHeight)
+            SvgBounds(0.0, 0.0, viewport.width, viewport.height)
+    }
+}
+
 /** 元素到根用户空间的矩阵（未挂载时为单位矩阵）。 */
-internal func svgElementCtm(element: SvgElement): SvgMatrix {
+internal func svgElementCtm(
+    element: SvgElement,
+    mediaWidth!: ?Float64 = None,
+    mediaHeight!: ?Float64 = None
+): SvgMatrix {
     let root = match (svgRootOf(element)) {
         case Some(value) => value
         case None => return SvgMatrix.identity
     }
-    let tree = SvgStyleResolver().compute(root)
-    SvgGeometry.ctm(element, styles: tree)
+    let width = mediaWidth ?? 300.0
+    let height = mediaHeight ?? 150.0
+    let tree = SvgStyleResolver().compute(root, mediaWidth: width, mediaHeight: height)
+    SvgGeometry.ctm(
+        element,
+        styles: tree,
+        viewportWidth: width,
+        viewportHeight: height
+    )
 }
 
 /** 元素到设备空间的矩阵；`viewport` 为空时按根尺寸与 DPR 1 构造。 */
-internal func svgElementScreenCtm(element: SvgElement, viewport: ?SvgViewportTransform): SvgMatrix {
+internal func svgElementScreenCtm(
+    element: SvgElement,
+    viewport: ?SvgViewportTransform,
+    mediaWidth!: ?Float64 = None,
+    mediaHeight!: ?Float64 = None
+): SvgMatrix {
     let root = match (svgRootOf(element)) {
         case Some(value) => value
         case None => return SvgMatrix.identity
@@ -239,10 +338,17 @@ internal func svgElementScreenCtm(element: SvgElement, viewport: ?SvgViewportTra
                 case _ => SvgViewportTransform(300.0, 150.0, SvgMatrix.identity, 1.0)
             }
     }
-    let tree = SvgStyleResolver().compute(root)
+    let width = mediaWidth ?? transform.width
+    let height = mediaHeight ?? transform.height
+    let tree = SvgStyleResolver().compute(root, mediaWidth: width, mediaHeight: height)
     SvgMatrix.scale(transform.devicePixelRatio, transform.devicePixelRatio)
         .multiply(transform.matrix)
-        .multiply(SvgGeometry.ctm(element, styles: tree))
+        .multiply(SvgGeometry.ctm(
+            element,
+            styles: tree,
+            viewportWidth: width,
+            viewportHeight: height
+        ))
 }
 
 /** 后代元素收集（文档顺序，不含自身）。 */

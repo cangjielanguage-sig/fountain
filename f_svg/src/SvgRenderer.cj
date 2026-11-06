@@ -186,7 +186,10 @@ public class SvgRenderer {
                         frame.matrix,
                         frame.bounds,
                         list.root,
-                        frame.clipQuads
+                        frame.clipQuads,
+                        list.styles,
+                        list.logicalWidth,
+                        list.logicalHeight
                     )
                     let target = if (frames.size > 0) {
                         frames[frames.size - 1].bitmap
@@ -240,7 +243,10 @@ public class SvgRenderer {
                             command.matrix,
                             command.clipBounds,
                             list.root,
-                            command.clipQuads
+                            command.clipQuads,
+                            list.styles,
+                            list.logicalWidth,
+                            list.logicalHeight
                         )
                         SvgGroupCompositor.composite(target, layer, 1.0, mode: command.blendMode)
                     } else {
@@ -588,7 +594,10 @@ public class SvgRenderer {
         matrix: SvgMatrix,
         bounds: ?SvgBounds,
         root: SvgElement,
-        clipQuads: Array<Array<SvgPoint>>
+        clipQuads: Array<Array<SvgPoint>>,
+        styles: ?SvgComputedStyleTree,
+        viewportWidth: Float64,
+        viewportHeight: Float64
     ): Unit {
         match (clipRect) {
             case Some(rect) => clipBitmapToRect(bitmap, rect)
@@ -623,7 +632,10 @@ public class SvgRenderer {
                     units: units,
                     targetBox: targetBox,
                     root: Some(root),
-                    warnings: Some(this.warnings)
+                    warnings: Some(this.warnings),
+                    styles: styles,
+                    viewportWidth: viewportWidth,
+                    viewportHeight: viewportHeight
                 )
                 mask.applyTo(bitmap)
             case None => ()
@@ -646,7 +658,10 @@ public class SvgRenderer {
                     maskContentUnits: contentUnits,
                     targetBox: targetBox,
                     root: Some(root),
-                    warnings: Some(this.warnings)
+                    warnings: Some(this.warnings),
+                    styles: styles,
+                    viewportWidth: viewportWidth,
+                    viewportHeight: viewportHeight
                 )
                 mask.applyTo(bitmap)
             case None => ()

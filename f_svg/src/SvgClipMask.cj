@@ -84,7 +84,10 @@ public class SvgClipPathMasker {
         units!: SvgCoordinateUnits = SvgCoordinateUnits.UserSpaceOnUse,
         targetBox!: SvgBounds = SvgBounds.empty(),
         root!: ?SvgElement = None,
-        warnings!: ?ArrayList<String> = None
+        warnings!: ?ArrayList<String> = None,
+        styles!: ?SvgComputedStyleTree = None,
+        viewportWidth!: Float64 = 300.0,
+        viewportHeight!: Float64 = 150.0
     ): SvgCoverageMask {
         let rootElement = root ?? rootOfSvgElement(clip)
         let warningList = warnings ?? ArrayList<String>()
@@ -99,7 +102,10 @@ public class SvgClipPathMasker {
             rootElement,
             warningList,
             Array<String>(),
-            0
+            0,
+            styles,
+            viewportWidth,
+            viewportHeight
         )
     }
 }
@@ -116,7 +122,10 @@ public class SvgMasker {
         maskContentUnits!: SvgCoordinateUnits = SvgCoordinateUnits.UserSpaceOnUse,
         targetBox!: SvgBounds = SvgBounds.empty(),
         root!: ?SvgElement = None,
-        warnings!: ?ArrayList<String> = None
+        warnings!: ?ArrayList<String> = None,
+        styles!: ?SvgComputedStyleTree = None,
+        viewportWidth!: Float64 = 300.0,
+        viewportHeight!: Float64 = 150.0
     ): SvgCoverageMask {
         let rootElement = root ?? rootOfSvgElement(mask)
         let warningList = warnings ?? ArrayList<String>()
@@ -132,7 +141,10 @@ public class SvgMasker {
             rootElement,
             warningList,
             Array<String>(),
-            0
+            0,
+            styles,
+            viewportWidth,
+            viewportHeight
         )
     }
 }
@@ -210,7 +222,10 @@ private func renderClipCoverage(
     root: ?SvgElement,
     warnings: ArrayList<String>,
     stack: Array<String>,
-    depth: Int64
+    depth: Int64,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
 ): SvgCoverageMask {
     let bitmap = SvgBitmap(width, height)
     var matrix = contentMatrix
@@ -228,7 +243,10 @@ private func renderClipCoverage(
         root,
         warnings,
         stack,
-        depth
+        depth,
+        styles,
+        viewportWidth,
+        viewportHeight
     )
     let coverage = Array<Byte>(width * height, repeat: 0)
     for (index in 0..coverage.size) {
@@ -249,14 +267,29 @@ private func renderMaskCoverage(
     root: ?SvgElement,
     warnings: ArrayList<String>,
     stack: Array<String>,
-    depth: Int64
+    depth: Int64,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
 ): SvgCoverageMask {
     let bitmap = SvgBitmap(width, height)
     var content = contentMatrix
     if (maskContentUnits == SvgCoordinateUnits.ObjectBoundingBox) {
         content = content.multiply(bboxMatrix(targetBox))
     }
-    renderMaskChildren(mask, content, bitmap, samplesPerPixel, root, warnings, stack, depth)
+    renderMaskChildren(
+        mask,
+        content,
+        bitmap,
+        samplesPerPixel,
+        root,
+        warnings,
+        stack,
+        depth,
+        styles,
+        viewportWidth,
+        viewportHeight
+    )
     let region = maskRegion(mask, width, height, contentMatrix, maskUnits, targetBox)
     let alphaType = (mask.attr("mask-type") ?? "luminance").trimAscii().toAsciiLower() == "alpha"
     let coverage = Array<Byte>(width * height, repeat: 0)
@@ -288,15 +321,46 @@ private func renderClipChildren(
     root: ?SvgElement,
     warnings: ArrayList<String>,
     stack: Array<String>,
-    depth: Int64
+    depth: Int64,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
 ): Unit {
     for (node in element.children) {
         match (node) {
             case ElementNode(child) =>
-                let childMatrix = matrix.multiply(elementTransformMatrix(child))
+                let childStyle = match (styles) {
+                    case Some(tree) => tree.get(child)
+                    case None => Option<SvgComputedStyle>.None
+                }
+                let childBounds = match (childStyle) {
+                    case Some(value) => if (value.transformBox() == SvgTransformBox.FillBox) {
+                        svgBBoxOf(
+                            child,
+                            SvgBBoxRequest(
+                                SvgBBoxOptions(),
+                                styles,
+                                viewportWidth: viewportWidth,
+                                viewportHeight: viewportHeight
+                            )
+                        )
+                    } else {
+                        Option<SvgBounds>.None
+                    }
+                    case None => Option<SvgBounds>.None
+                }
+                let childMatrix = matrix.multiply(
+                    effectiveElementTransform(
+                        child,
+                        style: childStyle,
+                        bounds: childBounds,
+                        viewportWidth: viewportWidth,
+                        viewportHeight: viewportHeight
+                    )
+                )
                 let clipId = readEffectId(child.attr("clip-path"))
                 let maskId = readEffectId(child.attr("mask"))
-                let data = elementPathData(child)
+                let data = elementPathData(child, style: childStyle)
                 if (clipId.isNone() && maskId.isNone()) {
                     match (data) {
                         case Some(path) =>
@@ -318,7 +382,10 @@ private func renderClipChildren(
                             root,
                             warnings,
                             stack,
-                            depth
+                            depth,
+                            styles,
+                            viewportWidth,
+                            viewportHeight
                         )
                     }
                     continue
@@ -344,7 +411,10 @@ private func renderClipChildren(
                         root,
                         warnings,
                         stack,
-                        depth
+                        depth,
+                        styles,
+                        viewportWidth,
+                        viewportHeight
                     )
                 }
                 let box = match (data) {
@@ -361,7 +431,10 @@ private func renderClipChildren(
                         root,
                         warnings,
                         stack,
-                        depth
+                        depth,
+                        styles,
+                        viewportWidth,
+                        viewportHeight
                     )
                     case None => ()
                 }
@@ -375,7 +448,10 @@ private func renderClipChildren(
                         root,
                         warnings,
                         stack,
-                        depth
+                        depth,
+                        styles,
+                        viewportWidth,
+                        viewportHeight
                     )
                     case None => ()
                 }
@@ -393,15 +469,46 @@ private func renderMaskChildren(
     root: ?SvgElement,
     warnings: ArrayList<String>,
     stack: Array<String>,
-    depth: Int64
+    depth: Int64,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
 ): Unit {
     for (node in element.children) {
         match (node) {
             case ElementNode(child) =>
-                let childMatrix = matrix.multiply(elementTransformMatrix(child))
+                let childStyle = match (styles) {
+                    case Some(tree) => tree.get(child)
+                    case None => Option<SvgComputedStyle>.None
+                }
+                let childBounds = match (childStyle) {
+                    case Some(value) => if (value.transformBox() == SvgTransformBox.FillBox) {
+                        svgBBoxOf(
+                            child,
+                            SvgBBoxRequest(
+                                SvgBBoxOptions(),
+                                styles,
+                                viewportWidth: viewportWidth,
+                                viewportHeight: viewportHeight
+                            )
+                        )
+                    } else {
+                        Option<SvgBounds>.None
+                    }
+                    case None => Option<SvgBounds>.None
+                }
+                let childMatrix = matrix.multiply(
+                    effectiveElementTransform(
+                        child,
+                        style: childStyle,
+                        bounds: childBounds,
+                        viewportWidth: viewportWidth,
+                        viewportHeight: viewportHeight
+                    )
+                )
                 let clipId = readEffectId(child.attr("clip-path"))
                 let maskId = readEffectId(child.attr("mask"))
-                let data = elementPathData(child)
+                let data = elementPathData(child, style: childStyle)
                 if (clipId.isNone() && maskId.isNone()) {
                     match (data) {
                         case Some(path) => drawMaskPath(child, path, childMatrix, bitmap, samplesPerPixel)
@@ -413,7 +520,10 @@ private func renderMaskChildren(
                             root,
                             warnings,
                             stack,
-                            depth
+                            depth,
+                            styles,
+                            viewportWidth,
+                            viewportHeight
                         )
                     }
                     continue
@@ -429,7 +539,10 @@ private func renderMaskChildren(
                         root,
                         warnings,
                         stack,
-                        depth
+                        depth,
+                        styles,
+                        viewportWidth,
+                        viewportHeight
                     )
                 }
                 let box = match (data) {
@@ -446,7 +559,10 @@ private func renderMaskChildren(
                         root,
                         warnings,
                         stack,
-                        depth
+                        depth,
+                        styles,
+                        viewportWidth,
+                        viewportHeight
                     )
                     case None => ()
                 }
@@ -460,7 +576,10 @@ private func renderMaskChildren(
                         root,
                         warnings,
                         stack,
-                        depth
+                        depth,
+                        styles,
+                        viewportWidth,
+                        viewportHeight
                     )
                     case None => ()
                 }
@@ -511,7 +630,10 @@ private func applyClipReference(
     root: ?SvgElement,
     warnings: ArrayList<String>,
     stack: Array<String>,
-    depth: Int64
+    depth: Int64,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
 ): Unit {
     if (depth >= 64) {
         if (containsSvgStackId(stack, id)) {
@@ -542,7 +664,10 @@ private func applyClipReference(
         root,
         warnings,
         nextStack,
-        depth + 1
+        depth + 1,
+        styles,
+        viewportWidth,
+        viewportHeight
     )
     mask.applyTo(bitmap)
 }
@@ -556,7 +681,10 @@ private func applyMaskReference(
     root: ?SvgElement,
     warnings: ArrayList<String>,
     stack: Array<String>,
-    depth: Int64
+    depth: Int64,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
 ): Unit {
     if (depth >= 64) {
         if (containsSvgStackId(stack, id)) {
@@ -591,7 +719,10 @@ private func applyMaskReference(
         root,
         warnings,
         nextStack,
-        depth + 1
+        depth + 1,
+        styles,
+        viewportWidth,
+        viewportHeight
     )
     mask.applyTo(bitmap)
 }
@@ -643,13 +774,6 @@ private func containsSvgStackId(stack: Array<String>, id: String): Bool {
         }
     }
     false
-}
-
-private func elementTransformMatrix(element: SvgElement): SvgMatrix {
-    match (element.transform) {
-        case Some(transform) => transform.toMatrix()
-        case None => SvgMatrix.identity
-    }
 }
 
 internal func elementPathData(
