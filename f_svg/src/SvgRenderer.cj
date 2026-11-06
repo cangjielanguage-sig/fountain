@@ -260,7 +260,7 @@ public class SvgRenderer {
                     case None => return
                 }
                 let textRenderer = SvgTextRenderer(registry: registry)
-                let layout = textRenderer.outline(text, style: style, root: Some(list.root))
+                let layout = textRenderer.outline(text, style: style, root: Some(list.root), styles: list.styles)
                 for (warning in textRenderer.warnings) {
                     this.warnings.add(warning)
                 }
@@ -279,7 +279,7 @@ public class SvgRenderer {
                 )
                 this.drawFill(bitmap, textCommand, list, style, patterns)
                 this.drawStroke(bitmap, textCommand, list, style, patterns)
-                match (textRenderer.decorationOutline(text, style: style, root: Some(list.root))) {
+                match (textRenderer.decorationOutline(text, style: style, root: Some(list.root), styles: list.styles)) {
                     case Some(decoration) =>
                         let decorationCommand = SvgDisplayCommand(
                             SvgDisplayCommandKind.FillPath,

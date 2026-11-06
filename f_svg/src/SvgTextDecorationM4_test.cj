@@ -115,6 +115,58 @@ public class SvgTextDecorationM4_test {
         @Assert(bounds.getOrThrow().width > 10.0)
     }
 
+    /** 祖先的 `<style>` / 内联 `style` 声明同样向下传播。 */
+    @TestCase
+    public func ancestorStylePropagation(): Unit {
+        let styled = svgDoc(
+            '<style>g { text-decoration: underline }</style>' +
+            '<g><text x="0" y="30" font-family="Hershey" font-size="20" fill="red">A</text></g>',
+            width: 30,
+            height: 40
+        )
+        let styledBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(styled)
+        @Assert(m4InkAt(styledBitmap, 5, 32))
+
+        let inlineStyled = svgDoc(
+            '<g style="text-decoration: underline">' +
+            '<text x="0" y="30" font-family="Hershey" font-size="20" fill="red">A</text></g>',
+            width: 30,
+            height: 40
+        )
+        let inlineBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(inlineStyled)
+        @Assert(m4InkAt(inlineBitmap, 5, 32))
+    }
+
+    /** tspan 内联 style 的 baseline-shift 生效。 */
+    @TestCase
+    public func tspanInlineBaselineShift(): Unit {
+        let document = svgDoc(
+            '<text x="0" y="30" font-family="Hershey" font-size="20" fill="red">' +
+            'A<tspan x="20" style="baseline-shift: super">A</tspan></text>',
+            width: 45,
+            height: 40
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        var firstTop: Int64 = -1
+        var secondTop: Int64 = -1
+        for (y in 0..bitmap.height) {
+            for (x in 0..bitmap.width) {
+                if (m4InkAt(bitmap, x, y)) {
+                    if (x < 20 && firstTop < 0) {
+                        firstTop = y
+                    }
+                    if (x >= 20 && secondTop < 0) {
+                        secondTop = y
+                    }
+                }
+            }
+        }
+        @Assert(firstTop >= 0 && secondTop >= 0)
+        @Assert(secondTop <= firstTop - 5)
+    }
+
     /** 祖先传播与显式 none 关闭。 */
     @TestCase
     public func ancestorPropagation(): Unit {

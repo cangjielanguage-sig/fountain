@@ -180,7 +180,8 @@ public class SvgTextRenderer {
     public func layout(
         text: SvgTextElement,
         style!: SvgComputedStyle,
-        root!: ?SvgElement = None
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
     ): SvgTextLayout {
         let rootState = SvgTextState(
             style.fontSize().value,
@@ -192,7 +193,7 @@ public class SvgTextRenderer {
             dominant: style.dominantBaseline(),
             alignment: SvgAlignmentBaseline.Auto,
             shift: style.baselineShift(),
-            decoration: effectiveTextDecoration(text, style)
+            decoration: effectiveTextDecoration(text, style, styles)
         )
         let chars = ArrayList<SvgTextChar>()
         collectSvgTextChars(
@@ -201,7 +202,8 @@ public class SvgTextRenderer {
             chars,
             this.warnings,
             parentDominant: style.dominantBaseline(),
-            rootLevel: true
+            rootLevel: true,
+            styles: styles
         )
         applyRootTextAttributes(text, chars)
 
@@ -473,9 +475,10 @@ public class SvgTextRenderer {
     public func decorationOutline(
         text: SvgTextElement,
         style!: SvgComputedStyle,
-        root!: ?SvgElement = None
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
     ): ?SvgPathData {
-        let layout = this.layout(text, style: style, root: root)
+        let layout = this.layout(text, style: style, root: root, styles: styles)
         let commands = ArrayList<SvgPathCommand>()
         for (glyph in layout.glyphs) {
             if (glyph.decoration.isNone()) {
@@ -523,9 +526,10 @@ public class SvgTextRenderer {
     public func outline(
         text: SvgTextElement,
         style!: SvgComputedStyle,
-        root!: ?SvgElement = None
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
     ): ?SvgPathData {
-        let layout = this.layout(text, style: style, root: root)
+        let layout = this.layout(text, style: style, root: root, styles: styles)
         let commands = ArrayList<SvgPathCommand>()
         for (glyph in layout.glyphs) {
             match (glyph.path) {
@@ -584,7 +588,11 @@ private func appendDecorationRect(
 }
 
 /** 装饰线传播：最近声明祖先生效，显式 `none` 关闭。 */
-private func effectiveTextDecoration(text: SvgTextElement, style: SvgComputedStyle): SvgTextDecoration {
+private func effectiveTextDecoration(
+    text: SvgTextElement,
+    style: SvgComputedStyle,
+    styles: ?SvgComputedStyleTree
+): SvgTextDecoration {
     if (style.sourceOf("text-decoration") != CssStyleSource.Default) {
         return SvgTextDecoration.tryParse(style.get("text-decoration") ?? "none") ??
             SvgTextDecoration.none
@@ -593,7 +601,20 @@ private func effectiveTextDecoration(text: SvgTextElement, style: SvgComputedSty
     while (true) {
         match (current) {
             case Some(element) =>
-                match (element.attr("text-decoration")) {
+                let declared: ?String = match (styles) {
+                    case Some(tree) =>
+                        match (tree.get(element)) {
+                            case Some(parentStyle) =>
+                                if (parentStyle.sourceOf("text-decoration") != CssStyleSource.Default) {
+                                    Some(parentStyle.get("text-decoration") ?? "none")
+                                } else {
+                                    None
+                                }
+                            case None => None
+                        }
+                    case None => element.attr("text-decoration")
+                }
+                match (declared) {
                     case Some(value) =>
                         return SvgTextDecoration.tryParse(value) ?? SvgTextDecoration.none
                     case None => ()
@@ -657,7 +678,8 @@ private func collectSvgTextChars(
     out: ArrayList<SvgTextChar>,
     warnings: ArrayList<String>,
     parentDominant!: SvgDominantBaseline = SvgDominantBaseline.Auto,
-    rootLevel!: Bool = false
+    rootLevel!: Bool = false,
+    styles!: ?SvgComputedStyleTree = None
 ): Unit {
     for (node in element.children) {
         match (node) {
@@ -675,24 +697,50 @@ private func collectSvgTextChars(
             case ElementNode(child) =>
                 match (child) {
                     case span: SvgTextElement =>
-                        let nextDominant = match (span.attr("dominant-baseline")) {
-                            case Some(text) =>
-                                SvgDominantBaseline.fromName(text) ?? state.dominant
-                            case None => state.dominant
+                        let spanStyle: ?SvgComputedStyle = match (styles) {
+                            case Some(tree) => tree.get(span)
+                            case None => None
                         }
-                        let nextAlignment = match (span.attr("alignment-baseline")) {
-                            case Some(text) =>
-                                SvgAlignmentBaseline.fromName(text) ?? SvgAlignmentBaseline.Auto
-                            case None => SvgAlignmentBaseline.Auto
+                        let nextDominant = match (spanStyle) {
+                            case Some(value) => value.dominantBaseline()
+                            case None =>
+                                match (span.attr("dominant-baseline")) {
+                                    case Some(text) =>
+                                        SvgDominantBaseline.fromName(text) ?? state.dominant
+                                    case None => state.dominant
+                                }
                         }
-                        let nextShift = match (span.attr("baseline-shift")) {
-                            case Some(text) => SvgBaselineShift.fromName(text) ?? state.shift
-                            case None => state.shift
+                        let nextAlignment = match (spanStyle) {
+                            case Some(value) => value.alignmentBaseline()
+                            case None =>
+                                match (span.attr("alignment-baseline")) {
+                                    case Some(text) =>
+                                        SvgAlignmentBaseline.fromName(text) ?? state.alignment
+                                    case None => state.alignment
+                                }
                         }
-                        let nextDecoration = match (span.attr("text-decoration")) {
-                            case Some(text) =>
-                                SvgTextDecoration.tryParse(text) ?? state.decoration
-                            case None => state.decoration
+                        let nextShift = match (spanStyle) {
+                            case Some(value) => value.baselineShift()
+                            case None =>
+                                match (span.attr("baseline-shift")) {
+                                    case Some(text) =>
+                                        SvgBaselineShift.fromName(text) ?? state.shift
+                                    case None => state.shift
+                                }
+                        }
+                        let nextDecoration = match (spanStyle) {
+                            case Some(value) =>
+                                if (value.sourceOf("text-decoration") != CssStyleSource.Default) {
+                                    value.textDecoration()
+                                } else {
+                                    state.decoration
+                                }
+                            case None =>
+                                match (span.attr("text-decoration")) {
+                                    case Some(text) =>
+                                        SvgTextDecoration.tryParse(text) ?? state.decoration
+                                    case None => state.decoration
+                                }
                         }
                         let next = SvgTextState(
                             span.fontSize?.value ?? state.fontSize,
@@ -713,7 +761,8 @@ private func collectSvgTextChars(
                             out,
                             warnings,
                             parentDominant: state.dominant,
-                            rootLevel: false
+                            rootLevel: false,
+                            styles: styles
                         )
                         if (out.size > start) {
                             let first = out[start]

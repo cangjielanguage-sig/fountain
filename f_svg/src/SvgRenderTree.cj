@@ -121,6 +121,8 @@ public class SvgDisplayList {
     public let height: Int64
     public let logicalWidth: Float64
     public let logicalHeight: Float64
+    /** 构建该列表时使用的计算样式树；文本渲染据此读取 tspan / 祖先样式。 */
+    internal let styles: ?SvgComputedStyleTree
 
     internal init(
         commands: Array<SvgDisplayCommand>,
@@ -128,7 +130,8 @@ public class SvgDisplayList {
         width: Int64,
         height: Int64,
         logicalWidth: Float64,
-        logicalHeight: Float64
+        logicalHeight: Float64,
+        styles!: ?SvgComputedStyleTree = None
     ) {
         this.commands = commands
         this.root = root
@@ -136,6 +139,7 @@ public class SvgDisplayList {
         this.height = height
         this.logicalWidth = logicalWidth
         this.logicalHeight = logicalHeight
+        this.styles = styles
     }
 }
 
@@ -234,7 +238,7 @@ public class SvgRenderTreeBuilder {
                 }
             case None => ()
         }
-        SvgDisplayList(commands.toArray(), root, outputWidth, outputHeight, logicalWidth, logicalHeight)
+        SvgDisplayList(commands.toArray(), root, outputWidth, outputHeight, logicalWidth, logicalHeight, styles: Some(styles))
     }
 
     /** 以给定初始矩阵渲染容器子内容（pattern tile 等内部复用）。 */
@@ -272,7 +276,8 @@ public class SvgRenderTreeBuilder {
             width,
             height,
             Float64(width),
-            Float64(height)
+            Float64(height),
+            styles: Some(styles)
         )
     }
 
@@ -309,7 +314,7 @@ public class SvgRenderTreeBuilder {
             options.fonts
         )
         this.walkElement(element, context, commands)
-        SvgDisplayList(commands.toArray(), element, outputWidth, outputHeight, Float64(width), Float64(height))
+        SvgDisplayList(commands.toArray(), element, outputWidth, outputHeight, Float64(width), Float64(height), styles: Some(styles))
     }
 
     private func walkChildren(
