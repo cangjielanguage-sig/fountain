@@ -102,6 +102,41 @@ public class SvgTextDecorationM4_test {
         @Assert(color.blue > 150 && color.red < 60)
     }
 
+    /** 渐变装饰线按字形起点取样：每个字形重新从渐变起点开始。 */
+    @TestCase
+    public func decorationGradientPerGlyph(): Unit {
+        let document = svgDoc(
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0">' +
+            '<stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/>' +
+            '</linearGradient></defs>' +
+            '<text y="30" font-family="Hershey" font-size="20" fill="url(#g)" ' +
+            'text-decoration="underline">AA</text>',
+            width: 40,
+            height: 40
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        // 第一个字形末端应接近渐变终点（蓝）。
+        let firstEnd = bitmap.pixel(13, 32)
+        @Assert(firstEnd.alpha > 0.2)
+        @Assert(firstEnd.blue > 170 && firstEnd.red < 90)
+        // 第二个字形起点重新接近渐变起点（红）。
+        var found = false
+        var redStart = false
+        for (y in 31..35) {
+            for (x in 14..20) {
+                let color = bitmap.pixel(x, y)
+                if (color.alpha > 0.2) {
+                    found = true
+                    if (color.red > 170 && color.blue < 90) {
+                        redStart = true
+                    }
+                }
+            }
+        }
+        @Assert(found)
+        @Assert(redStart)
+    }
+
     /** 同一文本内 tspan 不断开。 */
     @TestCase
     public func tspanContinuity(): Unit {

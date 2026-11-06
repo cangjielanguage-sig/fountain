@@ -56,6 +56,17 @@ public class SvgTextGlyph {
     }
 }
 
+/** 单个字形的装饰线及其包围盒（用于渐变按字形起点取样）。 */
+internal class SvgDecorationRun {
+    let path: SvgPathData
+    let bounds: SvgBounds
+
+    init(path: SvgPathData, bounds: SvgBounds) {
+        this.path = path
+        this.bounds = bounds
+    }
+}
+
 /** 文本布局结果。 */
 public class SvgTextLayout {
     public let glyphs: Array<SvgTextGlyph>
@@ -478,12 +489,36 @@ public class SvgTextRenderer {
         root!: ?SvgElement = None,
         styles!: ?SvgComputedStyleTree = None
     ): ?SvgPathData {
-        let layout = this.layout(text, style: style, root: root, styles: styles)
+        let runs = this.decorationRuns(text, style: style, root: root, styles: styles)
+        if (runs.size == 0) {
+            return None
+        }
         let commands = ArrayList<SvgPathCommand>()
+        for (run in runs) {
+            for (command in run.path.commands) {
+                commands.add(command)
+            }
+        }
+        Some(SvgPathData(commands.toArray()))
+    }
+
+    /**
+     * 按字形切分装饰线。每段携带该字形的包围盒，渐变按字形起点取样，
+     * 而不是按整段文本包围盒。
+     */
+    internal func decorationRuns(
+        text: SvgTextElement,
+        style!: SvgComputedStyle,
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
+    ): ArrayList<SvgDecorationRun> {
+        let layout = this.layout(text, style: style, root: root, styles: styles)
+        let runs = ArrayList<SvgDecorationRun>()
         for (glyph in layout.glyphs) {
             if (glyph.decoration.isNone()) {
                 continue
             }
+            let commands = ArrayList<SvgPathCommand>()
             let matrix = SvgMatrix.translate(glyph.x, glyph.y)
                 .multiply(SvgMatrix.rotate(glyph.angle))
             let thickness = SvgTextDecorationGeometry.thickness(glyph.fontSize)
@@ -514,12 +549,14 @@ public class SvgTextRenderer {
                     thickness
                 )
             }
+            if (commands.size == 0) {
+                continue
+            }
+            let path = SvgPathData(commands.toArray())
+            let bounds = pathDataBounds(path) ?? SvgBounds(glyph.x, glyph.y, glyph.advance, thickness)
+            runs.add(SvgDecorationRun(path, bounds))
         }
-        if (commands.size == 0) {
-            None
-        } else {
-            Some(SvgPathData(commands.toArray()))
-        }
+        runs
     }
 
     /** 合并所有字形路径，供光栅器与形状共用填充 / 描边 / 渐变管线。 */

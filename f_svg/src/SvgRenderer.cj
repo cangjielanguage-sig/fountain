@@ -279,19 +279,47 @@ public class SvgRenderer {
                 )
                 this.drawFill(bitmap, textCommand, list, style, patterns)
                 this.drawStroke(bitmap, textCommand, list, style, patterns)
-                match (textRenderer.decorationOutline(text, style: style, root: Some(list.root), styles: list.styles)) {
-                    case Some(decoration) =>
+                // 纯色装饰线合并为一条路径，避免逐字形填充在接缝处二次混色；
+                // 渐变 / 图案按字形切分，使取样原点回到每个字形起点。
+                if (style.fill().kind == SvgPaintKind.Reference) {
+                    let decorationRuns = textRenderer.decorationRuns(
+                        text,
+                        style: style,
+                        root: Some(list.root),
+                        styles: list.styles
+                    )
+                    for (run in decorationRuns) {
                         let decorationCommand = SvgDisplayCommand(
                             SvgDisplayCommandKind.FillPath,
                             command.tag,
                             command.matrix,
-                            path: Some(decoration),
+                            path: Some(run.path),
                             style: Some(style),
-                            bounds: command.bounds,
+                            bounds: Some(run.bounds),
                             opacity: command.opacity
                         )
                         this.drawFill(bitmap, decorationCommand, list, style, patterns)
-                    case None => ()
+                    }
+                } else {
+                    match (textRenderer.decorationOutline(
+                        text,
+                        style: style,
+                        root: Some(list.root),
+                        styles: list.styles
+                    )) {
+                        case Some(decoration) =>
+                            let decorationCommand = SvgDisplayCommand(
+                                SvgDisplayCommandKind.FillPath,
+                                command.tag,
+                                command.matrix,
+                                path: Some(decoration),
+                                style: Some(style),
+                                bounds: command.bounds,
+                                opacity: command.opacity
+                            )
+                            this.drawFill(bitmap, decorationCommand, list, style, patterns)
+                        case None => ()
+                    }
                 }
             case Image =>
                 let box = match (command.bounds) {
