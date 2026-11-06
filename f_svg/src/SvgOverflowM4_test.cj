@@ -110,6 +110,37 @@ public class SvgOverflowM4_test {
         @Assert(!m4OpaqueRed(bitmap, 10, 10))
     }
 
+    /** 旋转视口按四边形裁剪，AABB 角部不得放行。 */
+    @TestCase
+    public func rotatedNestedSvgClip(): Unit {
+        let document = svgDoc(
+            '<svg x="10" y="10" width="40" height="40" transform="rotate(45 30 30)" ' +
+            'viewBox="0 0 40 40"><rect x="-10" y="-10" width="60" height="60" fill="red"/></svg>',
+            width: 60,
+            height: 60
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 30, 30))
+        @Assert(!m4OpaqueRed(bitmap, 12, 12))
+        @Assert(!m4OpaqueRed(bitmap, 48, 48))
+    }
+
+    /** 旋转 marker 视口按四边形裁剪，且不放宽一个像素。 */
+    @TestCase
+    public func rotatedMarkerClip(): Unit {
+        let document = svgDoc(
+            '<marker id="m" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="45">' +
+            '<rect x="-10" y="-10" width="30" height="30" fill="red"/></marker>' +
+            '<line x1="30" y1="30" x2="40" y2="30" stroke="black" marker-start="url(#m)"/>',
+            width: 60,
+            height: 60
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 30, 30))
+        @Assert(!m4OpaqueRed(bitmap, 24, 24))
+        @Assert(!m4OpaqueRed(bitmap, 36, 36))
+    }
+
     /** pattern overflow="visible" 不向相邻 tile 扩展。 */
     @TestCase
     public func patternTileBoundary(): Unit {

@@ -28,6 +28,7 @@ private class SvgRenderFrame {
     let bounds: ?SvgBounds
     let filter: ?SvgElement
     let clip: ?SvgClipRect
+    let clipQuads: Array<Array<SvgPoint>>
 
     init(
         bitmap: SvgBitmap,
@@ -38,7 +39,8 @@ private class SvgRenderFrame {
         matrix: SvgMatrix,
         bounds: ?SvgBounds,
         filter: ?SvgElement,
-        clip: ?SvgClipRect
+        clip: ?SvgClipRect,
+        clipQuads: Array<Array<SvgPoint>>
     ) {
         this.bitmap = bitmap
         this.opacity = opacity
@@ -49,6 +51,7 @@ private class SvgRenderFrame {
         this.bounds = bounds
         this.filter = filter
         this.clip = clip
+        this.clipQuads = clipQuads
     }
 }
 
@@ -142,7 +145,8 @@ public class SvgRenderer {
                             command.matrix,
                             command.bounds,
                             command.filter,
-                            command.clip
+                            command.clip,
+                            command.clipQuads
                         )
                     )
                 case GroupEnd =>
@@ -174,7 +178,8 @@ public class SvgRenderer {
                         frame.mask,
                         frame.matrix,
                         frame.bounds,
-                        list.root
+                        list.root,
+                        frame.clipQuads
                     )
                     let target = if (frames.size > 0) {
                         frames[frames.size - 1].bitmap
@@ -193,7 +198,8 @@ public class SvgRenderer {
                         case None => false
                     }
                     let needsLayer = clipRectEffective || command.clipPath.isSome() ||
-                        command.mask.isSome() || command.filter.isSome() || command.clip.isSome()
+                        command.mask.isSome() || command.filter.isSome() || command.clip.isSome() ||
+                        command.clipQuads.size > 0
                     if (needsLayer) {
                         var layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
                         this.renderCommand(layer, command, list, registry, images, patterns)
@@ -220,7 +226,8 @@ public class SvgRenderer {
                             command.mask,
                             command.matrix,
                             command.bounds,
-                            list.root
+                            list.root,
+                            command.clipQuads
                         )
                         SvgGroupCompositor.composite(target, layer, 1.0)
                     } else {
@@ -560,11 +567,15 @@ public class SvgRenderer {
         maskElement: ?SvgElement,
         matrix: SvgMatrix,
         bounds: ?SvgBounds,
-        root: SvgElement
+        root: SvgElement,
+        clipQuads: Array<Array<SvgPoint>>
     ): Unit {
         match (clipRect) {
             case Some(rect) => clipBitmapToRect(bitmap, rect)
             case None => ()
+        }
+        for (quad in clipQuads) {
+            applyQuadCoverage(bitmap, quad, this.options)
         }
         match (clip) {
             case Some(rect) =>
@@ -673,6 +684,46 @@ private func clipRectCoversCommand(command: SvgDisplayCommand, rect: SvgBounds):
     left - margin >= rect.x - 1.0e-6 && top - margin >= rect.y - 1.0e-6 &&
         right + margin <= rect.x + rect.width + 1.0e-6 &&
         bottom + margin <= rect.y + rect.height + 1.0e-6
+}
+
+/** 用设备空间四边形生成覆盖率蒙版并乘到已绘制内容上。 */
+private func applyQuadCoverage(
+    bitmap: SvgBitmap,
+    quad: Array<SvgPoint>,
+    options: SvgRenderOptions
+): Unit {
+    if (quad.size < 3) {
+        return
+    }
+    let commands = ArrayList<SvgPathCommand>()
+    commands.add(
+        SvgPathCommand(SvgPathCommandKind.MoveTo, false, [quad[0].x, quad[0].y])
+    )
+    var index = 1
+    while (index < quad.size) {
+        commands.add(
+            SvgPathCommand(SvgPathCommandKind.LineTo, false, [quad[index].x, quad[index].y])
+        )
+        index++
+    }
+    commands.add(SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>()))
+    let maskBitmap = SvgBitmap(bitmap.width, bitmap.height)
+    SvgRasterizer(
+        maskBitmap,
+        samplesPerPixel: options.samplesPerPixel,
+        antiAlias: options.antiAlias
+    ).fill(
+        SvgPathData(commands.toArray()),
+        color: SvgColor.Black,
+        fillRule: SvgFillRule.Nonzero
+    )
+    let coverage = Array<Byte>(bitmap.width * bitmap.height, repeat: 0)
+    var pixel = 0
+    while (pixel < coverage.size) {
+        coverage[pixel] = maskBitmap.pixels[pixel * 4 + 3]
+        pixel++
+    }
+    SvgCoverageMask(bitmap.width, bitmap.height, coverage).applyTo(bitmap)
 }
 
 private func clipBitmapToRect(bitmap: SvgBitmap, rect: SvgBounds): Unit {

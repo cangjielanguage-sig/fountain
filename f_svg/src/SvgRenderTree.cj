@@ -75,6 +75,8 @@ public class SvgDisplayCommand {
     public let clip: ?SvgClipRect
     /** 描边是否按设备空间计算（`vector-effect: non-scaling-stroke`）。 */
     public let nonScalingStroke: Bool
+    /** 旋转视口 / marker 的设备空间四边形裁剪（按顺序相乘）。 */
+    public let clipQuads: Array<Array<SvgPoint>>
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -92,7 +94,8 @@ public class SvgDisplayCommand {
         aspect!: ?SvgPreserveAspectRatio = None,
         filter!: ?SvgElement = None,
         clip!: ?SvgClipRect = None,
-        nonScalingStroke!: Bool = false
+        nonScalingStroke!: Bool = false,
+        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>()
     ) {
         this.kind = kind
         this.tag = tag
@@ -110,6 +113,7 @@ public class SvgDisplayCommand {
         this.filter = filter
         this.clip = clip
         this.nonScalingStroke = nonScalingStroke
+        this.clipQuads = clipQuads
     }
 }
 
@@ -153,6 +157,7 @@ private class SvgRenderTreeContext {
     let depth: Int64
     let useStack: Array<String>
     let fonts: ?SvgFontRegistry
+    let clipQuads: Array<Array<SvgPoint>>
 
     init(
         matrix: SvgMatrix,
@@ -163,7 +168,8 @@ private class SvgRenderTreeContext {
         root: SvgElement,
         depth: Int64,
         useStack: Array<String>,
-        fonts: ?SvgFontRegistry
+        fonts: ?SvgFontRegistry,
+        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>()
     ) {
         this.matrix = matrix
         this.width = width
@@ -174,6 +180,7 @@ private class SvgRenderTreeContext {
         this.depth = depth
         this.useStack = useStack
         this.fonts = fonts
+        this.clipQuads = clipQuads
     }
 }
 
@@ -232,7 +239,8 @@ public class SvgRenderTreeBuilder {
                         root,
                         0,
                         Array<String>(),
-                        options.fonts
+                        options.fonts,
+                        clipQuads: Array<Array<SvgPoint>>()
                     )
                     this.walkChildren(root, context, commands)
                 }
@@ -249,7 +257,8 @@ public class SvgRenderTreeBuilder {
         matrix: SvgMatrix,
         fonts: ?SvgFontRegistry,
         root!: ?SvgElement = None,
-        clipRect!: ?SvgBounds = None
+        clipRect!: ?SvgBounds = None,
+        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>()
     ): SvgDisplayList {
         this.ensureGuard()
         let resolver = SvgStyleResolver()
@@ -267,7 +276,8 @@ public class SvgRenderTreeBuilder {
             root ?? container,
             0,
             Array<String>(),
-            fonts
+            fonts,
+            clipQuads: clipQuads
         )
         this.walkChildren(container, context, commands)
         SvgDisplayList(
@@ -311,7 +321,8 @@ public class SvgRenderTreeBuilder {
             element,
             0,
             Array<String>(),
-            options.fonts
+            options.fonts,
+            clipQuads: Array<Array<SvgPoint>>()
         )
         this.walkElement(element, context, commands)
         SvgDisplayList(commands.toArray(), element, outputWidth, outputHeight, Float64(width), Float64(height), styles: Some(styles))
@@ -381,7 +392,8 @@ public class SvgRenderTreeBuilder {
                         context.clipRect,
                         filterElement,
                         bounds,
-                        clip
+                        clip,
+                        context.clipQuads
                     )
                 }
                 commands.add(
@@ -397,7 +409,8 @@ public class SvgRenderTreeBuilder {
                         mask: if (filterElement.isSome()) { None } else { maskElement },
                         clipRect: if (filterElement.isSome()) { None } else { context.clipRect },
                         filter: None,
-                        clip: if (filterElement.isSome()) { None } else { clip }
+                        clip: if (filterElement.isSome()) { None } else { clip },
+                        clipQuads: context.clipQuads
                     )
                 )
                 if (filterElement.isSome()) {
@@ -440,7 +453,8 @@ public class SvgRenderTreeBuilder {
             context.root,
             context.depth,
             context.useStack,
-            context.fonts
+            context.fonts,
+            clipQuads: context.clipQuads
         )
         let childCommands = ArrayList<SvgDisplayCommand>()
         if (container.kind == SvgContainerKind.Switch) {
@@ -468,7 +482,8 @@ public class SvgRenderTreeBuilder {
                     clipRect: context.clipRect,
                     bounds: groupBounds,
                     filter: filterElement,
-                    clip: clip
+                    clip: clip,
+                    clipQuads: context.clipQuads
                 )
             )
         }
@@ -495,8 +510,9 @@ public class SvgRenderTreeBuilder {
         matrix = matrix.multiply(elementTransformMatrix(svg))
         let originX = lengthOrZero(svg.x)
         let originY = lengthOrZero(svg.y)
+        let clipMatrix = context.matrix.multiply(elementTransformMatrix(svg))
         let clip = transformedRectBounds(
-            context.matrix,
+            clipMatrix,
             originX,
             originY,
             viewport.width,
@@ -511,6 +527,13 @@ public class SvgRenderTreeBuilder {
             case None => false
         }
         let childClip = if (overflowVisible) { context.clipRect } else { Some(combinedClip) }
+        var childQuads = context.clipQuads
+        if (!overflowVisible && !isAxisAlignedMatrix(clipMatrix)) {
+            childQuads = appendSvgQuad(
+                childQuads,
+                transformedRectQuad(clipMatrix, originX, originY, viewport.width, viewport.height)
+            )
+        }
         let childContext = SvgRenderTreeContext(
             matrix,
             viewport.width,
@@ -520,7 +543,8 @@ public class SvgRenderTreeBuilder {
             context.root,
             context.depth + 1,
             context.useStack,
-            context.fonts
+            context.fonts,
+            clipQuads: childQuads
         )
         this.walkChildren(svg, childContext, commands)
     }
@@ -556,6 +580,7 @@ public class SvgRenderTreeBuilder {
         let y = lengthOrZero(use.y)
         var matrix = context.matrix.multiply(SvgMatrix.translate(x, y))
         var clipRect = context.clipRect
+        var childQuads = context.clipQuads
         match (target) {
             case container: SvgContainer =>
                 if (container.kind == SvgContainerKind.Symbol) {
@@ -591,6 +616,12 @@ public class SvgRenderTreeBuilder {
                             case Some(existing) => existing.intersect(symbolClip)
                             case None => symbolClip
                         })
+                        if (!isAxisAlignedMatrix(matrix)) {
+                            childQuads = appendSvgQuad(
+                                childQuads,
+                                transformedRectQuad(matrix, 0.0, 0.0, width, height)
+                            )
+                        }
                     }
                 }
             case _ => ()
@@ -610,7 +641,8 @@ public class SvgRenderTreeBuilder {
             context.root,
             context.depth + 1,
             nextStack.toArray(),
-            context.fonts
+            context.fonts,
+            clipQuads: childQuads
         )
         if (target.tag == "symbol") {
             this.walkChildren(target, childContext, commands)
@@ -650,7 +682,8 @@ public class SvgRenderTreeBuilder {
                 context.clipRect,
                 filterElement,
                 bounds,
-                clip
+                clip,
+                context.clipQuads
             )
         }
         let fill = style.fill()
@@ -668,7 +701,8 @@ public class SvgRenderTreeBuilder {
                     mask: if (filtered) { None } else { maskElement },
                     clipRect: if (filtered) { None } else { context.clipRect },
                     filter: None,
-                    clip: if (filtered) { None } else { clip }
+                    clip: if (filtered) { None } else { clip },
+                    clipQuads: context.clipQuads
                 )
             )
         }
@@ -688,7 +722,8 @@ public class SvgRenderTreeBuilder {
                     clipRect: if (filtered) { None } else { context.clipRect },
                     filter: None,
                     clip: if (filtered) { None } else { clip },
-                    nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke
+                    nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke,
+                    clipQuads: context.clipQuads
                 )
             )
         }
@@ -708,7 +743,8 @@ public class SvgRenderTreeBuilder {
         clipRect: ?SvgBounds,
         filter: ?SvgElement,
         bounds: ?SvgBounds,
-        clip: ?SvgClipRect
+        clip: ?SvgClipRect,
+        clipQuads: Array<Array<SvgPoint>>
     ): Unit {
         commands.add(
             SvgDisplayCommand(
@@ -721,7 +757,8 @@ public class SvgRenderTreeBuilder {
                 clipRect: clipRect,
                 bounds: bounds,
                 filter: filter,
-                clip: clip
+                clip: clip,
+                clipQuads: clipQuads
             )
         )
     }
@@ -760,22 +797,45 @@ public class SvgRenderTreeBuilder {
                 case Some(style) => !style.overflowMode().clips()
                 case None => false
             }
-            let markerClip: ?SvgBounds = if (overflowVisible) {
+            let viewportMatrix = base.multiply(instance.viewportMatrix)
+                .multiply(
+                    SvgMatrix.translate(
+                        -(instance.marker.refX ?? SvgLength(0.0)).value,
+                        -(instance.marker.refY ?? SvgLength(0.0)).value
+                    )
+                )
+            let contentFits = markerContentFits(
+                instance.marker,
+                instance.viewportWidth,
+                instance.viewportHeight
+            )
+            let markerClip: ?SvgBounds = if (overflowVisible || contentFits) {
                 None
             } else {
-                let viewport = base.multiply(instance.viewportMatrix)
-                    .multiply(SvgMatrix.translate(-(instance.marker.refX ?? SvgLength(0.0)).value, -(instance.marker.refY ?? SvgLength(0.0)).value))
                 let clip = transformedRectBounds(
-                    viewport,
+                    viewportMatrix,
                     0.0,
                     0.0,
                     instance.viewportWidth,
                     instance.viewportHeight
-                ).inflate(1.0)
+                )
                 Some(match (context.clipRect) {
                     case Some(existing) => existing.intersect(clip)
                     case None => clip
                 })
+            }
+            var markerQuads = context.clipQuads
+            if (!overflowVisible && !contentFits && !isAxisAlignedMatrix(viewportMatrix)) {
+                markerQuads = appendSvgQuad(
+                    markerQuads,
+                    transformedRectQuad(
+                        viewportMatrix,
+                        0.0,
+                        0.0,
+                        instance.viewportWidth,
+                        instance.viewportHeight
+                    )
+                )
             }
             try {
                 let list = this.buildContent(
@@ -785,7 +845,8 @@ public class SvgRenderTreeBuilder {
                     base.multiply(instance.matrix),
                     context.fonts,
                     root: Some(context.root),
-                    clipRect: markerClip
+                    clipRect: markerClip,
+                    clipQuads: markerQuads
                 )
                 for (command in list.commands) {
                     expanded.add(command)
@@ -835,7 +896,8 @@ public class SvgRenderTreeBuilder {
                 context.clipRect,
                 filterElement,
                 Some(box),
-                clip
+                clip,
+                context.clipQuads
             )
         }
         commands.add(
@@ -852,7 +914,8 @@ public class SvgRenderTreeBuilder {
                 href: image.href,
                 aspect: image.preserveAspectRatio,
                 filter: None,
-                clip: if (filtered) { None } else { clip }
+                clip: if (filtered) { None } else { clip },
+                clipQuads: context.clipQuads
             )
         )
         if (filtered) {
@@ -943,6 +1006,102 @@ private func transformedRectBounds(
     let minimumY = min(min(c0.y, c1.y), min(c2.y, c3.y))
     let maximumY = max(max(c0.y, c1.y), max(c2.y, c3.y))
     SvgBounds(minimumX, minimumY, maximumX - minimumX, maximumY - minimumY)
+}
+
+/** marker 内容是否全部落在 viewport 内；用于避免对无需裁剪的内容加蒙版。 */
+private func markerContentFits(
+    marker: SvgElement,
+    width: Float64,
+    height: Float64
+): Bool {
+    markerContentFitsIn(marker, SvgMatrix.identity, width, height)
+}
+
+private func markerContentFitsIn(
+    element: SvgElement,
+    matrix: SvgMatrix,
+    width: Float64,
+    height: Float64
+): Bool {
+    for (node in element.children) {
+        match (node) {
+            case ElementNode(child) =>
+                if (child.tag == "title" || child.tag == "desc" || child.tag == "metadata") {
+                    continue
+                }
+                let childMatrix = matrix.multiply(elementTransformMatrix(child))
+                match (child) {
+                    case shape: SvgShape =>
+                        if (child.attr("filter").isSome() || child.attr("clip-path").isSome() ||
+                            child.attr("mask").isSome()) {
+                            return false
+                        }
+                        let stroke = child.attr("stroke")
+                        if (stroke.isSome() &&
+                            stroke.getOrThrow().trimAscii().toAsciiLower() != "none") {
+                            return false
+                        }
+                        let path = match (elementPathData(shape)) {
+                            case Some(value) => value
+                            case None => return false
+                        }
+                        let box = match (pathDataBounds(path)) {
+                            case Some(value) => value
+                            case None => return false
+                        }
+                        let corners: Array<SvgPoint> = [
+                            childMatrix.apply(SvgPoint(box.x, box.y)),
+                            childMatrix.apply(SvgPoint(box.x + box.width, box.y)),
+                            childMatrix.apply(SvgPoint(box.x + box.width, box.y + box.height)),
+                            childMatrix.apply(SvgPoint(box.x, box.y + box.height))
+                        ]
+                        for (point in corners) {
+                            if (point.x < -1.0e-6 || point.y < -1.0e-6 ||
+                                point.x > width + 1.0e-6 || point.y > height + 1.0e-6) {
+                                return false
+                            }
+                        }
+                    case container: SvgContainer =>
+                        if (!markerContentFitsIn(container, childMatrix, width, height)) {
+                            return false
+                        }
+                    case _ => return false
+                }
+            case _ => ()
+        }
+    }
+    true
+}
+
+private func transformedRectQuad(
+    matrix: SvgMatrix,
+    x: Float64,
+    y: Float64,
+    width: Float64,
+    height: Float64
+): Array<SvgPoint> {
+    [
+        matrix.apply(SvgPoint(x, y)),
+        matrix.apply(SvgPoint(x + width, y)),
+        matrix.apply(SvgPoint(x + width, y + height)),
+        matrix.apply(SvgPoint(x, y + height))
+    ]
+}
+
+private func isAxisAlignedMatrix(matrix: SvgMatrix): Bool {
+    abs(matrix.b) < 1.0e-9 && abs(matrix.c) < 1.0e-9
+}
+
+private func appendSvgQuad(
+    quads: Array<Array<SvgPoint>>,
+    quad: Array<SvgPoint>
+): Array<Array<SvgPoint>> {
+    let result = ArrayList<Array<SvgPoint>>()
+    for (value in quads) {
+        result.add(value)
+    }
+    result.add(quad)
+    result.toArray()
 }
 
 private func maxInt64(first: Int64, second: Int64): Int64 {    if (first > second) { first } else { second }
