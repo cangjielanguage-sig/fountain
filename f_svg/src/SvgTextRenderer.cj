@@ -357,6 +357,8 @@ public class SvgTextRenderer {
                 case SvgTextAnchor.End => -verticalTotal
             }
         }
+        var glyphScaleX = scaleX
+        var pathScaleX = scaleX
         match (textPathElement) {
             case Some(pathElement) =>
                 match (resolveTextPathData(pathElement, root)) {
@@ -391,6 +393,10 @@ public class SvgTextRenderer {
                         for (index in 0..count) {
                             dxOffsets[index] = chars[index].dx
                         }
+                        let letterSpacings = Array<Float64>(count, repeat: 0.0)
+                        for (index in 0..count) {
+                            letterSpacings[index] = chars[index].letterSpacing
+                        }
                         let placed = pathLayout.place(
                             advanceArray,
                             pathData,
@@ -400,8 +406,11 @@ public class SvgTextRenderer {
                             method: methodValue,
                             spacing: spacingValue,
                             sideOffsets: sideOffsets,
-                            dxOffsets: dxOffsets
+                            dxOffsets: dxOffsets,
+                            letterSpacings: letterSpacings
                         )
+                        glyphScaleX = scaleX * pathLayout.stretchScale
+                        pathScaleX = glyphScaleX
                         for (warning in pathLayout.warnings) {
                             this.warnings.add("${location} textPath：${warning}")
                         }
@@ -427,9 +436,9 @@ public class SvgTextRenderer {
         for (index in 0..count) {
             let char = chars[index]
             var path = paths[index]
-            if (scaleX != 1.0) {
+            if (pathScaleX != 1.0) {
                 path = match (path) {
-                    case Some(value) => Some(scalePathX(value, scaleX))
+                    case Some(value) => Some(scalePathX(value, pathScaleX))
                     case None => None
                 }
             }
@@ -457,7 +466,7 @@ public class SvgTextRenderer {
                     char.codePoint,
                     x,
                     y,
-                    advances[index] * scaleX,
+                    advances[index] * glyphScaleX,
                     char.fontSize,
                     path,
                     angle: angle,

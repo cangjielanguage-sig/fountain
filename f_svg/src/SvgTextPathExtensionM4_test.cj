@@ -130,6 +130,56 @@ public class SvgTextPathExtensionM4_test {
         @Assert(near(auto[0].originX, 0.0))
     }
 
+    /** method="stretch" 同时缩放字形宽度，与 spacingAndGlyphs 一致。 */
+    @TestCase
+    public func stretchScalesGlyphWidth(): Unit {
+        let makePathText = { method: String =>
+            let text = SvgText()
+            text.fontFamily = "Hershey"
+            text.fontSize = SvgLength(20.0)
+            let path = SvgTextPath()
+            path.setAttr("path", "M0 0 L100 0")
+            path.setAttr("method", method)
+            path.appendText("AB")
+            text.appendElement(path)
+            SvgTextRenderer().layout(text, style: textStyleOf(text))
+        }
+        let aligned = makePathText("align")
+        let stretched = makePathText("stretch")
+        @Assert(aligned.glyphs.size == 2 && stretched.glyphs.size == 2)
+        let alignedWidth = pathDataBounds(aligned.glyphs[0].path.getOrThrow()).getOrThrow().width
+        let stretchedWidth = pathDataBounds(stretched.glyphs[0].path.getOrThrow()).getOrThrow().width
+        @Assert(stretchedWidth > alignedWidth * 2.0)
+        @Assert(near(stretched.glyphs[1].x, 50.0))
+    }
+
+    /** spacing="exact" 计入 letter-spacing；缺省时等同 auto。 */
+    @TestCase
+    public func exactSpacingUsesLetterSpacing(): Unit {
+        let makeText = { spacing: ?String, letterSpacing: ?Float64 =>
+            let text = SvgText()
+            text.fontFamily = "Hershey"
+            text.fontSize = SvgLength(20.0)
+            if (letterSpacing.isSome()) {
+                text.letterSpacing = SvgLength(letterSpacing.getOrThrow())
+            }
+            let path = SvgTextPath()
+            path.setAttr("path", "M0 0 L100 0")
+            if (spacing.isSome()) {
+                path.setAttr("spacing", spacing.getOrThrow())
+            }
+            path.appendText("AB")
+            text.appendElement(path)
+            SvgTextRenderer().layout(text, style: textStyleOf(text))
+        }
+        let auto = makeText(None, None)
+        let exact = makeText(Some("exact"), None)
+        @Assert(near(auto.glyphs[1].x, exact.glyphs[1].x))
+
+        let spaced = makeText(Some("exact"), Some(5.0))
+        @Assert(near(spaced.glyphs[1].x, exact.glyphs[1].x + 5.0))
+    }
+
     /** 缺省行为与 M3 落位一致。 */
     @TestCase
     public func defaultsMatchM3(): Unit {

@@ -55,6 +55,8 @@ public class SvgTextPathLayout {
     public let warnings = ArrayList<String>()
     /** 路径本身无命令或总弧长 ≤ 0；用于区分“空路径”与“有效路径但无可放置字形”。 */
     internal var pathEmpty: Bool = false
+    /** `method="stretch"` 的 advance / 字形宽度缩放系数；其它模式为 1。 */
+    internal var stretchScale: Float64 = 1.0
 
     public func place(
         advances: Array<Float64>,
@@ -65,9 +67,11 @@ public class SvgTextPathLayout {
         method!: SvgTextPathMethod = SvgTextPathMethod.Align,
         spacing!: SvgTextPathSpacing = SvgTextPathSpacing.Auto,
         sideOffsets!: Array<Float64> = Array<Float64>(),
-        dxOffsets!: Array<Float64> = Array<Float64>()
+        dxOffsets!: Array<Float64> = Array<Float64>(),
+        letterSpacings!: Array<Float64> = Array<Float64>()
     ): Array<SvgTextPlacement> {
         this.pathEmpty = false
+        this.stretchScale = 1.0
         let segments = SvgPathMeasure.buildSegments(path, 0.25, refine: false)
         var total: Float64 = 0.0
         if (segments.size > 0) {
@@ -93,6 +97,7 @@ public class SvgTextPathLayout {
                 adjusted[index] = adjusted[index] * factor
             }
             textAdvance = total
+            this.stretchScale = factor
         }
         var start = if (startOffset.unit == SvgLengthUnit.Percent) {
             startOffset.value / 100.0 * total
@@ -119,8 +124,13 @@ public class SvgTextPathLayout {
         var index: Int64 = 0
         while (index < adjusted.size) {
             let advance = adjusted[index]
-            if (spacing == SvgTextPathSpacing.Exact && index < dxOffsets.size) {
-                cursor += dxOffsets[index]
+            if (spacing == SvgTextPathSpacing.Exact) {
+                if (index < dxOffsets.size) {
+                    cursor += dxOffsets[index]
+                }
+                if (index > 0 && index - 1 < letterSpacings.size) {
+                    cursor += letterSpacings[index - 1]
+                }
             }
             let centerDistance = cursor + advance / 2.0
             if (cursor + advance > total || centerDistance > total) {
