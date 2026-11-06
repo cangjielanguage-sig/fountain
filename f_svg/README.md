@@ -550,9 +550,20 @@ TrueType 字体在布局阶段读取 `GPOS` Pair Adjustment（format 1 / 2，仅
 
 ```cangjie
 public class SvgElement {
-    public func getBBox(options!: SvgBBoxOptions = SvgBBoxOptions()): ?SvgBounds
-    public func getCTM(): SvgMatrix
-    public func getScreenCTM(viewport!: ?SvgViewportTransform = None): SvgMatrix
+    public func getBBox(
+        options!: SvgBBoxOptions = SvgBBoxOptions(),
+        mediaWidth!: ?Float64 = None,
+        mediaHeight!: ?Float64 = None
+    ): ?SvgBounds
+    public func getCTM(
+        mediaWidth!: ?Float64 = None,
+        mediaHeight!: ?Float64 = None
+    ): SvgMatrix
+    public func getScreenCTM(
+        viewport!: ?SvgViewportTransform = None,
+        mediaWidth!: ?Float64 = None,
+        mediaHeight!: ?Float64 = None
+    ): SvgMatrix
     public func getElementsByClassName(name: String): ArrayList<SvgElement>
     public func querySelectorAll(selector: String): ArrayList<SvgElement>
 }
