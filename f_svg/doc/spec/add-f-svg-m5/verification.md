@@ -355,3 +355,55 @@ M5 的工程门禁（941 测试、0 f_svg warning、17 张旧快照逐字节一�
 在这些 CRITICAL 修复前，本变更不应归档为“M5 完成”。
 
 CRITICAL=10
+
+## 8. 修复结果（2026-11-07）
+
+- 分支：`feature/f_svg`；基线：`5b7678bb`
+- 修复提交：`83ebf85d`、`ac149cc6`、`44ea4177`、`e71103da`、`4a54a0ad`、`cc2a04a3`、`ca72d35c`、`98580139`、`f72f24c1`
+- 最终门禁：`cjpm test` TOTAL **987 / PASSED 987 / FAILED 0**；`cjpm build success`，`f_svg` 自身 **0 warning**（22 条 warning 全部来自依赖 `f_xml`）
+- 17 张 M1–M4 快照：**17/17 SHA-256 与 `doc/perf-baseline.md` 一致**
+
+### 8.1 CRITICAL
+
+| 编号 | 修复内容 | 主要用例 | 结果 |
+|---|---|---|---|
+| C1 | 新增公开枚举 `SvgTransformBox`，计算样式 `transformBox()` 与渲染/几何统一取值 | `SvgTransformBoxM5_test.parseAndRoundTrip` / `computedStyleUsesEnum` | ✅ |
+| C2 | GPOS/GSUB 解析 ScriptList → FeatureList → LookupList，仅应用 `kern` / `liga`；无特性时回退 kern 表 | `SvgGposM5_test.otherFeatureIsIgnored`、`SvgGsubM5_test.otherFeatureIsIgnored`、`SvgKerningLayoutM5_test.gposWithoutKernFallsBackToKern` / `gsubWithoutLigaDoesNotApply` | ✅ |
+| C3 | GPOS PairPos format 2 先检查 Coverage，未覆盖左字形调整量为 0 | `SvgGposM5_test.pairFormatTwo` | ✅ |
+| C4 | `@font-face` 目标未注册时不建立别名、不回退首个 family，并记 warning | `CssFontAliasM5_test.missingTargetDoesNotUsePrimaryFamily` / `missingAliasFallsBackToNextFamily` | ✅ |
+| C5 | `x/y/width/height/cx/cy/r/rx/ry` 进入级联表并支持 `calc()`；几何/渲染优先读计算样式，元素 getter 保持原语义 | `CssGeometryCalcM5_test` 4 条用例 | ✅ |
+| C6 | GSUB 特性 lookup 链深度上限 8，第 9 层停止替换并 warning | `SvgGsubM5_test.lookupDepthLimit`（深度 8 正常、9 停止） | ✅ |
+| C7 | `mix-blend-mode` 移到元素级 `GroupBegin`，内部命令不再逐条混合；覆盖形状、文本、image | `SvgElementBlendM5_test` 5 条（结构 + 像素参考） | ✅ |
+| C8 | 连字簇作为单布局单元：只消费簇首 `x/y/dx/dy/rotate`，输出单个字形，后续定位与 `textLength` 只按簇首计算 | `SvgKerningLayoutM5_test.ligatureReplacesAdvance` / `ligatureConsumesDxList` / `ligatureConsumesXList` / `ligatureConsumesRotateList` | ✅ |
+| C9 | 整形顺序改为 GSUB 连字 → kern/GPOS 字距 → bidi 视觉重排；镜像后按新码点重取字形 | `SvgKerningLayoutM5_test.ligatureAppliedBeforeBidi` / `kerningUsesShapedGlyphs` | ✅ |
+| C10 | `effectiveElementTransform` 接入 clipPath/mask 子元素、root、嵌套 svg、use 目标、`g`/`text` fill-box、元素级 bbox 与 CTM | `SvgTransformPathM5_test` 4 条、`SvgBBoxM5_test.containerChildTransformOrigin` | ✅ |
+
+### 8.2 WARNING
+
+| 编号 | 修复内容 | 主要用例 | 结果 |
+|---|---|---|---|
+| W1 | `SvgFontKerning` 改为枚举；`SvgGeometry.screenCTM` 增加可选样式上下文重载 | `SvgDirectionM5_test.enumParsing`、`SvgTransformPathM5_test.screenCtmAcceptsStyles` | ✅ |
+| W2 | `SvgContextPaint.cj` 落实为实际实现文件，迁入 `useContextFrame` / `resolveContextPaintOf` | `SvgContextPaintM5_test`、`SvgContextPaintRenderM5_test` | ✅ |
+| W3 | `paint-order` 未知关键字逐项丢弃并 warning，合法项保留后补齐默认顺序 | `SvgPaintOrderM5_test.unknownKeywordIsDroppedInComputedStyle` | ✅ |
+| W4 | 负 `stdDeviation` 回退 2（含滤镜区域外扩）；非法 `flood-color` 回退黑色 + warning | `SvgDropShadowRenderM5_test.negativeDeviationFallsBackToDefault` / `invalidFloodColorFallsBackToBlack` | ✅ |
+| W5 | `getBBox` 支持嵌套 svg viewBox 裁剪、`display:none` / `visibility:hidden`、use 循环保护、symbol 目标、子变换走 `effectiveElementTransform` | `SvgBBoxM5_test` 5 条、`SvgElementApiM5_test.clippedBBox` | ✅ |
+| W6 | `unicode-bidi: embed` 嵌入层、tspan 方向、`B` 分段、竖排 `direction` 列序、rotate 逻辑字符绑定 | `SvgDirectionM5_test.tspanDirectionRtl` / `embedCreatesLayer` / `paragraphBreakSegmentsBidi` / `verticalColumnOrderFollowsDirection` / `rotateFollowsLogicalCharacters` / `directionDoesNotChangeGeometry` | ✅ |
+| W9 | GSUB 输入上限严格为 4；连字不跨 tspan 字体/字号边界 | `SvgGsubM5_test.inputLimit`、`SvgKerningLayoutM5_test.ligatureDoesNotCrossTspanBoundary` | ✅ |
+| W10 | README 的 M4 限制段与 M5 章节对齐（中英文） | `README.md` / `README_en.md` | ✅ |
+| W11 | 主规格与 M5 行为同步（`openspec/` 被 `.gitignore` 忽略，仅工作树生效） | `openspec/specs/svg-css/spec.md`、`openspec/specs/svg-text/spec.md` | ✅ |
+| W14 | `getBBox` / `getCTM` / `getScreenCTM` 增加 `mediaWidth` / `mediaHeight`；`absoluteBounds` 接收真实视口 | `SvgBBoxM5_test.bboxMediaWidth` / `ctmUsesViewportFallback` / `absoluteBoundsUsesViewport` | ✅ |
+
+### 8.3 SUGGESTION
+
+| 编号 | 处理 | 结果 |
+|---|---|---|
+| S1 | GPOS/GSUB fixture 改为真实 ScriptList / FeatureList，并补特性缺失与 Coverage 负向用例 | ✅ |
+| S2 | 9 个场景测试全部落地（C1/C5/C6/C8/W5/W6/C4/C7/C9） | ✅ |
+| S3 | `m5-shaping` 改用含 `kern` / `GPOS` / `GSUB` 的最小 TTF；`m5-element-api` 增加元素 API 可断言结果 | ✅ |
+| S5 | 与 W2 合并，`SvgContextPaint` 文件职责落实 | ✅ |
+| S6 | 多命令形状、文本与显式混合组的像素回归 | ✅ |
+| S4 | 不在本轮 fix-plan 的第 3 节清单内；主规格同步由 W11 覆盖 | — |
+
+### 8.4 结论
+
+CRITICAL=0；第 2 节要求的 WARNING 全部落地；第 3 节 SUGGESTION 已处理；第 4 节记录不改项未动。M1–M4 公开 API 语义未改，17 张既有快照逐字节一致。
