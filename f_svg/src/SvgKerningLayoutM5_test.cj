@@ -271,7 +271,7 @@ public class SvgKerningLayoutM5_test {
         @Assert(abs(layout.advance - 15.0) < 0.001)
     }
 
-    /** GSUB liga：连字字形替换两个字形的推进量。 */
+    /** GSUB liga：连字簇输出单个字形。 */
     @TestCase
     public func ligatureReplacesAdvance(): Unit {
         let font = SvgTrueTypeFont.parse(
@@ -288,9 +288,148 @@ public class SvgKerningLayoutM5_test {
             registry
         )
         @Assert(abs(layout.advance - 7.0) < 0.001)
-        @Assert(layout.glyphs.size == 2)
+        @Assert(layout.glyphs.size == 1)
         @Assert(abs(layout.glyphs[0].advance - 7.0) < 0.001)
-        @Assert(abs(layout.glyphs[1].advance) < 0.001)
+    }
+
+    /** 连字簇只消费簇首的 dx 列表项。 */
+    @TestCase
+    public func ligatureConsumesDxList(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\" dx=\"5 9\">fi</text></svg>",
+            registry
+        )
+        @Assert(layout.glyphs.size == 1)
+        @Assert(abs(layout.advance - 12.0) < 0.001)
+        @Assert(abs(layout.glyphs[0].x - 5.0) < 0.001)
+    }
+
+    /** 连字簇只消费簇首的 x 列表项，后续字形按逻辑位置定位。 */
+    @TestCase
+    public func ligatureConsumesXList(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\" x=\"10 20 30\">fiA</text></svg>",
+            registry
+        )
+        @Assert(layout.glyphs.size == 2)
+        @Assert(abs(layout.glyphs[0].x - 10.0) < 0.001)
+        @Assert(abs(layout.glyphs[1].x - 30.0) < 0.001)
+        @Assert(abs(layout.advance - 35.0) < 0.001)
+    }
+
+    /** rotate 列表按逻辑字符绑定，连字消费簇首项。 */
+    @TestCase
+    public func ligatureConsumesRotateList(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\" rotate=\"10 20 30\">fiA</text></svg>",
+            registry
+        )
+        @Assert(layout.glyphs.size == 2)
+        @Assert(abs(layout.glyphs[0].angle - 10.0) < 0.001)
+        @Assert(abs(layout.glyphs[1].angle - 30.0) < 0.001)
+    }
+
+    /** 连字在逻辑序列上匹配，之后才做双向重排。 */
+    @TestCase
+    public func ligatureAppliedBeforeBidi(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\" direction=\"rtl\">fi</text></svg>",
+            registry
+        )
+        @Assert(layout.glyphs.size == 1)
+        @Assert(abs(layout.advance - 7.0) < 0.001)
+    }
+
+    /** 字距作用于整形后的字形，不作用于被连字消费的字形。 */
+    @TestCase
+    public func kerningUsesShapedGlyphs(): Unit {
+        let ignoredPairFont = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                kern: m5KernTable([(4, 1, -80)]),
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let ignoredRegistry = SvgFontRegistry()
+        ignoredRegistry.register("Test", ignoredPairFont)
+        let ignored = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\">fiA</text></svg>",
+            ignoredRegistry
+        )
+        @Assert(abs(ignored.advance - 12.0) < 0.001)
+
+        let shapedPairFont = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                kern: m5KernTable([(10, 1, -100)]),
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let shapedRegistry = SvgFontRegistry()
+        shapedRegistry.register("Test", shapedPairFont)
+        let shaped = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\">fiA</text></svg>",
+            shapedRegistry
+        )
+        @Assert(abs(shaped.advance - 11.0) < 0.001)
+    }
+
+    /** 连字不跨 tspan 的字体 / 字号边界。 */
+    @TestCase
+    public func ligatureDoesNotCrossTspanBoundary(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5Gsub(3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\">f<tspan font-size=\"20\">i</tspan></text></svg>",
+            registry
+        )
+        @Assert(layout.glyphs.size == 2)
+        @Assert(abs(layout.advance - 15.0) < 0.001)
     }
 
     /** 非整形字体（Hershey）输出与 M4 一致。 */

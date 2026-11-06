@@ -289,6 +289,11 @@ public class SvgTrueTypeFont <: SvgFont {
             case Some(value) => value
             case None => return 0.0
         }
+        this.kerningAdjustByIds(leftGlyph, rightGlyph, fontSize)
+    }
+
+    /** 按整形后的字形 id 调整 x advance。 */
+    internal func kerningAdjustByIds(leftGlyph: Int64, rightGlyph: Int64, fontSize: Float64): Float64 {
         let units = match (this.gposPairs) {
             case Some(value) => value.adjust(leftGlyph, rightGlyph)
             case None => match (this.kernPairs) {
@@ -297,6 +302,11 @@ public class SvgTrueTypeFont <: SvgFont {
             }
         }
         Float64(units) * fontSize / Float64(this.unitsPerEmValue)
+    }
+
+    /** 码点到字形 id；缺失返回 0。 */
+    internal func glyphIndexOrZero(codePoint: Int64): Int64 {
+        this.glyphIndex(codePoint) ?? 0
     }
 
     /** 字体是否提供 `liga` 连字。 */

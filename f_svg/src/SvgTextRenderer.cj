@@ -123,6 +123,8 @@ private class SvgTextState {
     let alignment: SvgAlignmentBaseline
     let shift: SvgBaselineShift
     let decoration: SvgTextDecoration
+    let direction: SvgDirection
+    let unicodeBidi: SvgUnicodeBidi
 
     init(
         fontSize: Float64,
@@ -134,7 +136,9 @@ private class SvgTextState {
         dominant!: SvgDominantBaseline = SvgDominantBaseline.Auto,
         alignment!: SvgAlignmentBaseline = SvgAlignmentBaseline.Auto,
         shift!: SvgBaselineShift = SvgBaselineShift.Baseline,
-        decoration!: SvgTextDecoration = SvgTextDecoration.none
+        decoration!: SvgTextDecoration = SvgTextDecoration.none,
+        direction!: SvgDirection = SvgDirection.Ltr,
+        unicodeBidi!: SvgUnicodeBidi = SvgUnicodeBidi.Normal
     ) {
         this.fontSize = fontSize
         this.family = family
@@ -146,6 +150,8 @@ private class SvgTextState {
         this.alignment = alignment
         this.shift = shift
         this.decoration = decoration
+        this.direction = direction
+        this.unicodeBidi = unicodeBidi
     }
 }
 
@@ -163,12 +169,20 @@ private class SvgTextChar {
     let parentDominant: SvgDominantBaseline
     let isRoot: Bool
     let decoration: SvgTextDecoration
+    let direction: SvgDirection
+    let unicodeBidi: SvgUnicodeBidi
     var xOverride: ?Float64 = None
     var yBase: Float64 = 0.0
     var dx: Float64 = 0.0
     var dy: Float64 = 0.0
     var xExplicit: Bool = false
     var yExplicit: Bool = false
+    /** 逻辑字符绑定的 rotate 列表项。 */
+    var rotation: Float64 = 0.0
+    /** 被 GSUB 连字消费；不参与定位与输出。 */
+    var consumed: Bool = false
+    /** 整形后的字形 id（TTF）；未整形时为 cmap 映射值。 */
+    var glyphId: Int64 = 0
 
     init(
         codePoint: Int64,
@@ -189,6 +203,8 @@ private class SvgTextChar {
         this.parentDominant = parentDominant
         this.isRoot = isRoot
         this.decoration = state.decoration
+        this.direction = state.direction
+        this.unicodeBidi = state.unicodeBidi
     }
 
     /** 复制一份并替换码点（用于双向镜像）。 */
@@ -203,7 +219,9 @@ private class SvgTextChar {
             dominant: this.dominant,
             alignment: this.alignment,
             shift: this.shift,
-            decoration: this.decoration
+            decoration: this.decoration,
+            direction: this.direction,
+            unicodeBidi: this.unicodeBidi
         )
         let copy = SvgTextChar(
             codePoint,
@@ -217,6 +235,9 @@ private class SvgTextChar {
         copy.dy = this.dy
         copy.xExplicit = this.xExplicit
         copy.yExplicit = this.yExplicit
+        copy.rotation = this.rotation
+        copy.consumed = this.consumed
+        copy.glyphId = this.glyphId
         copy
     }
 }
@@ -307,7 +328,9 @@ public class SvgTextRenderer {
             dominant: style.dominantBaseline(),
             alignment: SvgAlignmentBaseline.Auto,
             shift: style.baselineShift(),
-            decoration: effectiveTextDecoration(text, style, styles)
+            decoration: effectiveTextDecoration(text, style, styles),
+            direction: style.direction(),
+            unicodeBidi: style.unicodeBidi()
         )
         var chars = ArrayList<SvgTextChar>()
         collectSvgTextChars(
@@ -320,16 +343,34 @@ public class SvgTextRenderer {
             styles: styles
         )
         applyRootTextAttributes(text, chars)
-        if (shouldReorderBidi(style)) {
-            chars = reorderBidiChars(chars, style)
+
+        let textPathElement = findTextPathElement(text)
+        let rotationSource = match (textPathElement) {
+            case Some(pathElement) =>
+                if (pathElement.attr("rotate").isSome()) {
+                    pathElement
+                } else {
+                    text
+                }
+            case None => text
+        }
+        let location = "元素「${svgElementPath(root, rotationSource)}」"
+        let rotations = resolveTextRotations(
+            rotationSource,
+            chars.size,
+            this.warnings,
+            location: location
+        )
+        for (index in 0..chars.size) {
+            chars[index].rotation = rotations[index]
         }
 
-        let count = chars.size
-        let advances = ArrayList<Float64>()
-        let paths = ArrayList<?SvgPathData>()
-        let baselineOffsets = ArrayList<Float64>()
-        let ascentValues = ArrayList<Float64>()
-        let resolvedFonts = ArrayList<Option<SvgFont>>()
+        var count = chars.size
+        var advances = ArrayList<Float64>()
+        var paths = ArrayList<?SvgPathData>()
+        var baselineOffsets = ArrayList<Float64>()
+        var ascentValues = ArrayList<Float64>()
+        var resolvedFonts = ArrayList<Option<SvgFont>>()
         var missingGlyph = false
         for (index in 0..count) {
             let char = chars[index]
@@ -348,6 +389,11 @@ public class SvgTextRenderer {
                     baselineOffsets.add(
                         baselineOffsetFor(char, ascent, charFontDescent(value, char))
                     )
+                    match (value) {
+                        case truetype: SvgTrueTypeFont =>
+                            chars[index].glyphId = truetype.glyphIndexOrZero(char.codePoint)
+                        case _ => ()
+                    }
                 case None =>
                     missingGlyph = true
                     this.warnings.add("未找到字体「${char.family}」，使用占位字形")
@@ -360,8 +406,67 @@ public class SvgTextRenderer {
             }
         }
 
-        applyFontKerning(chars, resolvedFonts, advances, style)
+        // 先 GSUB 连字，再 kern / GPOS 字距。
         applyFontLigatures(chars, resolvedFonts, advances, paths)
+        let shapedChars = ArrayList<SvgTextChar>()
+        let shapedAdvances = ArrayList<Float64>()
+        let shapedPaths = ArrayList<?SvgPathData>()
+        let shapedBaselines = ArrayList<Float64>()
+        let shapedAscents = ArrayList<Float64>()
+        let shapedFonts = ArrayList<Option<SvgFont>>()
+        for (index in 0..count) {
+            if (chars[index].consumed) {
+                continue
+            }
+            shapedChars.add(chars[index])
+            shapedAdvances.add(advances[index])
+            shapedPaths.add(paths[index])
+            shapedBaselines.add(baselineOffsets[index])
+            shapedAscents.add(ascentValues[index])
+            shapedFonts.add(resolvedFonts[index])
+        }
+        chars = shapedChars
+        advances = shapedAdvances
+        paths = shapedPaths
+        baselineOffsets = shapedBaselines
+        ascentValues = shapedAscents
+        resolvedFonts = shapedFonts
+        count = chars.size
+
+        applyFontKerning(chars, resolvedFonts, advances, style)
+
+        if (shouldReorderBidi(style, chars)) {
+            let arrangement = bidiArrangement(chars, style)
+            chars = permuteBidiChars(chars, arrangement)
+            advances = permuteBidiValues(advances, arrangement.order)
+            paths = permuteBidiOptionalPaths(paths, arrangement.order)
+            baselineOffsets = permuteBidiValues(baselineOffsets, arrangement.order)
+            ascentValues = permuteBidiValues(ascentValues, arrangement.order)
+            resolvedFonts = permuteBidiFonts(resolvedFonts, arrangement.order)
+            // 镜像后的字符需要按新码点重新取字形路径与推进量。
+            for (visual in 0..count) {
+                let logical = arrangement.order[visual]
+                if (arrangement.levels[logical] % 2 == 0) {
+                    continue
+                }
+                let char = chars[visual]
+                match (resolvedFonts[visual]) {
+                    case Some(font) =>
+                        advances[visual] = font.advance(char.codePoint, char.fontSize)
+                        let entry = this.glyphEntry(font, char)
+                        paths[visual] = entry.path
+                        if (entry.missing) {
+                            missingGlyph = true
+                        }
+                        match (font) {
+                            case truetype: SvgTrueTypeFont =>
+                                chars[visual].glyphId = truetype.glyphIndexOrZero(char.codePoint)
+                            case _ => ()
+                        }
+                    case None => ()
+                }
+            }
+        }
 
         let target = match (text.textLength) {
             case Some(value) => value.value
@@ -413,23 +518,6 @@ public class SvgTextRenderer {
         }
 
         var placements: ?Array<SvgTextPlacement> = None
-        let textPathElement = findTextPathElement(text)
-        let rotationSource = match (textPathElement) {
-            case Some(pathElement) =>
-                if (pathElement.attr("rotate").isSome()) {
-                    pathElement
-                } else {
-                    text
-                }
-            case None => text
-        }
-        let location = "元素「${svgElementPath(root, rotationSource)}」"
-        let rotations = resolveTextRotations(
-            rotationSource,
-            count,
-            this.warnings,
-            location: location
-        )
         let writingMode = style.writingMode()
         let vertical = writingMode.isVertical() && textPathElement.isNone()
         if (writingMode.isVertical() && textPathElement.isSome()) {
@@ -440,28 +528,53 @@ public class SvgTextRenderer {
         var verticalTotal = 0.0
         var verticalAnchor = 0.0
         if (vertical) {
-            var columnPen = 0.0
-            var lastColumn: ?Float64 = None
+            let logicalColumns = ArrayList<Float64>()
             for (index in 0..count) {
                 let column = chars[index].xOverride ?? 0.0
-                match (lastColumn) {
-                    case Some(previous) => if (previous != column) {
-                        columnPen = 0.0
-                    }
-                    case None => ()
+                if (!containsTextColumn(logicalColumns, column)) {
+                    logicalColumns.add(column)
                 }
-                lastColumn = Some(column)
-                columnPositions.add(column)
-                verticalPositions.add(columnPen)
-                columnPen += advances[index] * scaleX
+            }
+            let sortedColumns = ArrayList<Float64>()
+            let remaining = ArrayList<Float64>()
+            for (column in logicalColumns) {
+                remaining.add(column)
+            }
+            while (remaining.size > 0) {
+                var minimum = 0
+                for (position in 1..remaining.size) {
+                    if (remaining[position] < remaining[minimum]) {
+                        minimum = position
+                    }
+                }
+                sortedColumns.add(remaining[minimum])
+                remaining.remove(at: minimum)
+            }
+            let columnPens = Array<Float64>(sortedColumns.size, repeat: 0.0)
+            let rtlColumns = style.direction() == SvgDirection.Rtl
+            for (index in 0..count) {
+                let key = chars[index].xOverride ?? 0.0
+                let columnRank = textColumnIndex(sortedColumns, key)
+                let visualIndex = if (rtlColumns) {
+                    sortedColumns.size - 1 - columnRank
+                } else {
+                    columnRank
+                }
+                columnPositions.add(sortedColumns[visualIndex])
+                verticalPositions.add(columnPens[visualIndex])
+                columnPens[visualIndex] += advances[index] * scaleX
                 if (index < count - 1) {
-                    columnPen += chars[index].letterSpacing + extra
+                    columnPens[visualIndex] += chars[index].letterSpacing + extra
                     if (chars[index].codePoint == 32) {
-                        columnPen += chars[index].wordSpacing
+                        columnPens[visualIndex] += chars[index].wordSpacing
                     }
                 }
             }
-            verticalTotal = columnPen
+            for (value in columnPens) {
+                if (value > verticalTotal) {
+                    verticalTotal = value
+                }
+            }
             verticalAnchor = match (style.textAnchor()) {
                 case SvgTextAnchor.Start => 0.0
                 case SvgTextAnchor.Middle => -verticalTotal / 2.0
@@ -555,7 +668,7 @@ public class SvgTextRenderer {
             }
             var x = positions[index] + anchorOffset
             var y = char.yBase + char.dy + baselineOffsets[index]
-            var angle = rotations[index]
+            var angle = char.rotation
             match (placements) {
                 case Some(placed) =>
                     if (index >= placed.size) {
@@ -563,14 +676,14 @@ public class SvgTextRenderer {
                     }
                     x = placed[index].originX
                     y = placed[index].originY + baselineOffsets[index]
-                    angle = placed[index].angle + rotations[index]
+                    angle = placed[index].angle + char.rotation
                 case None => ()
             }
             if (vertical) {
                 x = columnPositions[index]
                 y = char.yBase + char.dy + verticalPositions[index] + verticalAnchor +
                     baselineOffsets[index]
-                angle = rotations[index] + 90.0
+                angle = char.rotation + 90.0
             }
             glyphs.add(
                 SvgTextGlyph(
@@ -915,6 +1028,23 @@ private func collectSvgTextChars(
                                     case None => state.decoration
                                 }
                         }
+                        let nextDirection = match (spanStyle) {
+                            case Some(value) => value.direction()
+                            case None =>
+                                match (span.attr("direction")) {
+                                    case Some(text) => SvgDirection.fromName(text) ?? state.direction
+                                    case None => state.direction
+                                }
+                        }
+                        let nextBidi = match (spanStyle) {
+                            case Some(value) => value.unicodeBidi()
+                            case None =>
+                                match (span.attr("unicode-bidi")) {
+                                    case Some(text) =>
+                                        SvgUnicodeBidi.fromName(text) ?? SvgUnicodeBidi.Normal
+                                    case None => SvgUnicodeBidi.Normal
+                                }
+                        }
                         let next = SvgTextState(
                             span.fontSize?.value ?? state.fontSize,
                             span.fontFamily ?? state.family,
@@ -925,7 +1055,9 @@ private func collectSvgTextChars(
                             dominant: nextDominant,
                             alignment: nextAlignment,
                             shift: nextShift,
-                            decoration: nextDecoration
+                            decoration: nextDecoration,
+                            direction: nextDirection,
+                            unicodeBidi: nextBidi
                         )
                         let start = out.size
                         collectSvgTextChars(
@@ -1236,37 +1368,173 @@ private func transformTextCommand(command: SvgPathCommand, matrix: SvgMatrix): S
     }
 }
 
+private func containsTextColumn(columns: ArrayList<Float64>, value: Float64): Bool {
+    for (item in columns) {
+        if (item == value) {
+            return true
+        }
+    }
+    false
+}
+
+private func textColumnIndex(columns: ArrayList<Float64>, value: Float64): Int64 {
+    for (index in 0..columns.size) {
+        if (columns[index] == value) {
+            return index
+        }
+    }
+    0
+}
+
+private class SvgBidiArrangement {
+    let order: Array<Int64>
+    let levels: Array<Int64>
+
+    init(order: Array<Int64>, levels: Array<Int64>) {
+        this.order = order
+        this.levels = levels
+    }
+}
+
 /** 竖排时不做行内双向重排（`direction` 只决定列序）。 */
-private func shouldReorderBidi(style: SvgComputedStyle): Bool {
+private func shouldReorderBidi(style: SvgComputedStyle, chars: ArrayList<SvgTextChar>): Bool {
     let writingMode = style.writingMode()
     if (writingMode == SvgWritingMode.Tb || writingMode == SvgWritingMode.TbRl) {
         return false
     }
-    style.direction() == SvgDirection.Rtl || style.unicodeBidi() != SvgUnicodeBidi.Normal
+    if (style.direction() == SvgDirection.Rtl) {
+        return true
+    }
+    for (char in chars) {
+        if (char.direction == SvgDirection.Rtl || char.unicodeBidi != SvgUnicodeBidi.Normal) {
+            return true
+        }
+    }
+    false
 }
 
-/** 按双向算法重排为视觉顺序，并对偶数层级的 RTL 字符做单层镜像。 */
-private func reorderBidiChars(chars: ArrayList<SvgTextChar>, style: SvgComputedStyle): ArrayList<SvgTextChar> {
-    let codePoints = ArrayList<Int64>()
-    for (char in chars) {
-        codePoints.add(char.codePoint)
-    }
-    let rtl = style.direction() == SvgDirection.Rtl
-    let levels = if (style.unicodeBidi() == SvgUnicodeBidi.BidiOverride) {
-        svgBidiOverrideLevels(codePoints.toArray(), rtl)
+/** 方向对应的嵌入层级：先取比基础层级更高的层级，再调整奇偶。 */
+private func bidiEmbeddingLevel(base: Int64, direction: SvgDirection, forceIncrease: Bool): Int64 {
+    let needsOdd = direction == SvgDirection.Rtl
+    var level = if (forceIncrease || ((base % 2 == 1) != needsOdd)) {
+        base + 1
     } else {
-        svgBidiLevels(codePoints.toArray(), rtl)
+        base
     }
-    let order = svgBidiVisualOrder(levels)
-    let result = ArrayList<SvgTextChar>()
-    for (logical in order) {
-        let original = chars[logical]
-        let resolved = if (levels[logical] % 2 != 0) {
-            svgMirrorBidiCodePoint(original.codePoint)
-        } else {
-            original.codePoint
+    while ((level % 2 == 1) != needsOdd) {
+        level++
+    }
+    level
+}
+
+private func bidiSegmentLevels(
+    chars: ArrayList<SvgTextChar>,
+    start: Int64,
+    end: Int64,
+    baseRtl: Bool
+): Array<Int64> {
+    let codePoints = ArrayList<Int64>()
+    for (index in start..end) {
+        codePoints.add(chars[index].codePoint)
+    }
+    let base: Int64 = if (baseRtl) { 1 } else { 0 }
+    let paragraphDirection = if (baseRtl) { SvgDirection.Rtl } else { SvgDirection.Ltr }
+    let levels = svgBidiLevels(codePoints.toArray(), baseRtl)
+    for (offset in 0..levels.size) {
+        let char = chars[start + offset]
+        if (char.unicodeBidi == SvgUnicodeBidi.BidiOverride) {
+            levels[offset] = bidiEmbeddingLevel(base, char.direction, true)
+        } else if (char.unicodeBidi == SvgUnicodeBidi.Embed ||
+            char.direction != paragraphDirection) {
+            levels[offset] = bidiEmbeddingLevel(base, char.direction, false)
         }
-        result.add(original.copyWithCodePoint(resolved))
+    }
+    levels
+}
+
+/** 按 `B` 分段后重排为视觉顺序，返回逻辑下标与对应层级。 */
+private func bidiArrangement(
+    chars: ArrayList<SvgTextChar>,
+    style: SvgComputedStyle
+): SvgBidiArrangement {
+    let size = chars.size
+    let levels = Array<Int64>(size, repeat: 0)
+    let order = ArrayList<Int64>()
+    if (size == 0) {
+        return SvgBidiArrangement(order.toArray(), levels)
+    }
+    let baseRtl = style.direction() == SvgDirection.Rtl
+    var start: Int64 = 0
+    var index: Int64 = 0
+    while (index <= size) {
+        let atBreak = index == size || svgBidiClass(chars[index].codePoint) == SvgBidiClass.B
+        if (atBreak) {
+            if (index > start) {
+                let segmentLevels = bidiSegmentLevels(chars, start, index, baseRtl)
+                let segmentOrder = svgBidiVisualOrder(segmentLevels)
+                for (visual in segmentOrder) {
+                    order.add(start + visual)
+                }
+                for (offset in 0..segmentLevels.size) {
+                    levels[start + offset] = segmentLevels[offset]
+                }
+            }
+            if (index < size) {
+                levels[index] = if (baseRtl) { 1 } else { 0 }
+                order.add(index)
+            }
+            start = index + 1
+        }
+        index++
+    }
+    SvgBidiArrangement(order.toArray(), levels)
+}
+
+private func permuteBidiChars(
+    chars: ArrayList<SvgTextChar>,
+    arrangement: SvgBidiArrangement
+): ArrayList<SvgTextChar> {
+    let result = ArrayList<SvgTextChar>()
+    for (logical in arrangement.order) {
+        let original = chars[logical]
+        if (arrangement.levels[logical] % 2 != 0) {
+            result.add(original.copyWithCodePoint(svgMirrorBidiCodePoint(original.codePoint)))
+        } else {
+            result.add(original)
+        }
+    }
+    result
+}
+
+private func permuteBidiValues<T>(
+    values: ArrayList<T>,
+    order: Array<Int64>
+): ArrayList<T> {
+    let result = ArrayList<T>()
+    for (index in order) {
+        result.add(values[index])
+    }
+    result
+}
+
+private func permuteBidiOptionalPaths(
+    values: ArrayList<?SvgPathData>,
+    order: Array<Int64>
+): ArrayList<?SvgPathData> {
+    let result = ArrayList<?SvgPathData>()
+    for (index in order) {
+        result.add(values[index])
+    }
+    result
+}
+
+private func permuteBidiFonts(
+    values: ArrayList<Option<SvgFont>>,
+    order: Array<Int64>
+): ArrayList<Option<SvgFont>> {
+    let result = ArrayList<Option<SvgFont>>()
+    for (index in order) {
+        result.add(values[index])
     }
     result
 }
@@ -1298,7 +1566,11 @@ private func applyFontKerning(
         match (font) {
             case truetype: SvgTrueTypeFont =>
                 if (truetype.hasKerning()) {
-                    advances[index] += truetype.kerningAdjust(left.codePoint, right.codePoint, left.fontSize)
+                    advances[index] += truetype.kerningAdjustByIds(
+                        left.glyphId,
+                        right.glyphId,
+                        left.fontSize
+                    )
                 }
             case _ => ()
         }
@@ -1330,7 +1602,18 @@ private func applyFontLigatures(
                     continue
                 }
                 let remaining = ArrayList<Int64>()
-                for (position in index..chars.size) {
+                var runEnd = index + 1
+                while (runEnd < chars.size) {
+                    let candidate = chars[runEnd]
+                    if (candidate.fontSize != chars[index].fontSize ||
+                        candidate.family != chars[index].family ||
+                        candidate.weight != chars[index].weight ||
+                        candidate.style != chars[index].style) {
+                        break
+                    }
+                    runEnd++
+                }
+                for (position in index..runEnd) {
                     remaining.add(chars[position].codePoint)
                 }
                 match (truetype.ligatureAt(remaining.toArray(), 0)) {
@@ -1343,9 +1626,11 @@ private func applyFontLigatures(
                         }
                         advances[index] = truetype.advanceById(glyph, chars[index].fontSize)
                         paths[index] = truetype.pathById(glyph, chars[index].fontSize)
+                        chars[index].glyphId = glyph
                         for (offset in 1..consumed) {
                             advances[index + offset] = 0.0
                             paths[index + offset] = Option<SvgPathData>.None
+                            chars[index + offset].consumed = true
                         }
                         index += consumed
                     case None => index++
