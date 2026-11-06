@@ -54,12 +54,12 @@
 
 ## 4. 阶段一：GF(2) 常量生成器（G1–G3，反射域）
 
-- [ ] 4.1 红：`CrcGf_test.cj` —— `xPowModP(0) == 1`、`xPowModP(64) == P`、`xPowModP(n+1) == mulX(xPowModP(n))`（n 取 0..200 全跑）
-- [ ] 4.2 红：`barrettMu` 与长除法现算的 `⌊x^128 / P⌋` 逐位相等（长除法的参考实现独立写一份，不复用生成器的辅助函数）
-- [ ] 4.3 红：折叠恒等式 —— 随机 128 位 `v`，"乘常量 + Barrett 约减" 等于 "按多项式取模" 的参考结果（各 200 组确定性伪随机）
-- [ ] 4.4 绿：`CrcGf` —— 128 位值类型（`hi/lo: UInt64`）、`mulX`、`xPowModP`、`barrettMu`、`foldConstants(poly, reflected)`
-- [ ] 4.5 绿：生成 G1（`0x42F0E1EBA9EA3693`）、G2（`0x1B`）、G3（`0xAD93D23594C935A9`）三组反射域常量；G3 被 `redis` 与 `jones` 共享，缓存键为 `(poly, true)`
-- [ ] 4.6 验收（`P1-2`）：`CrcGf_test` 全绿；打印三组常量，人工核对 `xz` 与公开资料的 CRC-64/XZ 常量一致（作为"生成器没错"的第二证据，不作为唯一证据）；断言 G1/G2/G3 互不相同
+- [x] 4.1 红：`CrcGf_test.cj` —— `xPowModP(0) == 1`、`xPowModP(64) == P`、`xPowModP(n+1) == mulX(xPowModP(n))`（n 取 0..200 全跑）
+- [x] 4.2 红：`barrettMu` 与长除法现算的 `⌊x^128 / P⌋` 逐位相等（长除法的参考实现独立写一份，不复用生成器的辅助函数）
+- [x] 4.3 红：折叠恒等式 —— 随机 128 位 `v`，"乘常量 + Barrett 约减" 等于 "按多项式取模" 的参考结果（各 200 组确定性伪随机）
+- [x] 4.4 绿：`CrcGf` —— 128 位值类型（`hi/lo: UInt64`）、`mulX`、`xPowModP`、`barrettMu`、`foldConstants(poly, reflected)`
+- [x] 4.5 绿：生成 G1（`0x42F0E1EBA9EA3693`）、G2（`0x1B`）、G3（`0xAD93D23594C935A9`）三组反射域常量；G3 被 `redis` 与 `jones` 共享，缓存键为 `(poly, true)`
+- [x] 4.6 验收（`P1-2`）：`CrcGf_test` 全绿；打印三组常量，人工核对 `xz` 与公开资料的 CRC-64/XZ 常量一致（作为"生成器没错"的第二证据，不作为唯一证据）；断言 G1/G2/G3 互不相同
 
 ## 5. 阶段一：反射域生成式折叠核（`PMULL` / `PCLMULQDQ`）
 

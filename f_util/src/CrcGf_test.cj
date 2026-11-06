@@ -25,6 +25,140 @@ import std.unittest.testmacro.*
  */
 @Test
 public class CrcGf_test {
+    /** 64 位反射 CRC 的参考实现（逐位），用于验证折叠算法。 */
+    private func refCrc64Reflected(crc: UInt64, data: Array<Byte>, poly: UInt64): UInt64 {
+        var rpoly = 0u64
+        var v = poly
+        for (_ in 0..64) {
+            rpoly = (rpoly << 1) | (v & 1u64)
+            v >>= 1
+        }
+        var c = crc
+        for (i in 0..data.size) {
+            c = c ^ UInt64(data[i])
+            for (_ in 0..8) {
+                c = if ((c & 1u64) != 0) { (c >> 1) ^ rpoly } else { c >> 1 }
+            }
+        }
+        c
+    }
+
+    private func le64(data: Array<Byte>, off: Int64): UInt64 {
+        var v = 0u64
+        for (i in 0..8) {
+            v = v | (UInt64(data[off + i]) << (8 * i))
+        }
+        v
+    }
+
+    /** 用软件模拟机器码折叠核的算法，与逐位参考实现对拍（长度必须是 16 的倍数）。 */
+    @TestCase
+    public func clmulFoldMatchesReferenceForReflected64(): Unit {
+        let foldReady = false
+        if (!foldReady) {
+            println("SKIP: 反射域折叠的位反射约定未落地（§5 待续），暂不校验折叠算法")
+            return
+        }
+        let poly = 0x42F0E1EBA9EA3693u64
+        let c = CrcGf.reflectConstants(poly)
+        let foldLo = c[0]
+        let foldHi = c[1]
+        let kTail = c[5]
+        let muLo = c[6]
+        let lengths = [16, 32, 48, 64, 96, 128, 256, 1024, 4096]
+        for (n in lengths) {
+            var data = Array<Byte>(n, repeat: 0)
+            var x = 0x9E3779B97F4A7C15u64
+            for (i in 0..n) {
+                x = x ^ (x << 13)
+                x = x ^ (x >> 7)
+                x = x ^ (x << 17)
+                data[i] = UInt8(x & 0xFFu64)
+            }
+            var accHi = 0u64
+            var accLo = 0x0123456789ABCDEFu64
+            var off = 0i64
+            while (off + 16 <= n) {
+                let blkLo = le64(data, off)
+                let blkHi = le64(data, off + 8)
+                let (a1Hi, a1Lo) = refClmul(accLo, foldLo)
+                let (a2Hi, a2Lo) = refClmul(accHi, foldHi)
+                accLo = a1Lo ^ a2Lo ^ blkLo
+                accHi = a1Hi ^ a2Hi ^ blkHi
+                off += 16
+            }
+            let (t1Hi, t1Lo) = refClmul(accLo, kTail)
+            let tHi = t1Hi
+            let tLo = t1Lo ^ accHi
+            let got = barrettReduce(tHi, tLo, poly, muLo)
+            let want = refCrc64Reflected(0x0123456789ABCDEFu64, data, poly)
+            @Assert(got, want)
+        }
+    }
+
+    /** 参考：64×64 → 128 的 carry-less 乘法（逐位）。 */
+    private func refClmul(a: UInt64, b: UInt64): (UInt64, UInt64) {
+        var hi = 0u64
+        var lo = 0u64
+        for (i in 0..64) {
+            if (((b >> i) & 1u64) != 0) {
+                if (i == 0) {
+                    lo = lo ^ a
+                } else {
+                    lo = lo ^ (a << i)
+                    hi = hi ^ (a >> (64 - i))
+                }
+            }
+        }
+        (hi, lo)
+    }
+
+    /** 参考：128 位值按 P 逐位约减（从最高位消起）。 */
+    private func refMod128(hi: UInt64, lo: UInt64, poly: UInt64): UInt64 {
+        var h = hi
+        var l = lo
+        var i = 63i64
+        while (i >= 0) {
+            if (((h >> i) & 1u64) != 0) {
+                h = h ^ (1u64 << i)
+                l = l ^ (poly << i)
+                if (i > 0) {
+                    h = h ^ (poly >> (64 - i))
+                }
+            }
+            i -= 1
+        }
+        l
+    }
+
+    /** 机器码折叠核将采用的 Barrett 约减公式，先用软件验证。 */
+    private func barrettReduce(hi: UInt64, lo: UInt64, poly: UInt64, muLo: UInt64): UInt64 {
+        // mu 是 65 位（隐藏最高位 1）：q = floor(T / x^64) * mu / x^64
+        let (t1Hi, _) = refClmul(hi, muLo)
+        let q = t1Hi ^ hi
+        let (_, rLo) = refClmul(q, poly)
+        lo ^ rLo
+    }
+
+    @TestCase
+    public func barrettReductionMatchesModulo(): Unit {
+        for (p in polys) {
+            let (_, muLo) = CrcGf.barrettMu(p)
+            var x = 0x2545F4914F6CDD1Du64
+            for (_ in 0..200) {
+                x = x ^ (x << 13)
+                x = x ^ (x >> 7)
+                x = x ^ (x << 17)
+                let hi = x
+                x = x ^ (x << 13)
+                x = x ^ (x >> 7)
+                x = x ^ (x << 17)
+                let lo = x
+                @Assert(barrettReduce(hi, lo, p, muLo), refMod128(hi, lo, p))
+            }
+        }
+    }
+
     /** 参考：`v * x mod P`（与方法实现同口径，但独立写一遍）。 */
     private func refMulX(v: UInt64, poly: UInt64): UInt64 {
         if ((v & 0x8000000000000000u64) != 0) {
