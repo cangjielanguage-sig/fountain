@@ -80,6 +80,10 @@ public class SvgDisplayCommand {
     public let nonScalingStroke: Bool
     /** 旋转视口 / marker 的设备空间四边形裁剪（按顺序相乘）。 */
     public let clipQuads: Array<Array<SvgPoint>>
+    /** 该元素 / 组的混合模式；缺省 `normal`。 */
+    public let blendMode: SvgMixBlendMode
+    /** 是否建立隔离组（`isolation: isolate`）。 */
+    public let isolated: Bool
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -99,7 +103,9 @@ public class SvgDisplayCommand {
         filter!: ?SvgElement = None,
         clip!: ?SvgClipRect = None,
         nonScalingStroke!: Bool = false,
-        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>()
+        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>(),
+        blendMode!: SvgMixBlendMode = SvgMixBlendMode.Normal,
+        isolated!: Bool = false
     ) {
         this.kind = kind
         this.tag = tag
@@ -122,6 +128,8 @@ public class SvgDisplayCommand {
         this.clip = clip
         this.nonScalingStroke = nonScalingStroke
         this.clipQuads = clipQuads
+        this.blendMode = blendMode
+        this.isolated = isolated
     }
 }
 
@@ -446,7 +454,8 @@ public class SvgRenderTreeBuilder {
                         filterElement,
                         clipBounds,
                         clip,
-                        context.clipQuads
+                        context.clipQuads,
+                        blendMode: svgMixBlendModeOf(style)
                     )
                 }
                 commands.add(
@@ -496,8 +505,11 @@ public class SvgRenderTreeBuilder {
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
         let clip = style.clipRect()
+        let blendMode = svgMixBlendModeOf(style)
+        let isolated = style.get("isolation") == Some("isolate")
         let grouped = style.opacity() < 1.0 || clipPath.isSome() || maskElement.isSome() ||
-            context.clipRect.isSome() || filterElement.isSome() || clip.isSome()
+            context.clipRect.isSome() || filterElement.isSome() || clip.isSome() ||
+            blendMode != SvgMixBlendMode.Normal || isolated
         let childContext = SvgRenderTreeContext(
             matrix,
             context.width,
@@ -537,7 +549,9 @@ public class SvgRenderTreeBuilder {
                     bounds: groupBounds,
                     filter: filterElement,
                     clip: clip,
-                    clipQuads: context.clipQuads
+                    clipQuads: context.clipQuads,
+                    blendMode: blendMode,
+                    isolated: isolated
                 )
             )
         }
@@ -737,7 +751,8 @@ public class SvgRenderTreeBuilder {
                 filterElement,
                 bounds,
                 clip,
-                context.clipQuads
+                context.clipQuads,
+                blendMode: svgMixBlendModeOf(style)
             )
         }
         let paintOrder = svgPaintOrderOf(style.get("paint-order"))
@@ -760,7 +775,8 @@ public class SvgRenderTreeBuilder {
                     clipRect: if (filtered) { None } else { context.clipRect },
                     filter: None,
                     clip: if (filtered) { None } else { clip },
-                    clipQuads: context.clipQuads
+                    clipQuads: context.clipQuads,
+                    blendMode: svgMixBlendModeOf(style)
                 )
             )
         }
@@ -781,7 +797,8 @@ public class SvgRenderTreeBuilder {
                     filter: None,
                     clip: if (filtered) { None } else { clip },
                     nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke,
-                    clipQuads: context.clipQuads
+                    clipQuads: context.clipQuads,
+                    blendMode: svgMixBlendModeOf(style)
                 )
             )
         }
@@ -815,7 +832,8 @@ public class SvgRenderTreeBuilder {
         filter: ?SvgElement,
         bounds: ?SvgBounds,
         clip: ?SvgClipRect,
-        clipQuads: Array<Array<SvgPoint>>
+        clipQuads: Array<Array<SvgPoint>>,
+        blendMode!: SvgMixBlendMode = SvgMixBlendMode.Normal
     ): Unit {
         commands.add(
             SvgDisplayCommand(
@@ -829,7 +847,8 @@ public class SvgRenderTreeBuilder {
                 bounds: bounds,
                 filter: filter,
                 clip: clip,
-                clipQuads: clipQuads
+                clipQuads: clipQuads,
+                blendMode: blendMode
             )
         )
     }
@@ -973,7 +992,8 @@ public class SvgRenderTreeBuilder {
                 filterElement,
                 Some(box),
                 clip,
-                context.clipQuads
+                context.clipQuads,
+                blendMode: svgMixBlendModeOf(style)
             )
         }
         commands.add(

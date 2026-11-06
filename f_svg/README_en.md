@@ -486,6 +486,28 @@ The example draws the stroke first and the fill last, so overlaps show the fill.
 Documents without `paint-order` are byte-identical to M4; invalid values fall back to
 the default order with a warning.
 
+### Blend modes and isolation
+
+`mix-blend-mode` supports `normal`, `multiply`, `screen`, `overlay`, `darken`, `lighten`,
+`color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference` and `exclusion`.
+Elements with a non-`normal` mode are rendered to an offscreen layer first and composited
+once against the parent layer in premultiplied RGBA using the CSS formulas; filters,
+`clip`, `clip-path`, `mask` and group opacity keep the M4 ordering.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+  <rect width="40" height="40" fill="#c86432"/>
+  <rect width="40" height="40" fill="#808080" style="mix-blend-mode: multiply"/>
+</svg>
+```
+
+The multiply of `#808080` with `#c86432` above is approximately `#643219` (`(100,50,25)`).
+
+`isolation: isolate` creates an isolated group: children blend only with pixels already
+composited inside the group and never read outside content; `auto` adds no isolation.
+With no parent layer the backdrop is transparent. The `SvgBlendMode` used by `feBlend`
+keeps its five values and is unaffected.
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

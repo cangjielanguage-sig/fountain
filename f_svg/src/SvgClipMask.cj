@@ -147,6 +147,21 @@ public class SvgGroupCompositor {
 
     /** 把整层按 `opacity` 合成到目标；非法 opacity 按 1 处理。 */
     public static func composite(destination: SvgBitmap, layer: SvgBitmap, opacity: Float64): Unit {
+        SvgGroupCompositor.composite(destination, layer, opacity, mode: SvgMixBlendMode.Normal)
+    }
+
+    /**
+     * 按 `mode` 把整层合成到目标。
+     *
+     * `normal` 走与 M4 完全相同的 `blend` 路径，保证逐字节一致；其余模式在预乘域
+     * 计算混合色后写回。
+     */
+    public static func composite(
+        destination: SvgBitmap,
+        layer: SvgBitmap,
+        opacity: Float64,
+        mode!: SvgMixBlendMode
+    ): Unit {
         let effective = if (!isFiniteSvgNumber(opacity) || opacity < 0.0 || opacity > 1.0) {
             1.0
         } else {
@@ -158,8 +173,22 @@ public class SvgGroupCompositor {
         for (y in 0..layer.height) {
             for (x in 0..layer.width) {
                 let color = layer.pixel(x, y)
-                if (color.alpha > 0.0) {
+                if (color.alpha <= 0.0) {
+                    continue
+                }
+                if (mode == SvgMixBlendMode.Normal) {
                     destination.blend(x, y, SvgRgba.fromColor(color, effective))
+                } else {
+                    let backdropColor = destination.pixel(x, y)
+                    let backdropAlpha = backdropColor.alpha
+                    let backdrop = SvgRgba(
+                        Float64(backdropColor.red) / 255.0 * backdropAlpha,
+                        Float64(backdropColor.green) / 255.0 * backdropAlpha,
+                        Float64(backdropColor.blue) / 255.0 * backdropAlpha,
+                        backdropAlpha
+                    )
+                    let result = blendSvgRgba(backdrop, SvgRgba.fromColor(color, effective), mode)
+                    destination.setPixel(x, y, result.toColor())
                 }
             }
         }

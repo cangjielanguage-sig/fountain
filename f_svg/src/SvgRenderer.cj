@@ -29,6 +29,7 @@ private class SvgRenderFrame {
     let filter: ?SvgElement
     let clip: ?SvgClipRect
     let clipQuads: Array<Array<SvgPoint>>
+    let blendMode: SvgMixBlendMode
 
     init(
         bitmap: SvgBitmap,
@@ -40,7 +41,8 @@ private class SvgRenderFrame {
         bounds: ?SvgBounds,
         filter: ?SvgElement,
         clip: ?SvgClipRect,
-        clipQuads: Array<Array<SvgPoint>>
+        clipQuads: Array<Array<SvgPoint>>,
+        blendMode!: SvgMixBlendMode = SvgMixBlendMode.Normal
     ) {
         this.bitmap = bitmap
         this.opacity = opacity
@@ -52,6 +54,7 @@ private class SvgRenderFrame {
         this.filter = filter
         this.clip = clip
         this.clipQuads = clipQuads
+        this.blendMode = blendMode
     }
 }
 
@@ -149,7 +152,8 @@ public class SvgRenderer {
                             command.bounds,
                             command.filter,
                             command.clip,
-                            command.clipQuads
+                            command.clipQuads,
+                            blendMode: command.blendMode
                         )
                     )
                 case GroupEnd =>
@@ -189,7 +193,12 @@ public class SvgRenderer {
                     } else {
                         output
                     }
-                    SvgGroupCompositor.composite(target, frame.bitmap, frame.opacity)
+                    SvgGroupCompositor.composite(
+                        target,
+                        frame.bitmap,
+                        frame.opacity,
+                        mode: frame.blendMode
+                    )
                 case _ =>
                     let target = if (frames.size > 0) {
                         frames[frames.size - 1].bitmap
@@ -202,7 +211,8 @@ public class SvgRenderer {
                     }
                     let needsLayer = clipRectEffective || command.clipPath.isSome() ||
                         command.mask.isSome() || command.filter.isSome() || command.clip.isSome() ||
-                        command.clipQuads.size > 0
+                        command.clipQuads.size > 0 ||
+                        command.blendMode != SvgMixBlendMode.Normal
                     if (needsLayer) {
                         var layer = SvgGroupCompositor.createLayer(list.width, list.height, this.options)
                         this.renderCommand(layer, command, list, registry, images, patterns)
@@ -232,7 +242,7 @@ public class SvgRenderer {
                             list.root,
                             command.clipQuads
                         )
-                        SvgGroupCompositor.composite(target, layer, 1.0)
+                        SvgGroupCompositor.composite(target, layer, 1.0, mode: command.blendMode)
                     } else {
                         this.renderCommand(target, command, list, registry, images, patterns)
                     }

@@ -459,6 +459,26 @@ marker 的派生位置、数量与朝向不变。
 上例先画描边再画填充，重叠处显示填充。未声明 `paint-order` 的文档输出与 M4 逐字节一致；
 非法值（未知关键字）回退默认顺序并记 warning。
 
+### 混合模式与隔离
+
+`mix-blend-mode` 支持 `normal` / `multiply` / `screen` / `overlay` / `darken` / `lighten` /
+`color-dodge` / `color-burn` / `hard-light` / `soft-light` / `difference` / `exclusion`。
+非 `normal` 的元素会先渲染到离屏层，再与父层在预乘 RGBA 域按 CSS 公式合成一次；
+滤镜、`clip`、`clip-path`、`mask` 与组透明度的处理顺序与 M4 相同。
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+  <rect width="40" height="40" fill="#c86432"/>
+  <rect width="40" height="40" fill="#808080" style="mix-blend-mode: multiply"/>
+</svg>
+```
+
+上例中 `#808080` 与 `#c86432` 的 multiply 结果为约 `#643219`（`(100,50,25)`）。
+
+`isolation: isolate` 建立隔离组：组内子元素只与组内已合成像素混合，不会读取组外内容；
+`auto` 不额外隔离。缺少父图层时以透明背景作为混合背景。`feBlend` 使用的
+`SvgBlendMode` 仍保持 5 个取值，不受影响。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；
