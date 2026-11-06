@@ -90,6 +90,7 @@
 ### 2.3 `vector-effect`（M4-A3）
 
 - 支持 `none`（默认）与 `non-scaling-stroke`；
+- 公开 API 为 `SvgVectorEffect.NoEffect` / `SvgVectorEffect.NonScalingStroke`，以类 + 静态属性建模，避免与 `Option.None` 的枚举构造器同名；字符串形式仍为 `none` / `non-scaling-stroke`；
 - `non-scaling-stroke` 时描边宽度按设备空间计算：`deviceWidth = strokeWidth`，换算到用户空间时除以 CTM 的平均缩放 `sqrt(|det|)`；
 - 虚线长度同样按设备空间解释；
 - 其他取值记 warning 并按 `none` 处理。

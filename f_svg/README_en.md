@@ -293,6 +293,7 @@ let bitmap = SvgRenderer().render(document)
 - `clip` is a coverage mask that follows the element CTM; with `clip-path`, `clip` is applied first.
 - `overflow` only affects marker / symbol / pattern / nested `svg`; `scroll` and `auto` normalise to `hidden`.
 - `vector-effect="non-scaling-stroke"` divides stroke width and dash lengths by `sqrt(|det(CTM)|)`.
+- Public values are `SvgVectorEffect.NoEffect` / `SvgVectorEffect.NonScalingStroke` (class with static properties, avoiding a clash with `Option.None`).
 
 ### B: baseline, decoration, vertical text and TrueType
 

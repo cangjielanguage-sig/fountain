@@ -298,6 +298,7 @@ let bitmap = SvgRenderer().render(document)
 - `clip` 走覆盖率蒙版，可随元素 CTM 旋转；与 `clip-path` 同时存在时先 `clip` 后 `clip-path`。
 - `overflow` 只对 marker / symbol / pattern / 嵌套 svg 生效；`scroll` / `auto` 归一为 `hidden`。
 - `vector-effect="non-scaling-stroke"` 把描边宽度与虚线段长按 `1 / sqrt(|det(CTM)|)` 换算。
+- 公开取值 `SvgVectorEffect.NoEffect` / `SvgVectorEffect.NonScalingStroke`（类 + 静态属性，避免与 `Option.None` 同名）。
 
 ### B：基线、装饰、竖排与 TrueType
 

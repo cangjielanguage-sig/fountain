@@ -47,7 +47,7 @@
 
 系统 SHALL 新增以下公开枚举，均实现 `Equatable` 与 `ToString`：
 
-- `SvgVectorEffect`：`None` / `NonScalingStroke`；
+- `SvgVectorEffect`：`NoEffect` / `NonScalingStroke`（类 + 静态属性建模，避免与 `Option.None` 构造器同名）；
 - `SvgOverflow`：`Visible` / `Hidden` / `Scroll` / `Auto`。
 
 `SvgVectorEffect` 的字符串形式 SHALL 为 `none` / `non-scaling-stroke`；`SvgOverflow` 的字符串形式 SHALL 为 `visible` / `hidden` / `scroll` / `auto`。
@@ -93,7 +93,7 @@
 #### Scenario: 未知描边效果
 
 - **WHEN** 解析 `vector-effect="scaling-stroke"`
-- **THEN** 回退为 `SvgVectorEffect.None` 并追加 warning
+- **THEN** 回退为 `SvgVectorEffect.NoEffect` 并追加 warning
 
 #### Scenario: 未知光照通道
 

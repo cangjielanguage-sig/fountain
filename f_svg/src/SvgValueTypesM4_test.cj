@@ -91,6 +91,7 @@ public class SvgValueTypesM4_test {
         @Assert(SvgVectorEffect.fromName("none") == Some(SvgVectorEffect.NoEffect))
         @Assert(SvgVectorEffect.fromName("non-scaling-stroke") == Some(SvgVectorEffect.NonScalingStroke))
         @Assert(SvgVectorEffect.NonScalingStroke.toString() == "non-scaling-stroke")
+        @Assert(SvgVectorEffect.NoEffect.toString() == "none")
         @Assert(SvgVectorEffect.fromName("scaling-stroke").isNone())
 
         @Assert(SvgOverflow.fromName("visible") == Some(SvgOverflow.Visible))
