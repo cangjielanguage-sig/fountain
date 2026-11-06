@@ -440,6 +440,7 @@ public interface Destroy {
     func destroy(): Unit
 }
 ```
+Destroy/Resource to implement one is enough. f_bean will first check whether it is implemented Destroy, if not, it will check whether it is implemented Resource.
 
 ### PostConstructor
 If a class decorated with `@Bean` implements this interface, the IOC framework must call `postConstruct()` after the bean is instantiated to complete the final initialization.
