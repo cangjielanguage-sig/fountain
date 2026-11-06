@@ -178,7 +178,7 @@ private func m4TtfCmap12(): Array<Byte> {
     writer.toArray()
 }
 
-private func m4BuildTtf(
+internal func m4BuildTtf(
     cmap12!: Bool = false,
     selfComposite!: Bool = false
 ): Array<Byte> {
