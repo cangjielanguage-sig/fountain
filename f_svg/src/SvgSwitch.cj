@@ -78,9 +78,6 @@ public class SvgSwitch {
         match (element.attr("requiredFeatures")) {
             case Some(value) =>
                 let features = splitSwitchTokens(value)
-                if (features.size == 0) {
-                    return false
-                }
                 for (feature in features) {
                     if (!isKnownFeature(feature)) {
                         return false
@@ -91,19 +88,18 @@ public class SvgSwitch {
         match (element.attr("systemLanguage")) {
             case Some(value) =>
                 let declared = splitSwitchTokens(value)
-                if (declared.size == 0) {
-                    return false
-                }
-                var matched = false
-                for (language in declared) {
-                    for (available in languages) {
-                        if (languageMatches(language, available)) {
-                            matched = true
+                if (declared.size > 0) {
+                    var matched = false
+                    for (language in declared) {
+                        for (available in languages) {
+                            if (languageMatches(language, available)) {
+                                matched = true
+                            }
                         }
                     }
-                }
-                if (!matched) {
-                    return false
+                    if (!matched) {
+                        return false
+                    }
                 }
             case None => ()
         }

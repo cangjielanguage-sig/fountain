@@ -156,6 +156,34 @@ public class SvgSwitchM4_test {
         @Assert(bitmap.pixel(5, 5).blue > 200 && bitmap.pixel(5, 5).red < 60)
     }
 
+    /** 空的 requiredFeatures / systemLanguage 视为无要求。 */
+    @TestCase
+    public func emptyConditions(): Unit {
+        let emptyFeatures = svgDoc(
+            '<switch><rect requiredFeatures="" width="10" height="10" fill="red"/></switch>',
+            width: 10,
+            height: 10
+        )
+        @Assert(SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(emptyFeatures).pixel(5, 5).red > 200)
+
+        let spacedFeatures = svgDoc(
+            '<switch><rect requiredFeatures="   " width="10" height="10" fill="red"/></switch>',
+            width: 10,
+            height: 10
+        )
+        @Assert(SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(spacedFeatures).pixel(5, 5).red > 200)
+
+        let emptyLanguage = svgDoc(
+            '<switch><rect systemLanguage="" width="10" height="10" fill="red"/></switch>',
+            width: 10,
+            height: 10
+        )
+        @Assert(SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(emptyLanguage).pixel(5, 5).red > 200)
+    }
+
     /** requiredFeatures / requiredExtensions / 全部不满足 / display 交互。 */
     @TestCase
     public func conditions(): Unit {

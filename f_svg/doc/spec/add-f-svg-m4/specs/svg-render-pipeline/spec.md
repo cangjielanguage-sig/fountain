@@ -8,7 +8,7 @@
 
 条件判定 SHALL 为：
 
-- 无任何条件属性时视为满足；
+- 无任何条件属性、或条件属性为空 / 纯空白时视为满足；
 - `requiredFeatures` 按空白或逗号分隔，全部为已知特性才满足；未知特性视为不满足；
 - `requiredExtensions` 非空即不满足（本模块不提供扩展）；
 - `systemLanguage` 与 `SvgRenderOptions.languages` 做大小写不敏感的前缀匹配，`zh` SHALL 匹配 `zh-CN`；
