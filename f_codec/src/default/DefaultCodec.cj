@@ -53,6 +53,14 @@ public class DefaultCodec <: Codec & Releasable {
         initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096, maxWaiting: Duration.second * 30)
     private var size = 0
     private let inputs = ArrayList<BytesCopyTo>()
+    /** 编码缓冲的帧头预留量；只有成帧方（f_protocol）需要非 0。 */
+    private let headroom: Int64
+    public init() {
+        headroom = 0
+    }
+    public init(headroom!: Int64) {
+        this.headroom = headroom
+    }
 
     public static func setBytesPool(output: BytesListOutputStreamBuilder): Unit {
         byteListOutputBuilder = output
@@ -116,7 +124,7 @@ public class DefaultCodec <: Codec & Releasable {
         func getBuf(){
             // 有限超时取池项：取不到就抛，由调用方（写线程）记录可见失败，
             // 而不是无限等待（原实现是 build() 默认 Duration.Max）。
-            let buf = byteListOutputBuilder.build(timeout: Duration.second * 5).getOrThrow()
+            let buf = byteListOutputBuilder.build(timeout: Duration.second * 5, headroom: headroom).getOrThrow()
             if (!buf.isEmpty) {
                 // 池项应当是干净的：这里非空说明池的归还清理/记账出了问题（见 .autocode/bugs/bug-archived-on-20261004.md 六）。
                 // 直接抛：编码期失败，绝不会把脏字节写到线上；调用方（写线程）会记录可见错误。
