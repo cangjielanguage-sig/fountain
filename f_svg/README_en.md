@@ -584,6 +584,42 @@ direction, and `bidi-override` forces the paragraph direction. With
 `writing-mode: tb-*` no inline reordering happens and `direction` only decides column
 order. Arabic / Indic complex shaping and vertical ligatures are out of scope.
 
+### Element-level API
+
+```cangjie
+public class SvgElement {
+    public func getBBox(options!: SvgBBoxOptions = SvgBBoxOptions()): ?SvgBounds
+    public func getCTM(): SvgMatrix
+    public func getScreenCTM(viewport!: ?SvgViewportTransform = None): SvgMatrix
+    public func getElementsByClassName(name: String): ArrayList<SvgElement>
+    public func querySelectorAll(selector: String): ArrayList<SvgElement>
+}
+
+public class SvgPath {
+    public func getTotalLength(): Float64
+    public func getPointAtLength(distance: Float64): SvgPoint
+}
+```
+
+- `getBBox`: `stroke` includes the stroke expansion, `clipped` intersects ancestor viewport
+  rectangles (not `clip-path` / `mask`) and `fonts` supplies the text registry. `g` / `a` /
+  `switch` / nested `svg` return the union of descendants including their `transform`;
+  `use` adds `x` / `y`; `image` returns its rectangle; definition elements return `None`.
+  Results are never cached across calls.
+- `getCTM` returns the element-to-root user-space matrix (ancestor transforms, nested
+  viewports and `transform-origin`); unmounted elements return identity. `getScreenCTM`
+  additionally applies the viewport matrix and `devicePixelRatio`.
+- `getElementsByClassName` / `querySelectorAll` return descendants only, in document order
+  and without duplicates; `querySelectorAll` reuses the M5 selector engine and throws
+  `SvgException(InvalidValue)` for invalid selectors.
+- `SvgPath.getTotalLength` / `getPointAtLength` delegate to `SvgPathData`; negative and
+  over-long distances clamp to the start and end points.
+
+```cangjie
+let box = rect.getBBox(options: SvgBBoxOptions(stroke: true))
+let hits = root.querySelectorAll("rect:not(.skip) + circle")
+```
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

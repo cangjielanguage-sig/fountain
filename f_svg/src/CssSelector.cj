@@ -54,14 +54,6 @@ public struct CssSelectorPart <: ToString {
     /** 有序简单选择器；属性 / 伪类只在这里出现。 */
     public let simples: Array<CssSimpleSelectorKind>
 
-    init(typeName: ?String, id: ?String, classes: Array<String>, combinator: ?CssCombinator) {
-        this.typeName = typeName
-        this.id = id
-        this.classes = classes
-        this.combinator = combinator
-        this.simples = Array<CssSimpleSelectorKind>()
-    }
-
     init(
         typeName: ?String,
         id: ?String,

@@ -545,6 +545,38 @@ TrueType 字体在布局阶段读取 `GPOS` Pair Adjustment（format 1 / 2，仅
 `bidi-override` 强制按段落方向排列。`writing-mode: tb-*` 时不做行内重排，`direction` 只
 决定列顺序。阿拉伯 / 印度系复杂脚本整形与竖排连字不在支持范围内。
 
+### 元素级 API
+
+```cangjie
+public class SvgElement {
+    public func getBBox(options!: SvgBBoxOptions = SvgBBoxOptions()): ?SvgBounds
+    public func getCTM(): SvgMatrix
+    public func getScreenCTM(viewport!: ?SvgViewportTransform = None): SvgMatrix
+    public func getElementsByClassName(name: String): ArrayList<SvgElement>
+    public func querySelectorAll(selector: String): ArrayList<SvgElement>
+}
+
+public class SvgPath {
+    public func getTotalLength(): Float64
+    public func getPointAtLength(distance: Float64): SvgPoint
+}
+```
+
+- `getBBox`：`stroke` 并入描边外扩，`clipped` 与祖先视口矩形求交（不处理 `clip-path` / `mask`），
+  `fonts` 指定文本测量字体。`g` / `a` / `switch` / 嵌套 `svg` 返回后代并集并计入子元素 `transform`；
+  `use` 叠加 `x` / `y`；`image` 返回矩形；定义型元素返回 `None`。不跨调用缓存。
+- `getCTM` 返回元素到根用户空间的矩阵（含祖先变换、嵌套视口与 `transform-origin`），
+  未挂载返回单位矩阵；`getScreenCTM` 再乘视口矩阵与 `devicePixelRatio`。
+- `getElementsByClassName` / `querySelectorAll` 只返回后代（文档顺序、不重复），
+  `querySelectorAll` 复用 M5 选择器引擎，非法选择器抛 `SvgException(InvalidValue)`。
+- `SvgPath.getTotalLength` / `getPointAtLength` 转调 `SvgPathData` 的弧长实现，
+  负值与超长距离分别钳制到起点与终点。
+
+```cangjie
+let box = rect.getBBox(options: SvgBBoxOptions(stroke: true))
+let hits = root.querySelectorAll("rect:not(.skip) + circle")
+```
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

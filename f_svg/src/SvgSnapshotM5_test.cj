@@ -122,3 +122,28 @@ public class SvgSnapshotM5_test {
         @Assert(m5ExactMismatch(mutated, "basic").isSome())
     }
 }
+
+/** M5 新增特性场景：同输入重复渲染逐字节一致。 */
+@Test
+public class SvgSnapshotM5Scenes_test {
+    private static let SCENES: Array<String> = [
+        "m5-selector", "m5-media", "m5-blend", "m5-drop-shadow",
+        "m5-transform-origin", "m5-shaping", "m5-bidi", "m5-element-api"
+    ]
+
+    @TestCase
+    public func scenesExact(): Unit {
+        for (name in SvgSnapshotM5Scenes_test.SCENES) {
+            m5RenderAndCompare(name)
+        }
+    }
+
+    @TestCase
+    public func scenesAreDeterministic(): Unit {
+        for (name in SvgSnapshotM5Scenes_test.SCENES) {
+            let first = SvgRenderer().render(m5LoadDocument(name))
+            let second = SvgRenderer().render(m5LoadDocument(name))
+            @Assert(first.pixels == second.pixels)
+        }
+    }
+}

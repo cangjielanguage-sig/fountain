@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_svg
 
-import std.collection.*
 import std.math.*
 import fountain::f_base.*
 
@@ -120,8 +119,8 @@ internal func effectiveElementTransform(
     let tokens = splitCssWhitespaceWords(originText.trimAscii())
     let horizontal = if (tokens.size > 0) { tokens[0] } else { "0" }
     let vertical = if (tokens.size > 1) { tokens[1] } else { "center" }
-    let originX = referenceX + resolveOriginComponent(horizontal, referenceWidth, true)
-    let originY = referenceY + resolveOriginComponent(vertical, referenceHeight, false)
+    let originX = referenceX + resolveOriginComponent(horizontal, referenceWidth)
+    let originY = referenceY + resolveOriginComponent(vertical, referenceHeight)
     if (abs(originX) <= 1e-12 && abs(originY) <= 1e-12) {
         return matrix
     }
@@ -130,7 +129,7 @@ internal func effectiveElementTransform(
         .multiply(SvgMatrix.translate(-originX, -originY))
 }
 
-private func resolveOriginComponent(text: String, reference: Float64, horizontal: Bool): Float64 {
+private func resolveOriginComponent(text: String, reference: Float64): Float64 {
     let lower = text.toAsciiLower()
     match (lower) {
         case "left" => return 0.0

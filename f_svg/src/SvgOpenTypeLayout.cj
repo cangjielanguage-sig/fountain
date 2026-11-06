@@ -20,7 +20,6 @@ import std.collection.*
 internal let CSS_KERN_MAX_PAIRS: Int64 = 65536
 internal let CSS_GPOS_MAX_PAIRS: Int64 = 65536
 internal let CSS_GSUB_MAX_INPUT: Int64 = 4
-internal let CSS_GSUB_MAX_DEPTH: Int64 = 8
 
 private func cssPairKey(left: Int64, right: Int64): Int64 {
     left * 65536 + right

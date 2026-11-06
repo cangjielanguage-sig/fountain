@@ -113,3 +113,17 @@
 
 - 基线测试结果：`cjpm test` TOTAL 710 / PASSED 710 / FAILED 0，单次 wall 约 11.9 s（Linux x86_64，`-O2`）。
 - `cjpm build`：`f_svg` 自身 0 warning（依赖模块 `f_xml` 有 22 条既有 warning，不属本模块）。
+
+## M5 元素级 API（参考值，非门禁）
+
+- 环境：Linux x86_64，Cangjie SDK 1.3.0，`cjpm test`，`-O2`，单次运行、含噪声。
+- 场景：1000 个 `rect.a` 组成的文档（每元素宽高 5），`querySelectorAll("rect.a")` 与单个元素 `getBBox()`。
+- 基准测试：`SvgPerfM5_test.cj` 的 `thousandElementQueries`。
+
+| 操作 | 单次耗时 |
+|---|---|
+| `querySelectorAll("rect.a")`（1000 结果） | 约 0.9 ms |
+| 单次 `getBBox()`（挂载元素，含样式树重算） | 约 51 ms |
+
+- `getBBox` 按契约不做跨调用缓存，每次从根重算计算样式；1000 元素文档下耗时随之线性增长。
+- 以上数值为参考、非 CI 门禁。

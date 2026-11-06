@@ -24,6 +24,22 @@ public class SvgPath <: SvgShape {
         this.d = d
     }
 
+    /** 路径总弧长；`d` 缺失或为空时返回 0。 */
+    public func getTotalLength(): Float64 {
+        match (this.d) {
+            case Some(data) => data.totalLength()
+            case None => 0.0
+        }
+    }
+
+    /** 弧长处的点；负值与超长分别钳制到起点与终点。 */
+    public func getPointAtLength(distance: Float64): SvgPoint {
+        match (this.d) {
+            case Some(data) => data.pointAtLength(distance)
+            case None => SvgPoint(0.0, 0.0)
+        }
+    }
+
     public mut prop d: ?SvgPathData {
         get() {
             this.dCache.get(

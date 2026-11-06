@@ -1,3 +1,17 @@
+2026-11-06
+    feat(f_svg): M5 P1 CSS 扩展——属性选择器 / 结构伪类 / :not / 兄弟组合器与 256 上限；
+      @media（screen/all、min/max-width、and、逗号列表）、@font-face 别名（不加载文件）、
+      CSS 变量（8 层、循环检测）与 calc()（16 层、单位约束）；新增 8 个计算属性
+    feat(f_svg): M5 P2 SVG 2 渲染——paint-order 命令重排、mix-blend-mode 12 值 +
+      isolation 隔离组、feDropShadow（复用 blur/offset/flood/merge）、
+      transform-origin / transform-box、context-fill / context-stroke
+    feat(f_svg): M5 P3 文本整形——kern format 0 与 GPOS PairPos 1/2（GPOS 优先、65536 上限）、
+      GSUB liga（4 字形输入上限）、UAX#9 子集双向重排与 direction / unicode-bidi / font-kerning；
+      advance 语义与未整形字体输出不变
+    feat(f_svg): M5 P4 元素级 API——getBBox / getCTM / getScreenCTM /
+      getElementsByClassName / querySelectorAll 与 SvgPath 长度薄封装；不缓存、不改文档
+    test(f_svg): 941 条用例全绿；17 张 M1–M4 快照逐字节一致，新增 8 张 m5-* 场景快照
+    docs(f_svg): README / README_en 增补 M5 能力与上限，perf-baseline 记录快照哈希与新基准
 2026-10-30
     feat(f_excel): 新增 f_excel 模块（M1）：整文档读写、流式读（ExcelSheetStream）、
       流式写（ExcelWriter）、日期识别与合并单元格；86 用例全绿，openpyxl 回读通过

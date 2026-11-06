@@ -325,6 +325,35 @@ public open class SvgElement <: ToString {
         out.toString()
     }
 
+    /** 元素自身用户空间包围盒；定义型或几何无效元素返回 `None`。 */
+    public func getBBox(options!: SvgBBoxOptions = SvgBBoxOptions()): ?SvgBounds {
+        let styles = match (svgRootOf(this)) {
+            case Some(root) => Some(SvgStyleResolver().compute(root))
+            case None => Option<SvgComputedStyleTree>.None
+        }
+        svgBBoxOf(this, options, styles)
+    }
+
+    /** 元素到根用户空间的矩阵；未挂载时为单位矩阵。 */
+    public func getCTM(): SvgMatrix {
+        svgElementCtm(this)
+    }
+
+    /** 元素到设备空间的矩阵；`viewport` 为空时按根尺寸与 DPR 1 构造。 */
+    public func getScreenCTM(viewport!: ?SvgViewportTransform = None): SvgMatrix {
+        svgElementScreenCtm(this, viewport)
+    }
+
+    /** 后代中 `class` 含指定词的第一个集合（文档顺序，不含自身）。 */
+    public func getElementsByClassName(name: String): ArrayList<SvgElement> {
+        svgElementsByClassName(this, name)
+    }
+
+    /** 复用 M5 选择器引擎查询后代；非法选择器抛 `InvalidValue`。 */
+    public func querySelectorAll(selector: String): ArrayList<SvgElement> {
+        svgQuerySelectorAll(this, selector)
+    }
+
     internal func writeOptionalAttribute(name: String, value: ?String): Unit {
         match (value) {
             case Some(text) => this.setAttr(name, text)
