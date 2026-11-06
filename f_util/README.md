@@ -68,6 +68,8 @@ public func crc32(data: String): UInt32
 public func crc32<T>(s: T): UInt16 where T <: ToString 
 ```
 
+**硬件加速（Linux x86_64）**：`Crc32.crc32c` 用 SSE4.2 `crc32` 指令，`Crc32.isoHdlc` / `jamcrc` 用 PCLMULQDQ 折叠；首次使用时生成机器码（`mmap` RW → `mprotect` RX，`CFunc` 调用），结果与纯软件逐位一致。CPU 不支持、`mprotect` 被策略拦截或设置 `F_UTIL_CRC_HW=0` 时自动回退纯软件；其它 OS/架构始终纯软件。**无第三方运行时依赖、无 C 垫片**（生成器只依赖 libc 的 `mmap/mprotect`）。
+
 ## crc64
 ```cj
 
