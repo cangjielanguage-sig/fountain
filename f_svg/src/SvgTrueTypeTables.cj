@@ -50,15 +50,6 @@ internal func readTtfU16(bytes: Array<Byte>, offset: Int64): Int64 {
     Int64(bytes[offset]) * 256 + Int64(bytes[offset + 1])
 }
 
-internal func readTtfI16(bytes: Array<Byte>, offset: Int64): Int64 {
-    let value = readTtfU16(bytes, offset)
-    if (value >= 32768) {
-        value - 65536
-    } else {
-        value
-    }
-}
-
 internal func readTtfU32(bytes: Array<Byte>, offset: Int64): Int64 {
     if (offset < 0 || offset + 4 > Int64(bytes.size)) {
         throw SvgException("TTF 数据在偏移 ${offset} 处截断", kind: SvgErrorKind.Syntax)

@@ -33,7 +33,7 @@ public class SvgTrueTypeTables_test {
         @Assert(directory.table("missing").isNone())
 
         @Assert(readTtfU16(bytes, head.offset + 18) == 1000)
-        @Assert(readTtfI16(bytes, head.offset + 50) == 0)
+        @Assert(SvgTtfTableReader(bytes, head).i16(50) == 0)
         @Assert(readTtfU32(bytes, 0) == 0x00010000)
 
         let u16Error = expectSvgException({=> readTtfU16(bytes, Int64(bytes.size) - 1)})

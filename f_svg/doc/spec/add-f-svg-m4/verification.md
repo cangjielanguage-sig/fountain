@@ -325,3 +325,42 @@ spec 明确列出的上限均有负向用例：
 7. 以上完成后再考虑 18.8 的合并/删分支；本次按要求不归档。
 
 CRITICAL=5
+
+## 7. 修复结果
+
+修复执行时间：2026-11-06；分支：`feature/f_svg`。以下每项均先补失败用例并确认失败原因，再实现并以 `cjpm test` 全绿提交。
+
+| 编号 | 状态 | 修复内容与证据 |
+|---|---|---|
+| C1 | 已修复 | 5 个 M3 场景纳入 `compareSceneExact`（容差 0），新增单字节篡改检测用例；`clipRect` 完整覆盖内容时跳过离屏层，消除组合成二次量化，`m3-marker` 恢复逐字节一致 |
+| C2 | 已修复 | `screenCTM` 改为 `scale(dpr) × viewport.matrix × ctm(element)`；新增 `g transform` + viewBox meet + DPR 2 用例，并同步设计文档 |
+| C3 | 已修复 | 新增 `SvgTtfTableReader` 表级边界；`endPtsOfContours` 严格递增、`appendTtfContour` 端点校验；表 tag 按 ASCII 校验；`head` / `hhea` / `maxp` / `cmap` 子表长度校验；补非单调 endPts、非法 tag、声明长度为 0、cmap 子表越界、loca 中段截断用例 |
+| C4 | 已修复 | 采用 `NoEffect` 方案；delta spec（两处副本）、`f_svg-M4设计.md`、README 中英统一为 `NoEffect` / `NonScalingStroke`，字符串 `none` / `non-scaling-stroke` 不变 |
+| C5 | 已修复 | `feMorphology` 像素半径上限 `min(4096, max(区域宽, 区域高))`，超限抛 `Limit` 且检查在循环前；补 100×100 / 4×4 负向用例并登记 `svg-security` 上限表 |
+| W1 | 已落地 | 复核 `tasks.md`：5.3、6.4、8.2、10.3、12.3、16.3、17.5 补齐证据或修正表述；18.6 因本机无 `openspec` CLI 保持未勾选并注明 |
+| W2 | 已落地 | 补锐化核、零尺寸 warning、`feDisplacementMap scale="nan"`、多语言优先级、`<image>`+`feImage` 共享预算、字体不读文件、`switch` 受 `maxElements` 约束、loca 中段截断、无显式 `x` 竖排共 9 项断言 |
+| W3 | 已落地 | 与 C3 合并：所有表读取以 `table.offset/length` 为界，越界抛 `Syntax` |
+| W4 | 已落地 | `SvgDisplayList` 携带计算样式树；`tspan` 的基线 / 对齐 / 位移 / 装饰与祖先 `text-decoration` 统一从计算样式读取，支持 `<style>` 与内联 `style` |
+| W5 | 已落地 | 装饰线按字形切分为 `SvgDecorationRun`，渐变以字形起点包围盒取样；纯色仍合并绘制以避免接缝二次混色 |
+| W6 | 已落地 | `method="stretch"` 同步缩放字形宽度；`spacing="exact"` 计入 `letter-spacing`，缺省等同 `auto`；补字形宽度与 letter-spacing 用例 |
+| W7 | 已落地 | 旋转嵌套 `svg` / `symbol` / marker 增加设备空间四边形覆盖率裁剪；marker 内容已完全落在视口内时跳过裁剪，去掉 `inflate(1.0)`；补旋转 45° 与 AABB 角部用例 |
+| W8 | 已落地 | `anchors()` 返回所有 `a`，无 href 或外部 href 被移除时 `href=None`；同步 delta spec |
+| W9 | 已落地 | `requiredFeatures` / `systemLanguage` 为空或纯空白视为无要求；README 与 proposal 补充 `switch` 条件性输出差异 |
+| W10 | 已落地 | 零尺寸滤镜区域追加 warning；`feConvolveMatrix.order` 必须为正整数，非整数按直通 + warning；补 `edgeMode="wrap"`、`feImage slice`、base64 超限用例 |
+| W11 | 已落地 | 补奇异 CTM 下 `non-scaling-stroke` 按 `none` 回退且追加 warning 的渲染用例 |
+| W12 | 已落地 | 补 `SvgView` 修改 `viewBox` / `preserveAspectRatio` / `viewTarget` 后写回再解析断言，并说明 setter 写默认值会显式写出属性 |
+| S4 | 已处理 | spec 明确 `clip: none` 是 `auto` 别名 |
+| S5 | 已处理 | `pointAtLength` 对仅含 `MoveTo` 的零长度路径返回该起点 |
+| S6 | 已处理 | TTF 表读取器用例拆分为 `SvgTrueTypeTables_test.cj` / `SvgTrueTypeTables_test` |
+| S7 | 已处理 | 补 `clip` 作用于文本与图像的像素用例 |
+| S8 | 已处理 | 补“`a` 容器渲染与去掉 `a` 逐字节一致”用例 |
+| S9 | 已处理 | 修正 `SvgTextBaseline.shift` 注释的 y 轴方向 |
+| S10 | 已处理 | 补 `view` 无 `viewBox` + 非法视口仍抛 `InvalidValue` 用例 |
+| S1 / 18.8 | 按记录不改 | 仓库无 CI 配置，字节基线已进入 `cjpm test`；合并回上游与删除分支未执行 |
+
+复验结果：
+
+- `cjpm test`：`TOTAL: 691 / PASSED: 691 / FAILED: 0`，M1–M3 字节基线全部通过。
+- `cjpm build`：成功；`f_svg` 自身 0 warning（依赖 `f_xml` 的既有 warning 不变）。
+- 快照更新：`m4-text.rgba`（textPath stretch 现在缩放字形宽度）、`m4-clip.rgba`（marker 改为精确视口，不再放宽 1 像素）；M1–M3 快照未改动。
+- 结论：`CRITICAL=0`，`WARNING=0`（W1–W12 全部落地），SUGGESTION 除 S1 的记录不改项外全部处理。
