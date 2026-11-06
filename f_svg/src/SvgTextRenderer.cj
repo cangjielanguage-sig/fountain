@@ -1414,9 +1414,9 @@ private func shouldReorderBidi(style: SvgComputedStyle, chars: ArrayList<SvgText
 }
 
 /** 方向对应的嵌入层级：先取比基础层级更高的层级，再调整奇偶。 */
-private func bidiEmbeddingLevel(base: Int64, direction: SvgDirection, forceIncrease: Bool): Int64 {
+private func bidiEmbeddingLevel(base: Int64, direction: SvgDirection): Int64 {
     let needsOdd = direction == SvgDirection.Rtl
-    var level = if (forceIncrease || ((base % 2 == 1) != needsOdd)) {
+    var level = if ((base % 2 == 1) != needsOdd) {
         base + 1
     } else {
         base
@@ -1439,14 +1439,16 @@ private func bidiSegmentLevels(
     }
     let base: Int64 = if (baseRtl) { 1 } else { 0 }
     let paragraphDirection = if (baseRtl) { SvgDirection.Rtl } else { SvgDirection.Ltr }
-    let levels = svgBidiLevels(codePoints.toArray(), baseRtl)
+    let codePointArray = codePoints.toArray()
+    let levels = svgBidiLevels(codePointArray, baseRtl)
+    let overrideLevels = svgBidiOverrideLevels(codePointArray, baseRtl)
     for (offset in 0..levels.size) {
         let char = chars[start + offset]
         if (char.unicodeBidi == SvgUnicodeBidi.BidiOverride) {
-            levels[offset] = bidiEmbeddingLevel(base, char.direction, true)
+            levels[offset] = overrideLevels[offset]
         } else if (char.unicodeBidi == SvgUnicodeBidi.Embed ||
             char.direction != paragraphDirection) {
-            levels[offset] = bidiEmbeddingLevel(base, char.direction, false)
+            levels[offset] = bidiEmbeddingLevel(base, char.direction)
         }
     }
     levels

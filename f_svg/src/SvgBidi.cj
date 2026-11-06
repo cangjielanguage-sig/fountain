@@ -217,6 +217,16 @@ public func svgMirrorBidiCodePoint(codePoint: Int64): Int64 {
     }
 }
 
+/** `bidi-override`：整段强制为段落基础层级（RTL 为 1，LTR 为 0）。 */
+internal func svgBidiOverrideLevels(codePoints: Array<Int64>, baseRtl: Bool): Array<Int64> {
+    let level: Int64 = if (baseRtl) { 1 } else { 0 }
+    let levels = ArrayList<Int64>()
+    for (_ in codePoints) {
+        levels.add(level)
+    }
+    levels.toArray()
+}
+
 /** 计算每个字符的嵌入层级（UAX#9 弱 / 中性 / 隐式子集）。 */
 internal func svgBidiLevels(codePoints: Array<Int64>, paragraphRtl: Bool): Array<Int64> {
     let size = codePoints.size

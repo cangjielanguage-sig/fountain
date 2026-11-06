@@ -67,6 +67,17 @@ public class SvgBidiM5_test {
         @Assert(ltr == [0, 1, 2])
     }
 
+    /** `bidi-override` 把所有字符强制到基础层级。 */
+    @TestCase
+    public func override(): Unit {
+        let rtl = svgBidiOverrideLevels(m5CodePoints("abc"), true)
+        @Assert(rtl == [1, 1, 1])
+        @Assert(svgBidiVisualOrder(rtl) == [2, 1, 0])
+        let ltr = svgBidiOverrideLevels(m5CodePoints("אב"), false)
+        @Assert(ltr == [0, 0])
+        @Assert(svgBidiVisualOrder(ltr) == [0, 1])
+    }
+
     /** 中性字符按两侧强类型解析。 */
     @TestCase
     public func neutrals(): Unit {
