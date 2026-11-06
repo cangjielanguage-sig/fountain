@@ -543,6 +543,22 @@ argument to resolve the origin during queries.
 </svg>
 ```
 
+### Context paint
+
+`fill` / `stroke` accept `context-fill` / `context-stroke`, valid only inside a `use`
+instance: they resolve to the computed `fill` / `stroke` of the `use.href` target, with
+nested `use` taking the nearest frame. Outside any `use`, or on a plain element, they
+fall back to `none` with a warning; when the referenced element itself uses `context-*`
+the result is also `none` with a warning, with no recursion. Resolution order is
+`context-*` first, then `currentColor`; the two never both take effect.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+  <defs><g id="paint" fill="red"><rect width="20" height="20" fill="context-fill"/></g></defs>
+  <use href="#paint"/>
+</svg>
+```
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

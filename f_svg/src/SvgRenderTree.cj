@@ -84,6 +84,8 @@ public class SvgDisplayCommand {
     public let blendMode: SvgMixBlendMode
     /** 是否建立隔离组（`isolation: isolate`）。 */
     public let isolated: Bool
+    /** 构建期已解析的画笔（`context-fill` / `context-stroke`）；`None` 时按样式解析。 */
+    public let paintOverride: ?SvgPaint
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -105,7 +107,8 @@ public class SvgDisplayCommand {
         nonScalingStroke!: Bool = false,
         clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>(),
         blendMode!: SvgMixBlendMode = SvgMixBlendMode.Normal,
-        isolated!: Bool = false
+        isolated!: Bool = false,
+        paintOverride!: ?SvgPaint = None
     ) {
         this.kind = kind
         this.tag = tag
@@ -130,6 +133,7 @@ public class SvgDisplayCommand {
         this.clipQuads = clipQuads
         this.blendMode = blendMode
         this.isolated = isolated
+        this.paintOverride = paintOverride
     }
 }
 
@@ -182,6 +186,9 @@ private class SvgRenderTreeContext {
     let useStack: Array<String>
     let fonts: ?SvgFontRegistry
     let clipQuads: Array<Array<SvgPoint>>
+    /** 最近的 `use` 实例帧：被引用元素的计算 fill / stroke。 */
+    let contextFill: ?SvgPaint
+    let contextStroke: ?SvgPaint
 
     init(
         matrix: SvgMatrix,
@@ -193,7 +200,9 @@ private class SvgRenderTreeContext {
         depth: Int64,
         useStack: Array<String>,
         fonts: ?SvgFontRegistry,
-        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>()
+        clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>(),
+        contextFill!: ?SvgPaint = None,
+        contextStroke!: ?SvgPaint = None
     ) {
         this.matrix = matrix
         this.width = width
@@ -205,6 +214,8 @@ private class SvgRenderTreeContext {
         this.useStack = useStack
         this.fonts = fonts
         this.clipQuads = clipQuads
+        this.contextFill = contextFill
+        this.contextStroke = contextStroke
     }
 }
 
@@ -534,7 +545,9 @@ public class SvgRenderTreeBuilder {
             context.depth,
             context.useStack,
             context.fonts,
-            clipQuads: context.clipQuads
+            clipQuads: context.clipQuads,
+            contextFill: context.contextFill,
+            contextStroke: context.contextStroke
         )
         let childCommands = ArrayList<SvgDisplayCommand>()
         if (container.kind == SvgContainerKind.Switch) {
@@ -626,7 +639,9 @@ public class SvgRenderTreeBuilder {
             context.depth + 1,
             context.useStack,
             context.fonts,
-            clipQuads: childQuads
+            clipQuads: childQuads,
+            contextFill: context.contextFill,
+            contextStroke: context.contextStroke
         )
         this.walkChildren(svg, childContext, commands)
     }
@@ -724,7 +739,9 @@ public class SvgRenderTreeBuilder {
             context.depth + 1,
             nextStack.toArray(),
             context.fonts,
-            clipQuads: childQuads
+            clipQuads: childQuads,
+            contextFill: useContextFrame(context.styles, target, true),
+            contextStroke: useContextFrame(context.styles, target, false)
         )
         if (target.tag == "symbol") {
             this.walkChildren(target, childContext, commands)
@@ -781,7 +798,13 @@ public class SvgRenderTreeBuilder {
         let fillCommands = ArrayList<SvgDisplayCommand>()
         let strokeCommands = ArrayList<SvgDisplayCommand>()
         let markerCommands = ArrayList<SvgDisplayCommand>()
-        let fill = style.fill()
+        let fill = resolveContextPaintOf(
+            style.fill(),
+            context.contextFill,
+            SvgPaintKind.ContextFill,
+            "context-fill",
+            this.warnings
+        )
         if (fill.kind != SvgPaintKind.None) {
             fillCommands.add(
                 SvgDisplayCommand(
@@ -798,11 +821,18 @@ public class SvgRenderTreeBuilder {
                     filter: None,
                     clip: if (filtered) { None } else { clip },
                     clipQuads: context.clipQuads,
-                    blendMode: svgMixBlendModeOf(style)
+                    blendMode: svgMixBlendModeOf(style),
+                    paintOverride: Some(fill)
                 )
             )
         }
-        let stroke = style.stroke()
+        let stroke = resolveContextPaintOf(
+            style.stroke(),
+            context.contextStroke,
+            SvgPaintKind.ContextStroke,
+            "context-stroke",
+            this.warnings
+        )
         if (stroke.kind != SvgPaintKind.None) {
             strokeCommands.add(
                 SvgDisplayCommand(
@@ -820,7 +850,8 @@ public class SvgRenderTreeBuilder {
                     clip: if (filtered) { None } else { clip },
                     nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke,
                     clipQuads: context.clipQuads,
-                    blendMode: svgMixBlendModeOf(style)
+                    blendMode: svgMixBlendModeOf(style),
+                    paintOverride: Some(stroke)
                 )
             )
         }
@@ -1383,4 +1414,46 @@ private func deriveRenderFonts(
         case None => SvgFontRegistry.defaultRegistry()
     }
     SvgFontRegistry.derived(base, faces.toArray())
+}
+
+/** `use` 目标元素的计算画笔作为上下文帧；自身为 `context-*` 时视为无帧。 */
+private func useContextFrame(
+    styles: SvgComputedStyleTree,
+    target: SvgElement,
+    isFill: Bool
+): ?SvgPaint {
+    let style = match (styles.get(target)) {
+        case Some(value) => value
+        case None => return Option<SvgPaint>.None
+    }
+    let paint = if (isFill) { style.fill() } else { style.stroke() }
+    match (paint.kind) {
+        case ContextFill | ContextStroke => Option<SvgPaint>.None
+        case _ => Some(paint)
+    }
+}
+
+/** 解析 `context-fill` / `context-stroke`；无帧时回退 none 并告警。 */
+private func resolveContextPaintOf(
+    paint: SvgPaint,
+    frame: ?SvgPaint,
+    expected: SvgPaintKind,
+    keyword: String,
+    warnings: ArrayList<String>
+): SvgPaint {
+    if (paint.kind != expected) {
+        return paint
+    }
+    match (frame) {
+        case Some(value) =>
+            match (value.kind) {
+                case ContextFill | ContextStroke =>
+                    warnings.add("${keyword} 没有可用的 use 上下文，按 none 处理")
+                    SvgPaint.None
+                case _ => value
+            }
+        case None =>
+            warnings.add("${keyword} 没有可用的 use 上下文，按 none 处理")
+            SvgPaint.None
+    }
 }

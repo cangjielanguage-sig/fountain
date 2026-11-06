@@ -392,7 +392,10 @@ public class SvgRenderer {
             case Some(value) => value
             case None => return
         }
-        let paint = style.fill()
+        let paint = match (command.paintOverride) {
+            case Some(value) => value
+            case None => style.fill()
+        }
         let opacity = command.opacity * style.fillOpacity()
         this.drawPaint(bitmap, command, list, style, path, paint, opacity, false, patterns)
     }
@@ -408,7 +411,10 @@ public class SvgRenderer {
             case Some(value) => value
             case None => return
         }
-        let paint = style.stroke()
+        let paint = match (command.paintOverride) {
+            case Some(value) => value
+            case None => style.stroke()
+        }
         let opacity = command.opacity * style.strokeOpacity()
         this.drawPaint(bitmap, command, list, style, path, paint, opacity, true, patterns)
     }
@@ -442,6 +448,7 @@ public class SvgRenderer {
         let effectiveDashOffset = style.strokeDashOffset().value * strokeScale
         let color = match (paint.kind) {
             case None => return
+            case ContextFill | ContextStroke => return
             case CurrentColor => style.color()
             case Color => paint.color ?? SvgColor.Black
             case Reference =>

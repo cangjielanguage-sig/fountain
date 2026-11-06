@@ -510,6 +510,21 @@ marker 的派生位置、数量与朝向不变。
 </svg>
 ```
 
+### 上下文画笔 context-fill / context-stroke
+
+`fill` / `stroke` 可取 `context-fill` / `context-stroke`，只在 `use` 展开的实例内有效：
+解析为 `use.href` 目标元素的计算 `fill` / `stroke`，嵌套 `use` 取最近一层的帧。
+无 `use` 上下文、或在普通元素上直接使用时回退 `none` 并记 warning；被引用元素自身为
+`context-*` 时同样回退 `none`，不递归解析。解析顺序为先 `context-*`、再 `currentColor`，
+两者不会同时生效。
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+  <defs><g id="paint" fill="red"><rect width="20" height="20" fill="context-fill"/></g></defs>
+  <use href="#paint"/>
+</svg>
+```
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

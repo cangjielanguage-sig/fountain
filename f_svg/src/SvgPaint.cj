@@ -27,6 +27,10 @@ public enum SvgPaintKind <: Equatable<SvgPaintKind> & ToString {
     | CurrentColor
     | Color
     | Reference
+    /** `use` 实例内解析为被引用元素的 `fill`。 */
+    | ContextFill
+    /** `use` 实例内解析为被引用元素的 `stroke`。 */
+    | ContextStroke
 
     public operator func ==(that: SvgPaintKind): Bool {
         match ((this, that)) {
@@ -34,6 +38,8 @@ public enum SvgPaintKind <: Equatable<SvgPaintKind> & ToString {
             case (CurrentColor, CurrentColor) => true
             case (Color, Color) => true
             case (Reference, Reference) => true
+            case (ContextFill, ContextFill) => true
+            case (ContextStroke, ContextStroke) => true
             case _ => false
         }
     }
@@ -44,6 +50,8 @@ public enum SvgPaintKind <: Equatable<SvgPaintKind> & ToString {
             case CurrentColor => "CurrentColor"
             case Color => "Color"
             case Reference => "Reference"
+            case ContextFill => "ContextFill"
+            case ContextStroke => "ContextStroke"
         }
     }
 }
@@ -107,6 +115,12 @@ public struct SvgPaint <: Equatable<SvgPaint> & ToString {
         if (lower == "currentcolor") {
             return SvgPaint.CurrentColor
         }
+        if (lower == "context-fill") {
+            return SvgPaint.make(SvgPaintKind.ContextFill)
+        }
+        if (lower == "context-stroke") {
+            return SvgPaint.make(SvgPaintKind.ContextStroke)
+        }
         if (lower.size >= 4 && lower[0..4] == "url(") {
             return parseReference(trimmed)
         }
@@ -121,6 +135,8 @@ public struct SvgPaint <: Equatable<SvgPaint> & ToString {
                 case Some(color) => color.toString()
                 case None => "none"
             }
+            case ContextFill => "context-fill"
+            case ContextStroke => "context-stroke"
             case Reference =>
                 let base = "url(${this.reference ?? ""})"
                 match (this.fallback) {
@@ -135,7 +151,7 @@ public struct SvgPaint <: Equatable<SvgPaint> & ToString {
             return false
         }
         match (this.kind) {
-            case None | CurrentColor => true
+            case None | CurrentColor | ContextFill | ContextStroke => true
             case Color => this.color == that.color
             case Reference => this.reference == that.reference && this.fallback == that.fallback
         }
