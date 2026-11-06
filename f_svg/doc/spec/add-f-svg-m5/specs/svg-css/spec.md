@@ -209,14 +209,14 @@
 
 ### Requirement: @font-face 别名
 
-系统 SHALL 解析 `@font-face` 的 `font-family`、可选 `font-weight` 与 `font-style`，把该 family 名称注册为字体别名，指向字体注册表中已注册的同名 family。
+系统 SHALL 解析 `@font-face` 的 `font-family`、可选 `font-weight` 与 `font-style`，把该 family 名称注册为字体别名。目标 family SHALL 取自 `src` 中的 `local(<family>)`；`src` 无 `local()` 时，仅当同名 family 已注册才建立恒等别名。
 
 `src`、`unicode-range`、`font-display` 等其余声明 SHALL 被忽略，且 `src` SHALL 追加一条 warning；本模块 SHALL NOT 加载任何字体文件或发起网络请求。别名只在本次渲染内生效，SHALL NOT 修改调用方传入的字体注册表。目标 family 未注册时别名 SHALL 不生效并记 warning。
 
 #### Scenario: 别名指向已注册字体
 
-- **WHEN** 注册表已注册 family `Brand`，样式表声明 `@font-face { font-family: Body; src: url(x.ttf) }`，文本 `font-family="Body"`
-- **THEN** 文本使用 `Brand` 的字体渲染，`warnings` 含 `src`
+- **WHEN** 注册表已注册 family `Brand`，样式表声明 `@font-face { font-family: Body; src: local(Brand) }`，文本 `font-family="Body"`
+- **THEN** 文本使用 `Brand` 的字体渲染
 
 #### Scenario: 未注册目标
 
