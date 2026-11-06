@@ -62,6 +62,25 @@ public class CssGeometryCalcM5_test {
         @Assert(m5BoxNear(SvgGeometry.bounds(element, style: style), 25.0, 0.0, 10.0, 10.0))
     }
 
+    /** 几何属性的百分比按对应视口轴换算，允许与 px 混合。 */
+    @TestCase
+    public func mixedUnitsUseViewportAxes(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>" +
+            "rect { x: calc(10% + 5px); y: calc(20% + 5px); " +
+            "width: calc(50% + 10px); height: calc(10% + 2px) }</style>" +
+            "<rect id=\"r\"/></svg>"
+        )
+        let tree = SvgStyleResolver().compute(
+            document.root,
+            mediaWidth: 200.0,
+            mediaHeight: 100.0
+        )
+        let element = document.elementById("r") ?? throw invalidValue("缺少矩形")
+        let style = m5StyleOf(tree, Some(element))
+        @Assert(m5BoxNear(SvgGeometry.bounds(element, style: style), 25.0, 25.0, 110.0, 12.0))
+    }
+
     /** 非法 calc 回退初始值并告警。 */
     @TestCase
     public func invalidGeometryCalcFallsBack(): Unit {
