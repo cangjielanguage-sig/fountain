@@ -442,6 +442,23 @@ if (selector.matches(element)) {
   `view-box`、`direction` 为 `ltr`（继承）、`unicode-bidi` 为 `normal`、
   `font-kerning` 为 `auto`（继承）；非法值回退初始值并记 warning。
 
+### 绘制顺序 paint-order
+
+`paint-order` 是 `fill` / `stroke` / `markers` 的无重复有序子集，缺省
+`fill stroke markers`。渲染树按该顺序发出命令；未列出的层按默认相对顺序追加到末尾，
+marker 的派生位置、数量与朝向不变。
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="40" height="40"
+        fill="orange" stroke="navy" stroke-width="6"
+        style="paint-order: stroke fill"/>
+</svg>
+```
+
+上例先画描边再画填充，重叠处显示填充。未声明 `paint-order` 的文档输出与 M4 逐字节一致；
+非法值（未知关键字）回退默认顺序并记 warning。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

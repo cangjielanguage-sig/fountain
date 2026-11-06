@@ -740,9 +740,13 @@ public class SvgRenderTreeBuilder {
                 context.clipQuads
             )
         }
+        let paintOrder = svgPaintOrderOf(style.get("paint-order"))
+        let fillCommands = ArrayList<SvgDisplayCommand>()
+        let strokeCommands = ArrayList<SvgDisplayCommand>()
+        let markerCommands = ArrayList<SvgDisplayCommand>()
         let fill = style.fill()
         if (fill.kind != SvgPaintKind.None) {
-            commands.add(
+            fillCommands.add(
                 SvgDisplayCommand(
                     SvgDisplayCommandKind.FillPath,
                     shape.tag,
@@ -762,7 +766,7 @@ public class SvgRenderTreeBuilder {
         }
         let stroke = style.stroke()
         if (stroke.kind != SvgPaintKind.None) {
-            commands.add(
+            strokeCommands.add(
                 SvgDisplayCommand(
                     SvgDisplayCommandKind.StrokePath,
                     shape.tag,
@@ -781,7 +785,20 @@ public class SvgRenderTreeBuilder {
                 )
             )
         }
-        this.addMarkers(shape, context, commands, style)
+        this.addMarkers(shape, context, markerCommands, style)
+        for (layer in paintOrder.layers) {
+            match (layer) {
+                case Fill => for (command in fillCommands) {
+                    commands.add(command)
+                }
+                case Stroke => for (command in strokeCommands) {
+                    commands.add(command)
+                }
+                case Markers => for (command in markerCommands) {
+                    commands.add(command)
+                }
+            }
+        }
         if (filtered) {
             commands.add(SvgDisplayCommand(SvgDisplayCommandKind.GroupEnd, shape.tag, matrix))
         }

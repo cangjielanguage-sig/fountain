@@ -467,6 +467,25 @@ skipped with a warning.
   `font-kerning` `auto` (inherited). Invalid values fall back to the initial value with a
   warning.
 
+### Paint order
+
+`paint-order` is a duplicate-free ordered subset of `fill` / `stroke` / `markers`,
+defaulting to `fill stroke markers`. The render tree emits commands in that order;
+layers not listed are appended in the default relative order, and marker derivation,
+count and orientation stay unchanged.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="40" height="40"
+        fill="orange" stroke="navy" stroke-width="6"
+        style="paint-order: stroke fill"/>
+</svg>
+```
+
+The example draws the stroke first and the fill last, so overlaps show the fill.
+Documents without `paint-order` are byte-identical to M4; invalid values fall back to
+the default order with a warning.
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

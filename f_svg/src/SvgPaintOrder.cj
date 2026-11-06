@@ -17,6 +17,98 @@ package fountain::f_svg
 
 import std.collection.*
 
+/** 绘制层。 */
+public enum SvgPaintLayer <: Equatable<SvgPaintLayer> & ToString {
+    | Fill
+    | Stroke
+    | Markers
+
+    public operator func ==(that: SvgPaintLayer): Bool {
+        match ((this, that)) {
+            case (Fill, Fill) => true
+            case (Stroke, Stroke) => true
+            case (Markers, Markers) => true
+            case _ => false
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Fill => "fill"
+            case Stroke => "stroke"
+            case Markers => "markers"
+        }
+    }
+}
+
+/** `fill` / `stroke` / `markers` 的无重复有序子集。 */
+public class SvgPaintOrder <: ToString {
+    public let layers: Array<SvgPaintLayer>
+
+    private init(layers: Array<SvgPaintLayer>) {
+        this.layers = layers
+    }
+
+    /** 缺省顺序。 */
+    public static func defaultOrder(): SvgPaintOrder {
+        SvgPaintOrder([SvgPaintLayer.Fill, SvgPaintLayer.Stroke, SvgPaintLayer.Markers])
+    }
+
+    public static func parse(text: String): SvgPaintOrder {
+        SvgPaintOrder.parse(text, ArrayList<String>())
+    }
+
+    /** 解析并记录重复 / 未知关键字告警。 */
+    internal static func parse(text: String, warnings: ArrayList<String>): SvgPaintOrder {
+        let tokens = splitCssWhitespaceWords(text.trimAscii().toAsciiLower())
+        let layers = ArrayList<SvgPaintLayer>()
+        for (token in tokens) {
+            match (paintLayerFromName(token)) {
+                case Some(layer) =>
+                    if (containsPaintLayer(layers, layer)) {
+                        warnings.add("paint-order 重复层「${token}」，已忽略重复项")
+                    } else {
+                        layers.add(layer)
+                    }
+                case None => warnings.add("paint-order 忽略未知关键字「${token}」")
+            }
+        }
+        for (layer in [SvgPaintLayer.Fill, SvgPaintLayer.Stroke, SvgPaintLayer.Markers]) {
+            if (!containsPaintLayer(layers, layer)) {
+                layers.add(layer)
+            }
+        }
+        SvgPaintOrder(layers.toArray())
+    }
+
+    public func toString(): String {
+        let out = ArrayList<String>()
+        for (layer in this.layers) {
+            out.add(layer.toString())
+        }
+        joinCssStrings(out, " ")
+    }
+}
+
+/** 关键字到层的映射；未知返回 `None`。 */
+internal func paintLayerFromName(name: String): ?SvgPaintLayer {
+    match (name.trimAscii().toAsciiLower()) {
+        case "fill" => Some(SvgPaintLayer.Fill)
+        case "stroke" => Some(SvgPaintLayer.Stroke)
+        case "markers" => Some(SvgPaintLayer.Markers)
+        case _ => None
+    }
+}
+
+private func containsPaintLayer(layers: ArrayList<SvgPaintLayer>, layer: SvgPaintLayer): Bool {
+    for (item in layers) {
+        if (item == layer) {
+            return true
+        }
+    }
+    false
+}
+
 private let CSS_PAINT_LAYER_NAMES: Array<String> = ["fill", "stroke", "markers"]
 
 /**
@@ -62,4 +154,12 @@ private func containsCssPaintLayer(layers: ArrayList<String>, name: String): Boo
         }
     }
     false
+}
+
+/** 计算样式值转回绘制层序列；非法值返回缺省顺序。 */
+internal func svgPaintOrderOf(value: ?String): SvgPaintOrder {
+    match (value) {
+        case Some(text) => SvgPaintOrder.parse(text)
+        case None => SvgPaintOrder.defaultOrder()
+    }
 }
