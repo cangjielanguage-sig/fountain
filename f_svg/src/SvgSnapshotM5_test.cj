@@ -22,6 +22,31 @@ import std.unittest.testmacro.*
 
 internal let M5_SNAPSHOT_DIR = "testdata/render"
 
+
+/** m5-shaping 场景使用含 kern / GPOS / GSUB 的最小 TTF。 */
+internal func m5ShapingFonts(): SvgFontRegistry {
+    let font = SvgTrueTypeFont.parse(
+        m5BuildLayoutTtf(
+            [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+            kern: m5KernTable([(1, 2, -80)]),
+            gpos: m5GposFormat1(1, 2, -200),
+            gsub: m5Gsub(3, [(10, [4])])
+        )
+    )
+    let registry = SvgFontRegistry()
+    registry.register("Shaping", font)
+    registry
+}
+
+/** 场景渲染：m5-shaping 注入整形字体，其余使用默认字体。 */
+internal func m5RenderScene(name: String): SvgBitmap {
+    if (name == "m5-shaping") {
+        return SvgRenderer(options: SvgRenderOptions(fonts: m5ShapingFonts()))
+            .render(m5LoadDocument(name))
+    }
+    SvgRenderer().render(m5LoadDocument(name))
+}
+
 /** M5 快照路径：`<name>.svg` / `<name>.rgba`。 */
 internal func m5SnapshotPath(name: String, extension: String): String {
     "${M5_SNAPSHOT_DIR}/${name}.${extension}"
@@ -134,16 +159,28 @@ public class SvgSnapshotM5Scenes_test {
     @TestCase
     public func scenesExact(): Unit {
         for (name in SvgSnapshotM5Scenes_test.SCENES) {
-            m5RenderAndCompare(name)
+            m5CompareExact(m5RenderScene(name), name)
         }
     }
 
     @TestCase
     public func scenesAreDeterministic(): Unit {
         for (name in SvgSnapshotM5Scenes_test.SCENES) {
-            let first = SvgRenderer().render(m5LoadDocument(name))
-            let second = SvgRenderer().render(m5LoadDocument(name))
+            let first = m5RenderScene(name)
+            let second = m5RenderScene(name)
             @Assert(first.pixels == second.pixels)
         }
+    }
+
+    /** m5-element-api 场景同时验证 P4 元素级 API 的可断言结果。 */
+    @TestCase
+    public func elementApiSceneAssertions(): Unit {
+        let document = m5LoadDocument("m5-element-api")
+        let queried = document.root.querySelectorAll("rect")
+        @Assert(queried.size == 2)
+        let box = queried[1].getBBox()
+        @Assert(m5BoxNear(box, 4.0, 36.0, 24.0, 20.0))
+        let ctm = queried[0].getCTM()
+        @Assert(m5PointNear(ctm.apply(SvgPoint(0.0, 0.0)), 0.0, 0.0))
     }
 }

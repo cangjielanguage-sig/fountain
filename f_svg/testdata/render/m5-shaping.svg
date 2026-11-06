@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-  <text x="6" y="24" font-family="Hershey" font-size="16" direction="rtl">abc</text>
-  <text x="6" y="46" font-family="Hershey" font-size="16" unicode-bidi="bidi-override" direction="rtl">fi</text>
+  <text x="6" y="20" font-family="Shaping" font-size="16">fi</text>
+  <text x="6" y="40" font-family="Shaping" font-size="16">AV</text>
+  <text x="6" y="58" font-family="Shaping" font-size="12" direction="rtl">fi</text>
 </svg>
