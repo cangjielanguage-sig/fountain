@@ -27,7 +27,8 @@ public class ReloadResult {
     }
 
     public func toString(): String {
-        'loom reload: restored=${restored}, compiled=${compiled}, failed=${failed}'
+        'loom reload: restored=${restored}, compiled=${compiled}, failed=${failed}, '
+            + 'restoreFailed=${restoreFailed}'
     }
 }
 

@@ -84,7 +84,9 @@ export llm_channels='[{"platform":"email","account":"work","from":"bot@example.c
 | 幂等 | 同名流程重复登记只更新描述/状态，不产生第二条 |
 | 并发 | 表由 `Mutex` 保护，与 `LoomRegistry` 一致 |
 | 初始化 | `LoomWiring.wire` 在开关打开时用 `LoomRegistry.compiledFlows()` 播种（重启后从存储恢复的流程也在此进来） |
-| 存储不可用 | 恢复失败不阻断启动：`LoomBootstrap.startup` 置 `ReloadResult.restoreFailed=true` 并继续，路由表为空、流程服务照常可用 |
+| 存储不可用 | 恢复失败不阻断启动：`ReloadResult.restoreFailed=true` 并继续，路由表为空、流程服务照常可用；装配后可用 `LoomWiring.lastReload()` 读到该结果 |
+| 陈旧路由 | 派发前二次校验发现流程已不是 `compiled` → **先摘除该路由**再返回「没有可完成此工作的流程」，不会被反复选中 |
+| 宿主 | `LoomWiring.wire(host:)` 优先；已安装宿主不会被默认宿主覆盖 |
 | 持久化 | **不落库**：路由表是流程库的派生视图，避免双份真相 |
 
 事件名用 `sv/` 前缀，与 `LoomRunner` 内部的 `loom/<name>#<seq>` 流程 tag 区分开——日志里一眼能看出

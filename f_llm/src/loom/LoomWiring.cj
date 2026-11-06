@@ -19,6 +19,7 @@ import std.collection.*
 import std.time.DateTime
 import fountain::f_llm.channel.*
 import fountain::f_llm.config.LLMConfig
+import fountain::f_log.*
 import fountain::f_llm.store.*
 
 /**
@@ -75,7 +76,8 @@ public class LoomWiring {
         store!: ?LoomStore = None, memoryPolicy!: ?LoomMemoryPolicy = None,
         skillEmbedder!: ?(String) -> Array<Float64> = None, evolutionCron!: String = '', evolutionUserId!: Int64 = 0,
         evolutionNamespace!: String = 'loom', evolutionModel!: String = '', evolutionNameCandidates!: Bool = true,
-        evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy(), gateway!: ?LoomStoreGateway = None): LoomService {
+        evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy(), gateway!: ?LoomStoreGateway = None,
+        host!: ?LoomHost = None): LoomService {
         let settings = StoreSettings.load()
         // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
         let chosen = match (store) {
@@ -83,7 +85,12 @@ public class LoomWiring {
             case None => LoomBootstrap.storeFor(settings.metaStore)
         }
         let registry = LoomRegistry(store: chosen)
-        LoomBootstrap.startup(registry)
+        let reloaded = LoomBootstrap.startup(registry)
+        reload = Some(reloaded)
+        if (reloaded.restoreFailed) {
+            // 库可能比应用晚就绪：不阻断启动，但必须留下痕迹
+            LoggerFactory.getLogger<LoomWiring>().warn('loom restore failed: ${reloaded.toString()}')
+        }
         let planner = Planner({system, user => chat(plannerModel, system, user)})
         let service = LoomService(planner, registry)
         LoomServices.install(service)
@@ -94,7 +101,14 @@ public class LoomWiring {
             kind, op, payload => gatewayHolder.get(gateway).call(kind, op, payload)
         })
         // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
-        LoomServices.installHost(DefaultLoomHost(chat))
+        let chosenHost: LoomHost = match (host) {
+            case Some(value) => value
+            case None => match (LoomServices.currentHost()) {
+                case Some(value) => value
+                case None => DefaultLoomHost(chat)
+            }
+        }
+        LoomServices.installHost(chosenHost)
         // 第三方平台通道：按 llm_channels 装配（未配置时什么都不做）
         let _ = ChannelBootstrap.installFromConfig()
         // Supervisor：开关打开时用已编译流程播种路由表（重启后恢复的流程也在这里进来）
@@ -124,6 +138,13 @@ public class LoomWiring {
      * 路由表不落库，开机时按 `LoomRegistry` 里已恢复的流程重建；
      * 选路与派发复用同一份 chat 回调（模型名取 `plannerModel`）。
      */
+    /** 最近一次装配的恢复结果（`wire` 写入）；进程级，和 `LoomServices` 一致 */
+    private static var reload: ?ReloadResult = None
+
+    public static func lastReload(): ?ReloadResult {
+        reload
+    }
+
     private static func installSupervisor(service: LoomService, registry: LoomRegistry,
         chat: (String, String, String) -> String, plannerModel: String): Unit {
         if (!LLMConfig.supervisorEnabled()) {

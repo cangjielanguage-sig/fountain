@@ -164,7 +164,11 @@ public class Supervisor {
             case Some(value) => value
             case None => return SupervisorOutcome(SupervisorOutcome.NO_USABLE, message: NO_USABLE_MESSAGE)
         }
-        let candidates = routable()
+        let candidates = try {
+            routable()
+        } catch (e: Exception) {
+            return SupervisorOutcome(SupervisorOutcome.NO_USABLE, message: NO_USABLE_MESSAGE)
+        }
         var reply = ''
         try {
             reply = chat('', routerPrompt(prompt, candidates))
@@ -175,8 +179,15 @@ public class Supervisor {
             case Some(name) => name
             case None => return onNoUsable(prompt, service, host)
         }
-        // 路由表可能落后于流程库（比如刚被改回 pending）：派发前再确认一次
-        if (service.status(chosen) != LoomStatus.COMPILED) {
+        // 路由表可能落后于流程库（比如刚被改回 pending）：派发前再确认一次。
+        // 不一致就把这条陈旧路由摘掉——否则它会一直被模型选中、每次白烧一次选路调用。
+        let stillCompiled = try {
+            service.status(chosen) == LoomStatus.COMPILED
+        } catch (e: Exception) {
+            false
+        }
+        if (!stillCompiled) {
+            let _ = unregister(chosen)
             return SupervisorOutcome(SupervisorOutcome.NO_USABLE, message: NO_USABLE_MESSAGE)
         }
         let event = Supervisor.eventName(chosen)

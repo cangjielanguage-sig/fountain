@@ -538,4 +538,85 @@ class Supervisor_test {
         let _ = service.delete('daily')
         @Expect(Supervisor.current().isNone(), true)
     }
+
+    /** 流程被改回 pending：派发时必须把陈旧路由摘掉，而不是一直留在候选里 */
+    @TestCase
+    func testDispatchUnregistersStaleRoute(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        LoomHostApi.unbind()
+
+        let registry = LoomRegistry()
+        let (service, flow) = compiledService('daily', '汇总日报', registry: registry)
+        let host = SupervisorRecordingHost()
+        LoomHostApi.bind(host)
+        LoomServices.installHost(host)
+        let flows = ArrayList<LoomFlow>()
+        flows.add(flow)
+        let supervisor = Supervisor.install(service, host, { _, _ => '{"flow":"daily"}' }, flows: flows)
+
+        // 路由表仍认为是 compiled，流程库已经改回 pending
+        let stale = registry.get('daily').getOrThrow()
+        stale.mark(LoomStatus.PENDING)
+        registry.put(stale)
+
+        let outcome = supervisor.dispatch('把今天的提交汇总一下')
+        @Expect(outcome.kind, SupervisorOutcome.NO_USABLE)
+        @Expect(supervisor.routes().size, 0)
+    }
+
+    /** 选路阶段的存储异常不外抛 */
+    @TestCase
+    func testDispatchSwallowsStoreFailure(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        LoomHostApi.unbind()
+
+        let service = LoomService(Planner({ _, _ => llmPlanJson('daily') }), LoomRegistry(store: ExplodingStore()))
+        let host = SupervisorRecordingHost()
+        LoomHostApi.bind(host)
+        LoomServices.installHost(host)
+        let supervisor = Supervisor.install(service, host, { _, _ => '{"flow":"daily"}' })
+        let _ = supervisor.register('daily', '汇总日报', status: LoomStatus.COMPILED)
+
+        let outcome = supervisor.dispatch('把今天的提交汇总一下')
+        @Expect(outcome.kind, SupervisorOutcome.NO_USABLE)
+        @Expect(host.inputs.size, 0)
+    }
+}
+
+
+/** 查询就抛异常的流程库：模拟「存储不可用」 */
+class ExplodingStore <: LoomStore {
+    public func save(flow: LoomFlow): Unit {
+    }
+
+    public func get(name: String): ?LoomFlow {
+        throw LoomException('store down')
+    }
+
+    public func list(offset: Int64, limit: Int64): ArrayList<LoomFlow> {
+        throw LoomException('store down')
+    }
+
+    public func remove(name: String): Bool {
+        false
+    }
+}
+
+/** 带标记的宿主：验证 wire 有没有把它换掉 */
+class SpyHost <: LoomHost {
+    public var marker: String = ''
+
+    public func render(template: String, e: Event): String {
+        template
+    }
+
+    public func callTool(name: String, argsJson: String): String {
+        argsJson
+    }
+
+    public func callLlm(model: String, system: String, input: String): String {
+        input
+    }
 }

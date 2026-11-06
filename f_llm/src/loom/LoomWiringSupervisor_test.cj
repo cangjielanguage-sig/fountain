@@ -113,4 +113,50 @@ class LoomWiringSupervisor_test {
         @Expect(Supervisor.current().isNone(), true)
         LoomServices.reset()
     }
+
+    /** 装配把恢复结果留下来：库不可用时可观测 */
+    @TestCase
+    func testWireRecordsRestoreFailure(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        Config.set<Bool>([(LLMConfig.LLM_SUPERVISOR, true)])
+        Config.set<String>([('llm_metaStore', 'memory')])
+        try {
+            let _ = LoomWiring.wire({ _, _, _ => '{}' }, store: FailingLoomStore())
+
+            let reload = LoomWiring.lastReload().getOrThrow()
+            @Expect(reload.restoreFailed, true)
+            @Expect(reload.toString().contains('restoreFailed'), true)
+        } finally {
+            Config.remove(LLMConfig.LLM_SUPERVISOR)
+            Config.remove('llm_metaStore')
+            Supervisor.reset()
+            LoomServices.reset()
+        }
+    }
+
+    /** 调用方先装的宿主不能被 wire 抢走 */
+    @TestCase
+    func testWireKeepsInstalledHost(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        let custom = SpyHost()
+        custom.marker = 'mine'
+        LoomServices.installHost(custom)
+        try {
+            let _ = LoomWiring.wire({ _, _, _ => '{}' }, store: MemoryLoomStore())
+
+            let resolved = match (LoomServices.currentHost()) {
+                case Some(value) => match (value as SpyHost) {
+                    case Some(spy) => spy.marker
+                    case None => 'other'
+                }
+                case None => 'none'
+            }
+            @Expect(resolved, 'mine')
+        } finally {
+            Supervisor.reset()
+            LoomServices.reset()
+        }
+    }
 }
