@@ -32,6 +32,19 @@
 
 无。
 
+## 范围扩展（2026-11-06，用户确认）
+
+归因数据出来后，按用户指示**不单开变更**，在本变更内继续两项优化（硬件 CRC 暂不做）：
+
+- **per-thread / 小工作集池**：`BytesListOutputStream` 的缓冲借还增加线程本地缓存（默认 2~4 个），
+  借出方线程复用同一批缓冲，避免共享 `ArrayPool` 的锁竞争与 1024 × 8KB 轮转造成的 L3 抖动；
+  公开 API 只增可选参数，不改线格式。
+- **P0 编码器**：给 `BytesListOutputStream` 加标量写入口，`DefaultCodec` 的整数/长度字段不再每次
+  `write([...])` 新建小数组；评估 `Message.encode()` 的编码器复用与接口去虚调用。
+
+验收：单线程 C 的 p50 目标 ≤ 5.5 µs（当前 6.43 µs），MT 4 线程扩展比 ≥ 3.0×（当前 2.27×）；
+两项都不改线格式，帧字节与回归必须保持一致。
+
 ## Impact
 
 - 代码：仅 `f_protocol/src/default/FrameEncodeBench_test.cj`（测试）与 `f_protocol/doc/perf/frame-encode-4k.md`（文档）。

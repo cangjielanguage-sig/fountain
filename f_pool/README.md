@@ -336,9 +336,12 @@ public func giveBack(array: Array<T>): Unit
   - `ChainedBytesCopyTo <: Releasable`（`release` 级联释放子项）；
   - `BytesListOutputStream`（`OutputStream & BytesCopyTo & Releasable`）：内部是**单个可增长缓冲**，`write` 一次 `copyTo`
     写入、`asBytes()` 返回 `[start, start+len)` 视图（零拷贝），`release()` 幂等，另有 `isEmpty` / `reset`；
-  - `BytesListOutputStream.builder(...)`（`capacity` = 单缓冲字节数，默认 8192；`clearOnReturning` 默认 `false`）/
+    标量热路径用 `writeByte` / `writeUInt64BE(value, count)` / `writeUInt32BE`，避免为类型头/小整数新建临时数组；
+  - `BytesListOutputStream.builder(...)`（`capacity` = 单缓冲字节数，默认 8192；`clearOnReturning` 默认 `false`；
+    `localCacheSize` = 每线程本地缓存的缓冲数，默认 **2**，0 = 关闭）/
     `BytesListOutputStreamBuilder.build(timeout!, headroom!)`；`frameBytes(headroom, tail)` 返回整帧视图（含头/尾预留），
     供帧装配原地补头与 CRC，省掉整帧再分配 —— 对应 `f_codec` 的 `setBytesPool(...)` 与 `f_rpc` 的 `rpc_codec*` 配置；
+    本地缓存的缓冲归还到**借出方线程**的 cache，跨线程归还只锁该线程自己的 cache；
 - **`PoolDiagnostics`**（`diagnostics/PoolDiagnostics.cj`）：`snapshot()` / `dump()` / `redirectWarningsTo(...)` /
   `installCrashHandler(...)` / `uninstallCrashHandler()` / `CRASH_DUMP_ON_FATAL`，配合 `[FOUNTAIN_POOL.diag]`
   日志做池异常取证；
@@ -356,7 +359,7 @@ public func giveBack(array: Array<T>): Unit
 以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
 
 - 模块级：`public func next(): ?Unit`
-- `BytesListOutputStream`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`、`func write(bytes: Array<Byte>): Unit`、`func byteSize(): ?Int64`、`func asBytes(): ?Array<Byte>`、`func frameBytes(headroom: Int64, tail: Int64): ?Array<Byte>`
+- `BytesListOutputStream`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`、`func write(bytes: Array<Byte>): Unit`、`func writeByte(value: UInt8): Unit`、`func writeUInt64BE(value: UInt64, count: Int64): Unit`、`func writeUInt32BE(value: UInt32): Unit`、`func byteSize(): ?Int64`、`func asBytes(): ?Array<Byte>`、`func frameBytes(headroom: Int64, tail: Int64): ?Array<Byte>`
 - `ChainedBytesCopyTo`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
 - `PooledBufferBytesCopyTo`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
 - `PooledBufferedBytesCopyFrom`：`func copy(from!: InputStream, closeFromOnEnd!: Bool = false, closeToOnEnd!: Bool = true): Unit`

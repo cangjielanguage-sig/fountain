@@ -71,9 +71,10 @@ public class DefaultCodec <: Codec & Releasable {
      * 不要求调用方 import f_pool（f_rpc 就是这样按配置初始化的，见 .autocode/bugs/bug-archived-on-20261004.md 7.6）。
      */
     public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
-        maxWaiting!: Duration = Duration.second * 30): Unit {
+        maxWaiting!: Duration = Duration.second * 30, localCacheSize!: Int64 = 2): Unit {
         byteListOutputBuilder = BytesListOutputStream.builder(
-            initSize: initSize, minSize: minSize, maxSize: maxSize, maxWaiting: maxWaiting)
+            initSize: initSize, minSize: minSize, maxSize: maxSize, maxWaiting: maxWaiting,
+            localCacheSize: localCacheSize)
     }
     public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024, arraySize!: Int64 = 4096,
         maxWaiting!: Duration = Duration.second * 30): Unit {
@@ -256,12 +257,10 @@ public class DefaultCodec <: Codec & Releasable {
     private func encode(value: String, buffer: BytesListOutputStream): Encoder {
         let ss = value.size
         if (ss == 0) {
-            buffer.write([DataType.STRING.value])
+            buffer.writeByte(DataType.STRING.value)
             size++
         } else {
-            let buf = encodeSizeOfValue(STRING, ss)
-            buffer.write(buf)
-            size += buf.size
+            size += writeSizeOfValue(STRING, true, ss, false, buffer)
             buffer.write(value.unsafeBytes())
             size += ss
         }
@@ -271,15 +270,16 @@ public class DefaultCodec <: Codec & Releasable {
         encode(value, lastBuffer())
     }
     private func encode(value: Int8, buffer: BytesListOutputStream): Encoder {
-        buffer.write([DataType.INT.value | 1 | if (value < 0) {
+        buffer.writeByte(DataType.INT.value | 1 | if (value < 0) {
             1 << 3
         } else {
             0
-        }, UInt8(if (value < 0) {
+        })
+        buffer.writeByte(UInt8(if (value < 0) {
             !value
         } else {
             value
-        })])
+        }))
         size += 2
         this
     }
@@ -287,7 +287,8 @@ public class DefaultCodec <: Codec & Releasable {
         encode(value, lastBuffer())
     }
     private func encode(value: UInt8, buffer: BytesListOutputStream): Encoder {
-        buffer.write([DataType.INT.value | 1, value])
+        buffer.writeByte(DataType.INT.value | 1)
+        buffer.writeByte(value)
         size += 2
         this
     }
@@ -395,19 +396,13 @@ public class DefaultCodec <: Codec & Releasable {
         } else {
             size
         }
-        let bytes = Array<Byte>(1 + s) {
-            i => if (i == 0) {
-                dataType.value | UInt8(size) | if (sign) {
-                    0
-                } else {
-                    1 << 3
-                }
-            } else {
-                UInt8((value >> (8 * (s - i))) & 0xff)
-            }
-        }
-        buffer.write(bytes)
-        this.size += bytes.size
+        buffer.writeByte(dataType.value | UInt8(size) | if (sign) {
+            0
+        } else {
+            1 << 3
+        })
+        buffer.writeUInt64BE(value, s)
+        this.size += 1 + s
         this
     }
     private func encode(value: Int64, buffer: BytesListOutputStream): Encoder {
@@ -572,6 +567,41 @@ public class DefaultCodec <: Codec & Releasable {
         buffer.write(fileName)
         this.size += sizeBuf.size + fileName.size
         this
+    }
+    /** 直接把「类型头 + 最短字节数」写进缓冲，返回写入字节数（热路径用，免去临时数组）。 */
+    private func writeSizeOfValue(dataType: DataType, sign: Bool, value: Int64, forInt: Bool,
+        buffer: BytesListOutputStream): Int64 {
+        let s = if (value <= 0xff) {
+            1
+        } else if (value <= 0xffff) {
+            2
+        } else if (value <= 0xffffff) {
+            3
+        } else if (value <= 0xffffffff) {
+            4
+        } else if (value <= 0xffffffffff) {
+            5
+        } else if (value <= 0xffffffffffff) {
+            6
+        } else if (value <= 0xffffffffffffff) {
+            7
+        } else if (forInt) {
+            0
+        } else {
+            8
+        }
+        let ss = if (s == 0) {
+            8
+        } else {
+            s
+        }
+        buffer.writeByte(dataType.value | UInt8(s) | if (!forInt || sign) {
+            0
+        } else {
+            1 << 3
+        })
+        buffer.writeUInt64BE(UInt64(value), ss)
+        ss + 1
     }
     private func encodeSizeOfValue(dataType: DataType, sign: Bool, value: Int64, forInt!: Bool): Array<Byte> {
         let s = if (value <= 0xff) {

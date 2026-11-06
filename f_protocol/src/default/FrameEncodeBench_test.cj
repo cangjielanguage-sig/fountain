@@ -54,6 +54,16 @@ private func envInt(name: String, defaultValue: Int64): Int64 {
     }
 }
 
+/** 按 `F_PROTOCOL_BENCH_LOCAL_CACHE` 重配编码缓冲池；返回实际使用的值（-1 = 不改默认）。 */
+private func configurePoolFromEnv(): Int64 {
+    let v = envInt("F_PROTOCOL_BENCH_LOCAL_CACHE", -1)
+    if (v >= 0) {
+        DefaultCodec.setBufferPool(initSize: 1024, minSize: 1024, maxSize: 1024,
+            maxWaiting: Duration.second * 30, localCacheSize: v)
+    }
+    v
+}
+
 /** 强制一次 GC 并等 GC 计数稳定：`gc()` 可能异步收尾，紧接着的窗口会把这次 GC 记进去。 */
 private func settleGc(): Int64 {
     gc(heavy: true)
@@ -409,6 +419,7 @@ public class FrameEncodeBench_test {
         let allocN = envInt("F_PROTOCOL_BENCH_ALLOC_N", 2_000)
         @Assert(n > 0 && warmup >= 0 && allocN > 0)
 
+        let localCache = configurePoolFromEnv()
         let msg = benchMessage(4000)
         let sink = CountingNullOutputStream()
         let probe = frameOf(msg)
@@ -464,7 +475,7 @@ public class FrameEncodeBench_test {
             'n=${n} warmup=${warmup} nsPerFrameWithGc=${nsWithGcTotal / n} nsPerFrame=${totalNs / n} ' +
             'batchP50=${p50} batchP99=${p99} allocBytesPerFrame=${allocPerFrame} allocN=${allocN} ' +
             'allocSamples=${allocSamples} allocAttempts=${allocAttempts} allocLowerBound=${allocLowerBound} ' +
-            'gcCount=${gcTotal} gcPer10k=${gcPer10k} gcTimeUs=${gcTimeUs}')
+            'gcCount=${gcTotal} gcPer10k=${gcPer10k} gcTimeUs=${gcTimeUs} localCache=${localCache}')
     }
 
     /** 归因基准 1：4KB `copyTo` + `crc32` + 空 sink，测不可约成本。 */
@@ -494,6 +505,7 @@ public class FrameEncodeBench_test {
         let warmup = envInt("F_PROTOCOL_BENCH_WARMUP", 5_000)
         let allocN = envInt("F_PROTOCOL_BENCH_ALLOC_N", 2_000)
         @Assert(n > 0 && warmup >= 0 && allocN > 0)
+        let localCache = configurePoolFromEnv()
         let msg = benchMessage(4000)
         let sink = CountingNullOutputStream()
         let frameBytes = frameOf(msg).size - BENCH_FRAME_CRC
@@ -518,7 +530,7 @@ public class FrameEncodeBench_test {
         let (alloc, allocSamples, _) = measureAllocPerFrameWith(allocN, { => encodeNoCrcInto(msg, sink) })
         println('NOCRC frameBytes=${frameBytes} n=${n} nsPerFrame=${totalNs / n} ' +
             'batchP50=${batchNs[batchNs.size / 2]} batchP99=${batchNs[batchNs.size - 1]} ' +
-            'allocBytesPerFrame=${alloc} allocSamples=${allocSamples} totalBytes=${sink.total}')
+            'allocBytesPerFrame=${alloc} allocSamples=${allocSamples} totalBytes=${sink.total} localCache=${localCache}')
     }
 
     /** 归因基准 3：1/4/8/16 线程吞吐与扩展比；`F_PROTOCOL_BENCH_THREADS` 可只跑单档。 */
@@ -536,6 +548,7 @@ public class FrameEncodeBench_test {
             [1, 4, 8, 16]
         }
         @Assert(n > 0)
+        let localCache = configurePoolFromEnv()
         let msg = benchMessage(4000)
         let frameBytes = frameOf(msg).size
         var baseFps = 0.0
@@ -550,7 +563,7 @@ public class FrameEncodeBench_test {
             }
             println('MT threads=${t} framesPerThread=${n} totalFrames=${n * t} elapsedMs=${elapsed / 1_000_000} ' +
                 'throughputFps=${Int64(fps)} nsPerFramePerThread=${Int64(Float64(elapsed) / Float64(n))} ' +
-                'scaling=${fps / baseFps}')
+                'scaling=${fps / baseFps} localCache=${localCache}')
         }
     }
 }
