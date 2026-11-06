@@ -84,3 +84,32 @@
 - 旋转裁剪的四边形蒙版只在设备 AABB 内光栅化，同一元素的多个 quad 共用交集缓冲；
   上表 100 个元素的口径为单次完整文档渲染，用于回归对比。
 - 以上数值为参考、非 CI 门禁；每次复验后更新本文件，而不是写成硬断言。
+
+## M5 快照逐字节基线（SHA-256）
+
+- 口径：`testdata/render/*.rgba`，M1–M3 13 张（含 3 张动画帧）与 M4 4 张，共 17 张；逐字节比对容差 0。
+- 用途：M5 未使用新特性的文档输出必须与 M4 逐字节一致；下表是回归基准，不随渲染结果更新。
+- 采集命令：`sha256sum testdata/render/<name>.rgba`。
+
+| 快照 | SHA-256 |
+|---|---|
+| animation-0 | 11d601db9988862894c32c6ada82c161abcb7acc630ef2e36abb3f22bf1d069a |
+| animation-05 | f98f3a6405f31fdf7b1f7cb295197e257a1245574f7703248f2d3b192293b799 |
+| animation-1 | dbcbdc0efb09a1dbc12a7b802d90952e767e3752784cdf63c2410ec7ce57e86d |
+| basic | c7b1e7fbf92a755511d860c6fcbadd380e109e68c9779e4292108d150d0dd15a |
+| clip | 10e28c90626551215a1acbd85cfc8f8ea392012ffdabecea08e960537db3082c |
+| gradient | c9819dcb996e7b3e3790eb530f423a38b04c031806753f327d965ca825fed3b8 |
+| stroke | cf26874a3fae5cb0efe6ac9d706ca3b704057190448b87c49f4a3fba1e610651 |
+| text | b20ab78f251af927075c1361ba0a7a8e54afae4cd861756ff47abe78a7340bcc |
+| m3-filter | 4302d98ce2e735b1646a2a2ee2a03a1148dddb27adb9f8c01c881d8197ec446a |
+| m3-image | ab94d45a27672bb52d670744f49e4e17522558c606387f04b30fdeea26b3502b |
+| m3-marker | ccadf9ba93553075feb4770fcaddd82fa9b6c3468c98e759e0cbb7edacea6b4b |
+| m3-pattern | 7c8fe19bee3f4e0591c634fbbcfb13bb61a77b1b4a522b1cf4cdbd2fd792395d |
+| m3-textpath | 0e453ccae6683b75a8a9fe27853ff235ec741f5e5c765be2d6281f3a1d450dda |
+| m4-clip | 379ed1e7733f865cedd8ab91137b84accf28331c0e2252fc4907c3b4564cf1bb |
+| m4-filter | 9f8f4026e00bc1422627d5de791a1db25b6226231e72127a1dd0e637128701c0 |
+| m4-text | 26bc330fe963050a21955d5aa82b2944852e79634cf542a0f7049e0c7b7e65e8 |
+| m4-view | f880f5614b4f2b9e8ce9bca81e1dd7856e0671f03e911a0ad55e41884b4b12be |
+
+- 基线测试结果：`cjpm test` TOTAL 710 / PASSED 710 / FAILED 0，单次 wall 约 11.9 s（Linux x86_64，`-O2`）。
+- `cjpm build`：`f_svg` 自身 0 warning（依赖模块 `f_xml` 有 22 条既有 warning，不属本模块）。
