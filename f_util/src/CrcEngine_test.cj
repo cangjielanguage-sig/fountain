@@ -424,6 +424,31 @@ public class CrcEngine_test {
         }
     }
 
+    /**
+     * 聚焦回归：XZ 256B 是旧 x86 折叠核最早暴露错误的长度。
+     *
+     * 旧核按 16 字节向量使用常量，而 `CrcGf.reflectX86Constants` 是 8 字节连续布局，
+     * 硬件结果会退化成 `maskF0` 一类常量；修复后必须与表路径逐位一致。
+     */
+    @TestCase
+    public func crc64HwXz256MatchesSoftwareRegression(): Unit {
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let data = pseudoBytes(256)
+        let c0 = Crc64.xz.initRegister()
+        let hw = Crc64.xz.update(c0, data)
+        Crc64Hw.setNativeEnabled(false)
+        let sw = try {
+            Crc64.xz.update(c0, data)
+        } finally {
+            Crc64Hw.setNativeEnabled(true)
+            Crc64Hw.resetForTest()
+        }
+        @Assert(hw, sw)
+    }
+
     /** Scenario: 任意切分与一次累计等价（硬件路径内部按 16 字节块消费）。 */
     @TestCase
     public func crc64HwSegmentedMatchesOneShot(): Unit {

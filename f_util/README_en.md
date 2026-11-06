@@ -89,6 +89,8 @@ public func crc64<T>(s: T): UInt16 where T <: ToString
 
 **Measured (aarch64, default `cjpm test` build, 1 MiB)**: CRC-64/XZ table path 98 MB/s, hardware path 7450 MB/s, 4 KiB single call 777 ns, CRC-16/MODBUS table path 52 MB/s.
 
+**Measured (x86_64, WSL Ubuntu 24.04, `-O2`, 1 MiB)**: CRC-64/XZ hardware path 11.7 GB/s, 4 KiB single call 475 ns; all six variants 11.1–12.6 GB/s, 4 KiB 429–483 ns.
+
 ## wyhash
 
 ```cj
