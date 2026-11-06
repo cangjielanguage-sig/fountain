@@ -141,6 +141,79 @@ public class SvgOverflowM4_test {
         @Assert(!m4OpaqueRed(bitmap, 36, 36))
     }
 
+    /** viewBox 放大后的 marker 内容越界必须裁剪。 */
+    @TestCase
+    public func markerViewBoxScalingClips(): Unit {
+        let document = svgDoc(
+            '<marker id="m" markerWidth="10" markerHeight="10" refX="0" refY="0" ' +
+            'markerUnits="userSpaceOnUse" viewBox="0 0 5 5">' +
+            '<rect width="6" height="6" fill="red"/></marker>' +
+            '<line x1="0" y1="0" x2="20" y2="0" stroke="black" marker-start="url(#m)"/>',
+            width: 20,
+            height: 20
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 5, 5))
+        // viewBox 把 6 单位内容放大到 12，超出 10×10 视口。
+        @Assert(!m4OpaqueRed(bitmap, 11, 5))
+    }
+
+    /** 计算样式里的描边同样算作越界风险，不能跳过裁剪。 */
+    @TestCase
+    public func markerStyledStrokeClips(): Unit {
+        let document = svgDoc(
+            '<marker id="m" markerWidth="4" markerHeight="4" refX="0" refY="0" ' +
+            'markerUnits="userSpaceOnUse">' +
+            '<rect width="4" height="4" fill="blue" style="stroke:red;stroke-width:4"/></marker>' +
+            '<line x1="0" y1="0" x2="20" y2="0" stroke="black" marker-start="url(#m)"/>',
+            width: 20,
+            height: 20
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(!m4OpaqueRed(bitmap, 5, 2))
+    }
+
+    /** 计算样式里的滤镜会扩大绘制区域，仍需按 marker 视口裁剪。 */
+    @TestCase
+    public func markerStyledFilterClips(): Unit {
+        let document = svgDoc(
+            '<defs><filter id="f" x="-100%" y="-100%" width="300%" height="300%">' +
+            '<feFlood flood-color="red"/></filter></defs>' +
+            '<marker id="m" markerWidth="4" markerHeight="4" refX="0" refY="0" ' +
+            'markerUnits="userSpaceOnUse">' +
+            '<rect width="2" height="2" fill="red" style="filter:url(#f)"/></marker>' +
+            '<line x1="0" y1="0" x2="20" y2="0" stroke="black" marker-start="url(#m)"/>',
+            width: 20,
+            height: 20
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 1, 1))
+        @Assert(!m4OpaqueRed(bitmap, 5, 1))
+    }
+
+    /** 内容完全在视口内时保留不建蒙版的快路径。 */
+    @TestCase
+    public func markerContentFitsSkipsMask(): Unit {
+        let document = svgDoc(
+            '<marker id="m" markerWidth="10" markerHeight="10" refX="0" refY="0" ' +
+            'markerUnits="userSpaceOnUse" viewBox="0 0 5 5">' +
+            '<rect width="4" height="4" fill="red"/></marker>' +
+            '<line x1="0" y1="0" x2="20" y2="0" stroke="black" marker-start="url(#m)"/>',
+            width: 20,
+            height: 20
+        )
+        let list = SvgRenderTreeBuilder().build(document)
+        var found = false
+        for (command in list.commands) {
+            if (command.tag == "rect") {
+                found = true
+                @Assert(command.clipRect.isNone())
+                @Assert(command.clipQuads.size == 0)
+            }
+        }
+        @Assert(found)
+    }
+
     /** pattern overflow="visible" 不向相邻 tile 扩展。 */
     @TestCase
     public func patternTileBoundary(): Unit {

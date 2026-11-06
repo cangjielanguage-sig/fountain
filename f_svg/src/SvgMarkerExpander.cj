@@ -380,13 +380,18 @@ private func markerViewportMatrix(
         .multiply(SvgMatrix.scale(unitScale, unitScale))
 }
 
-/** 内容坐标（viewBox / marker 用户坐标）→ 用户空间。 */
-private func markerContentMatrix(marker: SvgMarker, viewportMatrix: SvgMatrix): SvgMatrix {
-    let content = match (marker.viewBox) {
+/** 内容坐标（viewBox）→ 视口坐标；无 viewBox 时为恒等。 */
+internal func markerViewBoxMatrix(marker: SvgMarker): SvgMatrix {
+    match (marker.viewBox) {
         case Some(box) =>
             marker.preserveAspectRatio.toMatrix(box, markerWidth(marker), markerHeight(marker))
         case None => SvgMatrix.identity
     }
+}
+
+/** 内容坐标（viewBox / marker 用户坐标）→ 用户空间。 */
+private func markerContentMatrix(marker: SvgMarker, viewportMatrix: SvgMatrix): SvgMatrix {
+    let content = markerViewBoxMatrix(marker)
     let referenceX = (marker.refX ?? SvgLength(0.0)).value
     let referenceY = (marker.refY ?? SvgLength(0.0)).value
     viewportMatrix

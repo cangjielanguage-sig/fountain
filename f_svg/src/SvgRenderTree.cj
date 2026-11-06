@@ -797,17 +797,22 @@ public class SvgRenderTreeBuilder {
                 case Some(style) => !style.overflowMode().clips()
                 case None => false
             }
-            let viewportMatrix = base.multiply(instance.viewportMatrix)
-                .multiply(
-                    SvgMatrix.translate(
-                        -(instance.marker.refX ?? SvgLength(0.0)).value,
-                        -(instance.marker.refY ?? SvgLength(0.0)).value
-                    )
+            // refX/refY 在内容坐标中定义；含 viewBox 时视口平移量是 C(refX, refY)。
+            let contentTransform = markerViewBoxMatrix(instance.marker)
+            let reference = contentTransform.apply(
+                SvgPoint(
+                    (instance.marker.refX ?? SvgLength(0.0)).value,
+                    (instance.marker.refY ?? SvgLength(0.0)).value
                 )
+            )
+            let viewportMatrix = base.multiply(instance.viewportMatrix)
+                .multiply(SvgMatrix.translate(-reference.x, -reference.y))
             let contentFits = markerContentFits(
                 instance.marker,
                 instance.viewportWidth,
-                instance.viewportHeight
+                instance.viewportHeight,
+                contentTransform,
+                context.styles
             )
             let markerClip: ?SvgBounds = if (overflowVisible || contentFits) {
                 None
@@ -1008,20 +1013,29 @@ private func transformedRectBounds(
     SvgBounds(minimumX, minimumY, maximumX - minimumX, maximumY - minimumY)
 }
 
-/** marker 内容是否全部落在 viewport 内；用于避免对无需裁剪的内容加蒙版。 */
+/**
+ * marker 内容是否全部落在 viewport 内；用于避免对无需裁剪的内容加蒙版。
+ *
+ * `contentTransform` 是 viewBox / preserveAspectRatio 建立的内容→视口矩阵；
+ * 子元素包围盒先变换到视口坐标，再与 0..width / 0..height 比较。
+ * 任何无法确定绘制范围的元素（描边、滤镜、裁剪、蒙版、文本等）都回退为需要裁剪。
+ */
 private func markerContentFits(
     marker: SvgElement,
     width: Float64,
-    height: Float64
+    height: Float64,
+    contentTransform: SvgMatrix,
+    styles: SvgComputedStyleTree
 ): Bool {
-    markerContentFitsIn(marker, SvgMatrix.identity, width, height)
+    markerContentFitsIn(marker, contentTransform, width, height, styles)
 }
 
 private func markerContentFitsIn(
     element: SvgElement,
     matrix: SvgMatrix,
     width: Float64,
-    height: Float64
+    height: Float64,
+    styles: SvgComputedStyleTree
 ): Bool {
     for (node in element.children) {
         match (node) {
@@ -1029,16 +1043,20 @@ private func markerContentFitsIn(
                 if (child.tag == "title" || child.tag == "desc" || child.tag == "metadata") {
                     continue
                 }
+                let style = match (styles.get(child)) {
+                    case Some(value) => value
+                    case None => return false
+                }
+                if (markerStyleHasEffect(style, "filter") ||
+                    markerStyleHasEffect(style, "clip-path") ||
+                    markerStyleHasEffect(style, "mask") ||
+                    markerStyleHasEffect(style, "clip")) {
+                    return false
+                }
                 let childMatrix = matrix.multiply(elementTransformMatrix(child))
                 match (child) {
                     case shape: SvgShape =>
-                        if (child.attr("filter").isSome() || child.attr("clip-path").isSome() ||
-                            child.attr("mask").isSome()) {
-                            return false
-                        }
-                        let stroke = child.attr("stroke")
-                        if (stroke.isSome() &&
-                            stroke.getOrThrow().trimAscii().toAsciiLower() != "none") {
+                        if (style.stroke().kind != SvgPaintKind.None) {
                             return false
                         }
                         let path = match (elementPathData(shape)) {
@@ -1062,7 +1080,13 @@ private func markerContentFitsIn(
                             }
                         }
                     case container: SvgContainer =>
-                        if (!markerContentFitsIn(container, childMatrix, width, height)) {
+                        if (!markerContentFitsIn(
+                            container,
+                            childMatrix,
+                            width,
+                            height,
+                            styles
+                        )) {
                             return false
                         }
                     case _ => return false
@@ -1071,6 +1095,15 @@ private func markerContentFitsIn(
         }
     }
     true
+}
+
+private func markerStyleHasEffect(style: SvgComputedStyle, name: String): Bool {
+    match (style.get(name)) {
+        case Some(value) =>
+            let text = value.trimAscii().toAsciiLower()
+            text.size > 0 && text != "none" && text != "auto"
+        case None => false
+    }
 }
 
 private func transformedRectQuad(
