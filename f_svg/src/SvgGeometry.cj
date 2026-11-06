@@ -960,16 +960,21 @@ private func elementMatrix(
     if (resolved.transformBox() == SvgTransformBox.FillBox) {
         box = SvgGeometry.bounds(element, style: resolved)
         if (box.isNone()) {
-            // 容器 / use 的自身几何盒由后代并集给出，与渲染路径保持一致。
-            box = svgBBoxOf(
-                element,
-                SvgBBoxRequest(
-                    SvgBBoxOptions(),
-                    styles,
-                    viewportWidth: viewportWidth,
-                    viewportHeight: viewportHeight
-                )
-            )
+            match (element) {
+                // `<use>` 的自身样式效果尚未接入渲染路径，保持 view-box 参考。
+                case _: SvgUse => ()
+                case _ =>
+                    // 容器 / image 的自身几何盒由后代并集或矩形给出，与渲染路径一致。
+                    box = svgBBoxOf(
+                        element,
+                        SvgBBoxRequest(
+                            SvgBBoxOptions(),
+                            styles,
+                            viewportWidth: viewportWidth,
+                            viewportHeight: viewportHeight
+                        )
+                    )
+            }
         }
     }
     effectiveElementTransform(
