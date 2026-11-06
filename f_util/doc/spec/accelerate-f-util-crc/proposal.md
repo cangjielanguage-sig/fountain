@@ -43,12 +43,12 @@
 | 阶段 | 范围 | 验收点 |
 | --- | --- | --- |
 | 阶段一 | CRC-16 24 变体；CRC-64 `xz` / `iso` / `redis` / `jones` | 4 个反射 64 位变体检查值与任意切分等价；3 组反射常量自洽；4 个变体三态一致；1 MiB ≥ 500 MB/s、4 KiB 单次 ≤ 1.34 µs；反射 4 变体表路径 ≥ 60 MB/s、CRC-16 表路径 ≥ 40 MB/s；回退路径正确 |
-| 阶段二 | CRC-64 `ecma182` / `we` | 2 个非反射变体检查值与任意切分等价；第 4 组（正常域）常量自洽；2 个变体三态一致；1 MiB ≥ 500 MB/s、4 KiB 单次 ≤ 1.34 µs；非反射 2 变体表路径 ≥ 60 MB/s；6/6 变体全量回归 |
+| 阶段二 | CRC-64 `ecma182` / `we` | 2 个非反射变体检查值与任意切分等价；3 组常量覆盖两个域（无第 4 组）；2 个变体三态一致；1 MiB ≥ 500 MB/s、4 KiB 单次 ≤ 1.34 µs；非反射 2 变体表路径 ≥ 60 MB/s；6/6 变体全量回归 |
 
 验收点编号与 spec 各场景末尾的标注一一对应：
 
 - **阶段一**：`P1-1` 检查值与任意切分等价；`P1-2` 三组反射常量自洽；`P1-3` 4 变体三态一致；`P1-4` 性能（表 40 / 60 MB/s、硬件 500 MB/s、4 KiB ≤ 1.34 µs）；`P1-5` 回退。
-- **阶段二**：`P2-1` 2 变体表路径等价；`P2-2` 第 4 组正常域常量自洽；`P2-3` 2 变体三态一致；`P2-4` 性能；`P2-5` 6/6 全量回归。
+- **阶段二**：`P2-1` 2 变体表路径等价；`P2-2` 3 组常量覆盖两个域（无第 4 组）；`P2-3` 2 变体三态一致；`P2-4` 性能；`P2-5` 6/6 全量回归。
 
 阶段一验收通过后可独立合并发布；阶段二在阶段一合并后继续。阶段二结束时 6/6 变体都具备表路径与生成式硬件路径。
 
@@ -66,15 +66,16 @@
 ## Impact
 
 - **修改代码**：`f_util/src/CrcEngine.cj`（表结构泛化 + 分派 + 16/64 位热循环）。
-- **新增代码**：`f_util/src/CrcGf.cj`、`f_util/src/crc64_codegen.cj`、`f_util/src/crc64_native_x86.cj`、`f_util/src/crc64_native_arm.cj`、`f_util/src/crc64_native_stub.cj`；测试 `f_util/src/CrcGf_test.cj`、`f_util/src/crc64_codegen_test.cj`，扩写 `f_util/src/CrcEngine_test.cj`。
+- **新增代码**：`f_util/src/CrcGf.cj`、`f_util/src/crc64_native_x86.cj`、`f_util/src/crc64_native_arm.cj`、`f_util/src/crc64_native_stub.cj`；测试 `f_util/src/CrcGf_test.cj`，扩写 `f_util/src/CrcEngine_test.cj`。机器码是**静态字节数组**（aarch64 反射 196 B / 正常域 180 B，x86_64 反射 539 B / 正常域 219 B），没有运行时发射器，因此不新增 `crc64_codegen.cj` / `crc64_codegen_test.cj`。
 - **复用不改**：`f_util/src/code_buffer.cj`（已存在于 master；本 worktree 开工前先同步）。
 - **零公开 API 变更**：`CrcEngine` 本身就是包内 `class`（非 `public`），新增类型一律 `internal`/`private`；`Crc16` / `Crc64` / `crc16*` / `crc64*` 的签名与返回值不变。
 - **无 C 依赖、无导出符号变化**：不新增 `.c`/`.h`、不改 `cjpm.toml`、不新增 `[ffi.c]`、不 `dlopen`、不链接第三方库。生成式路径只通过既有 `CodeBuffer` 调用 libc 的 `mmap`/`mprotect`/`__clear_cache`（与 CRC-32 生成路径同一口径），**`libf_util.so` 的导出符号集合不因本变更变化**。
-- **静态内存**：CRC-16 新增 24 × 2 × 256 × 2 B = **12 KB**；CRC-64 新增 6 × 8 × 256 × 8 B = **96 KB**；生成代码页 4 份 × 约 1~2 KB ≈ **6~8 KB**；合计约 **+114 KB**，均为构造期/首次使用期一次性分配（与现有 32 位切片表同一口径）。
+- **静态内存**：CRC-16 新增 24 × 2 × 256 × 2 B = **12 KB**；CRC-64 新增 6 × 8 × 256 × 8 B = **96 KB**；生成代码页每平台 2 份（反射 + 正常域）合计不足 **0.5 KB**；常量 3 组 × 32 B = **96 B**。合计约 **+109 KB**，均为构造期/首次使用期一次性分配（与现有 32 位切片表同一口径）。
 - **构建矩阵**：不变。mingw / darwin / ohos 等目标不生成机器码，`Crc64Hw` 空实现返回 `None`，`Crc64` 自动退回 slicing-by-8。
 - **语义影响面**：所有 CRC 调用方 —— `f_protocol` 帧校验（`f_protocol/src/default/Message.cj:95` / `:128` / `:297`）、`f_store` WAL 校验（`f_store/src/WAL.cj:125`、`f_store/src/WALRecordCodec.cj:39`）、`f_zip` 条目 CRC。**只改性能不改语义**，回归口径 = `f_util` 全量 `cjpm test` + 上述模块的 CRC 相关用例。
 - **修正一条既有表述**：`f_zip/doc/spec/add-f-zip-module/design.md` D16 与 `tasks.md` §18 的"不引 FFI / 硬件指令"需要改写为"不引 C/FFI/native 链接；硬件加速走 `f_util` 既有的生成式机器码（`CodeBuffer` + `CFunc`）"。落地时必须同提交改掉这两处（见 tasks §8），否则文档之间互相打脸。
 - **覆盖的入口**：顶层 `crc64()` 指向 `Crc64.redis`，本变更**覆盖**它（阶段一）。README 不再需要"默认入口未加速"的免责说明。
+- **实测（融合引擎 aarch64，`cjpm test` 默认构建，1 MiB）**：CRC-64/XZ 表路径 **98.35 MB/s**（改造前 ~20）；CRC-16/MODBUS 表路径 **52.37 MB/s**；CRC-64/XZ 生成式硬件路径 **7450.5 MB/s**，4 KiB 单次 **777.03 ns**；CRC-32 硬件路径 9182 MB/s（无回退）。x86_64 仅有离线编码与 `objdump` 核对，性能待真机回填。
 
 ## Out of Scope
 

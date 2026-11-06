@@ -21,6 +21,13 @@ package fountain::f_util
  * 口径：`poly` 是 RevEng 口径的低 64 位，隐含最高项 `x^64`；元素都是 UInt64，
  * 乘法/约减在调用点按 128 位处理。
  */
+/** 生成式路径的三态开关：`auto` 默认、`on` 强制尝试、`off` 强制表路径。 */
+enum CrcHwMode {
+    | Auto
+    | On
+    | Off
+}
+
 class CrcGf {
     /** `x * v mod P`，`v` 次数 < 64。 */
     static func mulX(v: UInt64, poly: UInt64): UInt64 {

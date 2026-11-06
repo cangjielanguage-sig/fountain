@@ -16,9 +16,12 @@ limitations under the License.
 package fountain::f_util
 
 /**
- * 非 Linux 平台的 CRC-64 折叠核空实现：永远没有 native 路径，全部走表驱动。
+ * 非目标平台的 CRC-64 折叠核空实现：永远没有 native 路径，全部走表驱动。
+ *
+ * 覆盖范围是"非 Linux **或** Linux 上不是 aarch64/x86_64"——后者若漏掉，
+ * `CrcEngine` 引用 `Crc64Hw` 时会因缺少定义而编译失败（riscv64 / loongarch64）。
  */
-@When[os != "Linux"]
+@When[os != "Linux" || (arch != "aarch64" && arch != "x86_64")]
 class Crc64Hw {
     static func available(): Bool {
         false
@@ -43,4 +46,14 @@ class Crc64Hw {
     static func setNativeEnabled(_: Bool): Unit {}
 
     static func resetForTest(): Unit {}
+
+    static func lastUsedNativeForTest(): Bool {
+        false
+    }
+
+    static func modeNameForTest(): String {
+        "off"
+    }
+
+    static func forceAllocFailureForTest(_: Bool): Unit {}
 }
