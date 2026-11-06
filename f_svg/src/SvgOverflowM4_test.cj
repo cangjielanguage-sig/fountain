@@ -275,6 +275,31 @@ public class SvgOverflowM4_test {
         @Assert(!m4OpaqueRed(bitmap, 5, 22))
     }
 
+    /**
+     * marker 内容中的子形状自身带 marker 时，嵌套 marker 可能越界。
+     *
+     * 快路径必须把 `marker-start/mid/end` 视为无法确定绘制范围，
+     * 否则父 marker 会跳过裁剪，让嵌套 marker 的实例画到视口外。
+     */
+    @TestCase
+    public func nestedMarkerContentStillClips(): Unit {
+        let document = svgDoc(
+            '<marker id="inner" markerWidth="20" markerHeight="20" refX="0" refY="0" ' +
+            'markerUnits="userSpaceOnUse"><rect width="20" height="20" fill="red"/></marker>' +
+            '<marker id="outer" markerWidth="10" markerHeight="10" refX="0" refY="0" ' +
+            'markerUnits="userSpaceOnUse">' +
+            '<path d="M 2 5 L 8 5" fill="none" stroke="none" ' +
+            'marker-end="url(#inner)"/></marker>' +
+            '<line x1="0" y1="0" x2="40" y2="0" stroke="black" marker-start="url(#outer)"/>',
+            width: 40,
+            height: 40
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        // 嵌套 marker 从 (8,5) 画 20×20；外层 0..10 视口内应保留，视口外必须裁掉。
+        @Assert(m4OpaqueRed(bitmap, 9, 8))
+        @Assert(!m4OpaqueRed(bitmap, 15, 8))
+    }
+
     /** pattern overflow="visible" 不向相邻 tile 扩展。 */
     @TestCase
     public func patternTileBoundary(): Unit {

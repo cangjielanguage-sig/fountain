@@ -1062,7 +1062,8 @@ private func transformedRectBounds(
  *
  * `contentTransform` 是 viewBox / preserveAspectRatio 建立的内容→视口矩阵；
  * 子元素包围盒先变换到视口坐标，再与 0..width / 0..height 比较。
- * 任何无法确定绘制范围的元素（描边、滤镜、裁剪、蒙版、文本等）都回退为需要裁剪。
+ * 任何无法确定绘制范围的元素（描边、滤镜、裁剪、蒙版、文本、子元素 marker 等）
+ * 都回退为需要裁剪。
  */
 private func markerContentFits(
     marker: SvgElement,
@@ -1094,7 +1095,11 @@ private func markerContentFitsIn(
                 if (markerStyleHasEffect(style, "filter") ||
                     markerStyleHasEffect(style, "clip-path") ||
                     markerStyleHasEffect(style, "mask") ||
-                    markerStyleHasEffect(style, "clip")) {
+                    markerStyleHasEffect(style, "clip") ||
+                    markerStyleHasEffect(style, "marker-start") ||
+                    markerStyleHasEffect(style, "marker-mid") ||
+                    markerStyleHasEffect(style, "marker-end")) {
+                    // 子元素自身的 marker 会扩展绘制范围，无法只凭路径包围盒判定。
                     return false
                 }
                 let childMatrix = matrix.multiply(elementTransformMatrix(child))
