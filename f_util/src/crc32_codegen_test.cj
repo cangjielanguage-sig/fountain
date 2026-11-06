@@ -175,4 +175,53 @@ public class Crc32CodegenTest {
         }
         @Assert(Crc32.isoHdlc.finish(crc) == expected)
     }
+
+    /**
+     * 直接调用机器码入口，覆盖非对齐长度（1..7 字节尾部、8 的倍数、非 16 倍数）。
+     *
+     * `Crc32.update` 对 ISO 只把 16 字节整数倍交给硬件，本用例绕开该分层，
+     * 让 `crc32b` / `crc32cb` 尾字节分支真正执行；初始寄存器用非标准值验证 raw 语义可链式。
+     *
+     * x86_64 的 ISO 生成函数按契约只接受 16 字节整数倍，其余长度返回 `None`（尾部由软件补）；
+     * aarch64 的 `crc32x` 循环自带尾字节处理，任意长度都应返回结果。
+     */
+    @TestCase
+    public func crc32HardwareRawMatchesSoftwareForUnalignedLengths(): Unit {
+        let kinds: Array<CrcHwKind> = [CrcHwKind.Iso, CrcHwKind.Crc32c]
+        let labels: Array<String> = ["ISO-HDLC", "CRC32C"]
+        let lengths: Array<Int64> = [1, 2, 3, 5, 7, 8, 9, 15, 16, 17, 23, 24, 31, 33, 255, 256, 257, 4095, 4097]
+        let seed = 0xDEADBEEFu32
+        for (i in 0..kinds.size) {
+            let kind = kinds[i]
+            if (!Crc32Hw.availableFor(kind)) {
+                println("SKIP: 无 ${labels[i]} 硬件路径")
+                continue
+            }
+            // 探测该平台 ISO 入口是否只接受 16 字节整数倍（x86_64 是，aarch64 否）
+            let alignedOnly = kind == CrcHwKind.Iso &&
+                Crc32Hw.update(kind, seed, codegenBytes(3)).isNone()
+            let variant = if (kind == CrcHwKind.Iso) { Crc32.isoHdlc } else { Crc32.crc32c }
+            for (n in lengths) {
+                let data = codegenBytes(n)
+                let hardware = Crc32Hw.update(kind, seed, data)
+                let software = try {
+                    Crc32Hw.setNativeEnabled(false)
+                    variant.update(seed, data)
+                } finally {
+                    Crc32Hw.setNativeEnabled(true)
+                }
+                match (hardware) {
+                    case Some(value) => @Assert(value, software)
+                    case None =>
+                        // x86_64 对非 16 倍长度返回 None 属于契约；其余一律视为失败
+                        if (alignedOnly && n % 16 != 0) {
+                            continue
+                        }
+                        @Fail("${labels[i]} len=${n}: 硬件路径未返回结果")
+                }
+            }
+            // 空输入不进机器码，交回软件
+            @Assert(Crc32Hw.update(kind, seed, Array<Byte>()).isNone())
+        }
+    }
 }
