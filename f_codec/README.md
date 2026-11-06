@@ -81,6 +81,8 @@ public enum DataType <: ToString {
 
 ```cj
 public class DefaultCodec <: Codec & Releasable {
+    /** 编码缓冲预留 `headroom` 字节（供成帧方原地补帧头；默认 0） */
+    public init(headroom!: Int64)
     /** 按配置重建「编码缓冲池」（超时取不到池项就抛，由调用方记录可见失败） */
     public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
         maxWaiting!: Duration = Duration.second * 30): Unit
