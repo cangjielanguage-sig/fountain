@@ -437,6 +437,36 @@ if (selector.matches(element)) {
 A single selector is capped at 256 simple selectors; beyond that the whole rule is
 skipped with a warning.
 
+### @media and @font-face
+
+- `@media <query-list> { rules }` supports `screen` / `all`, `and`, comma-separated OR
+  lists and `(min-width: Npx)` / `(max-width: Npx)`. The width is the logical render
+  viewport width (`SvgRenderOptions.width` first, then the root width, then 300);
+  `SvgStyleResolver.compute` accepts `mediaWidth:` when used standalone. Other media
+  types such as `print` simply do not match and produce no warning; unparsable queries
+  are skipped with a warning.
+- `@font-face` reads the required `font-family` plus optional `font-weight` / `font-style`
+  and maps it to the same-named registered family; when that family is absent it maps to
+  the registry's first family. `src` loads nothing and only emits a warning. Aliases live
+  for one render and never mutate the caller's registry.
+
+### CSS variables and calc()
+
+- `--name: value` inherits per element and keeps its original case;
+  `var(--name, fallback)` expands before normalization, nesting is capped at 8 levels,
+  and cycles or a missing variable without fallback invalidate the declaration with a
+  warning; fallbacks may contain another `var()`.
+- `calc()` supports `+` / `-` / `*` / `/`, parentheses and `px` / `%` / `em`, with at most
+  16 nested parentheses. At least one side of `*` / `/` must be a number and percentages
+  cannot be mixed with absolute lengths. `calc()` is only accepted on `stroke-width`,
+  `letter-spacing`, `word-spacing`, `font-size` and `stroke-dashoffset`; elsewhere it is
+  treated as invalid.
+- Computed-style initial values: `paint-order` `fill stroke markers` (inherited),
+  `mix-blend-mode` `normal`, `isolation` `auto`, `transform-origin` `0 0`,
+  `transform-box` `view-box`, `direction` `ltr` (inherited), `unicode-bidi` `normal`,
+  `font-kerning` `auto` (inherited). Invalid values fall back to the initial value with a
+  warning.
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

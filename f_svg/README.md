@@ -419,6 +419,29 @@ if (selector.matches(element)) {
 
 单条选择器最多 256 个简单选择器；超出时整条规则跳过并写 warning。
 
+### @media 与 @font-face
+
+- `@media <query-list> { rules }` 支持 `screen` / `all`、`and`、逗号「或」列表与
+  `(min-width: Npx)` / `(max-width: Npx)`；宽度取渲染逻辑视口宽度（`SvgRenderOptions.width`
+  优先，其次根元素宽度，再其次 300）；独立调用 `SvgStyleResolver.compute` 时可用
+  `mediaWidth:` 指定。`print` 等其他媒体类型不匹配，不产生 warning；无法解析的查询跳过并记 warning。
+- `@font-face` 只读取 `font-family`（必需）与可选的 `font-weight` / `font-style`，把该
+  family 作为别名指向字体注册表中的同名 family；同名未注册时指向注册表的首个 family。
+  `src` 不加载任何文件，只记一条 warning。别名只在本次渲染内生效，不写入调用方注册表。
+
+### CSS 变量与 calc()
+
+- `--name: value` 按元素继承，名称保留原始大小写；`var(--name, fallback)` 在归一化前展开，
+  嵌套上限 8 层，循环引用与缺失且无 fallback 都使该声明无效并记 warning；fallback 内可再写 `var()`。
+- `calc()` 支持 `+` / `-` / `*` / `/`、括号与 `px` / `%` / `em`，括号上限 16 层；
+  `*` / `/` 至少一侧必须是数字，百分比与绝对长度不得混用。`calc()` 只用于
+  `stroke-width`、`letter-spacing`、`word-spacing`、`font-size`、`stroke-dashoffset`，
+  用在颜色或画笔上按非法值处理。
+- 计算样式的初始值：`paint-order` 为 `fill stroke markers`（继承）、`mix-blend-mode` 为
+  `normal`、`isolation` 为 `auto`、`transform-origin` 为 `0 0`、`transform-box` 为
+  `view-box`、`direction` 为 `ltr`（继承）、`unicode-bidi` 为 `normal`、
+  `font-kerning` 为 `auto`（继承）；非法值回退初始值并记 warning。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

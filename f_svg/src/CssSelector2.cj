@@ -458,7 +458,7 @@ private func parseCssPseudoClass(
 }
 
 /** 找到与 `open` 位置左括号配对的右括号；支持嵌套。 */
-private func findCssClosingParen(bytes: Array<Byte>, open: Int64): Int64 {
+internal func findCssClosingParen(bytes: Array<Byte>, open: Int64): Int64 {
     var depth = 0
     var i = open
     while (i < bytes.size) {

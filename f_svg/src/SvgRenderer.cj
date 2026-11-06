@@ -116,9 +116,12 @@ public class SvgRenderer {
             case None => ()
         }
         let frames = ArrayList<SvgRenderFrame>()
-        let registry = match (this.options.fonts) {
+        let registry = match (list.fonts) {
             case Some(value) => value
-            case None => SvgFontRegistry.defaultRegistry()
+            case None => match (this.options.fonts) {
+                case Some(value) => value
+                case None => SvgFontRegistry.defaultRegistry()
+            }
         }
         let images = match (this.sessionImages) {
             case Some(value) => value

@@ -113,7 +113,15 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("alignment-baseline", true, "auto"),
     SvgPropertySpec("baseline-shift", true, "baseline"),
     SvgPropertySpec("text-decoration", false, "none"),
-    SvgPropertySpec("writing-mode", true, "lr-tb")
+    SvgPropertySpec("writing-mode", true, "lr-tb"),
+    SvgPropertySpec("paint-order", true, "fill stroke markers"),
+    SvgPropertySpec("mix-blend-mode", false, "normal"),
+    SvgPropertySpec("isolation", false, "auto"),
+    SvgPropertySpec("transform-origin", false, "0 0"),
+    SvgPropertySpec("transform-box", false, "view-box"),
+    SvgPropertySpec("direction", true, "ltr"),
+    SvgPropertySpec("unicode-bidi", false, "normal"),
+    SvgPropertySpec("font-kerning", true, "auto")
 ]
 
 internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {
@@ -133,12 +141,20 @@ internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {
 public class SvgComputedStyle <: ToString {
     private let values: HashMap<String, String>
     private let sources: HashMap<String, CssStyleSource>
+    /** 含 `var()` 的属性原始表达式；供子元素用自身自定义属性重新展开。 */
+    private let varExpressions: HashMap<String, String>
     public let source: CssStyleSource
 
-    internal init(values: HashMap<String, String>, sources: HashMap<String, CssStyleSource>, source: CssStyleSource) {
+    internal init(
+        values: HashMap<String, String>,
+        sources: HashMap<String, CssStyleSource>,
+        source: CssStyleSource,
+        varExpressions!: HashMap<String, String> = HashMap<String, String>()
+    ) {
         this.values = values
         this.sources = sources
         this.source = source
+        this.varExpressions = varExpressions
     }
 
     public func get(name: String): ?String {
@@ -147,6 +163,22 @@ public class SvgComputedStyle <: ToString {
 
     public func has(name: String): Bool {
         this.values.get(name).isSome()
+    }
+
+    /** 自定义属性（`--*`）键值对；保持声明时的原始大小写。 */
+    internal func customProperties(): Array<(String, String)> {
+        let result = ArrayList<(String, String)>()
+        for ((key, value) in this.values) {
+            if (key.startsWith("--")) {
+                result.add((key, value))
+            }
+        }
+        result.toArray()
+    }
+
+    /** 该属性的 `var()` 原始表达式；无则返回 `None`。 */
+    internal func varExpressionOf(name: String): ?String {
+        this.varExpressions.get(name)
     }
 
     public func sourceOf(name: String): CssStyleSource {

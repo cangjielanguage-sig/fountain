@@ -49,11 +49,19 @@ public class CssRule <: ToString {
     public let selectors: Array<CssSelector>
     public let declarations: Array<CssDeclaration>
     public let order: Int64
+    /** `@media` 条件；`None` 表示无条件规则。 */
+    public let media: ?CssMediaQuery
 
-    init(selectors: Array<CssSelector>, declarations: Array<CssDeclaration>, order: Int64) {
+    init(
+        selectors: Array<CssSelector>,
+        declarations: Array<CssDeclaration>,
+        order: Int64,
+        media!: ?CssMediaQuery = None
+    ) {
         this.selectors = selectors
         this.declarations = declarations
         this.order = order
+        this.media = media
     }
 
     /** 分组选择器的特异性取最高值。 */
@@ -73,14 +81,38 @@ public class CssRule <: ToString {
             selectorTexts.add(selector.toString())
         }
         let prefix = joinCssStrings(selectorTexts, ", ")
-        if (this.declarations.size == 0) {
-            return prefix + " {}"
+        let body = if (this.declarations.size == 0) {
+            prefix + " {}"
+        } else {
+            let declarationTexts = ArrayList<String>()
+            for (declaration in this.declarations) {
+                declarationTexts.add(declaration.toString() + ";")
+            }
+            prefix + " { " + joinCssStrings(declarationTexts, " ") + " }"
         }
-        let declarationTexts = ArrayList<String>()
-        for (declaration in this.declarations) {
-            declarationTexts.add(declaration.toString() + ";")
+        match (this.media) {
+            case Some(media) => "@media ${media.toString()} { ${body} }"
+            case None => body
         }
-        prefix + " { " + joinCssStrings(declarationTexts, " ") + " }"
+    }
+}
+
+/** 一条 `@font-face` 别名声明。`src` 只记录是否出现，不加载文件。 */
+public class CssFontFaceRule <: ToString {
+    public let family: String
+    public let weight: ?String
+    public let style: ?String
+    public let srcPresent: Bool
+
+    init(family: String, weight: ?String, style: ?String, srcPresent: Bool) {
+        this.family = family
+        this.weight = weight
+        this.style = style
+        this.srcPresent = srcPresent
+    }
+
+    public func toString(): String {
+        "@font-face { font-family: ${this.family} }"
     }
 }
 
@@ -91,9 +123,12 @@ public class CssRule <: ToString {
  */
 public class CssStyleSheet <: ToString {
     public let rules: Array<CssRule>
+    /** `@font-face` 别名，按源顺序。 */
+    public let fontFaces: Array<CssFontFaceRule>
 
-    private init(rules: Array<CssRule>) {
+    private init(rules: Array<CssRule>, fontFaces!: Array<CssFontFaceRule> = Array<CssFontFaceRule>()) {
         this.rules = rules
+        this.fontFaces = fontFaces
     }
 
     public static func empty(): CssStyleSheet {
@@ -107,54 +142,9 @@ public class CssStyleSheet <: ToString {
 
     public static func parse(text: String, warnings: ArrayList<String>): CssStyleSheet {
         let tokens = CssLexer(text).tokenize()
-        let rules = ArrayList<CssRule>()
-        var i = 0
-        var order = 0
-        while (i < tokens.size) {
-            i = skipCssTrivia(tokens, i)
-            if (i >= tokens.size) {
-                break
-            }
-            if (tokens[i].kind == CssTokenKind.AtKeyword) {
-                warnings.add("已跳过不支持的 at-rule「${tokens[i].text}」")
-                i = skipCssAtRule(tokens, i)
-                continue
-            }
-            let preludeStart = i
-            while (i < tokens.size && tokens[i].kind != CssTokenKind.LeftBrace &&
-                tokens[i].kind != CssTokenKind.Semicolon) {
-                i++
-            }
-            if (i >= tokens.size) {
-                warnings.add("样式规则缺少左花括号")
-                break
-            }
-            if (tokens[i].kind == CssTokenKind.Semicolon) {
-                i++
-                continue
-            }
-            let preludeEnd = i
-            i++
-            let parsed = parseCssDeclarations(tokens, i, warnings)
-            let declarations = parsed.declarations
-            i = parsed.position
-            let selectors = ArrayList<CssSelector>()
-            for (segment in splitCssSelectorList(tokens, preludeStart, preludeEnd)) {
-                if (segment.size == 0) {
-                    continue
-                }
-                try {
-                    selectors.add(CssSelector.parse(segment))
-                } catch (error: SvgException) {
-                    warnings.add("已跳过无法解析的选择器「${segment}」：${error.message}")
-                }
-            }
-            if (selectors.size > 0) {
-                rules.add(CssRule(selectors.toArray(), declarations, order))
-                order++
-            }
-        }
-        CssStyleSheet(rules.toArray())
+        let state = CssSheetParseState(warnings)
+        parseCssRuleBlock(tokens, 0, tokens.size, None, state)
+        CssStyleSheet(state.rules.toArray(), fontFaces: state.fontFaces.toArray())
     }
 
     public func toString(): String {
@@ -166,9 +156,191 @@ public class CssStyleSheet <: ToString {
     }
 }
 
-private func skipCssTrivia(tokens: Array<CssToken>, start: Int64): Int64 {
+/** 样式表解析的累积状态：规则、源顺序与告警。 */
+private class CssSheetParseState {
+    let rules = ArrayList<CssRule>()
+    let fontFaces = ArrayList<CssFontFaceRule>()
+    let warnings: ArrayList<String>
+    var order: Int64 = 0
+
+    init(warnings: ArrayList<String>) {
+        this.warnings = warnings
+    }
+}
+
+/**
+ * 解析 `[start, end)` 范围内的规则；`media` 为外层 `@media` 条件（嵌套时由内层覆盖）。
+ */
+private func parseCssRuleBlock(
+    tokens: Array<CssToken>,
+    start: Int64,
+    end: Int64,
+    media: ?CssMediaQuery,
+    state: CssSheetParseState
+): Unit {
     var i = start
-    while (i < tokens.size &&
+    while (i < end) {
+        i = skipCssTriviaWithin(tokens, i, end)
+        if (i >= end) {
+            break
+        }
+        if (tokens[i].kind == CssTokenKind.RightBrace) {
+            i++
+            continue
+        }
+        if (tokens[i].kind == CssTokenKind.AtKeyword) {
+            if (tokens[i].text.toAsciiLower() == "@media") {
+                i = parseCssMediaBlock(tokens, i, end, state)
+                continue
+            }
+            if (tokens[i].text.toAsciiLower() == "@font-face") {
+                i = parseCssFontFace(tokens, i, end, state)
+                continue
+            }
+            state.warnings.add("已跳过不支持的 at-rule「${tokens[i].text}」")
+            i = skipCssAtRuleWithin(tokens, i, end)
+            continue
+        }
+        let preludeStart = i
+        while (i < end && tokens[i].kind != CssTokenKind.LeftBrace &&
+            tokens[i].kind != CssTokenKind.Semicolon) {
+            i++
+        }
+        if (i >= end) {
+            state.warnings.add("样式规则缺少左花括号")
+            break
+        }
+        if (tokens[i].kind == CssTokenKind.Semicolon) {
+            i++
+            continue
+        }
+        let preludeEnd = i
+        i++
+        let parsed = parseCssDeclarations(tokens, i, state.warnings)
+        let declarations = parsed.declarations
+        i = parsed.position
+        let selectors = ArrayList<CssSelector>()
+        for (segment in splitCssSelectorList(tokens, preludeStart, preludeEnd)) {
+            if (segment.size == 0) {
+                continue
+            }
+            try {
+                selectors.add(CssSelector.parse(segment))
+            } catch (error: SvgException) {
+                state.warnings.add("已跳过无法解析的选择器「${segment}」：${error.message}")
+            }
+        }
+        if (selectors.size > 0) {
+            state.rules.add(CssRule(selectors.toArray(), declarations, state.order, media: media))
+            state.order++
+        }
+    }
+}
+
+/** 解析 `@media <query-list> { rules }`；`start` 指向 `@media`。 */
+private func parseCssMediaBlock(
+    tokens: Array<CssToken>,
+    start: Int64,
+    end: Int64,
+    state: CssSheetParseState
+): Int64 {
+    var i = start + 1
+    while (i < end && tokens[i].kind != CssTokenKind.LeftBrace &&
+        tokens[i].kind != CssTokenKind.Semicolon) {
+        i++
+    }
+    if (i >= end) {
+        state.warnings.add("已跳过缺少规则块的 @media")
+        return end
+    }
+    if (tokens[i].kind == CssTokenKind.Semicolon) {
+        state.warnings.add("已跳过缺少规则块的 @media")
+        return i + 1
+    }
+    let preludeText = tokensToCssText(tokens, start + 1, i)
+    let blockEnd = findCssClosingBrace(tokens, i, end)
+    if (blockEnd < 0) {
+        state.warnings.add("已跳过缺少右花括号的 @media")
+        return end
+    }
+    match (CssMediaQuery.parse(preludeText, state.warnings)) {
+        case Some(query) =>
+            parseCssRuleBlock(tokens, i + 1, blockEnd, Some(query), state)
+        case None => ()
+    }
+    blockEnd + 1
+}
+
+/** 解析 `@font-face { ... }`；`start` 指向 `@font-face`。 */
+private func parseCssFontFace(
+    tokens: Array<CssToken>,
+    start: Int64,
+    end: Int64,
+    state: CssSheetParseState
+): Int64 {
+    var i = start + 1
+    while (i < end && tokens[i].kind != CssTokenKind.LeftBrace &&
+        tokens[i].kind != CssTokenKind.Semicolon) {
+        i++
+    }
+    if (i >= end || tokens[i].kind == CssTokenKind.Semicolon) {
+        state.warnings.add("已跳过缺少声明块的 @font-face")
+        return if (i >= end) { end } else { i + 1 }
+    }
+    let blockEnd = findCssClosingBrace(tokens, i, end)
+    if (blockEnd < 0) {
+        state.warnings.add("已跳过缺少右花括号的 @font-face")
+        return end
+    }
+    let parsed = parseCssDeclarations(tokens, i + 1, state.warnings)
+    var family: ?String = None
+    var weight: ?String = None
+    var style: ?String = None
+    var srcPresent = false
+    for (declaration in parsed.declarations) {
+        match (declaration.property) {
+            case "font-family" =>
+                let name = trimAsciiQuotes(declaration.value.trimAscii())
+                if (name.size > 0) {
+                    family = Some(name)
+                }
+            case "font-weight" => weight = Some(declaration.value.trimAscii().toAsciiLower())
+            case "font-style" => style = Some(declaration.value.trimAscii().toAsciiLower())
+            case "src" =>
+                srcPresent = true
+                state.warnings.add("已忽略 @font-face 的 src（不加载字体文件）：${declaration.value}")
+            case _ => ()
+        }
+    }
+    match (family) {
+        case Some(name) => state.fontFaces.add(CssFontFaceRule(name, weight, style, srcPresent))
+        case None => state.warnings.add("已跳过缺少 font-family 的 @font-face")
+    }
+    blockEnd + 1
+}
+
+/** 找到与 `open` 左花括号配对的右花括号下标；越界返回 -1。 */
+private func findCssClosingBrace(tokens: Array<CssToken>, open: Int64, end: Int64): Int64 {
+    var depth = 0
+    var i = open
+    while (i < end) {
+        match (tokens[i].kind) {
+            case LeftBrace => depth++
+            case RightBrace =>
+                depth--
+                if (depth == 0) {
+                    return i
+                }
+            case _ => ()
+        }
+        i++
+    }
+    -1
+}
+
+private func skipCssTriviaWithin(tokens: Array<CssToken>, start: Int64, end: Int64): Int64 {
+    var i = start
+    while (i < end &&
         (tokens[i].kind == CssTokenKind.Whitespace || tokens[i].kind == CssTokenKind.Semicolon)) {
         i++
     }
@@ -176,32 +348,23 @@ private func skipCssTrivia(tokens: Array<CssToken>, start: Int64): Int64 {
 }
 
 /** 跳过 at-rule：带块时按花括号配对，`@import` 一类跳到分号。 */
-private func skipCssAtRule(tokens: Array<CssToken>, start: Int64): Int64 {
+private func skipCssAtRuleWithin(tokens: Array<CssToken>, start: Int64, end: Int64): Int64 {
     var i = start + 1
-    while (i < tokens.size && tokens[i].kind != CssTokenKind.LeftBrace &&
+    while (i < end && tokens[i].kind != CssTokenKind.LeftBrace &&
         tokens[i].kind != CssTokenKind.Semicolon) {
         i++
     }
-    if (i >= tokens.size) {
-        return tokens.size
+    if (i >= end) {
+        return end
     }
     if (tokens[i].kind == CssTokenKind.Semicolon) {
         return i + 1
     }
-    var depth = 0
-    while (i < tokens.size) {
-        match (tokens[i].kind) {
-            case LeftBrace => depth++
-            case RightBrace =>
-                depth--
-                if (depth <= 0) {
-                    return i + 1
-                }
-            case _ => ()
-        }
-        i++
+    let close = findCssClosingBrace(tokens, i, end)
+    if (close < 0) {
+        return end
     }
-    tokens.size
+    close + 1
 }
 
 /** 声明块解析结果。 */
@@ -241,7 +404,12 @@ private func parseCssDeclarations(
             i = skipToCssDeclarationEnd(tokens, i)
             continue
         }
-        let property = decodeCssIdent(tokens[i].text).toAsciiLower()
+        let decodedProperty = decodeCssIdent(tokens[i].text)
+        let property = if (decodedProperty.startsWith("--")) {
+            decodedProperty
+        } else {
+            decodedProperty.toAsciiLower()
+        }
         i++
         while (i < tokens.size && tokens[i].kind == CssTokenKind.Whitespace) {
             i++

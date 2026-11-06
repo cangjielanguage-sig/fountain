@@ -137,6 +137,8 @@ public class SvgDisplayList {
     internal let styles: ?SvgComputedStyleTree
     /** 构建与光栅化共享的文本布局缓存；不跨渲染。 */
     internal let textLayouts: ?SvgTextLayoutCache
+    /** 本次渲染使用的字体注册表（含 `@font-face` 别名）；`None` 表示按选项回退。 */
+    internal let fonts: ?SvgFontRegistry
 
     internal init(
         commands: Array<SvgDisplayCommand>,
@@ -146,7 +148,8 @@ public class SvgDisplayList {
         logicalWidth: Float64,
         logicalHeight: Float64,
         styles!: ?SvgComputedStyleTree = None,
-        textLayouts!: ?SvgTextLayoutCache = None
+        textLayouts!: ?SvgTextLayoutCache = None,
+        fonts!: ?SvgFontRegistry = None
     ) {
         this.commands = commands
         this.root = root
@@ -156,6 +159,7 @@ public class SvgDisplayList {
         this.logicalHeight = logicalHeight
         this.styles = styles
         this.textLayouts = textLayouts
+        this.fonts = fonts
     }
 }
 
@@ -226,14 +230,14 @@ public class SvgRenderTreeBuilder {
         this.ensureGuard()
         this.languages = options.languages
         let root = document.root
-        let resolver = SvgStyleResolver()
-        let styles = resolver.compute(root)
-        for (warning in resolver.warnings) {
-            this.warnings.add(warning)
-        }
         let viewport = SvgViewport.from(root, 300.0, 150.0)
         let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
         let logicalHeight = if (options.height > 0) { Float64(options.height) } else { viewport.height }
+        let resolver = SvgStyleResolver()
+        let styles = resolver.compute(root, mediaWidth: logicalWidth)
+        for (warning in resolver.warnings) {
+            this.warnings.add(warning)
+        }
         let ratio = options.devicePixelRatio
         let outputWidth = maxInt64(1, ceilSvgPixel(logicalWidth * ratio))
         let outputHeight = maxInt64(1, ceilSvgPixel(logicalHeight * ratio))
@@ -241,6 +245,7 @@ public class SvgRenderTreeBuilder {
             .multiply(viewport.transform(root))
             .multiply(elementTransformMatrix(root))
         let commands = ArrayList<SvgDisplayCommand>()
+        let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces)
         match (styles.get(root)) {
             case Some(rootStyle) =>
                 if (rootStyle.display() != "none") {
@@ -253,7 +258,7 @@ public class SvgRenderTreeBuilder {
                         root,
                         0,
                         Array<String>(),
-                        options.fonts,
+                        derivedFonts,
                         clipQuads: Array<Array<SvgPoint>>()
                     )
                     this.walkChildren(root, context, commands)
@@ -268,7 +273,8 @@ public class SvgRenderTreeBuilder {
             logicalWidth,
             logicalHeight,
             styles: Some(styles),
-            textLayouts: this.textLayouts
+            textLayouts: this.textLayouts,
+            fonts: derivedFonts
         )
     }
 
@@ -285,10 +291,11 @@ public class SvgRenderTreeBuilder {
     ): SvgDisplayList {
         this.ensureGuard()
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(container)
+        let styles = resolver.compute(container, mediaWidth: Float64(width))
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
+        let derivedFonts = deriveRenderFonts(fonts, resolver.fontFaces)
         let commands = ArrayList<SvgDisplayCommand>()
         let context = SvgRenderTreeContext(
             matrix,
@@ -299,7 +306,7 @@ public class SvgRenderTreeBuilder {
             root ?? container,
             0,
             Array<String>(),
-            fonts,
+            derivedFonts,
             clipQuads: clipQuads
         )
         this.walkChildren(container, context, commands)
@@ -311,7 +318,8 @@ public class SvgRenderTreeBuilder {
             Float64(width),
             Float64(height),
             styles: Some(styles),
-            textLayouts: this.textLayouts
+            textLayouts: this.textLayouts,
+            fonts: derivedFonts
         )
     }
 
@@ -327,10 +335,11 @@ public class SvgRenderTreeBuilder {
         this.ensureGuard()
         this.languages = options.languages
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(element)
+        let styles = resolver.compute(element, mediaWidth: Float64(width))
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
+        let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces)
         let ratio = options.devicePixelRatio
         let outputWidth = maxInt64(1, ceilSvgPixel(Float64(width) * ratio))
         let outputHeight = maxInt64(1, ceilSvgPixel(Float64(height) * ratio))
@@ -345,7 +354,7 @@ public class SvgRenderTreeBuilder {
             element,
             0,
             Array<String>(),
-            options.fonts,
+            derivedFonts,
             clipQuads: Array<Array<SvgPoint>>()
         )
         this.walkElement(element, context, commands)
@@ -357,7 +366,8 @@ public class SvgRenderTreeBuilder {
             Float64(width),
             Float64(height),
             styles: Some(styles),
-            textLayouts: this.textLayouts
+            textLayouts: this.textLayouts,
+            fonts: derivedFonts
         )
     }
 
@@ -1277,4 +1287,17 @@ private func findSvgElementPath(
         }
     }
     None
+}
+
+
+/** 以选项注册表为基座，把 `@font-face` 别名带入本次渲染。 */
+private func deriveRenderFonts(
+    fonts: ?SvgFontRegistry,
+    faces: ArrayList<CssFontFaceRule>
+): SvgFontRegistry {
+    let base = match (fonts) {
+        case Some(value) => value
+        case None => SvgFontRegistry.defaultRegistry()
+    }
+    SvgFontRegistry.derived(base, faces.toArray())
 }

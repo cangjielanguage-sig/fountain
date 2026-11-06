@@ -34,17 +34,78 @@ public interface SvgFont {
 /** 字体注册表：按 family 列表回退，weight / style 未命中时回退 normal / normal。 */
 public class SvgFontRegistry {
     private let fonts = HashMap<String, SvgFont>()
+    /** 注册顺序，供别名目标推断使用（确定性的「首个已注册 family」）。 */
+    private let registrationOrder = ArrayList<String>()
+    private let registeredFamilies = HashMap<String, Bool>()
+    /** 派生注册表的委托目标；`None` 表示自身持有字体。 */
+    private var base: ?SvgFontRegistry = None
+    /** 别名 family（小写）到目标 family（小写）。 */
+    private let aliases = HashMap<String, String>()
 
     public init() {}
 
     public func register(family: String, font: SvgFont): Unit {
-        this.fonts[SvgFontRegistry.key(normalizeSvgFontFamily(family), "normal", "normal")] = font
+        let normalized = normalizeSvgFontFamily(family)
+        this.fonts[SvgFontRegistry.key(normalized, "normal", "normal")] = font
+        if (this.registeredFamilies.get(normalized).isNone()) {
+            this.registeredFamilies[normalized] = true
+            this.registrationOrder.add(normalized)
+        }
+    }
+
+    /**
+     * 构造一次性派生注册表：别名 family 先映射到目标 family，再委托 base 解析。
+     *
+     * CSS `@font-face` 不携带可加载的目标，因此目标取「已注册的同名 family」；
+     * 同名未注册时回退到注册表的首个 family；注册表为空时别名不生效。
+     * base 不被写入。
+     */
+    public static func derived(base: SvgFontRegistry, aliases: Array<CssFontFaceRule>): SvgFontRegistry {
+        let result = SvgFontRegistry()
+        result.base = Some(base)
+        for (rule in aliases) {
+            let name = normalizeSvgFontFamily(rule.family)
+            let target = if (base.hasFamily(name)) {
+                name
+            } else {
+                match (base.primaryFamily()) {
+                    case Some(primary) => primary
+                    case None => continue
+                }
+            }
+            result.aliases[name] = target
+        }
+        result
+    }
+
+    /** 注册表中首个注册的 family（小写）；空注册表返回 `None`。 */
+    internal func primaryFamily(): ?String {
+        if (this.registrationOrder.size == 0) {
+            return None
+        }
+        Some(this.registrationOrder[0])
+    }
+
+    internal func hasFamily(name: String): Bool {
+        this.registeredFamilies.get(name).isSome()
     }
 
     public func resolve(family: String, weight: String, style: String): ?SvgFont {
         let normalizedWeight = weight.trimAscii().toAsciiLower()
         let normalizedStyle = style.trimAscii().toAsciiLower()
         for (name in splitSvgFontFamilies(family)) {
+            match (this.aliases.get(name)) {
+                case Some(target) =>
+                    match (this.base) {
+                        case Some(delegate) =>
+                            match (delegate.resolve(target, weight, style)) {
+                                case Some(font) => return Some(font)
+                                case None => ()
+                            }
+                        case None => ()
+                    }
+                case None => ()
+            }
             match (this.fonts.get(SvgFontRegistry.key(name, normalizedWeight, normalizedStyle))) {
                 case Some(font) => return Some(font)
                 case None => ()
@@ -54,7 +115,10 @@ public class SvgFontRegistry {
                 case None => ()
             }
         }
-        None
+        match (this.base) {
+            case Some(delegate) => delegate.resolve(family, weight, style)
+            case None => None
+        }
     }
 
     /** 每次返回新实例，避免调用方注册污染其他渲染。 */

@@ -58,7 +58,7 @@ public class CssStyleSheet_test {
         @Assert(spaced.rules[0].declarations[0].value == "red")
     }
 
-    /** @media / @import / @font-face 整条跳过并写 warning。 */
+    /** @import 仍跳过；@media / @font-face 正常解析（M5 契约）。 */
     @TestCase
     public func atRulesAreSkipped(): Unit {
         let warnings = ArrayList<String>()
@@ -69,9 +69,14 @@ public class CssStyleSheet_test {
             "circle { fill: blue }",
             warnings
         )
-        @Assert(sheet.rules.size == 1)
-        @Assert(sheet.rules[0].selectors[0].toString().startsWith("circle"))
-        @Assert(warnings.size == 3)
+        @Assert(sheet.rules.size == 2)
+        @Assert(sheet.rules[0].selectors[0].toString().startsWith("rect"))
+        @Assert(sheet.rules[0].media.isSome())
+        @Assert(sheet.rules[1].selectors[0].toString().startsWith("circle"))
+        @Assert(sheet.fontFaces.size == 1)
+        @Assert(sheet.fontFaces[0].family == "X")
+        @Assert(warnings.size == 1)
+        @Assert(warnings[0].contains("@import"))
     }
 
     /** 未知伪类整条跳过；属性选择器与子代组合器正常解析（M5 契约）。 */

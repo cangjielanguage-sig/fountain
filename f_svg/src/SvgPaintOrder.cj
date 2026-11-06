@@ -15,4 +15,51 @@ limitations under the License.
 */
 package fountain::f_svg
 
-// TODO(M5): SvgPaintOrder
+import std.collection.*
+
+private let CSS_PAINT_LAYER_NAMES: Array<String> = ["fill", "stroke", "markers"]
+
+/**
+ * `paint-order` 的字符串归一化：去重、按默认顺序补齐缺失层。
+ *
+ * 未知关键字使整条声明无效（返回 `None`，由调用方回退初始值并告警）。
+ */
+internal func normalizeCssPaintOrder(text: String): ?String {
+    let tokens = splitCssWhitespaceWords(text.toAsciiLower())
+    if (tokens.size == 0) {
+        return None
+    }
+    let layers = ArrayList<String>()
+    for (token in tokens) {
+        if (!isCssPaintLayerName(token)) {
+            return None
+        }
+        if (!containsCssPaintLayer(layers, token)) {
+            layers.add(token)
+        }
+    }
+    for (name in CSS_PAINT_LAYER_NAMES) {
+        if (!containsCssPaintLayer(layers, name)) {
+            layers.add(name)
+        }
+    }
+    joinCssStrings(layers, " ")
+}
+
+internal func isCssPaintLayerName(name: String): Bool {
+    for (candidate in CSS_PAINT_LAYER_NAMES) {
+        if (candidate == name) {
+            return true
+        }
+    }
+    false
+}
+
+private func containsCssPaintLayer(layers: ArrayList<String>, name: String): Bool {
+    for (item in layers) {
+        if (item == name) {
+            return true
+        }
+    }
+    false
+}

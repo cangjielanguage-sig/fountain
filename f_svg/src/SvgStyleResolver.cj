@@ -64,20 +64,35 @@ private class CssCandidate {
  */
 public class SvgStyleResolver <: ToString {
     public let warnings = ArrayList<String>()
+    /** 本次解析得到的 `@font-face` 别名，按源顺序。 */
+    public let fontFaces = ArrayList<CssFontFaceRule>()
     private let sheet: CssStyleSheet
     private let styleCache = HashMap<String, CssStyleSheet>()
     private let inlineCache = HashMap<String, Array<CssDeclaration>>()
     private var mergedRules: Array<CssRule> = Array<CssRule>()
+    private var mergedFontFaces: Array<CssFontFaceRule> = Array<CssFontFaceRule>()
     private var selectorIndex: ?CssSelectorIndex = None
     private var preparedRoot: ?Int64 = None
+    /** `@media` 宽度求值基准；缺省 300。 */
+    private var mediaWidth: Float64 = 300.0
 
     public init(sheet!: CssStyleSheet = CssStyleSheet.empty()) {
         this.sheet = sheet
     }
 
     public func compute(root: SvgElement): SvgComputedStyleTree {
+        this.compute(root, mediaWidth: 300.0)
+    }
+
+    /** 以给定逻辑视口宽度求值 `@media`。 */
+    public func compute(root: SvgElement, mediaWidth!: Float64): SvgComputedStyleTree {
+        this.mediaWidth = mediaWidth
         this.warnings.clear()
         this.prepare(Some(root))
+        this.fontFaces.clear()
+        for (face in this.mergedFontFaces) {
+            this.fontFaces.add(face)
+        }
         let tree = SvgComputedStyleTree()
         this.computeSubtree(root, None, tree)
         tree
@@ -88,6 +103,16 @@ public class SvgStyleResolver <: ToString {
      * 独立调用时只使用外部样式表，不回溯真实祖先。
      */
     public func computeElement(element: SvgElement, parent: ?SvgComputedStyle): SvgComputedStyle {
+        this.computeElement(element, parent, mediaWidth: 300.0)
+    }
+
+    /** 计算单个元素，并以给定宽度求值 `@media`。 */
+    public func computeElement(
+        element: SvgElement,
+        parent: ?SvgComputedStyle,
+        mediaWidth!: Float64
+    ): SvgComputedStyle {
+        this.mediaWidth = mediaWidth
         this.prepare(None)
         this.cascade(element, parent)
     }
@@ -120,8 +145,12 @@ public class SvgStyleResolver <: ToString {
             return
         }
         let rules = ArrayList<CssRule>()
+        let faces = ArrayList<CssFontFaceRule>()
         for (rule in this.sheet.rules) {
-            rules.add(CssRule(rule.selectors, rule.declarations, rule.order))
+            rules.add(CssRule(rule.selectors, rule.declarations, rule.order, media: rule.media))
+        }
+        for (face in this.sheet.fontFaces) {
+            faces.add(face)
         }
         match (root) {
             case Some(element) =>
@@ -130,12 +159,16 @@ public class SvgStyleResolver <: ToString {
                 var styleIndex = 1
                 for (text in texts) {
                     let parsed = this.parseStyleText(text)
+                    for (face in parsed.fontFaces) {
+                        faces.add(face)
+                    }
                     for (rule in parsed.rules) {
                         rules.add(
                             CssRule(
                                 rule.selectors,
                                 rule.declarations,
-                                styleIndex * CSS_STYLE_ORDER_CAP + rule.order
+                                styleIndex * CSS_STYLE_ORDER_CAP + rule.order,
+                                media: rule.media
                             )
                         )
                     }
@@ -144,6 +177,7 @@ public class SvgStyleResolver <: ToString {
             case None => ()
         }
         this.mergedRules = rules.toArray()
+        this.mergedFontFaces = faces.toArray()
         this.selectorIndex = CssSelectorIndex(this.mergedRules)
         this.preparedRoot = key
     }
@@ -175,23 +209,54 @@ public class SvgStyleResolver <: ToString {
 
     private func cascade(element: SvgElement, parent: ?SvgComputedStyle): SvgComputedStyle {
         let best = HashMap<String, CssCandidate>()
+        let customBest = HashMap<String, CssCandidate>()
         let elementPath = element.elementPath()
         this.considerPresentation(element, best)
-        this.considerSheet(element, best)
-        this.considerInline(element, best)
+        this.considerSheet(element, best, customBest)
+        this.considerInline(element, best, customBest)
+
+        let custom = HashMap<String, String>()
+        match (parent) {
+            case Some(parentStyle) =>
+                for ((name, value) in parentStyle.customProperties()) {
+                    custom[name] = value
+                }
+            case None => ()
+        }
+        for ((name, candidate) in customBest) {
+            custom[name] = candidate.value
+        }
 
         let values = HashMap<String, String>()
         let sources = HashMap<String, CssStyleSource>()
+        let varExpressions = HashMap<String, String>()
         var overall = CssStyleSource.Default
         let fontSpec = SvgPropertySpec("font-size", true, "16px")
         var fontSizeRaw = "16px"
+        var fontSizeExpression: ?String = None
         match (best.get("font-size")) {
-            case Some(candidate) => fontSizeRaw = candidate.value
+            case Some(candidate) =>
+                fontSizeRaw = candidate.value
+                if (containsCssVariable(candidate.value)) {
+                    fontSizeExpression = Some(candidate.value)
+                }
             case None =>
                 match (parent) {
-                    case Some(parentStyle) => fontSizeRaw = parentStyle.get("font-size") ?? "16px"
+                    case Some(parentStyle) =>
+                        match (parentStyle.varExpressionOf("font-size")) {
+                            case Some(expression) =>
+                                fontSizeRaw = expression
+                                fontSizeExpression = Some(expression)
+                            case None => fontSizeRaw = parentStyle.get("font-size") ?? "16px"
+                        }
                     case None => ()
                 }
+        }
+        match (expandCustomValue(fontSizeRaw, custom)) {
+            case Some(text) => fontSizeRaw = text
+            case None =>
+                this.warnings.add("元素「${elementPath}」属性「font-size」的 var() 无法解析，已回退")
+                fontSizeRaw = ""
         }
         fontSizeRaw = resolveCssKeyword(fontSizeRaw, fontSpec, parent)
         var normalizedFontSize = this.normalizeValue(
@@ -203,6 +268,7 @@ public class SvgStyleResolver <: ToString {
         )
         if (normalizedFontSize.isNone()) {
             let original = fontSizeRaw
+            fontSizeExpression = None
             let inherited = match (parent) {
                 case Some(parentStyle) => parentStyle.get("font-size") ?? "16px"
                 case None => "16px"
@@ -218,10 +284,14 @@ public class SvgStyleResolver <: ToString {
         for (spec in SVG_PROPERTY_TABLE) {
             let name = spec.name
             var raw = spec.initial
+            var rawExpression: ?String = None
             var source = CssStyleSource.Default
             match (best.get(name)) {
                 case Some(candidate) =>
                     raw = candidate.value
+                    if (containsCssVariable(candidate.value)) {
+                        rawExpression = Some(candidate.value)
+                    }
                     source = if (candidate.important) {
                         CssStyleSource.Important
                     } else {
@@ -230,10 +300,23 @@ public class SvgStyleResolver <: ToString {
                 case None =>
                     if (spec.inherited) {
                         match (parent) {
-                            case Some(parentStyle) => raw = parentStyle.get(name) ?? spec.initial
+                            case Some(parentStyle) =>
+                                match (parentStyle.varExpressionOf(name)) {
+                                    case Some(expression) =>
+                                        raw = expression
+                                        rawExpression = Some(expression)
+                                    case None => raw = parentStyle.get(name) ?? spec.initial
+                                }
                             case None => raw = spec.initial
                         }
                     }
+            }
+            match (expandCustomValue(raw, custom)) {
+                case Some(text) => raw = text
+                case None =>
+                    this.warnings.add("元素「${elementPath}」属性「${name}」的 var() 无法解析，已回退")
+                    raw = ""
+                    rawExpression = None
             }
             raw = resolveCssKeyword(raw, spec, parent)
             var normalized = if (name == "font-size") {
@@ -245,6 +328,7 @@ public class SvgStyleResolver <: ToString {
                 case Some(_) => ()
                 case None =>
                     let original = raw
+                    rawExpression = None
                     if (spec.inherited) {
                         match (parent) {
                             case Some(parentStyle) => raw = parentStyle.get(name) ?? spec.initial
@@ -261,9 +345,23 @@ public class SvgStyleResolver <: ToString {
             }
             values[name] = normalized ?? spec.initial
             sources[name] = source
+            match (rawExpression) {
+                case Some(expression) => varExpressions[name] = expression
+                case None => ()
+            }
             if (source.rank() > overall.rank()) {
                 overall = source
             }
+        }
+        if (normalizedFontSize.isNone()) {
+            fontSizeExpression = None
+        }
+        match (fontSizeExpression) {
+            case Some(expression) => varExpressions["font-size"] = expression
+            case None => ()
+        }
+        for ((name, value) in custom) {
+            values[name] = value
         }
         let color = values.get("color") ?? "#000000"
         for (name in ["fill", "stroke", "stop-color"]) {
@@ -271,7 +369,7 @@ public class SvgStyleResolver <: ToString {
                 values[name] = color
             }
         }
-        SvgComputedStyle(values, sources, overall)
+        SvgComputedStyle(values, sources, overall, varExpressions: varExpressions)
     }
 
     private func considerPresentation(element: SvgElement, best: HashMap<String, CssCandidate>): Unit {
@@ -288,13 +386,24 @@ public class SvgStyleResolver <: ToString {
         }
     }
 
-    private func considerSheet(element: SvgElement, best: HashMap<String, CssCandidate>): Unit {
+    private func considerSheet(
+        element: SvgElement,
+        best: HashMap<String, CssCandidate>,
+        customBest: HashMap<String, CssCandidate>
+    ): Unit {
         let index = match (this.selectorIndex) {
             case Some(value) => value
             case None => return
         }
         for (ruleIndex in index.candidates(element)) {
             let rule = this.mergedRules[ruleIndex]
+            match (rule.media) {
+                case Some(media) =>
+                    if (!media.matches(this.mediaWidth)) {
+                        continue
+                    }
+                case None => ()
+            }
             var matched = false
             var specificity = CssSpecificity.zero
             for (selector in rule.selectors) {
@@ -309,45 +418,55 @@ public class SvgStyleResolver <: ToString {
                 continue
             }
             for (declaration in rule.declarations) {
+                let candidate = CssCandidate(
+                    declaration.value,
+                    declaration.important,
+                    CSS_ORIGIN_SHEET,
+                    specificity,
+                    rule.order
+                )
+                if (declaration.property.startsWith("--")) {
+                    if (declaration.value.trimAscii().size > 0) {
+                        considerCssCandidate(customBest, declaration.property, candidate)
+                    }
+                    continue
+                }
                 if (findSvgPropertySpec(declaration.property).isNone()) {
                     continue
                 }
-                considerCssCandidate(
-                    best,
-                    declaration.property,
-                    CssCandidate(
-                        declaration.value,
-                        declaration.important,
-                        CSS_ORIGIN_SHEET,
-                        specificity,
-                        rule.order
-                    )
-                )
+                considerCssCandidate(best, declaration.property, candidate)
             }
         }
     }
 
-    private func considerInline(element: SvgElement, best: HashMap<String, CssCandidate>): Unit {
+    private func considerInline(
+        element: SvgElement,
+        best: HashMap<String, CssCandidate>,
+        customBest: HashMap<String, CssCandidate>
+    ): Unit {
         match (element.style) {
             case Some(text) =>
                 if (text.trimAscii().size == 0) {
                     return
                 }
                 for (declaration in this.inlineDeclarations(text)) {
+                    let candidate = CssCandidate(
+                        declaration.value,
+                        declaration.important,
+                        CSS_ORIGIN_INLINE,
+                        CssSpecificity.zero,
+                        CSS_INLINE_ORDER
+                    )
+                    if (declaration.property.startsWith("--")) {
+                        if (declaration.value.trimAscii().size > 0) {
+                            considerCssCandidate(customBest, declaration.property, candidate)
+                        }
+                        continue
+                    }
                     if (findSvgPropertySpec(declaration.property).isNone()) {
                         continue
                     }
-                    considerCssCandidate(
-                        best,
-                        declaration.property,
-                        CssCandidate(
-                            declaration.value,
-                            declaration.important,
-                            CSS_ORIGIN_INLINE,
-                            CssSpecificity.zero,
-                            CSS_INLINE_ORDER
-                        )
-                    )
+                    considerCssCandidate(best, declaration.property, candidate)
                 }
             case None => ()
         }
@@ -360,33 +479,52 @@ public class SvgStyleResolver <: ToString {
         elementPath: String,
         fontSizePx: Float64
     ): ?String {
-        let trimmed = raw.trimAscii()
-        if (trimmed.size == 0) {
+        var text = raw.trimAscii()
+        if (text.size == 0) {
             return None
         }
-        let lower = trimmed.toAsciiLower()
+        var textLower = text.toAsciiLower()
+        if (text.size > 5 && text[text.size - 1] == b')' && text[0..5].toAsciiLower() == "calc(") {
+            if (!cssCalcAppliesTo(name)) {
+                return None
+            }
+            let baseFontSize = if (name == "font-size") {
+                match (parent) {
+                    case Some(parentStyle) => parentStyle.fontSize().value
+                    case None => 16.0
+                }
+            } else {
+                fontSizePx
+            }
+            match (evaluateCssCalc(text[5..text.size - 1], baseFontSize)) {
+                case Some(value) =>
+                    text = value
+                    textLower = value.toAsciiLower()
+                case None => return None
+            }
+        }
         match (name) {
-            case "fill" | "stroke" => return this.normalizePaint(name, trimmed, elementPath)
+            case "fill" | "stroke" => return this.normalizePaint(name, text, elementPath)
             case "color" =>
-                if (lower == "currentcolor") {
+                if (textLower == "currentcolor") {
                     match (parent) {
                         case Some(parentStyle) => return Some(parentStyle.color().toString())
                         case None => return Some(SvgColor.Black.toString())
                     }
                 }
-                return this.normalizeColor(trimmed)
+                return this.normalizeColor(text)
             case "stop-color" =>
-                if (lower == "currentcolor") {
+                if (textLower == "currentcolor") {
                     return Some("currentColor")
                 }
-                return this.normalizeColor(trimmed)
+                return this.normalizeColor(text)
             case "fill-opacity" | "stroke-opacity" | "opacity" | "stop-opacity" =>
-                match (tryParseSvgFloat(trimmed)) {
+                match (tryParseSvgFloat(text)) {
                     case Some(value) => return Some(formatSvgNumber(clampSvgUnit(value)))
                     case None => return None
                 }
             case "stroke-miterlimit" =>
-                match (tryParseSvgFloat(trimmed)) {
+                match (tryParseSvgFloat(text)) {
                     case Some(value) => if (value < 1.0) {
                         return None
                     } else {
@@ -395,7 +533,7 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "font-size" =>
-                match (SvgLength.tryParse(trimmed)) {
+                match (SvgLength.tryParse(text)) {
                     case Some(length) =>
                         match (length.unit) {
                             case Em =>
@@ -421,19 +559,19 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "stroke-width" | "letter-spacing" | "word-spacing" | "stroke-dashoffset" =>
-                if ((name == "letter-spacing" || name == "word-spacing") && lower == "normal") {
+                if ((name == "letter-spacing" || name == "word-spacing") && textLower == "normal") {
                     return Some("0")
                 }
-                match (SvgLength.tryParse(trimmed)) {
+                match (SvgLength.tryParse(text)) {
                     case Some(length) =>
                         return Some(resolveFontRelativeLength(length, fontSizePx))
                     case None => return None
                 }
             case "stroke-dasharray" =>
-                if (lower == "none") {
+                if (textLower == "none") {
                     return Some("none")
                 }
-                match (parseSvgLengthList(trimmed)) {
+                match (parseSvgLengthList(text)) {
                     case Some(list) =>
                         let out = StringBuilder()
                         for (index in 0..list.size) {
@@ -446,16 +584,16 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "clip-path" | "mask" | "filter" | "marker-start" | "marker-mid" | "marker-end" =>
-                if (lower == "none") {
+                if (textLower == "none") {
                     return Some("none")
                 }
-                if (lower.size > 4 && lower[0..4] == "url(") {
-                    return Some(trimmed)
+                if (textLower.size > 4 && textLower[0..4] == "url(") {
+                    return Some(text)
                 }
                 return None
-            case "clip" => return SvgClipProperty.normalize(trimmed)
+            case "clip" => return SvgClipProperty.normalize(text)
             case "overflow" =>
-                match (SvgOverflow.fromName(lower)) {
+                match (SvgOverflow.fromName(textLower)) {
                     case Some(value) =>
                         if (value.clips()) {
                             return Some("hidden")
@@ -464,22 +602,22 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "vector-effect" =>
-                match (SvgVectorEffect.fromName(lower)) {
+                match (SvgVectorEffect.fromName(textLower)) {
                     case Some(value) => return Some(value.toString())
                     case None => return None
                 }
             case "dominant-baseline" =>
-                match (SvgDominantBaseline.fromName(lower)) {
+                match (SvgDominantBaseline.fromName(textLower)) {
                     case Some(value) => return Some(value.toString())
                     case None => return None
                 }
             case "alignment-baseline" =>
-                match (SvgAlignmentBaseline.fromName(lower)) {
+                match (SvgAlignmentBaseline.fromName(textLower)) {
                     case Some(value) => return Some(value.toString())
                     case None => return None
                 }
             case "baseline-shift" =>
-                match (SvgBaselineShift.fromName(trimmed)) {
+                match (SvgBaselineShift.fromName(text)) {
                     case Some(value) =>
                         match (value) {
                             case Length(length) =>
@@ -495,64 +633,98 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "text-decoration" =>
-                match (SvgTextDecoration.tryParse(trimmed)) {
+                match (SvgTextDecoration.tryParse(text)) {
                     case Some(value) => return Some(value.toString())
                     case None => return None
                 }
             case "writing-mode" =>
-                match (SvgWritingMode.fromName(lower)) {
+                match (SvgWritingMode.fromName(textLower)) {
                     case Some(value) => return Some(value.toString())
                     case None => return None
                 }
             case "fill-rule" | "clip-rule" =>
-                match (SvgFillRule.fromName(lower)) {
+                match (SvgFillRule.fromName(textLower)) {
                     case Some(rule) => return Some(rule.attrName())
                     case None => return None
                 }
             case "stroke-linecap" =>
-                match (SvgLineCap.fromName(lower)) {
+                match (SvgLineCap.fromName(textLower)) {
                     case Some(cap) => return Some(cap.attrName())
                     case None => return None
                 }
             case "stroke-linejoin" =>
-                match (SvgLineJoin.fromName(lower)) {
+                match (SvgLineJoin.fromName(textLower)) {
                     case Some(join) => return Some(join.attrName())
                     case None => return None
                 }
             case "text-anchor" =>
-                match (SvgTextAnchor.fromName(lower)) {
+                match (SvgTextAnchor.fromName(textLower)) {
                     case Some(anchor) => return Some(anchor.attrName())
                     case None => return None
                 }
             case "visibility" =>
-                if (lower == "visible" || lower == "hidden" || lower == "collapse") {
-                    return Some(lower)
+                if (textLower == "visible" || textLower == "hidden" || textLower == "collapse") {
+                    return Some(textLower)
                 }
                 return None
             case "display" =>
-                if (lower == "inline" || lower == "block" || lower == "none" || lower == "inline-block") {
-                    return Some(lower)
+                if (textLower == "inline" || textLower == "block" || textLower == "none" || textLower == "inline-block") {
+                    return Some(textLower)
                 }
                 return None
-            case "font-family" => return trimmed
+            case "font-family" => return text
             case "font-weight" =>
-                if (lower == "normal" || lower == "bold" || lower == "bolder" || lower == "lighter") {
-                    return Some(lower)
+                if (textLower == "normal" || textLower == "bold" || textLower == "bolder" || textLower == "lighter") {
+                    return Some(textLower)
                 }
-                match (tryParseSvgFloat(lower)) {
+                match (tryParseSvgFloat(textLower)) {
                     case Some(value) => return Some(formatSvgNumber(value))
                     case None => return None
                 }
             case "font-style" =>
-                if (lower == "normal" || lower == "italic" || lower == "oblique") {
-                    return Some(lower)
+                if (textLower == "normal" || textLower == "italic" || textLower == "oblique") {
+                    return Some(textLower)
                 }
                 return None
             case "image-rendering" =>
-                match (SvgImageRendering.fromName(lower)) {
+                match (SvgImageRendering.fromName(textLower)) {
                     case Some(rendering) => return Some(rendering.toString())
                     case None => return None
                 }
+            case "paint-order" => return normalizeCssPaintOrder(textLower)
+            case "mix-blend-mode" =>
+                match (textLower) {
+                    case "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten" |
+                        "color-dodge" | "color-burn" | "hard-light" | "soft-light" | "difference" |
+                        "exclusion" => return Some(textLower)
+                    case _ => return None
+                }
+            case "isolation" =>
+                if (textLower == "auto" || textLower == "isolate") {
+                    return Some(textLower)
+                }
+                return None
+            case "transform-origin" => return normalizeCssTransformOrigin(text)
+            case "transform-box" =>
+                if (textLower == "view-box" || textLower == "fill-box") {
+                    return Some(textLower)
+                }
+                return None
+            case "direction" =>
+                if (textLower == "ltr" || textLower == "rtl") {
+                    return Some(textLower)
+                }
+                return None
+            case "unicode-bidi" =>
+                if (textLower == "normal" || textLower == "embed" || textLower == "bidi-override") {
+                    return Some(textLower)
+                }
+                return None
+            case "font-kerning" =>
+                if (textLower == "auto" || textLower == "normal" || textLower == "none") {
+                    return Some(textLower)
+                }
+                return None
             case _ => return None
         }
     }
@@ -575,6 +747,22 @@ public class SvgStyleResolver <: ToString {
             case Some(color) => Some(color.toString())
             case None => None
         }
+    }
+}
+
+/** 展开单个属性的 `var()`；无 `var(` 时原样返回。 */
+private func expandCustomValue(raw: String, custom: HashMap<String, String>): ?String {
+    if (!containsCssVariable(raw)) {
+        return Some(raw)
+    }
+    expandCssVariables(raw, {name => custom.get(name)}, Array<String>(), 0)
+}
+
+/** `calc()` 只对长度属性生效。 */
+private func cssCalcAppliesTo(name: String): Bool {
+    match (name) {
+        case "stroke-width" | "letter-spacing" | "word-spacing" | "font-size" | "stroke-dashoffset" => true
+        case _ => false
     }
 }
 
