@@ -93,6 +93,59 @@ class LoomPersona_test {
         }
     }
 
+    /** `default` 表示「不注入」，不能把单词 default 当人格塞进 system */
+    @TestCase
+    func testDefaultCharacterInjectsNothing(): Unit {
+        LoomHostApi.resetStore()
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan('default'), host, start())
+            @Expect(host.lastSystem, 'BASE')
+        }finally{
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
+    /** 提示词条目正文为空时继续下沉到内置角色 */
+    @TestCase
+    func testEmptyPromptContentFallsBackToBuiltin(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        gateway.call('prompt', 'put', '{"name":"rigorous","content":""}')
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan('rigorous'), host, start())
+            @Expect(host.lastSystem.contains('BASE'), true)
+            @Expect(host.lastSystem.contains(PredefinedCharacters.bodyOf('rigorous')), true)
+            @Expect(host.lastSystem.startsWith('rigorous'), false)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
+    /** 空提示词 + 未知 key：保持第三级「字面文本」语义 */
+    @TestCase
+    func testEmptyPromptContentUnknownKeyFallsBackToLiteral(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        gateway.call('prompt', 'put', '{"name":"临时角色","content":""}')
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try{
+            let host = PersonaHost()
+            LoomRunner().run(plan('临时角色'), host, start())
+            @Expect(host.lastSystem, '临时角色\nBASE')
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
     /** 技能按标题加载后自动拼进 system，模型不必自己想起来去查 */
     @TestCase
     func testSkillsInjectedIntoSystem(): Unit {

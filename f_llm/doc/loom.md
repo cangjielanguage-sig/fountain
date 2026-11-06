@@ -395,13 +395,17 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 **解析是三级回落**（`LoomRunner.resolvePersona`）：
 
 ```
-1. prompt 库：prompt.latest(name) 命中 → 用它
+1. prompt 库：prompt.latest(name) 命中且 content 非空 → 用它
 2. 内置角色正文：PredefinedCharacters.bodyOf(name) 非空 → 用它
-3. 字面文本：以上都没有 → 把入参当正文
+3. 字面文本：以上都没有，且 name 不是已知角色 key → 把入参当正文
 ```
 
 第 2 级是必须的：`characterKey` 是 `rigorous` 这类**预定义 key**，设计里每个 key 都配了正文。
 没有这一级时，库里找不到同名提示词就会把 `rigorous` 这个单词直接塞进 system——比不设置更糟。
+
+**「无正文」的三种情况走同一判据**：`persona` 写 `custom` 或 `default`、提示词条目 `content` 为空、
+已知角色 `bodyOf` 为空——都表示「本级没有正文」，继续下沉；已知角色最终无正文时**不注入**，
+不再退化成把关键字塞进 system（`PredefinedCharacters.isKnown` 判定）。
 
 **`character.prompts` 作为附加要求追加**（如「回答不超过 300 字，用中文」），与本次风格无关，
 只要该用户有 character 记录且 `prompts` 非空就拼在人格正文之后：

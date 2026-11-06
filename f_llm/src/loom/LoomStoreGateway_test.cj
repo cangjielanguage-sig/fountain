@@ -49,6 +49,36 @@ class LoomStoreGateway_test {
         @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":0}'), '[]')
     }
 
+    /** experience.list 不传 kind 时必须只返回经验 */
+    @TestCase
+    func testExperienceListFiltersByKind(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"普通笔记","content":"note-body","kind":"note"}')
+        let _ = gateway.call('experience', 'add',
+            '{"userId":7,"namespace":"n","title":"一次经验","content":"exp-body"}')
+
+        let list = gateway.call('experience', 'list',
+            '{"userId":7,"namespace":"n","offset":0,"limit":10}')
+        @Expect(list.contains('exp-body'), true)
+        @Expect(list.contains('note-body'), false)
+    }
+
+    /** 显式 kind 仍然优先（与 search 的既有语义一致） */
+    @TestCase
+    func testExperienceListHonoursExplicitKind(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"普通笔记","content":"note-body","kind":"note"}')
+        let _ = gateway.call('experience', 'add',
+            '{"userId":7,"namespace":"n","title":"一次经验","content":"exp-body"}')
+
+        let list = gateway.call('experience', 'list',
+            '{"userId":7,"namespace":"n","kind":"note","offset":0,"limit":10}')
+        @Expect(list.contains('note-body'), true)
+        @Expect(list.contains('exp-body'), false)
+    }
+
     @TestCase
     func testMemoryAddThenRemove(): Unit {
         let gateway = gateway()
