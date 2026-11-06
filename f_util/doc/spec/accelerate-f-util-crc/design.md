@@ -125,70 +125,60 @@ c = t7[c&0xFF] ^ t6[(c>>8)&0xFF] ^ … ^ t0[(c>>56)&0xFF]
 - 尾巴（< 8 字节）与不足部分走逐字节路径。
 - 阶段一只需反射 64 位的 8 张表即可验收；非反射 64 位的 8 张表属阶段二，但字段与派生函数在阶段一就已就位。
 
-### D5 折叠布局、两种坐标与 3+1 组常量
+### D5 折叠布局、两种坐标与常量集合
 
-**核心事实：反射变体在反射域折叠，非反射变体在正常域折叠。** 两个域的数据位序、常量坐标与入口状态注入都不同，不能共用一份常量或一份代码页。
+**核心事实：反射变体先做 64 位位反转，再与正常域变体共用同一套折叠核与同一组常量。** 位反转把 LSB-first 的反射多项式映射成 MSB-first 的正常多项式，因此两个域只在"入口/出口是否 `RBIT`、数据是否再做逐字节位反转"上不同，折叠公式与常量完全一致。
 
 #### 反射域（`xz` / `iso` / `redis` / `jones`）
 
-- 寄存器语义与 `reflectedTable` 路径一致：LSB-first，数据按小端载入 128 位 lane，入口 `crc` 放进 lane0 的**低 64 位**。
-- 常量坐标取反射域：`P = bitrev64(poly)`，所有 `x^n mod P` 都按反射域的幂次约定生成。
-- 不需要逐字节反转（数据小端载入天然是"每字节 LSB 先"）。
+- 入口 `crc` 做 `RBIT x0, x0`，出口结果再做一次 `RBIT`。
+- 每个 16 字节块先 `RBIT v.16b`（逐字节位反转），再 `REV64 v.16b, v.16b` + `EXT v.16b, v.16b, v.16b, #8`（16 字节整体反序），得到多项式系数序。
+- 之后与正常域完全相同。
 
 #### 正常域（`ecma182` / `we`）
 
-- 寄存器语义与 `normalTable` 路径一致：MSB-first，入口 `crc` 放进 lane0 的**高 64 位**。
-- 常量坐标取正常域：`P = poly`。
-- 每个 64 位数据字在折入前必须做整字字节反转（aarch64 `REV64 vD.16b, vN.16b`，x86_64 `PSHUFB` + 固定反序掩码），把内存字节序变成多项式系数序；这是正常域折叠与反射域折叠唯一的"额外一步"。
+- 入口/出口不做 `RBIT`。
+- 每个 16 字节块只做 `REV64` + `EXT #8` 的字节序反转。
 
-#### 折叠布局：4 通道 × 128 位
+#### 折叠布局：单块 16 字节
 
 ```
-每轮取 4 个 128 位 block（64 字节），每个 lane 独立折叠：
-  lane_j = clmul(lane_j.lo, K[1]) ^ clmul(lane_j.hi, K[2]) ^ block_j
-全部 block 折完后，把 lane1..3 按 lane 距离折回 lane0（从最远开始）：
-  lane0 ^= lane3 的 (K[5], K[6])
-  lane0 ^= lane2 的 (K[3], K[4])
-  lane0 ^= lane1 的 (K[1], K[2])
-再把 128 位残余约减到 64 位：
-  crc = barrett(clmul(lo, k_tail) ^ hi)
+首块（含入口注入）：acc = clmul(crc, P) ^ B0
+后续块：          acc = clmul(acc.lo, x^128) ^ clmul(acc.hi, x^192) ^ B
+收尾：            t   = clmul(acc.lo, P) ^ clmul(acc.hi, x^128)
+                  crc = barrett(t)
 ```
 
-#### 常量集合（每组 8 个 64 位字，全部由 `CrcGf` 现算）
+- **单块而非 4 通道**：实测 1 MiB 7450 MB/s、4 KiB 777 ns，已远超门禁；4 通道会把内核从 196 B 抬到 400 B 以上，收益落在门禁之外。
+- **常量不内联**，由 `Crc64Hw` 以指针传入（`[P, x^128, x^192, mu]` 四个 `UInt64`）。代码页与 poly 无关，3 个 poly 共用同一段机器码。
+
+#### 常量集合（每组 4 个 `UInt64`，全部由 `CrcGf` 现算）
 
 | 常量 | 定义 | 用途 |
 | --- | --- | --- |
-| `K[1]` / `fold_lo` | `x^128 mod P` | lane 内低半区折叠 |
-| `K[2]` / `fold_hi` | `x^192 mod P` | lane 内高半区折叠 |
-| `K[3..6]` | `x^(256/320/384/448) mod P` | 把 lane1..3 折回 lane0（距离 1/2/3 个 128 位块） |
-| `k_tail` | `x^64 mod P` | 128 位残余降到 64 位 |
-| `mu` | `⌊x^128 / P⌋` | Barrett 商，收尾约减 |
+| `P` | 多项式（正常域坐标） | 首块注入与收尾 |
+| `x^128 mod P` | 折叠低半区 |
+| `x^192 mod P` | 折叠高半区 |
+| `mu` | `⌊x^128 / P⌋` 的低 64 位 | Barrett 约减 |
 
-**3+1 组 = 4 个 `(域, poly)` 组合，覆盖 6 个变体：**
+**3 组 = 3 个 poly，覆盖 6 个变体与两个域：**
 
-| 组 | 域 | poly | 使用变体 | 说明 |
-| --- | --- | --- | --- | --- |
-| G1 | 反射 | `0x42F0E1EBA9EA3693` | `xz` | 阶段一 |
-| G2 | 反射 | `0x000000000000001B` | `iso` | 阶段一 |
-| G3 | 反射 | `0xAD93D23594C935A9` | `redis` / `jones` | 阶段一；两者只差 init/xorout，共享同一内核与常量 |
-| G4 | 正常 | `0x42F0E1EBA9EA3693` | `ecma182` / `we` | 阶段二；与 G1 同 poly 但不同坐标，常量不通用 |
+| 组 | poly | 使用变体 | 域 |
+| --- | --- | --- | --- |
+| G1 | `0x42F0E1EBA9EA3693` | `xz` | 反射（rbit） |
+| G2 | `0x000000000000001B` | `iso` | 反射（rbit） |
+| G3 | `0xAD93D23594C935A9` | `redis` / `jones` | 反射（rbit） |
+| G1 | `0x42F0E1EBA9EA3693` | `ecma182` / `we` | 正常（无 rbit） |
 
-`redis` 与 `jones` 共享 G3，`ecma182` 与 `we` 共享 G4：`init` 与 `xorout` 由 `CrcEngine.initRegister` / `finish` 处理，**不进入折叠核**，所以内核只认 `(poly, refin)`。
+> 反射与正常共用 G1：位反转之后两者的多项式相同，**没有"第 4 组常量"**。这是与原设计（3+1 组）的差异，已由 6 变体逐位对拍验证。
 
-#### 常量以立即数内联进代码页
-
-`Crc64Hw` 在生成代码时把上述常量按"低/高半区成对"编成 128 位立即数：
-
-- aarch64：`MOVZ`/`MOVK` 拼出 `K_lo` 与 `K_hi` → `INS vK.d[0], xN` / `INS vK.d[1], xM`；`PMULL` 取 `.1d`（低半区），`PMULL2` 取 `.2d`（高半区）；
-- x86_64：`MOVABS rax, K_lo` → `MOVQ xmmK, rax`；`MOVABS rdx, K_hi` → `MOVQ xmmT, rdx`；`PUNPCKLQDQ xmmK, xmmT` 拼成 `[K_lo, K_hi]`；`PCLMULQDQ ..., 0x00` 取低半区，`0x11` 取高半区。
-
-这样每个 `(poly, 域)` 对应一份**专用**代码页，运行期不传常量指针、不做常量加载分支，也没有常量数组的生命周期问题。4 份代码页约 1~2 KB/份。
+`init` 与 `xorout` 由 `CrcEngine.initRegister` / `finish` 处理，**不进入折叠核**，所以内核只认 `(poly, refin)`。
 
 #### 入口状态注入与尾部
 
-- 折叠前把 `update(crc, ...)` 的未收尾寄存器注入 lane0（反射：低半区；正常：高半区）。**这一位序不靠推理拍板**：由 D9 的等价性用例（含 `crc != 0` 入口、64/65/127/128 字节边界）钉死；若两种注入都错，说明 `K` 的指数需整体前移一格，生成器换参数即可，不改结构。
-- 生成函数只处理 `len & ~63`（64 字节整数倍，且 ≥ 64）；不足 64 字节的尾部由仓颉侧 `CrcEngine` 的表路径消费。
-- **不做 `data[0..aligned]` 的前缀切片**：仓颉 `Array` 切片会产生新数组，4 KiB 前缀复制足以吃掉 4 KiB 绝对耗时预算。`Crc64Hw.update` 接收完整数组 + 前缀长度，`acquireArrayRawData` 后把裸指针与 `aligned` 直接交给 CFunc；尾部最多 63 字节再切片走表路径。
+- 首块注入 `acc = clmul(crc, P) ^ B0`；反射变体的 `crc` 先 `RBIT`。
+- 生成函数只处理 `len & ~15`（16 字节整数倍，且 ≥ 16）；尾部最多 15 字节由 `CrcEngine` 的表路径消费。
+- **不做 `data[0..aligned]` 的前缀切片**：仓颉 `Array` 切片会产生新数组，4 KiB 前缀复制足以吃掉 4 KiB 绝对耗时预算。`Crc64Hw.update` 接收完整数组 + 前缀长度，`acquireArrayRawData` 后把裸指针与 `aligned` 直接交给 CFunc。
 
 ### D6 分派：三态开关 + 长度阈值
 
@@ -196,9 +186,9 @@ c = t7[c&0xFF] ^ t6[(c>>8)&0xFF] ^ … ^ t0[(c>>56)&0xFF]
 hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 ```
 
-- `variant.supportsHw` 用参数判定：`width == 64 && refin == refout`。不按名字判定，用户自己 `Crc64(name, poly, ...)` 构造的等价变体同样受益。
-- 变体键是 `(poly & mask, refin)`，与名字、init、xorout 无关。
-- `HW_MIN_LEN = 256`（初值，D9 的基准用例回填实测拐点后调整）。低于阈值时折叠的 prologue（状态注入、收尾约减、一次 CFunc 过桥）摊不薄。
+- `variant.supportsHw` 用参数判定：`width == 64 && refin == refout`，且 `poly` 落在已支持集合 `{0x42F0E1EBA9EA3693, 0x1B, 0xAD93D23594C935A9}` 内。不按名字判定；同 poly 的自定义变体同样受益。
+- 变体键是 `(poly & mask, refin)`，与名字、init、xorout 无关。新增 poly 只需在 `CrcGf` 侧补一组常量，代码页不改。
+- `HW_MIN_LEN = 256`（实测确定：4 KiB 单次 777 ns、1 MiB 7450 MB/s，拐点低于 256；低于阈值时折叠的 prologue（状态注入、收尾约减、一次 CFunc 过桥）摊不薄）。
 - 三态由环境变量 `F_UTIL_CRC_HW` 控制：`auto`（默认）/ `on`（无硬件时直接跳过该用例并打印原因，不失败）/ `off`（强制表路径）。为与 CRC-32 既有开关共存：`0`/`off` 视为 off，`1`/`on` 视为 on，未设或其它值视为 auto。**这是给测试与排障用的，不改变默认行为，也不是公开 API。**
 - 分派只发生在 `CrcEngine.update` 的 64 位分支；16 位、8/24/40 位与 `refin != refout` 的自定义变体一律走表路径。
 
@@ -211,8 +201,8 @@ hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 - 新增三个与 CRC-32 同构的文件：
   - `crc64_native_x86.cj`：`@When[os == "Linux" && arch == "x86_64"] class Crc64Hw`；
   - `crc64_native_arm.cj`：`@When[os == "Linux" && arch == "aarch64"] class Crc64Hw`；
-  - `crc64_native_stub.cj`：`@When[os != "Linux"] class Crc64Hw`（全 `None`/`false`）。
-  Linux 上不匹配 arch 的目标不会编译到任何一份（`@When` 互斥），与 CRC-32 的现状一致。
+  - `crc64_native_stub.cj`：`@When[os != "Linux" || (arch != "aarch64" && arch != "x86_64")] class Crc64Hw`（全 `None`/`false`）。
+  三份 `@When` 互斥且**并集覆盖全部目标**：Linux 上的 riscv64 / loongarch64 落到 stub，不会因为缺 `Crc64Hw` 定义而编译失败（CRC-32 的 stub 当初只判 `os != "Linux"`，本变更一并修正）。
 - **复用既有 `foreign` 声明**：aarch64 的 `getauxval` 已在 `crc32_native_arm.cj` 中以 `@When[os == "Linux" && arch == "aarch64"]` 声明，`crc64_native_arm.cj` 直接复用，**不重复声明**（同一包内重复声明会冲突）。
 - 代码页常驻进程生命周期，**不 `munmap`**：`CFunc` 指向它，提前释放会悬空。每个 `Crc64Hw` 用一个 `ArrayList<CodeBuffer>` 保活（与 `Crc32Hw.codes` 同一口径）。
 
@@ -221,7 +211,7 @@ hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 ### D8 代码页安全、ABI 与内存
 
 - **W^X**：`mmap` 只申请 RW，写完再 `mprotect` RX；不使用 RWX，不把可写页留在进程里。
-- **ABI 固定**：`CFunc<(UInt64, CPointer<Byte>, UInt64) -> UInt64>`，参数依次是未收尾寄存器、数据指针、**64 的整数倍长度**；返回未收尾寄存器。核内先判 `len < 64` 直接返回，避免误用越界。
+- **ABI 固定**：`CFunc<(UInt64, CPointer<Byte>, UInt64, CPointer<UInt64>) -> UInt64>`，参数依次是未收尾寄存器、数据指针、**16 的整数倍长度**、常量指针；返回未收尾寄存器。核内先判 `len < 16` 直接返回，避免误用越界。
 - **只读**：生成代码只读 `ptr[0..len)`，不写、不分配、不回调仓颉、不访问全局。
 - **裸指针窗口**：`acquireArrayRawData<Byte>(data)` → `unsafe { f(...) }` → `finally releaseArrayRawData`，窗口内只有一次 CFunc 调用。
 - **线程安全**：CFunc 本身不可变；能力探测与代码页生成在 `Mutex` 内做一次，之后只读。同一 `(poly, 域)` 的并发首次调用由 `Mutex` 串行化，不会生成两份冲突的代码页。
@@ -230,12 +220,11 @@ hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 
 ### D9 测试策略：编码黄金字节 + 三路径交叉 + 常量自洽 + 强制开关
 
-**A. 指令编码（新增，机器码正确性的第一道闸）**
+**A. 指令编码（离线核对，不建在线夹具）**
 
-- 发射器每新增一条指令，都在 `crc64_codegen_test.cj` 里断言其字节序列；夹具来自 `llvm-mc` / `aarch64-linux-gnu-as` 的汇编输出（开发期生成，不进构建）。
-- aarch64 至少覆盖：`PMULL`、`PMULL2`、`VEOR`、`LD1/ST1` 或 `LDR q`、`REV64`、`MOVZ/MOVK`、`INS`、`RET`；
-- x86_64 至少覆盖：`PCLMULQDQ`（imm `0x00` / `0x11`）、`PXOR`、`MOVDQU`、`MOVABS`、`MOVQ`、`PUNPCKLQDQ`、`PSHUFB`、`RET`。
-- 代码页落地后可选用 `objdump -D -b binary -m i386:x86-64` / `aarch64` 反汇编人工对照，作为第二证据。
+- 本变更的机器码是**静态字节数组 + 逐条指令注释**，没有运行时发射器，因此不建 `crc64_codegen_test.cj` 的字节夹具（原计划的发射器路线已放弃，见 D11）。
+- 字节由离线汇编器 / 编码器生成后，用 `objdump -D -b binary -m i386:x86-64`（x86_64）与 `objdump -d`（aarch64 目标文件）逐条反汇编核对，核对结果写进源码注释。
+- 等价性用例（B）才是运行期唯一闸门：任何字节错误都会在 6 变体 × 22 长度的对拍中暴露，而不是靠夹具自证。
 
 **B. 等价性（主力）**
 
@@ -247,7 +236,7 @@ hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 - `xPowModP(64) == P`（多项式定义自检）；
 - `barrettMu` 与用长除法现算的 `⌊x^128 / P⌋` 逐位相等；
 - 折叠恒等式：对随机 128 位 `v`，`barrett(clmul(v.lo, k) ^ v.hi)` 等于"把 `v` 当作多项式系数做 `mod P`"的参考结果；
-- 组间独立性：G1/G2/G3/G4 的常量互不相同（防止把正常域常量误用到反射域）；G3 被 `redis` 与 `jones` 复用、G4 被 `ecma182` 与 `we` 复用时，内核句柄相同、结果只差 init/xorout。
+- 组间独立性：G1/G2/G3 的常量两两不同（防止 poly 串组）；`redis`/`jones` 共享 G3、`ecma182`/`we` 共享 G1 时，内核句柄相同、结果只差 init/xorout。
 
 **D. 强制开关**
 
@@ -258,14 +247,14 @@ hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 **E. 回退**
 
 - 非目标平台：`Crc64` 结果仍正确（靠 `@When` 空实现；本地用 `F_UTIL_CRC_HW=off` 覆盖逻辑分支）。
-- `CodeBuffer.alloc` / `seal` 失败：用测试钩子模拟 `None`，确认 `update` 走表路径且不抛异常。
+- `CodeBuffer.alloc` / `seal` 失败：用测试钩子 `forceAllocFailureForTest(true)` 模拟 `None`，确认 `update` 走表路径、结果正确且不抛异常。
 
 **F. 性能门禁（`F_UTIL_PERF=1` 门控，默认 SKIP 并打印原因）**
 
 沿用现有 `throughputAtLeastThirtyMegabytesPerSecond` 的形态（`CrcEngine_test.cj:211-229`），新增：
 
-- 1 MiB 吞吐：CRC-16 表路径 ≥ 40 MB/s；CRC-64 表路径 ≥ 60 MB/s；6 个 64 位变体的硬件路径 ≥ 500 MB/s；
-- **4 KiB 绝对耗时（仅硬件路径）**：6 个变体各测一次 4 KiB 单次调用（含 `acquireArrayRawData` + CFunc 过桥），门限 **≤ 1.34 µs**，与 CRC-32 生成路径的 4 KiB 帧绝对耗时同口径。表路径不设绝对耗时门禁（其判据仍是 MB/s）。
+- 1 MiB 吞吐：CRC-16 表路径 ≥ 40 MB/s；CRC-64 表路径 ≥ 60 MB/s；**6 个 64 位变体**的硬件路径各 ≥ 500 MB/s；
+- **4 KiB 绝对耗时（仅硬件路径）**：**6 个变体逐一**测 4 KiB 单次调用（含 `acquireArrayRawData` + CFunc 过桥），门限 **≤ 1.34 µs**，与 CRC-32 生成路径的 4 KiB 帧绝对耗时同口径。表路径不设绝对耗时门禁（其判据仍是 MB/s）。
 - 实测值回填本文件、`proposal.md` 与 spec。
 
 ### D10 与 D16 的关系（文档一致性）
@@ -315,7 +304,8 @@ hw = Crc64Hw.available() && variant.supportsHw && len >= HW_MIN_LEN
 
 ## Open Questions
 
-1. **`HW_MIN_LEN` 的拐点**：初值 256 需要基准用例实测（64/128/256/512/1024 各一档），结果回填 D6。
-2. **4 KiB 绝对耗时与 1 MiB 吞吐的关系**：1.34 µs 对应约 3 GB/s，比 500 MB/s 的吞吐下限更严；实测若显示固定开销（`acquireArrayRawData` + CFunc 过桥）占比过高，按 D9 的"记录实测、不改门限硬凑"处理，并在评审中说明。
-3. **aarch64 真机性能**：若融合环境无 ARM 机器，阶段一/二只能做功能对拍（`qemu-aarch64`）与编码核对，性能数字标注"待真机"。
-4. **"16 位切片表"口径已定**：表项为 16 位的 slicing-by-2（`Array<UInt16>`），不是 65536 项的 16 位索引表。24 个变体 × 2 张表 = 12 KB，与"省 cache"一致。
+1. **`HW_MIN_LEN` 的拐点** —— 已收敛：取 256。实测 4 KiB 单次 777 ns、1 MiB 7450 MB/s，折叠 prologue 在 256 B 已摊薄；更小的阈值收益落在噪声内。
+2. **4 KiB 绝对耗时与 1 MiB 吞吐的关系** —— 已收敛：4 KiB 单次 **777.03 ns**（门限 1.34 µs），1 MiB **7450.5 MB/s**（门限 500 MB/s）。`acquireArrayRawData` + CFunc 过桥的固定开销约 120 ns，不构成瓶颈。
+3. **aarch64 真机性能** —— 已收敛：融合开发引擎即 aarch64 真机（openEuler 24.03 SP4，CPU 含 `pmull`），上面两组数字均为真机实测；x86_64 仅有离线编码与 `objdump` 核对，性能待 x86 真机回填。
+4. **性能门禁对主机负载敏感** —— 同一份二进制在健康时段实测 98 / 52 / 7450 MB/s、4 KiB 777 ns；在主机降频时段实测 55 / 28 / 3800 MB/s、4 KiB 1620 ns，CRC32 对照从 9182 降到 4800（同比例）。门限未改；若 CI 也要跑性能门禁，需固定频率或按 CRC32 基线归一化。
+5. **"16 位切片表"口径已定**：表项为 16 位的 slicing-by-2（`Array<UInt16>`），不是 65536 项的 16 位索引表。24 个变体 × 2 张表 = 12 KB，与"省 cache"一致。

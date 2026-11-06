@@ -85,6 +85,10 @@ public func crc64(data: String): UInt64
 public func crc64<T>(s: T): UInt16 where T <: ToString 
 ```
 
+**硬件加速（Linux x86_64 / aarch64）**：`Crc64` 的 6 个内置变体（`ecma182` / `we` / `xz` / `iso` / `redis` / `jones`）在数据量 ≥ 256 字节时自动走生成式折叠核（x86_64 用 `PCLMULQDQ`、aarch64 用 `PMULL`），结果与纯软件逐位一致；顶层 `crc64()` 指向的 `redis` 同样受益。表路径本身已升级为 64 位 slicing-by-8 与 16 位 slicing-by-2（`UInt16` 表项）。`F_UTIL_CRC_HW=off`（或 `0`）强制回退、`on`（或 `1`）强制尝试、不设或 `auto` 自动判定；其它 OS/架构始终纯软件。无 C 垫片、无第三方运行时依赖。
+
+**实测（aarch64，`cjpm test` 默认构建，1 MiB）**：CRC-64/XZ 表路径 98 MB/s、硬件路径 7450 MB/s；4 KiB 单次 777 ns；CRC-16/MODBUS 表路径 52 MB/s。
+
 ## wyhash
 
 ```cj

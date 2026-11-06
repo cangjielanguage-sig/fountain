@@ -32,7 +32,14 @@ import std.sync.Mutex
 class Crc64Hw {
     private static let lock = Mutex()
     private static var ready = false
-    private static var nativeEnabled = true
+    /** `setNativeEnabled(false)` 立即生效，优先级高于环境变量。 */
+    private static var forcedOff = false
+    private static var modeResolved = false
+    private static var modeState = CrcHwMode.Auto
+    /** 最近一次 `update` 是否真的进了机器码（供三态用例断言）。 */
+    private static var lastNative = false
+    /** 测试钩子：模拟 `CodeBuffer` 分配/密封失败。 */
+    private static var failAlloc = false
     private static var fn: ?CFunc<(UInt64, CPointer<Byte>, UInt64, CPointer<UInt64>) -> UInt64> = None
     /** 正常域（MSB-first）折叠核，服务 ecma182 / we。 */
     private static var fnNorm: ?CFunc<(UInt64, CPointer<Byte>, UInt64, CPointer<UInt64>) -> UInt64> = None
@@ -87,11 +94,11 @@ class Crc64Hw {
     }
 
     static func available(): Bool {
-        if (!nativeEnabled) {
+        if (isOff()) {
             return false
         }
         ensureReady()
-        fn.isSome()
+        fn.isSome() || fnNorm.isSome()
     }
 
     /**
@@ -99,7 +106,8 @@ class Crc64Hw {
      * 返回未收尾的寄存器值，尾部由调用方用表路径补齐。
      */
     static func update(crc: UInt64, data: Array<Byte>, aligned: Int64, poly: UInt64): ?UInt64 {
-        if (!nativeEnabled || aligned < 16 || aligned > data.size || !supports(poly)) {
+        lastNative = false
+        if (isOff() || aligned < 16 || aligned > data.size || !supports(poly)) {
             return None
         }
         if (!ensureReady()) {
@@ -110,7 +118,7 @@ class Crc64Hw {
             case 0x1Bu64 => constsIso
             case _ => constsRedis
         }
-        match (fn) {
+        let result: ?UInt64 = match (fn) {
             case Some(f) =>
                 match (selected) {
                     case Some(c) =>
@@ -128,17 +136,20 @@ class Crc64Hw {
                 }
             case None => None
         }
+        lastNative = result.isSome()
+        result
     }
 
     /** 正常域折叠；`aligned` 必须是 16 的倍数且 >= 16。 */
     static func updateNormal(crc: UInt64, data: Array<Byte>, aligned: Int64): ?UInt64 {
-        if (!nativeEnabled || aligned < 16 || aligned > data.size) {
+        lastNative = false
+        if (isOff() || aligned < 16 || aligned > data.size) {
             return None
         }
         if (!ensureReady()) {
             return None
         }
-        match (fnNorm) {
+        let result: ?UInt64 = match (fnNorm) {
             case Some(f) =>
                 match (constsXz) {
                     case Some(c) =>
@@ -156,15 +167,41 @@ class Crc64Hw {
                 }
             case None => None
         }
+        lastNative = result.isSome()
+        result
     }
 
     static func setNativeEnabled(value: Bool): Unit {
-        nativeEnabled = value
+        forcedOff = !value
+    }
+
+    /** 最近一次 `update` 是否进了机器码。 */
+    static func lastUsedNativeForTest(): Bool {
+        lastNative
+    }
+
+    /** 当前解析出的模式名，供三态用例断言。 */
+    static func modeNameForTest(): String {
+        match (mode()) {
+            case CrcHwMode.Off => "off"
+            case CrcHwMode.On => "on"
+            case CrcHwMode.Auto => "auto"
+        }
+    }
+
+    /** 模拟 `CodeBuffer` 失败，验证回退。 */
+    static func forceAllocFailureForTest(value: Bool): Unit {
+        failAlloc = value
     }
 
     static func resetForTest(): Unit {
         synchronized(lock) {
             ready = false
+            forcedOff = false
+            modeResolved = false
+            modeState = CrcHwMode.Auto
+            lastNative = false
+            failAlloc = false
             fn = None
             fnNorm = None
             constsXz = None
@@ -180,7 +217,7 @@ class Crc64Hw {
                 fn.isSome()
             } else {
                 ready = true
-                if (!envEnabled() || !hasPmull()) {
+                if (isOff() || !hasPmull()) {
                     false
                 } else {
                     fn = make()
@@ -195,6 +232,9 @@ class Crc64Hw {
     }
 
     private static func make(): ?CFunc<(UInt64, CPointer<Byte>, UInt64, CPointer<UInt64>) -> UInt64> {
+        if (failAlloc) {
+            return None
+        }
         match (CodeBuffer.alloc(CODE.size + 64)) {
             case Some(buffer) =>
                 if (!buffer.write(CODE, 0) || !buffer.seal()) {
@@ -209,6 +249,9 @@ class Crc64Hw {
     }
 
     private static func makeNormal(): ?CFunc<(UInt64, CPointer<Byte>, UInt64, CPointer<UInt64>) -> UInt64> {
+        if (failAlloc) {
+            return None
+        }
         match (CodeBuffer.alloc(NORM_CODE.size + 64)) {
             case Some(buffer) =>
                 if (!buffer.write(NORM_CODE, 0) || !buffer.seal()) {
@@ -222,10 +265,36 @@ class Crc64Hw {
         }
     }
 
-    private static func envEnabled(): Bool {
+    private static func isOff(): Bool {
+        match (mode()) {
+            case CrcHwMode.Off => true
+            case _ => false
+        }
+    }
+
+    /** 三态模式：`off`/`0`、`on`/`1`、其它或未设 = `auto`；`forcedOff` 优先。 */
+    private static func mode(): CrcHwMode {
+        if (forcedOff) {
+            return CrcHwMode.Off
+        }
+        if (!modeResolved) {
+            modeState = parseMode()
+            modeResolved = true
+        }
+        modeState
+    }
+
+    private static func parseMode(): CrcHwMode {
         match (getVariable("F_UTIL_CRC_HW")) {
-            case Some(v) => v != "0"
-            case None => true
+            case Some(v) =>
+                if (v == "0" || v == "off" || v == "OFF" || v == "Off") {
+                    CrcHwMode.Off
+                } else if (v == "1" || v == "on" || v == "ON" || v == "On") {
+                    CrcHwMode.On
+                } else {
+                    CrcHwMode.Auto
+                }
+            case None => CrcHwMode.Auto
         }
     }
 

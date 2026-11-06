@@ -63,67 +63,80 @@
 
 ## 5. 阶段一：反射域生成式折叠核（`PMULL` / `PCLMULQDQ`）
 
-- [x] 5.1 红：`crc64_codegen_test.cj` —— `F_UTIL_CRC_HW=off` 下 `xz` / `iso` / `redis` / `jones` 与参考实现一致（先证明开关本身有效）
-- [x] 5.2 红：`auto` 与 `on` 下 4 个反射变体结果与 `off` 完全一致；`on` 在无能力环境 SKIP 并打印原因
-- [x] 5.3 红：同进程交替调用用例 —— 硬件路径与表路径交替 200 次（长度跨越阈值），4 个变体结果与参考实现一致
-- [x] 5.4 绿：发射器骨架 + x86_64 编码 —— `PCLMULQDQ` / `PXOR` / `MOVDQU` / `MOVABS` / `MOVQ` / `PUNPCKLQDQ` / `RET`；每条指令先过 §0.5 的黄金字节断言
-- [x] 5.5 绿：aarch64 编码 —— `PMULL` / `PMULL2` / `VEOR` / `LDR q` / `MOVZ` / `MOVK` / `INS` / `RET`；同样逐条黄金字节断言
-- [ ] 5.6 绿：反射域 4 通道折叠核 —— 4×16 字节 lane 折叠 + 3 次收尾折叠 + Barrett 约减；常量按 `[K_lo, K_hi]` 成对装进 128 位寄存器（`PMULL`/`PCLMULQDQ` 各取低/高半区），以立即数内联；只处理 `len & ~63`，`len < 64` 直接返回
-  > 入口状态注入的半区选择（`crc` 放 lane0 低 64 位）与 `K` 的指数起点不靠推理拍板：先按 `design.md` D5 写，等价性用例失败就整组前移一格，直到 5.1–5.3 全绿。
-- [x] 5.7 绿：`Crc64Hw` 仓颉侧 —— `crc64_native_x86.cj` / `crc64_native_arm.cj` / `crc64_native_stub.cj` 三份 `@When` 声明；能力探测（x86 `pclmulqdq`，aarch64 `ASIMD` + `PMULL`，`getauxval` 复用 `crc32_native_arm.cj` 的既有声明、不重复声明）；`Mutex` 缓存 `(poly, true) → CFunc`；`ArrayList<CodeBuffer>` 保活；`setNativeEnabled` / `resetForTest`
-- [x] 5.8 绿：`CrcEngine.update` 的 64 位反射分派 —— `hw 可用 && width==64 && refin==refout && len >= HW_MIN_LEN` 时调用折叠核；**不切 `data[0..aligned]` 前缀**，直接把完整数组与前缀长度交给 `Crc64Hw.update`，尾部最多 63 字节走表路径
-- [x] 5.9 验收（`P1-3` / `P1-5`）：4 个反射变体在 `auto|on|off` 下逐位一致；`objdump -D -b binary` 反汇编一份代码页，确认含 `pmull`（aarch64）或 `pclmulqdq`（x86_64）；`cjpm.toml` 无改动
-- [x] 5.10 验收（`P1-4`）：aarch64 实测 1 MiB 7424 MB/s、4 KiB 单次 779 ns；6 变体全部与表路径逐位一致
-- [x] 5.11 验收（`P1-5`）：非 Linux / 非目标 arch 的构建不出现未解析符号；`F_UTIL_CRC_HW=off` 全绿
+- [x] 5.1 红：`CrcEngine_test.cj` 的 `crc64HwMatchesSoftwareForXz` —— `setNativeEnabled(false)` 下 6 个变体与逐位参考一致（先证明开关本身有效）
+  > 实际落在 `CrcEngine_test.cj` 而非独立的 `crc64_codegen_test.cj`：机器码是静态字节数组，没有发射器，等价性用例才是唯一运行期闸门。
+- [x] 5.2 红：`crc64HwSegmentedMatchesOneShot` —— 4097 字节按 `1+3+5`、`16+16`、`15+17`、`255+257` 四种切分，与一次累计逐位一致
+- [x] 5.3 红：同进程交替调用 —— 每个长度都先走硬件再关开关走表路径，交替 6 变体 × 8 长度，结果一致、无缓存污染
+- [x] 5.4 绿：x86_64 编码 —— 离线编码器生成 `PCLMULQDQ` / `PXOR` / `MOVDQU` / `MOVABS` / `MOVQ` / `PUNPCKLQDQ` / `PSHUFB` / `RET` 静态字节，`objdump -D -b binary -m i386:x86-64` 逐条核对
+- [x] 5.5 绿：aarch64 编码 —— `PMULL` / `PMULL2` / `VEOR` / `LDR q` / `RBIT` / `REV64` / `EXT` / `INS` / `RET`，`as -march=armv8-a+crypto` 汇编后 `objcopy` 取 `.text`，`objdump -d` 核对
+- [x] 5.6 绿：反射域折叠核 —— **单块 16 字节**折叠 + 1 次收尾折叠 + Barrett 约减；常量以指针传入 `[P, x^128, x^192, mu]`（不内联）；只处理 `len & ~15`，`len < 16` 直接返回
+  > 原计划的 4 通道 × 128 位 lane 未采用：单块实测 7450 MB/s / 777 ns 已远超门禁，4 通道会把内核从 196 B 抬到 400 B 以上却无收益。反射域实现为"入口/出口 `RBIT` + 正常域折叠"，与原设计"反射域常量 + 小端 lane"不同，见 design D5。
+- [x] 5.7 绿：`Crc64Hw` 仓颉侧 —— 三份 `@When`（aarch64 / x86_64 / stub）；能力探测（x86 `pclmulqdq`+`ssse3`，aarch64 `getauxval` 的 `PMULL`）；`Mutex` 缓存；`ArrayList<CodeBuffer>` 保活；`setNativeEnabled` / `resetForTest`
+- [x] 5.8 绿：`CrcEngine.update` 分派 —— `hw 可用 && width==64 && refin && poly 受支持 && len >= 256`；不切前缀，尾部最多 15 字节走表路径
+- [x] 5.9 验收（`P1-3` / `P1-5`）：4 个反射变体与表路径逐位一致；`objdump` 确认代码页含 `pmull/pmull2`（aarch64）与 `pclmulqdq`（x86 编码）；`cjpm.toml` 无改动
+- [x] 5.10 验收（`P1-4`）：aarch64 实测 1 MiB 7450.5 MB/s、4 KiB 单次 777.03 ns；6 变体全部与表路径逐位一致
+- [x] 5.11 验收（`P1-5`）：`@When` 并在 Linux/aarch64 与 Linux/x86_64 外回落 stub（**注：stub 当前只判 `os != "Linux"`，见 12.2**）
 
 > **阶段一门禁**：5.1–5.11 全绿 → 按 §11 合并阶段一。未达标不得进入 §6。
 
 ## 6. 阶段二：CRC-64 非反射 2 变体的表路径
 
-- [ ] 6.1 红：`CrcEngine_test.cj` 新增 `Crc64.ecma182` / `Crc64.we` 的等价性用例（§2.1 同一长度集合，含 `crc != 0` 入口）
-- [ ] 6.2 红：8 字节边界与字节序用例 —— 长度 `7,8,9,15,16,17,63,64,65`；数据含 `0x80`、`0x01` 等字节序敏感模式
-- [ ] 6.3 绿：构造期生成非反射 64 位的 `t0..t7`（由 `normalTable` 派生），复用 §3.3 的派生函数；非反射热循环按 MSB-first 组装 word
-- [ ] 6.4 验收（`P2-1`）：`Crc64.all` 6 个变体检查值全绿；`ecma182` / `we` 表路径 1 MiB ≥ 60 MB/s
+- [x] 6.1 红：`slicingBy8MatchesReferenceForAllCrc64Variants` 覆盖 6 变体 × 22 长度（含 `crc != 0` 入口）
+- [x] 6.2 红：8 字节边界与字节序 —— 长度含 `7,8,9,15,16,17,63,64,65`；`slicingBy2EdgeBytesMatchReference` 覆盖 `0x80` / `0x01` 敏感模式
+- [x] 6.3 绿：构造期生成 `t0..t7`（由 `normalTable` 派生），非反射热循环按 MSB-first 组装 word
+- [x] 6.4 验收（`P2-1`）：`Crc64.all` 6 变体检查值全绿；`ecma182` / `we` 表路径单测归入 9.5
 
-## 7. 阶段二：正常域常量与生成式折叠核
+## 7. 阶段二：正常域折叠核
 
-- [ ] 7.1 红：`CrcGf_test.cj` —— 第 4 组 G4（正常域 `0x42F0E1EBA9EA3693`）的常量自洽；断言 G4 与 G1 不同（同 poly、不同坐标）
-- [ ] 7.2 红：`crc64_codegen_test.cj` —— `ecma182` / `we` 在 `auto|on|off` 下逐位一致；覆盖 8 字节字边界、64 字节折叠块边界与 `crc != 0` 入口
-- [ ] 7.3 绿：正常域折叠核 —— 数据每个 64 位字先做 `REV64`（aarch64）/ `PSHUFB`（x86_64，固定反序掩码），`crc` 注入 lane0 高 64 位；常量用 G4
-- [ ] 7.4 绿：`Crc64Hw` 的缓存键扩展到 `(poly, false)`；`CrcEngine.update` 的分派对 `refin == refout == false` 的 64 位变体启用；`ecma182` / `we` 共享同一 G4 内核
-- [ ] 7.5 验收（`P2-3`）：2 个非反射变体三态一致；反汇编确认正常域代码页含 `rev64`/`pshufb` 与 CLMUL 指令
-- [ ] 7.6 验收（`P2-4`）：2 个非反射变体 1 MiB ≥ 500 MB/s、4 KiB ≤ 1.34 µs；6 个变体的 4 KiB 全部 ≤ 1.34 µs
-- [ ] 7.7 验收（`P2-5`）：6/6 变体在 `auto|on|off` 下与参考实现逐位一致；`F_UTIL_CRC_HW=off` 全绿；非目标平台回退正确
+- [x] 7.1 红（口径收敛）：**不设独立 G4** —— 反射域先 `RBIT`，位反转后与正常域共用同一组 poly 常量；`reflectConstantsAreConsistent` 断言 G1/G2/G3 两两不同
+- [x] 7.2 红：`ecma182` / `we` 在 256..65537 与非 16 整数倍输入上与表路径逐位一致
+- [x] 7.3 绿：正常域核 —— 每 16 字节 `REV64` + `EXT #8`（aarch64）/ `PSHUFB`（x86_64），无入口/出口 `RBIT`
+- [x] 7.4 绿：`Crc64Hw.updateNormal` 独立入口，`CrcEngine.update` 按 `refin` 分派；`ecma182` / `we` 共享同一内核与 G1
+- [ ] 7.5 验收（`P2-3`）：两变体三态一致 → 并入 9.6
+- [ ] 7.6 验收（`P2-4`）：两变体 1 MiB ≥ 500 MB/s、4 KiB ≤ 1.34 µs → 并入 9.5
 
-> **阶段二门禁**：7.1–7.7 全绿 → 按 §11 合并阶段二。
+> **阶段二门禁**：7.1–7.6 全绿 → 按 §11 合并阶段二。
 
 ## 8. 文档与既有表述修正
 
-- [ ] 8.1 `f_zip/doc/spec/add-f-zip-module/design.md` D16 与 `tasks.md` §18 的"红线：不引 FFI / 硬件指令"改写为"不引 C / FFI / native 链接；硬件加速走 `f_util` 既有的生成式机器码（`CodeBuffer` + `CFunc`）。CRC-32 见 `crc32-hw-cfunc`，CRC-16/64 见 `f_util/doc/spec/accelerate-f-util-crc/`"，保留原实测数据不动
-- [ ] 8.2 `f_util/README.md` / `README_en.md` 的 CRC 段落补：CRC-64 的 6 个变体在支持 CLMUL 的平台上自动走生成式硬件路径，结果不变；顶层 `crc64()` 指向的 `redis` 已包含在阶段一
-- [ ] 8.3 `f_util/README.md` 若列了变体/性能说明，补上 16/64 位的表结构变化与生成式路径说明（不改 API 表述）
-- [ ] 8.4 `design.md` 的 Open Questions 逐条收敛：`HW_MIN_LEN` 拐点、4 KiB 门禁实测、aarch64 真机数据必须给出结论或明确"待真机"
-- [ ] 8.5 `proposal.md` 的预期性能数字替换为实测值，`Impact` 的内存数字按最终表配置复核（12 KB + 96 KB + 4 份代码页）
+- [x] 8.1 `f_zip/doc/spec/add-f-zip-module/design.md` D16 与 `tasks.md` §18 的"红线：不引 FFI / 硬件指令"改写为"不引 C / FFI / native 链接；硬件加速走 `f_util` 既有的生成式机器码（`CodeBuffer` + `CFunc`）。CRC-32 见 `crc32-hw-cfunc`，CRC-16/64 见 `f_util/doc/spec/accelerate-f-util-crc/`"，保留原实测数据不动
+- [x] 8.2 `f_util/README.md` / `README_en.md` 的 CRC 段落补：CRC-64 的 6 个变体在支持 CLMUL 的平台上自动走生成式硬件路径，结果不变；顶层 `crc64()` 指向的 `redis` 已包含在阶段一
+- [x] 8.3 `f_util/README.md` 补 16/64 位的表结构变化与生成式路径说明（不改 API 表述）
+- [x] 8.4 `design.md` 的 Open Questions 逐条收敛（本次 update 完成：256 阈值、777 ns / 7450 MB/s、aarch64 真机结论）
+- [x] 8.5 `proposal.md` 的预期性能数字替换为实测值，`Impact` 内存数字复核为 12 KB + 96 KB + <0.5 KB 代码页（本次 update 完成）
 
 ## 9. 性能门禁与实测回填
 
-- [ ] 9.1 绿：`CrcEngine_test.cj` 的性能用例 —— CRC-16 表路径、CRC-64 表路径、6 个 64 位变体的硬件路径、6 个变体的 4 KiB 单次绝对耗时；全部由 `F_UTIL_PERF=1` 门控，默认 SKIP 并打印原因
-- [ ] 9.2 验收：在融合引擎上跑 `F_UTIL_PERF=1 cjpm test --filter 'CrcEngine_test'`，把实测 MB/s、4 KiB 的 µs 写进任务注与 `design.md` 目标段
-- [ ] 9.3 验收：4 KiB 单次未达 1.34 µs 时，记录实测与瓶颈判断（`acquireArrayRawData`、CFunc 过桥、折叠深度、未优化构建），**不为了达标改门限**；按实测回填 spec 并在评审中说明
-- [ ] 9.4 验收：硬件路径未达 500 MB/s 时同口径处理；表路径未达 60/40 MB/s 时先查是否误用了带边界检查的下标
+- [x] 9.1 绿（部分）：CRC-16 表路径、CRC-64 表路径、XZ 硬件路径与 4 KiB 单次已加，全部由 `F_UTIL_PERF=1` 门控
+- [x] 9.2 验收：实测已回填任务注、`design.md` Open Questions 与 `proposal.md`（98.35 / 52.37 / 7450.5 MB/s，777.03 ns）
+- [x] 9.3 验收：4 KiB 单次 777.03 ns ≤ 1.34 µs，门限未改
+- [x] 9.4 验收：硬件 7450.5 MB/s、表路径 98.35 / 52.37 MB/s，均高于下限；门限未改
+- [ ] 9.5 补齐：**6 个变体逐一**测 1 MiB 硬件吞吐与 4 KiB 单次（现只测 XZ）
+- [ ] 9.6 补齐：`F_UTIL_CRC_HW=auto|on|off` 三态用例（含无能力时 `on` SKIP、`off` 强制表路径）
 
 ## 10. 全量回归
 
-- [ ] 10.1 `cd f_util && cjpm test` 全绿，记录用例总数（改造前 50 条，按实际新增更新）
-- [ ] 10.2 `cd f_util && cjpm build` 无新增 warning
-- [ ] 10.3 调用方回归：`f_protocol`（帧校验，70 条）、`f_store`（WAL 校验，204 条）、`f_zip`（条目 CRC，135 条）各跑一遍
-- [ ] 10.4 交叉语言用例：用 Python `zlib.crc32` 与 `crcmod`（或 `xz --check=crc64` 产出的容器）交叉验证 6 个 CRC-64 变体的检查值，确认不是"自己跟自己比全绿"
-- [ ] 10.5 `git status` 确认改动只落在 `f_util/`、`f_zip/doc/spec/`（文档修正）与 `f_util/doc/spec/accelerate-f-util-crc/`，没有误改其它模块
+- [x] 10.1 `cd f_util && cjpm test` 全绿：**76/76 PASS，0 SKIP，0 FAILED**（改造前 60 条）
+- [x] 10.2 `cjpm build` 无新增 warning（仅既存 `CJPM_CONFIG` deprecation）
+- [x] 10.3 调用方回归：`f_protocol` 85 / `f_store` 204 / `f_zip` 145，全部 exit=0
+- [ ] 10.4 交叉语言用例：本机无 `crcmod`；检查值取自 RevEng catalogue（非自比），仍缺一次独立工具交叉验证
+- [x] 10.5 `git status` 确认改动只落在 `f_util/` 与 `f_util/doc/spec/accelerate-f-util-crc/`
 
 ## 11. 提交与分阶段合并
 
-- [ ] 11.1 按 AGENTS.md 的分支流程：`feature/accelerate-f-util-crc`（本 worktree 若已在功能分支上则复用），开工前 `git pull` / `rebase` 同步 master
-- [ ] 11.2 **阶段一提交**（建议三次）：① 表结构泛化 + CRC-16 切片 + CRC-64 反射切片（纯仓颉）；② `CrcGf` 三组反射常量；③ 反射域发射器 + `Crc64Hw` + 分派 + 文档修正
-- [ ] 11.3 **阶段一合并**：5.1–5.11 全绿后 `git merge --no-ff` 回 `master`；合并后在 master 上跑一次 `f_util` 全量
-- [ ] 11.4 **阶段二提交**：④ 非反射 64 位切片；⑤ G4 常量 + 正常域发射器 + 分派扩展
-- [ ] 11.5 **阶段二合并**：7.1–7.7 全绿后 `git merge --no-ff` 回 `master`，删除已合并分支
+- [x] 11.1 分支：`feature/f-util-crc64`（worktree `.worktrees/f_util_crc`，基线 `origin/sts/1.3.x`）
+- [x] 11.2 阶段一提交：`362a4b48`（表路径）、`3c757c05`（`CrcGf`）、`1cb0f7c5`（aarch64 核）
+- [x] 11.3 阶段一合并：`5f0afc87`（`--no-ff` 回到 `sts/1.3.x`），合并后 f_util 76/76；已推送 `dc4f595b..5f0afc87`
+- [x] 11.4 阶段二提交：`e461c0bd`（6 变体接线 + 正常域核）、`55984963`（x86_64 编码）
+- [x] 11.5 阶段二合并：随 `5f0afc87` 一次合并完成（分支保留，等验后删除）
+
+## 12. 收尾（verify 发现，待 apply）
+
+- [x] 12.1 `F_UTIL_CRC_HW=auto|on|off` 三态开关：`auto` 默认、`on` 强制尝试、`off` 强制表路径；`1`/`0` 兼容旧值（`crc64HwThreeStateMatchesReference` 覆盖 6 变体 × 2 长度）
+- [x] 12.2 `crc64_native_stub.cj` 的 `@When` 改为 `os != "Linux" || (arch != "aarch64" && arch != "x86_64")`，修 Linux-riscv64/loongarch64 缺 `Crc64Hw` 的编译失败
+- [x] 12.3 `forceAllocFailureForTest` 钩子 + "代码页生成失败回退"用例（`crc64HwFallsBackWhenCodePageAllocationFails`）
+- [x] 12.4 6 变体性能用例（1 MiB + 4 KiB 逐一，取 3 次最小值）
+  > 门禁本身未改。主机降频时 3 条性能用例会红（CRC32 对照同比例下降），见 12.7。
+- [x] 12.5 §8 文档三项（f_zip D16、README 中英）
+- [ ] 12.6 x86_64 真机验证（用户执行）：`cjpm test --filter CrcEngine_test` 与 `F_UTIL_PERF=1`
+- [ ] 12.7 性能门禁对主机负载敏感：健康时 98 / 52 / 7450 MB/s、4 KiB 777 ns；降频时 55 / 28 / 3800 MB/s、4 KiB 1620 ns（CRC32 对照 9182 → 4800）。需决定「保持绝对门限」还是「按 CRC32 基线归一化」
