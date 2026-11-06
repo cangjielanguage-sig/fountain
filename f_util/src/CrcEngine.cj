@@ -37,6 +37,7 @@ package fountain::f_util
 class CrcEngine {
     private let width: Int64
     private let mask: UInt64
+    private let poly: UInt64
     private let initValue: UInt64
     private let refin: Bool
     private let refout: Bool
@@ -77,6 +78,7 @@ class CrcEngine {
         this.initValue = if (refin) { CrcEngine.reflectBits(initValue & mask, width) } else { initValue & mask }
         this.xorout = xorout & mask
         let p = poly & mask
+        this.poly = p
         let normal = Array<UInt64>(256, repeat: 0u64)
         let shift = width - 8
         for (i in 0..256) {
@@ -199,6 +201,19 @@ class CrcEngine {
     /** 继续累计一段字节。 */
     func update(crc: UInt64, data: Array<Byte>): UInt64 {
         var c = crc & mask
+        // CRC-64/XZ 家族：数据量达到阈值时走生成式折叠核，尾部仍用表路径。
+        if (width == 64 && refin && poly == 0x42F0E1EBA9EA3693u64 && data.size >= 256) {
+            let aligned = data.size - (data.size % 16)
+            if (aligned >= 16) {
+                if (let Some(raw) <- Crc64Hw.update(c, data, aligned)) {
+                    var t = raw
+                    for (i in aligned..data.size) {
+                        t = (t >> 8) ^ reflectedTable[Int64((t ^ UInt64(data[i])) & 0xFFu64)]
+                    }
+                    return t
+                }
+            }
+        }
         if (slicing) {
             // 一次消费 4 字节：把 4 字节按小端组装进寄存器，再用四张表一次算完；
             // 尾巴（不足 4 字节）走与逐字节路径完全相同的那一行，保证任意长度都正确。

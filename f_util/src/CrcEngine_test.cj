@@ -347,6 +347,8 @@ public class CrcEngine_test {
             return
         }
         let data = pseudoBytes(1024 * 1024)
+        // 表路径口径：先关闭生成式路径，避免测到硬件核
+        Crc64Hw.setNativeEnabled(false)
         Crc64.xz.compute(data)
         let start = MonoTime.now()
         let value = Crc64.xz.compute(data)
@@ -354,6 +356,8 @@ public class CrcEngine_test {
         let megabytes = Float64(data.size) / (1024.0 * 1024.0)
         let seconds = Float64(nanos) / 1.0e9
         let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+        Crc64Hw.setNativeEnabled(true)
+        Crc64Hw.resetForTest()
         println('1 MiB CRC-64/XZ 表路径（${value}）：${nanos} ns，${mbPerSecond} MB/s')
         if (mbPerSecond < 60.0) {
             @Fail('CRC-64 表路径吞吐 ${mbPerSecond} MB/s 低于 60 MB/s 下限（1 MiB 样本）')
@@ -378,6 +382,102 @@ public class CrcEngine_test {
         println('1 MiB CRC-16/MODBUS 表路径（${value}）：${nanos} ns，${mbPerSecond} MB/s')
         if (mbPerSecond < 40.0) {
             @Fail('CRC-16 表路径吞吐 ${mbPerSecond} MB/s 低于 40 MB/s 下限（1 MiB 样本）')
+        }
+    }
+
+    /** Scenario: CRC-64/XZ 生成式折叠核与表路径逐位一致（无能力时 SKIP）。 */
+    @TestCase
+    public func crc64HwMatchesSoftwareForXz(): Unit {
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let lengths = [256, 257, 272, 1024, 4095, 4096, 4097, 65537]
+        let c0 = Crc64.xz.initRegister()
+        for (n in lengths) {
+            let data = pseudoBytes(n)
+            let hw = Crc64.xz.update(c0, data)
+            Crc64Hw.setNativeEnabled(false)
+            let sw = Crc64.xz.update(c0, data)
+            Crc64Hw.setNativeEnabled(true)
+            Crc64Hw.resetForTest()
+            @Assert(hw, sw)
+        }
+    }
+
+    /** Scenario: 任意切分与一次累计等价（硬件路径内部按 16 字节块消费）。 */
+    @TestCase
+    public func crc64HwSegmentedMatchesOneShot(): Unit {
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let data = pseudoBytes(4097)
+        let c0 = Crc64.xz.initRegister()
+        let expected = Crc64.xz.update(c0, data)
+        for (pattern in [[1i64, 3, 5], [16, 16], [15, 17], [255, 257]]) {
+            var crc = c0
+            var off = 0i64
+            var k = 0i64
+            while (off < data.size) {
+                let step = pattern[k % pattern.size]
+                let end = if (off + step > data.size) { data.size } else { off + step }
+                crc = Crc64.xz.update(crc, data[off..end])
+                off = end
+                k += 1
+            }
+            @Assert(crc, expected)
+        }
+    }
+
+    /** Scenario: CRC-64/XZ 硬件路径吞吐（1 MiB ≥ 500 MB/s）与 4 KiB 绝对耗时（≤ 1.34 µs）。 */
+    @TestCase
+    public func throughputCrc64HwAtLeastFiveHundredMegabytesPerSecond(): Unit {
+        if (!perfEnabled()) {
+            println("SKIP: 未设置 F_UTIL_PERF=1，跳过 CRC-64 硬件吞吐用例")
+            return
+        }
+        Crc64Hw.setNativeEnabled(true)
+        Crc64Hw.resetForTest()
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let c0 = Crc64.xz.initRegister()
+        let data = pseudoBytes(1024 * 1024)
+        Crc64Hw.update(c0, data, 1024 * 1024)
+        let start = MonoTime.now()
+        let maybeValue = Crc64Hw.update(c0, data, 1024 * 1024)
+        let nanos = (MonoTime.now() - start).toNanoseconds()
+        let value = match (maybeValue) {
+            case Some(v) => v
+            case None =>
+                @Fail("1 MiB 测量时硬件入口返回 None")
+                return
+        }
+        let megabytes = Float64(data.size) / (1024.0 * 1024.0)
+        let seconds = Float64(nanos) / 1.0e9
+        let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+        let frame = pseudoBytes(4096)
+        Crc64Hw.update(c0, frame, 4096)
+        let s2 = MonoTime.now()
+        var sink = 0u64
+        for (_ in 0..1000) {
+            match (Crc64Hw.update(c0, frame, 4096)) {
+                case Some(v) => sink = v
+                case None => @Fail("4 KiB 测量时硬件入口返回 None")
+            }
+        }
+        let perCallNanos = Float64((MonoTime.now() - s2).toNanoseconds()) / 1000.0
+        println('1 MiB CRC-64/XZ 硬件路径（${value}）：${nanos} ns，${mbPerSecond} MB/s；4 KiB 单次 ${perCallNanos} ns')
+        if (sink == 0u64) {
+            @Fail("4 KiB 循环结果异常")
+        }
+        if (mbPerSecond < 500.0) {
+            @Fail('CRC-64 硬件路径吞吐 ${mbPerSecond} MB/s 低于 500 MB/s')
+        }
+        if (perCallNanos > 1340.0) {
+            @Fail('CRC-64 硬件路径 4 KiB 单次 ${perCallNanos} ns 超过 1.34 µs')
         }
     }
 

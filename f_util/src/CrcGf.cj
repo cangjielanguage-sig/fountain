@@ -67,9 +67,14 @@ class CrcGf {
         (1u64, q)
     }
 
-    /** 反射域折叠常量：`[foldLo, foldHi, lane1, lane2, lane3, kTail, muLo, poly]`。 */
-    static func reflectConstants(poly: UInt64): Array<UInt64> {
+    /** 折叠核常量：`[P, x^128, x^192, muLo]`（顺序与生成代码的 `consts` 结构一致）。 */
+    static func reflectConstants64(poly: UInt64): Array<UInt64> {
         let (_, muLo) = barrettMu(poly)
+        [poly, xPowModP(128, poly), xPowModP(192, poly), muLo]
+    }
+
+    /** 反射域折叠常量：`[foldLo, foldHi, lane1, lane2, lane3, kTail, muLo, poly]`。 */
+    static func reflectConstants(poly: UInt64): Array<UInt64> {        let (_, muLo) = barrettMu(poly)
         [
             xPowModP(128, poly),
             xPowModP(192, poly),
