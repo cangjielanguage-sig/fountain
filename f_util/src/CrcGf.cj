@@ -73,6 +73,57 @@ class CrcGf {
         [poly, xPowModP(128, poly), xPowModP(192, poly), muLo]
     }
 
+    /** 16 字节小端打包成 2 个 UInt64。 */
+    private static func pack16(bytes: Array<UInt8>): (UInt64, UInt64) {
+        var lo = 0u64
+        var hi = 0u64
+        for (i in 0..8) {
+            lo = lo | (UInt64(bytes[i]) << (8 * i))
+            hi = hi | (UInt64(bytes[8 + i]) << (8 * i))
+        }
+        (lo, hi)
+    }
+
+    /**
+     * x86_64 折叠核常量。
+     *
+     * 反射：`[P,K128,K192,mu, LUT(2), mask0F(2), maskF0(2), revIdx(2)]`（16 项 / 128 B）；
+     * 正常：`[P,K128,K192,mu, revIdx(2)]`（10 项 / 80 B）。
+     */
+    static func reflectX86Constants(poly: UInt64, reflected: Bool): Array<UInt64> {
+        let (_, muLo) = barrettMu(poly)
+        let base = [poly, xPowModP(128, poly), xPowModP(192, poly), muLo]
+        var revIdx = Array<UInt8>(16, repeat: 0)
+        for (i in 0..16) {
+            revIdx[i] = UInt8(15 - i)
+        }
+        let (riLo, riHi) = pack16(revIdx)
+        if (!reflected) {
+            return [base[0], base[1], base[2], base[3], riLo, riHi,
+                0u64, 0u64, 0u64, 0u64]
+        }
+        var lut = Array<UInt8>(16, repeat: 0)
+        for (i in 0..16) {
+            var r = 0u8
+            var v = UInt8(i)
+            for (_ in 0..4) {
+                r = UInt8((UInt16(r) << 1) | UInt16(v & 1))
+                v = v >> 1
+            }
+            lut[i] = r
+        }
+        var mask0f = Array<UInt8>(16, repeat: 0x0F)
+        var maskF0 = Array<UInt8>(16, repeat: 0xF0)
+        let (lutLo, lutHi) = pack16(lut)
+        let (m0Lo, m0Hi) = pack16(mask0f)
+        let (mfLo, mfHi) = pack16(maskF0)
+        [
+            base[0], base[1], base[2], base[3],
+            lutLo, lutHi, m0Lo, m0Hi, mfLo, mfHi, riLo, riHi,
+            0u64, 0u64, 0u64, 0u64
+        ]
+    }
+
     /** 反射域折叠常量：`[foldLo, foldHi, lane1, lane2, lane3, kTail, muLo, poly]`。 */
     static func reflectConstants(poly: UInt64): Array<UInt64> {        let (_, muLo) = barrettMu(poly)
         [
