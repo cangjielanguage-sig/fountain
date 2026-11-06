@@ -421,7 +421,14 @@ public class SvgRenderTreeBuilder {
                 if (style.visibility() == "hidden") {
                     return
                 }
-                let matrix = context.matrix.multiply(elementTransformMatrix(text))
+                let matrix = context.matrix.multiply(
+                    elementTransformMatrix(
+                        text,
+                        style: style,
+                        viewportWidth: context.width,
+                        viewportHeight: context.height
+                    )
+                )
                 let bounds = SvgGeometry.renderBounds(
                     text,
                     style: style,
@@ -500,7 +507,14 @@ public class SvgRenderTreeBuilder {
             case Defs | Symbol | Marker | Pattern | ClipPath | Mask => return
             case _ => ()
         }
-        let matrix = context.matrix.multiply(elementTransformMatrix(container))
+        let matrix = context.matrix.multiply(
+            elementTransformMatrix(
+                container,
+                style: style,
+                viewportWidth: context.width,
+                viewportHeight: context.height
+            )
+        )
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
@@ -732,8 +746,16 @@ public class SvgRenderTreeBuilder {
             case Some(value) => value
             case None => return
         }
-        let matrix = context.matrix.multiply(elementTransformMatrix(shape))
         let bounds = SvgGeometry.bounds(shape, style: style)
+        let matrix = context.matrix.multiply(
+            elementTransformMatrix(
+                shape,
+                style: style,
+                bounds: bounds,
+                viewportWidth: context.width,
+                viewportHeight: context.height
+            )
+        )
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
@@ -871,7 +893,14 @@ public class SvgRenderTreeBuilder {
         if (instances.size == 0) {
             return
         }
-        let base = context.matrix.multiply(elementTransformMatrix(shape))
+        let base = context.matrix.multiply(
+            elementTransformMatrix(
+                shape,
+                style: style,
+                viewportWidth: context.width,
+                viewportHeight: context.height
+            )
+        )
         let sessionGuard = this.ensureGuard()
         for (instance in instances) {
             let label = svgRenderGuardLabel(
@@ -973,8 +1002,16 @@ public class SvgRenderTreeBuilder {
                     this.warnings.add("<image> 的 href 为片段引用，不能作为图像资源，使用占位矩形")
                 }
         }
-        let matrix = context.matrix.multiply(elementTransformMatrix(image))
         let box = SvgBounds(x, y, width, height)
+        let matrix = context.matrix.multiply(
+            elementTransformMatrix(
+                image,
+                style: style,
+                bounds: box,
+                viewportWidth: context.width,
+                viewportHeight: context.height
+            )
+        )
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
@@ -1046,11 +1083,20 @@ public class SvgRenderTreeBuilder {
     }
 }
 
-private func elementTransformMatrix(element: SvgElement): SvgMatrix {
-    match (element.transform) {
-        case Some(transform) => transform.toMatrix()
-        case None => SvgMatrix.identity
-    }
+private func elementTransformMatrix(
+    element: SvgElement,
+    style!: ?SvgComputedStyle = None,
+    bounds!: ?SvgBounds = None,
+    viewportWidth!: Float64 = 0.0,
+    viewportHeight!: Float64 = 0.0
+): SvgMatrix {
+    effectiveElementTransform(
+        element,
+        style: style,
+        bounds: bounds,
+        viewportWidth: viewportWidth,
+        viewportHeight: viewportHeight
+    )
 }
 
 internal func findSvgElementById(element: ?SvgElement, id: String): ?SvgElement {

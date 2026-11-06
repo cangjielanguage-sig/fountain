@@ -494,6 +494,22 @@ marker 的派生位置、数量与朝向不变。
 </svg>
 ```
 
+### 变换原点
+
+`transform-origin` 接受 1–2 个值（长度、百分比、`left` / `center` / `right` / `top` /
+`bottom`），单值补 `center`；`transform-box` 为 `view-box`（缺省，以最近视口为参考盒）或
+`fill-box`（以元素包围盒为参考）。变换矩阵为 `T(origin) × M × T(-origin)`。
+
+缺省 `0 0` + `view-box` 时直接使用原矩阵，输出与 M1–M4 逐字节一致；
+`SvgGeometry.ctm` / `absoluteBounds` 新增 `styles:` 参数以在查询时解析原点。
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+  <rect x="30" y="30" width="20" height="20" fill="orange"
+        transform="rotate(90)" transform-origin="40 40"/>
+</svg>
+```
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

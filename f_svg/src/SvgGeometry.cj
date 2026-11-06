@@ -82,13 +82,14 @@ public class SvgGeometry {
     public static func absoluteBounds(
         element: SvgElement,
         style!: SvgComputedStyle,
-        fonts!: ?SvgFontRegistry = None
+        fonts!: ?SvgFontRegistry = None,
+        styles!: ?SvgComputedStyleTree = None
     ): ?SvgBounds {
         let base = match (bounds(element, style: style, fonts: fonts)) {
             case Some(box) => box
             case None => return None
         }
-        Some(base.transform(ancestorTransform(element)))
+        Some(base.transform(ancestorTransform(element, styles: styles)))
     }
 
     /**
@@ -176,7 +177,10 @@ public class SvgGeometry {
      * 包含各级 `transform` 与嵌套 `svg` 的 `viewBox` / `preserveAspectRatio`；
      * 不包含根 `viewBox` 与 `use` 实例化产生的变换。
      */
-    public static func ctm(element: SvgElement): SvgMatrix {
+    public static func ctm(
+        element: SvgElement,
+        styles!: ?SvgComputedStyleTree = None
+    ): SvgMatrix {
         let chain = ArrayList<SvgElement>()
         var current: ?SvgElement = Some(element)
         while (true) {
@@ -203,17 +207,17 @@ public class SvgGeometry {
         while (index >= 0) {
             let node = chain[index]
             if (node == root) {
-                matrix = matrix.multiply(elementMatrix(node))
+                matrix = matrix.multiply(elementMatrix(node, styles, width, height))
             } else {
                 match (node) {
                     case nested: SvgRoot =>
                         matrix = SvgViewport.nestedTransform(matrix, nested, width, height)
-                            .multiply(elementMatrix(nested))
+                            .multiply(elementMatrix(nested, styles, width, height))
                         let nestedViewport = SvgViewport.nestedViewport(nested, width, height)
                         width = nestedViewport.width
                         height = nestedViewport.height
                     case _ =>
-                        matrix = matrix.multiply(elementMatrix(node))
+                        matrix = matrix.multiply(elementMatrix(node, styles, width, height))
                 }
             }
             index--
@@ -884,7 +888,45 @@ private func elementMatrix(element: SvgElement): SvgMatrix {
     }
 }
 
-private func ancestorTransform(element: SvgElement): SvgMatrix {
+/** 带样式上下文的变换：解析 `transform-origin` / `transform-box`。 */
+private func elementMatrix(
+    element: SvgElement,
+    styles: ?SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64
+): SvgMatrix {
+    if (styles.isNone()) {
+        return elementMatrix(element)
+    }
+    let style = match (styles) {
+        case Some(tree) => tree.get(element)
+        case None => Option<SvgComputedStyle>.None
+    }
+    if (style.isNone()) {
+        return elementMatrix(element)
+    }
+    let resolved = match (style) {
+        case Some(value) => value
+        case None => return elementMatrix(element)
+    }
+    var box: ?SvgBounds = Option<SvgBounds>.None
+    if (resolved.get("transform-box") == Some("fill-box")) {
+        box = SvgGeometry.bounds(element, style: resolved)
+    }
+    effectiveElementTransform(
+        element,
+        style: Some(resolved),
+        bounds: box,
+        viewportWidth: viewportWidth,
+        viewportHeight: viewportHeight
+    )
+}
+
+
+private func ancestorTransform(
+    element: SvgElement,
+    styles!: ?SvgComputedStyleTree = None
+): SvgMatrix {
     let chain = ArrayList<SvgElement>()
     var current: ?SvgElement = Some(element)
     while (true) {
@@ -898,10 +940,7 @@ private func ancestorTransform(element: SvgElement): SvgMatrix {
     var matrix = SvgMatrix.identity
     var index = chain.size - 1
     while (index >= 0) {
-        match (chain[index].transform) {
-            case Some(transform) => matrix = matrix.multiply(transform.toMatrix())
-            case None => ()
-        }
+        matrix = matrix.multiply(elementMatrix(chain[index], styles, 300.0, 150.0))
         index--
     }
     matrix

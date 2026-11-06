@@ -525,6 +525,24 @@ canvas.
 </svg>
 ```
 
+### Transform origin
+
+`transform-origin` accepts one or two values (lengths, percentages, `left` / `center` /
+`right` / `top` / `bottom`); a single value implies `center` for the other axis.
+`transform-box` is either `view-box` (default, nearest viewport as reference box) or
+`fill-box` (element bounding box). The matrix is `T(origin) × M × T(-origin)`.
+
+With the default `0 0` + `view-box` the original matrix is used unchanged, keeping
+M1-M4 output byte-identical. `SvgGeometry.ctm` / `absoluteBounds` accept a new `styles:`
+argument to resolve the origin during queries.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+  <rect x="30" y="30" width="20" height="20" fill="orange"
+        transform="rotate(90)" transform-origin="40 40"/>
+</svg>
+```
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;
