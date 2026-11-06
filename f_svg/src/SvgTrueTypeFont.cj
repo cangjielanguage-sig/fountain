@@ -17,7 +17,31 @@ package fountain::f_svg
 
 import std.collection.*
 import std.fs.{File, Path, FSException}
+import std.sync.AtomicInt64
 import fountain::f_base.*
+
+/**
+ * 字体文件读取入口。
+ *
+ * 库内只有 `SvgTrueTypeFont.load(path)` 会经过这里；`parse(bytes)` 与渲染链
+ * 不访问文件系统。读取计数供单元测试验证这条边界。
+ */
+internal class SvgFontFileAccess {
+    private static let readCount = AtomicInt64(0)
+
+    static func read(path: Path): Array<Byte> {
+        readCount.fetchAdd(1)
+        File.readFrom(path)
+    }
+
+    static func count(): Int64 {
+        readCount.load()
+    }
+
+    static func reset(): Unit {
+        readCount.store(0)
+    }
+}
 
 /** TrueType 单字形点数上限。 */
 internal let SVG_TTF_MAX_POINTS: Int64 = 10000
@@ -215,7 +239,7 @@ public class SvgTrueTypeFont <: SvgFont {
 
     public static func load(path: Path): SvgTrueTypeFont {
         let bytes = try {
-            File.readFrom(path)
+            SvgFontFileAccess.read(path)
         } catch (_: FSException) {
             throw SvgException("无法读取字体文件 ${path}", kind: SvgErrorKind.Syntax)
         }

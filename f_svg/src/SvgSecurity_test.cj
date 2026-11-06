@@ -214,6 +214,33 @@ public class SvgSecurity_test {
         @Assert(warned)
     }
 
+    /**
+     * 字体文件读取只发生在显式 `load(path)`。
+     *
+     * 用库内唯一的文件读取探针证明：渲染含文件 URL 字体族的文档不会打开任何路径，
+     * 随后显式加载不存在路径时才产生一次读取并以 `Syntax` 失败。
+     */
+    @TestCase
+    public func fontFileAccessConfinedToExplicitLoad(): Unit {
+        let font = SvgTrueTypeFont.parse(m4BuildTtf())
+        @Assert(font.glyphPath(65, 12.0).isSome())
+
+        SvgFontFileAccess.reset()
+        let document = SvgParser.parse(
+            "<svg width=\"20\" height=\"20\">" +
+            "<text x=\"0\" y=\"15\" font-family=\"file:///etc/fonts/not-a-font.ttf\" " +
+            "font-size=\"12\">A</text></svg>"
+        )
+        SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(SvgFontFileAccess.count() == 0)
+
+        let error = expectSvgException({=>
+            SvgTrueTypeFont.load(Path("/definitely-not-a-font/f_svg-m4.ttf"))
+        })
+        @Assert(error.kind == SvgErrorKind.Syntax)
+        @Assert(SvgFontFileAccess.count() == 1)
+    }
+
     /** 默认上限 1,000,000：1,000,001 个元素触发 Limit。 */
     @TestCase
     public func elementCountAtDefaultLimit(): Unit {

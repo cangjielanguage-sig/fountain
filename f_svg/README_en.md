@@ -331,7 +331,9 @@ let ctm = SvgGeometry.ctm(document.elementsByTag("rect")[0])
 
 - `pattern` `overflow="visible"` does not extend into adjacent tiles; the tile remains the sampling period.
 - TTF supports TrueType outlines only: CFF / OTF raises `Unsupported`. Hinting, `GSUB`, `GPOS` and `kern`
-  are not parsed; spacing comes from `hmtx` only. Rendering never opens font files.
+  are not parsed; spacing comes from `hmtx` only. The library never opens paths on its own:
+  `SvgTrueTypeFont.load(path)` is the only file entry, while `parse(bytes)` and rendering do not
+  touch the file system.
 - `feImage` accepts only `data:image/png` and providers, sharing the per-render decode budget with `<image>`.
 - `ctm` does not include transforms introduced by `use` instantiation.
 

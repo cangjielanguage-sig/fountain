@@ -186,6 +186,8 @@ public class SvgTrueTypeFont <: SvgFont {
 - 坐标按 `unitsPerEm` 缩放到 `fontSize`，y 轴翻转（字体 y 向上 → SVG y 向下）；
 - 二次贝塞尔转为 `Q` 命令；复合字形按 `ARG_1_AND_2_ARE_WORDS` / `ARGS_ARE_XY_VALUES` / `MORE_COMPONENTS` 组合；
 - 安全：表数 ≤ 64、单表长度 ≤ 16 MiB、`glyf` 单字形点数 ≤ 10000、复合深度 ≤ 8、`loca` 单调；
+- 文件访问边界：`load(path)` 是库内唯一文件入口；`parse(bytes)` 与渲染链都不访问文件系统，
+  `SvgFontFileAccess` 读取计数供单元测试验证该边界；
 - 不解析 hinting、`GSUB` / `GPOS` / `kern`（字距为 0，除 `hmtx` advance）。
 
 **测试**：内置最小 TTF 字节 fixture（手工构造，覆盖简单字形 + 复合字形 + cmap4）；advance/路径/包围盒；截断表、超限字形、CFF 拒绝。
