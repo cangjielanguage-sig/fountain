@@ -215,6 +215,46 @@ public class SvgKerningLayoutM5_test {
         @Assert(abs(layout.advance - 8.0) < 0.001)
     }
 
+    /** GPOS 存在但没有 `kern` 特性时回退 kern 表。 */
+    @TestCase
+    public func gposWithoutKernFallsBackToKern(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500],
+                kern: m5KernTable([(1, 2, -80)]),
+                gpos: m5GposFormat1Tagged("vkrn", 1, 2, -200)
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\">AV</text></svg>",
+            registry
+        )
+        @Assert(abs(layout.advance - 9.2) < 0.001)
+    }
+
+    /** GSUB 存在 Type 4 lookup 但没有 `liga` 特性时不替换。 */
+    @TestCase
+    public func gsubWithoutLigaDoesNotApply(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5GsubTagged("dlig", 3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let layout = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Test\" " +
+            "font-size=\"10\">fi</text></svg>",
+            registry
+        )
+        @Assert(abs(layout.advance - 10.0) < 0.001)
+        @Assert(layout.glyphs.size == 2)
+    }
+
     /** 跨 tspan 字号变化不配对。 */
     @TestCase
     public func crossTspanNoKerning(): Unit {

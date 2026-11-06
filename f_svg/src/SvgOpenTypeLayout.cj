@@ -20,6 +20,127 @@ import std.collection.*
 internal let CSS_KERN_MAX_PAIRS: Int64 = 65536
 internal let CSS_GPOS_MAX_PAIRS: Int64 = 65536
 internal let CSS_GSUB_MAX_INPUT: Int64 = 4
+internal let CSS_GSUB_MAX_DEPTH: Int64 = 8
+
+/** FeatureList 中某个特性的 lookup 引用及其链深度（从 1 计）。 */
+private class SvgLayoutLookupRef {
+    let index: Int64
+    let depth: Int64
+
+    init(index: Int64, depth: Int64) {
+        this.index = index
+        this.depth = depth
+    }
+}
+
+private func cssLayoutTag(reader: SvgTtfTableReader, offset: Int64): String {
+    String.fromUtf8(
+        [
+            UInt8(reader.u8(offset)),
+            UInt8(reader.u8(offset + 1)),
+            UInt8(reader.u8(offset + 2)),
+            UInt8(reader.u8(offset + 3))
+        ]
+    )
+}
+
+private func cssLayoutCollectLangSys(
+    reader: SvgTtfTableReader,
+    offset: Int64,
+    featureIndices: ArrayList<Int64>
+): Unit {
+    let count = reader.u16(offset + 4)
+    for (index in 0..count) {
+        let featureIndex = reader.u16(offset + 6 + index * 2)
+        if (!containsCssFeatureIndex(featureIndices, featureIndex)) {
+            featureIndices.add(featureIndex)
+        }
+    }
+}
+
+private func containsCssFeatureIndex(indices: ArrayList<Int64>, index: Int64): Bool {
+    for (value in indices) {
+        if (value == index) {
+            return true
+        }
+    }
+    false
+}
+
+/** 按 ScriptList 的默认与命名 LangSys 收集启用的 FeatureList 下标。 */
+private func cssLayoutFeatureIndices(
+    reader: SvgTtfTableReader,
+    scriptListOffset: Int64
+): ArrayList<Int64> {
+    let result = ArrayList<Int64>()
+    let scriptCount = reader.u16(scriptListOffset)
+    for (scriptIndex in 0..scriptCount) {
+        let record = scriptListOffset + 2 + scriptIndex * 6
+        let scriptOffset = scriptListOffset + reader.u16(record + 4)
+        let defaultOffset = reader.u16(scriptOffset)
+        if (defaultOffset != 0) {
+            cssLayoutCollectLangSys(reader, scriptOffset + defaultOffset, result)
+        }
+        let languageCount = reader.u16(scriptOffset + 2)
+        for (languageIndex in 0..languageCount) {
+            let languageRecord = scriptOffset + 4 + languageIndex * 6
+            let languageOffset = scriptOffset + reader.u16(languageRecord + 4)
+            cssLayoutCollectLangSys(reader, languageOffset, result)
+        }
+    }
+    result
+}
+
+/**
+ * 解析 ScriptList → FeatureList，收集指定特性引用的 lookup 与链深度。
+ *
+ * `enforceDepth` 为真时，特性引用的第 9 个及之后的 lookup 被丢弃并告警。
+ */
+private func cssLayoutLookupRefs(
+    reader: SvgTtfTableReader,
+    featureTag: String,
+    label: String,
+    warnings: ArrayList<String>,
+    enforceDepth: Bool
+): ?Array<SvgLayoutLookupRef> {
+    let scriptListOffset = reader.u16(4)
+    let featureListOffset = reader.u16(6)
+    let lookupListOffset = reader.u16(8)
+    if (scriptListOffset == 0 || featureListOffset == 0 || lookupListOffset == 0 ||
+        scriptListOffset >= reader.length || featureListOffset >= reader.length ||
+        lookupListOffset >= reader.length) {
+        warnings.add("${label} 缺少 ScriptList / FeatureList / LookupList，已忽略")
+        return None
+    }
+    let featureIndices = cssLayoutFeatureIndices(reader, scriptListOffset)
+    let featureCount = reader.u16(featureListOffset)
+    let refs = ArrayList<SvgLayoutLookupRef>()
+    for (featureIndex in featureIndices) {
+        if (featureIndex >= featureCount) {
+            warnings.add("${label} 的 featureIndex 越界，已忽略")
+            continue
+        }
+        let record = featureListOffset + 2 + featureIndex * 6
+        if (cssLayoutTag(reader, record) != featureTag) {
+            continue
+        }
+        let featureOffset = featureListOffset + reader.u16(record + 4)
+        let lookupCount = reader.u16(featureOffset + 2)
+        for (position in 0..lookupCount) {
+            let depth = position + 1
+            if (enforceDepth && depth > CSS_GSUB_MAX_DEPTH) {
+                warnings.add("${label} lookup 深度超过 ${CSS_GSUB_MAX_DEPTH}，已停止后续替换")
+                continue
+            }
+            refs.add(SvgLayoutLookupRef(reader.u16(featureOffset + 4 + position * 2), depth))
+        }
+    }
+    if (refs.size == 0) {
+        warnings.add("${label} 缺少 ${featureTag} 特性，已忽略")
+        return None
+    }
+    Some(refs.toArray())
+}
 
 private func cssPairKey(left: Int64, right: Int64): Int64 {
     left * 65536 + right
@@ -118,6 +239,10 @@ internal class SvgGposPairs {
         if (this.classMatrix.size == 0) {
             return 0
         }
+        // PairPos format 2 只对 Coverage 覆盖的左字形生效。
+        if (this.covered.get(left).isNone()) {
+            return 0
+        }
         let firstClass = this.class1.get(left) ?? 0
         let secondClass = this.class2.get(right) ?? 0
         let index = firstClass * this.class2Count + secondClass
@@ -130,14 +255,19 @@ internal class SvgGposPairs {
     static func parse(reader: SvgTtfTableReader, warnings: ArrayList<String>): ?SvgGposPairs {
         try {
             let lookupListOffset = reader.u16(8)
-            if (lookupListOffset == 0 || lookupListOffset >= reader.length) {
-                return None
+            let refs = match (cssLayoutLookupRefs(reader, "kern", "GPOS", warnings, false)) {
+                case Some(value) => value
+                case None => return Option<SvgGposPairs>.None
             }
             let result = SvgGposPairs()
             let lookupCount = reader.u16(lookupListOffset)
             var parsed = false
-            for (index in 0..lookupCount) {
-                let lookupOffset = lookupListOffset + reader.u16(lookupListOffset + 2 + index * 2)
+            for (reference in refs) {
+                if (reference.index >= lookupCount) {
+                    warnings.add("GPOS lookupIndex 越界，已忽略")
+                    continue
+                }
+                let lookupOffset = lookupListOffset + reader.u16(lookupListOffset + 2 + reference.index * 2)
                 if (lookupOffset + 6 > reader.length) {
                     warnings.add("GPOS lookup 截断，已忽略")
                     continue
@@ -155,7 +285,7 @@ internal class SvgGposPairs {
                 }
             }
             if (!parsed) {
-                return None
+                return Option<SvgGposPairs>.None
             }
             Some(result)
         } catch (_: SvgException) {
@@ -385,14 +515,19 @@ internal class SvgGsubLigatures {
     static func parse(reader: SvgTtfTableReader, warnings: ArrayList<String>): ?SvgGsubLigatures {
         try {
             let lookupListOffset = reader.u16(8)
-            if (lookupListOffset == 0 || lookupListOffset >= reader.length) {
-                return None
+            let refs = match (cssLayoutLookupRefs(reader, "liga", "GSUB", warnings, true)) {
+                case Some(value) => value
+                case None => return Option<SvgGsubLigatures>.None
             }
             let result = SvgGsubLigatures()
             let lookupCount = reader.u16(lookupListOffset)
             var parsed = false
-            for (index in 0..lookupCount) {
-                let lookupOffset = lookupListOffset + reader.u16(lookupListOffset + 2 + index * 2)
+            for (reference in refs) {
+                if (reference.index >= lookupCount) {
+                    warnings.add("GSUB lookupIndex 越界，已忽略")
+                    continue
+                }
+                let lookupOffset = lookupListOffset + reader.u16(lookupListOffset + 2 + reference.index * 2)
                 if (lookupOffset + 6 > reader.length) {
                     warnings.add("GSUB lookup 截断，已忽略")
                     continue
@@ -409,7 +544,7 @@ internal class SvgGsubLigatures {
                 }
             }
             if (!parsed) {
-                return None
+                return Option<SvgGsubLigatures>.None
             }
             Some(result)
         } catch (_: SvgException) {
@@ -460,7 +595,7 @@ private func parseGsubLigatureSubtable(
             if (componentCount < 2) {
                 continue
             }
-            if (componentCount > CSS_GSUB_MAX_INPUT + 1) {
+            if (componentCount > CSS_GSUB_MAX_INPUT) {
                 warnings.add("GSUB 连字输入超过 ${CSS_GSUB_MAX_INPUT} 个字形，已忽略")
                 continue
             }
