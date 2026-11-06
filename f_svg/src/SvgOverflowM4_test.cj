@@ -214,6 +214,24 @@ public class SvgOverflowM4_test {
         @Assert(found)
     }
 
+    /** 嵌套旋转视口共用一张蒙版时仍按交集裁剪。 */
+    @TestCase
+    public func nestedRotatedQuadsIntersect(): Unit {
+        let document = svgDoc(
+            '<svg x="10" y="10" width="60" height="60" transform="rotate(20 40 40)" ' +
+            'viewBox="0 0 60 60">' +
+            '<svg x="10" y="10" width="40" height="40" transform="rotate(-25 30 30)" ' +
+            'viewBox="0 0 40 40">' +
+            '<rect x="-20" y="-20" width="100" height="100" fill="red"/></svg></svg>',
+            width: 80,
+            height: 80
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 40, 40))
+        @Assert(!m4OpaqueRed(bitmap, 2, 2))
+        @Assert(!m4OpaqueRed(bitmap, 77, 77))
+    }
+
     /** pattern overflow="visible" 不向相邻 tile 扩展。 */
     @TestCase
     public func patternTileBoundary(): Unit {

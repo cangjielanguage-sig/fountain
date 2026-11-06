@@ -78,4 +78,27 @@ public class SvgBenchmarkM4_test {
         @Assert(total > 1000.0)
         println("1000 段路径长度: ${lengthElapsed.toNanoseconds() / 1000000} ms")
     }
+
+    /** 100 个旋转裁剪元素的整文档渲染（参考，非门禁）。 */
+    @TestCase
+    public func quadClipBenchmark(): Unit {
+        let body = StringBuilder()
+        for (index in 0..100) {
+            let column = index % 10
+            let row = index / 10
+            let x = column * 50 + 5
+            let y = row * 50 + 5
+            body.append(
+                '<svg x="${x}" y="${y}" width="40" height="40" ' +
+                'transform="rotate(20 ${x + 20} ${y + 20})" viewBox="0 0 40 40">' +
+                '<rect x="-20" y="-20" width="80" height="80" fill="red"/></svg>'
+            )
+        }
+        let document = svgDoc(body.toString(), width: 512, height: 512)
+        let start = MonoTime.now()
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        let elapsed = MonoTime.now() - start
+        @Assert(bitmap.width == 512)
+        println("512×512 / 100 个旋转裁剪元素: ${elapsed.toNanoseconds() / 1000000} ms")
+    }
 }

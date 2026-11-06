@@ -574,9 +574,7 @@ public class SvgRenderer {
             case Some(rect) => clipBitmapToRect(bitmap, rect)
             case None => ()
         }
-        for (quad in clipQuads) {
-            applyQuadCoverage(bitmap, quad, this.options)
-        }
+        applyQuadCoverages(bitmap, clipQuads, this.options)
         match (clip) {
             case Some(rect) =>
                 let mask = SvgClipCoverage.render(
@@ -686,44 +684,181 @@ private func clipRectCoversCommand(command: SvgDisplayCommand, rect: SvgBounds):
         bottom + margin <= rect.y + rect.height + 1.0e-6
 }
 
-/** 用设备空间四边形生成覆盖率蒙版并乘到已绘制内容上。 */
-private func applyQuadCoverage(
-    bitmap: SvgBitmap,
+/** 一组四边形裁剪的设备空间包围盒。 */
+private class SvgQuadDeviceBounds {
+    let x: Int64
+    let y: Int64
+    let width: Int64
+    let height: Int64
+
+    init(x: Int64, y: Int64, width: Int64, height: Int64) {
+        this.x = x
+        this.y = y
+        this.width = width
+        this.height = height
+    }
+
+    func isEmpty(): Bool {
+        this.width <= 0 || this.height <= 0
+    }
+}
+
+private func quadDeviceBounds(
     quad: Array<SvgPoint>,
+    bitmapWidth: Int64,
+    bitmapHeight: Int64
+): SvgQuadDeviceBounds {
+    if (quad.size < 3) {
+        return SvgQuadDeviceBounds(0, 0, 0, 0)
+    }
+    var left = quad[0].x
+    var right = quad[0].x
+    var top = quad[0].y
+    var bottom = quad[0].y
+    for (index in 1..quad.size) {
+        left = min(left, quad[index].x)
+        right = max(right, quad[index].x)
+        top = min(top, quad[index].y)
+        bottom = max(bottom, quad[index].y)
+    }
+    let x0 = max(0, Int64(floor(left)) - 1)
+    let y0 = max(0, Int64(floor(top)) - 1)
+    let x1 = min(bitmapWidth, Int64(ceil(right)) + 1)
+    let y1 = min(bitmapHeight, Int64(ceil(bottom)) + 1)
+    SvgQuadDeviceBounds(x0, y0, max(0, x1 - x0), max(0, y1 - y0))
+}
+
+/**
+ * 应用一组设备空间四边形裁剪。
+ *
+ * 只为四边形的设备 AABB（外扩 1 像素）建立覆盖率蒙版，并按该 AABB 写回；
+ * 同一元素的所有 quad 共用一次蒙版与交集缓冲，避免逐 quad 全画布重算。
+ */
+private func applyQuadCoverages(
+    bitmap: SvgBitmap,
+    quads: Array<Array<SvgPoint>>,
     options: SvgRenderOptions
 ): Unit {
-    if (quad.size < 3) {
+    if (quads.size == 0) {
         return
     }
-    let commands = ArrayList<SvgPathCommand>()
-    commands.add(
-        SvgPathCommand(SvgPathCommandKind.MoveTo, false, [quad[0].x, quad[0].y])
-    )
-    var index = 1
-    while (index < quad.size) {
-        commands.add(
-            SvgPathCommand(SvgPathCommandKind.LineTo, false, [quad[index].x, quad[index].y])
-        )
+    let bounds = ArrayList<SvgQuadDeviceBounds>()
+    var left = bitmap.width
+    var top = bitmap.height
+    var right: Int64 = 0
+    var bottom: Int64 = 0
+    var hasBounds = false
+    for (quad in quads) {
+        let box = quadDeviceBounds(quad, bitmap.width, bitmap.height)
+        bounds.add(box)
+        if (box.isEmpty()) {
+            continue
+        }
+        hasBounds = true
+        left = min(left, box.x)
+        top = min(top, box.y)
+        right = max(right, box.x + box.width)
+        bottom = max(bottom, box.y + box.height)
+    }
+    if (!hasBounds || right <= left || bottom <= top) {
+        clearBitmapAlpha(bitmap)
+        return
+    }
+    let intersectionWidth = right - left
+    let intersectionHeight = bottom - top
+    // 交集外不可见；交集内先用 255 初始化，再逐 quad 相乘。
+    let coverage = Array<Byte>(intersectionWidth * intersectionHeight, repeat: 255)
+    var index = 0
+    for (quad in quads) {
+        let box = bounds[index]
         index++
+        if (box.isEmpty()) {
+            continue
+        }
+        let maskBitmap = SvgBitmap(box.width, box.height)
+        let commands = ArrayList<SvgPathCommand>()
+        commands.add(
+            SvgPathCommand(SvgPathCommandKind.MoveTo, false, [quad[0].x, quad[0].y])
+        )
+        var pointIndex = 1
+        while (pointIndex < quad.size) {
+            commands.add(
+                SvgPathCommand(
+                    SvgPathCommandKind.LineTo,
+                    false,
+                    [quad[pointIndex].x, quad[pointIndex].y]
+                )
+            )
+            pointIndex++
+        }
+        commands.add(SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>()))
+        SvgRasterizer(
+            maskBitmap,
+            samplesPerPixel: options.samplesPerPixel,
+            antiAlias: options.antiAlias
+        ).fill(
+            SvgPathData(commands.toArray()),
+            matrix: SvgMatrix.translate(-Float64(box.x), -Float64(box.y)),
+            color: SvgColor.Black,
+            fillRule: SvgFillRule.Nonzero
+        )
+        let fromX = max(left, box.x)
+        let fromY = max(top, box.y)
+        let toX = min(right, box.x + box.width)
+        let toY = min(bottom, box.y + box.height)
+        var y = fromY
+        while (y < toY) {
+            var x = fromX
+            while (x < toX) {
+                let target = (y - top) * intersectionWidth + (x - left)
+                let source = ((y - box.y) * box.width + (x - box.x)) * 4 + 3
+                coverage[target] = UInt8(
+                    Int64(coverage[target]) * Int64(maskBitmap.pixels[source]) / 255
+                )
+                x++
+            }
+            y++
+        }
     }
-    commands.add(SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>()))
-    let maskBitmap = SvgBitmap(bitmap.width, bitmap.height)
-    SvgRasterizer(
-        maskBitmap,
-        samplesPerPixel: options.samplesPerPixel,
-        antiAlias: options.antiAlias
-    ).fill(
-        SvgPathData(commands.toArray()),
-        color: SvgColor.Black,
-        fillRule: SvgFillRule.Nonzero
-    )
-    let coverage = Array<Byte>(bitmap.width * bitmap.height, repeat: 0)
-    var pixel = 0
-    while (pixel < coverage.size) {
-        coverage[pixel] = maskBitmap.pixels[pixel * 4 + 3]
-        pixel++
+    // 交集外清零，交集内乘覆盖率；两步都只按行遍历一次画布。
+    var y = 0
+    while (y < bitmap.height) {
+        let row = y * bitmap.width
+        if (y < top || y >= bottom) {
+            var x = 0
+            while (x < bitmap.width) {
+                bitmap.pixels[(row + x) * 4 + 3] = 0
+                x++
+            }
+        } else {
+            var x = 0
+            while (x < left) {
+                bitmap.pixels[(row + x) * 4 + 3] = 0
+                x++
+            }
+            while (x < right) {
+                let factor = Int64(coverage[(y - top) * intersectionWidth + (x - left)])
+                let alphaIndex = (row + x) * 4 + 3
+                bitmap.pixels[alphaIndex] = UInt8(
+                    Int64(bitmap.pixels[alphaIndex]) * factor / 255
+                )
+                x++
+            }
+            while (x < bitmap.width) {
+                bitmap.pixels[(row + x) * 4 + 3] = 0
+                x++
+            }
+        }
+        y++
     }
-    SvgCoverageMask(bitmap.width, bitmap.height, coverage).applyTo(bitmap)
+}
+
+private func clearBitmapAlpha(bitmap: SvgBitmap): Unit {
+    var index = 3
+    while (index < bitmap.pixels.size) {
+        bitmap.pixels[index] = 0
+        index += 4
+    }
 }
 
 private func clipBitmapToRect(bitmap: SvgBitmap, rect: SvgBounds): Unit {
