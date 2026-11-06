@@ -53,8 +53,9 @@ public class SvgFontRegistry {
     /**
      * 构造一次性派生注册表：别名 family 先映射到目标 family，再委托 base 解析。
      *
-     * CSS `@font-face` 不携带可加载的目标，因此目标取「已注册的同名 family」；
-     * 同名未注册时别名不生效，记 warning，不回退到注册表的首个 family。
+     * CSS `@font-face` 的目标取自 `src: local(<family>)`；`src` 无 `local()` 时，
+     * 仅当同名 family 已注册才建立恒等别名。目标未注册时别名不生效并记 warning，
+     * 不回退到注册表的首个 family。`url(...)` 不加载文件，仅由解析阶段记 warning。
      * base 不被写入。
      */
     public static func derived(
@@ -66,15 +67,31 @@ public class SvgFontRegistry {
         result.base = Some(base)
         for (rule in aliases) {
             let name = normalizeSvgFontFamily(rule.family)
-            if (!base.hasFamily(name)) {
-                match (warnings) {
-                    case Some(list) =>
-                        list.add("@font-face 目标 family「${rule.family}」未注册，别名不生效")
-                    case None => ()
-                }
-                continue
+            var target: ?String = None
+            let locals = match (rule.src) {
+                case Some(text) => parseCssLocalFontFamilies(text)
+                case None => Array<String>()
             }
-            result.aliases[name] = name
+            if (locals.size > 0) {
+                for (local in locals) {
+                    let normalized = normalizeSvgFontFamily(local)
+                    if (base.hasFamily(normalized)) {
+                        target = Some(normalized)
+                        break
+                    }
+                }
+            } else if (base.hasFamily(name)) {
+                target = Some(name)
+            }
+            match (target) {
+                case Some(value) => result.aliases[name] = value
+                case None =>
+                    match (warnings) {
+                        case Some(list) =>
+                            list.add("@font-face 目标 family「${rule.family}」未注册，别名不生效")
+                        case None => ()
+                    }
+            }
         }
         result
     }
@@ -133,6 +150,34 @@ public class SvgFontRegistry {
 
 internal func normalizeSvgFontFamily(family: String): String {
     trimAsciiQuotes(family.trimAscii()).toAsciiLower()
+}
+
+/** 提取 `src` 中所有 `local(<family>)` 的名称；大小写不敏感，忽略引号。 */
+internal func parseCssLocalFontFamilies(value: String): Array<String> {
+    let result = ArrayList<String>()
+    let lower = value.toAsciiLower()
+    let bytes = lower.unsafeBytes()
+    var index = 0
+    while (index + 5 < bytes.size) {
+        if (bytes[index] == b'l' && bytes[index + 1] == b'o' && bytes[index + 2] == b'c' &&
+            bytes[index + 3] == b'a' && bytes[index + 4] == b'l' && bytes[index + 5] == b'(') {
+            let start = index + 6
+            var end = start
+            while (end < bytes.size && bytes[end] != b')') {
+                end++
+            }
+            if (end < bytes.size) {
+                let name = trimAsciiQuotes(value[start..end].trimAscii())
+                if (name.size > 0) {
+                    result.add(name)
+                }
+            }
+            index = end + 1
+        } else {
+            index++
+        }
+    }
+    result.toArray()
 }
 
 /** 逗号分隔的 family 列表；去引号与首尾空白。 */

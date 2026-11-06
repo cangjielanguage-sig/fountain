@@ -97,18 +97,21 @@ public class CssRule <: ToString {
     }
 }
 
-/** 一条 `@font-face` 别名声明。`src` 只记录是否出现，不加载文件。 */
+/** 一条 `@font-face` 别名声明。`src` 记录原文，不加载文件。 */
 public class CssFontFaceRule <: ToString {
     public let family: String
     public let weight: ?String
     public let style: ?String
     public let srcPresent: Bool
+    /** `src` 声明原文；未声明时为 `None`。 */
+    public let src: ?String
 
-    init(family: String, weight: ?String, style: ?String, srcPresent: Bool) {
+    init(family: String, weight: ?String, style: ?String, srcPresent: Bool, src!: ?String = None) {
         this.family = family
         this.weight = weight
         this.style = style
         this.srcPresent = srcPresent
+        this.src = src
     }
 
     public func toString(): String {
@@ -297,6 +300,7 @@ private func parseCssFontFace(
     var weight: ?String = None
     var style: ?String = None
     var srcPresent = false
+    var srcValue: ?String = None
     for (declaration in parsed.declarations) {
         match (declaration.property) {
             case "font-family" =>
@@ -308,12 +312,14 @@ private func parseCssFontFace(
             case "font-style" => style = Some(declaration.value.trimAscii().toAsciiLower())
             case "src" =>
                 srcPresent = true
+                srcValue = Some(declaration.value.trimAscii())
                 state.warnings.add("已忽略 @font-face 的 src（不加载字体文件）：${declaration.value}")
             case _ => ()
         }
     }
     match (family) {
-        case Some(name) => state.fontFaces.add(CssFontFaceRule(name, weight, style, srcPresent))
+        case Some(name) =>
+            state.fontFaces.add(CssFontFaceRule(name, weight, style, srcPresent, src: srcValue))
         case None => state.warnings.add("已跳过缺少 font-family 的 @font-face")
     }
     blockEnd + 1

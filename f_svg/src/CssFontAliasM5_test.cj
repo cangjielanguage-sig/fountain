@@ -19,14 +19,20 @@ import std.collection.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
-/** 每个码点固定 10 单位 advance 的测试字体。 */
+/** 每个码点固定 advance 的测试字体；默认 10 单位。 */
 internal class M5FixedAdvanceFont <: SvgFont {
+    private let advancing: Float64
+
+    init(advancing!: Float64 = 10.0) {
+        this.advancing = advancing
+    }
+
     public func glyphPath(codePoint: Int64, fontSize: Float64): ?SvgPathData {
         None
     }
 
     public func advance(codePoint: Int64, fontSize: Float64): Float64 {
-        10.0
+        this.advancing
     }
 
     public func ascent(fontSize: Float64): Float64 {
@@ -48,29 +54,76 @@ internal func m5AliasRules(text: String): Array<CssFontFaceRule> {
 
 @Test
 public class CssFontAliasM5_test {
-    /** 别名命中：声明 family 与注册表中的 family 精确匹配。 */
+    /** `src: local(Brand)`：未注册的 family 使用已注册 Brand 的字体。 */
     @TestCase
-    public func aliasHitsRegisteredFamily(): Unit {
+    public func localSourceAliasesRegisteredFamily(): Unit {
         let base = SvgFontRegistry()
-        base.register("Body", M5FixedAdvanceFont())
+        base.register("Brand", M5FixedAdvanceFont(advancing: 42.0))
         let derived = SvgFontRegistry.derived(
             base,
-            m5AliasRules("@font-face { font-family: Body; src: url(x.ttf) }")
+            m5AliasRules("@font-face { font-family: Body; src: local(Brand) }")
         )
-        let font = derived.resolve("Body", "normal", "normal")
-        @Assert(font.isSome())
-        match (font) {
-            case Some(value) => @Assert(value.advance(65, 10.0) == 10.0)
-            case None => ()
+        @Assert(base.resolve("Body", "normal", "normal").isNone())
+        match (derived.resolve("Body", "normal", "normal")) {
+            case Some(value) => @Assert(value.advance(65, 10.0) == 42.0)
+            case None => @Fail("Body 应通过 local(Brand) 命中 Brand")
         }
+    }
+
+    /** `src: local(Missing)`：目标未注册，不建别名也不回退其他 family。 */
+    @TestCase
+    public func localSourceWithoutRegisteredTarget(): Unit {
+        let base = SvgFontRegistry()
+        base.register("Brand", M5FixedAdvanceFont(advancing: 42.0))
+        let warnings = ArrayList<String>()
+        let sheet = CssStyleSheet.parse(
+            "@font-face { font-family: Body; src: local(Missing) }",
+            warnings
+        )
+        let derived = SvgFontRegistry.derived(base, sheet.fontFaces, warnings: warnings)
+        @Assert(derived.resolve("Body", "normal", "normal").isNone())
+        var sawMissing = false
+        for (warning in warnings) {
+            if (warning.contains("Missing")) {
+                sawMissing = true
+            }
+        }
+        @Assert(sawMissing)
+    }
+
+    /** `src: url(...)`：不加载文件，同名已注册时保留恒等别名并记 src warning。 */
+    @TestCase
+    public func urlSourceKeepsIdentityAlias(): Unit {
+        let base = SvgFontRegistry()
+        base.register("Body", M5FixedAdvanceFont(advancing: 7.0))
+        let warnings = ArrayList<String>()
+        let sheet = CssStyleSheet.parse(
+            "@font-face { font-family: Body; src: url(x.ttf) }",
+            warnings
+        )
+        let derived = SvgFontRegistry.derived(base, sheet.fontFaces, warnings: warnings)
+        match (derived.resolve("Body", "normal", "normal")) {
+            case Some(value) => @Assert(value.advance(65, 10.0) == 7.0)
+            case None => @Fail("同名已注册时应保留恒等别名")
+        }
+        var sawSrc = false
+        for (warning in warnings) {
+            if (warning.contains("src")) {
+                sawSrc = true
+            }
+        }
+        @Assert(sawSrc)
     }
 
     /** 权重 / 风格未注册时回退目标的 normal / normal。 */
     @TestCase
     public func weightFallsBackToNormal(): Unit {
         let base = SvgFontRegistry()
-        base.register("Body", M5FixedAdvanceFont())
-        let derived = SvgFontRegistry.derived(base, m5AliasRules("@font-face { font-family: Body }"))
+        base.register("Brand", M5FixedAdvanceFont(advancing: 42.0))
+        let derived = SvgFontRegistry.derived(
+            base,
+            m5AliasRules("@font-face { font-family: Body; src: local(Brand) }")
+        )
         @Assert(derived.resolve("Body", "bold", "italic").isSome())
         @Assert(derived.resolve("Body", "700", "oblique").isSome())
     }
@@ -135,13 +188,14 @@ public class CssFontAliasM5_test {
     @TestCase
     public func inputRegistryNotPolluted(): Unit {
         let base = SvgFontRegistry()
-        base.register("Body", M5FixedAdvanceFont())
-        let aliases = m5AliasRules("@font-face { font-family: Body }")
+        base.register("Brand", M5FixedAdvanceFont(advancing: 42.0))
+        let aliases = m5AliasRules("@font-face { font-family: Body; src: local(Brand) }")
         let first = SvgFontRegistry.derived(base, aliases)
         let second = SvgFontRegistry.derived(base, aliases)
         @Assert(first.resolve("Body", "normal", "normal").isSome())
         @Assert(second.resolve("Body", "normal", "normal").isSome())
-        @Assert(base.resolve("Body", "normal", "normal").isSome())
+        @Assert(base.resolve("Body", "normal", "normal").isNone())
+        @Assert(base.resolve("Brand", "normal", "normal").isSome())
     }
 
     /** 渲染器使用样式表别名：文本不再报告「未找到字体」，两次渲染一致。 */
@@ -149,12 +203,12 @@ public class CssFontAliasM5_test {
     public func rendererAppliesAlias(): Unit {
         let document = SvgParser.parse(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"80\" height=\"30\"><style>" +
-            "@font-face { font-family: Body }\n" +
+            "@font-face { font-family: Body; src: local(Brand) }\n" +
             "text { font-family: Body; font-size: 10px }</style>" +
             "<text x=\"5\" y=\"20\">AB</text></svg>"
         )
         let base = SvgFontRegistry()
-        base.register("Body", M5FixedAdvanceFont())
+        base.register("Brand", M5FixedAdvanceFont())
         let renderer = SvgRenderer(
             options: SvgRenderOptions(samplesPerPixel: 1, fonts: base, width: 80, height: 30)
         )
@@ -170,6 +224,6 @@ public class CssFontAliasM5_test {
             options: SvgRenderOptions(samplesPerPixel: 1, fonts: base, width: 80, height: 30)
         ).render(document)
         @Assert(first.pixels == second.pixels)
-        @Assert(base.resolve("Body", "normal", "normal").isSome())
+        @Assert(base.resolve("Body", "normal", "normal").isNone())
     }
 }
