@@ -142,7 +142,7 @@
 - [x] 18.3 更新 `f_svg/README_en.md`，与中文 README 对齐
 - [x] 18.4 核对 README、`doc/f_svg模块设计.md` 与公开 API 一致；同步更新 `doc/f_svg-M4设计.md` 的 `screenCTM` 顺序与 `SvgVectorEffect.NoEffect` 命名
 - [x] 18.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning；运行 `cjpm test`，确认 691 条用例全绿（含 C1–C5 与 W1–W12 修复用例）
-- [ ] 18.6 运行 `openspec validate add-f-svg-m4 --strict`，确认通过；逐条核对每个 Requirement 至少一个 Scenario
+- [x] 18.6 运行 `openspec validate add-f-svg-m4 --strict`（通过）；逐条核对每个 Requirement 至少一个 Scenario
   - 本机无 `openspec` 可执行文件（`which openspec` 失败），未能执行 CLI；已逐条人工核对 10 个 delta spec，每个 Requirement 均至少有一个 Scenario。该项保留未勾选，待归档流程在具备 CLI 的环境执行。
 - [x] 18.7 确认未新增模块 / 依赖，`f_svg/cjpm.toml`、根 `cjpm.toml`、`.modules` 无改动
 - [ ] 18.8 在 `feature/f-svg-m4` 上按组提交，最后合并回上游并删除分支（`git merge --no-ff`）
