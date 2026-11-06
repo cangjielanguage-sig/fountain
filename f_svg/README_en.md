@@ -559,6 +559,31 @@ the result is also `none` with a warning, with no recursion. Resolution order is
 </svg>
 ```
 
+### Kerning and standard ligatures
+
+During layout a TrueType font reads `GPOS` Pair Adjustment (format 1 / 2, x advance only)
+and `kern` format 0; `GPOS` wins when both exist. Kerning only adjusts the advance of
+adjacent glyphs, is read in font design units and scaled by `font-size / unitsPerEm`;
+the per-glyph `advance(codePoint, fontSize)` semantics stay unchanged. `font-kerning:
+none` disables it, `normal` forces it and `auto` enables it when the font has the tables;
+pairs across a `tspan` with a different font or size are not kerned.
+
+`GSUB` only handles the `liga` feature, Lookup Type 4 format 1: at most four input glyphs
+per substitution and a lookup depth limit of 8. A ligature cluster advances by the
+ligature glyph and consumes only the first character's list items. The `kern` entry and
+GPOS pair limits are both 65536; exceeding either drops the table / subtable with a
+warning and keeps rendering the rest of the text.
+
+### Bidirectional text
+
+Layout implements a UAX#9 subset: the direction classes L / R / AL / EN / AN / WS / ON / B,
+paragraph levels from `direction`, digits kept LTR inside RTL paragraphs, neutrals
+resolved from both neighbours and single-level bracket mirroring.
+`unicode-bidi: normal` reorders naturally, `embed` opens an embedding with the element
+direction, and `bidi-override` forces the paragraph direction. With
+`writing-mode: tb-*` no inline reordering happens and `direction` only decides column
+order. Arabic / Indic complex shaping and vertical ligatures are out of scope.
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

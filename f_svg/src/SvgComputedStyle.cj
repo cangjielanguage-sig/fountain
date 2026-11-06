@@ -343,6 +343,31 @@ public class SvgComputedStyle <: ToString {
         SvgWritingMode.fromName(this.get("writing-mode") ?? "lr-tb") ?? SvgWritingMode.LrTb
     }
 
+    public func direction(): SvgDirection {
+        SvgDirection.fromName(this.get("direction") ?? "ltr") ?? SvgDirection.Ltr
+    }
+
+    public func unicodeBidi(): SvgUnicodeBidi {
+        SvgUnicodeBidi.fromName(this.get("unicode-bidi") ?? "normal") ?? SvgUnicodeBidi.Normal
+    }
+
+    public func fontKerning(): SvgFontKerning {
+        SvgFontKerning.fromName(this.get("font-kerning") ?? "auto") ?? SvgFontKerning.Auto
+    }
+
+    /** 绘制顺序（未声明时取默认值）。 */
+    public func paintOrder(): SvgPaintOrder {
+        svgPaintOrderOf(this.get("paint-order"))
+    }
+
+    public func mixBlendMode(): SvgMixBlendMode {
+        SvgMixBlendMode.fromNameOrDefault(this.get("mix-blend-mode"))
+    }
+
+    public func isolationIsolate(): Bool {
+        this.get("isolation") == Some("isolate")
+    }
+
     public func toString(): String {
         let out = StringBuilder()
         for (index in 0..SVG_PROPERTY_TABLE.size) {

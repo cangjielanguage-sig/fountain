@@ -190,6 +190,35 @@ private class SvgTextChar {
         this.isRoot = isRoot
         this.decoration = state.decoration
     }
+
+    /** 复制一份并替换码点（用于双向镜像）。 */
+    func copyWithCodePoint(codePoint: Int64): SvgTextChar {
+        let state = SvgTextState(
+            this.fontSize,
+            this.family,
+            this.weight,
+            this.style,
+            this.letterSpacing,
+            this.wordSpacing,
+            dominant: this.dominant,
+            alignment: this.alignment,
+            shift: this.shift,
+            decoration: this.decoration
+        )
+        let copy = SvgTextChar(
+            codePoint,
+            state,
+            parentDominant: this.parentDominant,
+            isRoot: this.isRoot
+        )
+        copy.xOverride = this.xOverride
+        copy.yBase = this.yBase
+        copy.dx = this.dx
+        copy.dy = this.dy
+        copy.xExplicit = this.xExplicit
+        copy.yExplicit = this.yExplicit
+        copy
+    }
 }
 
 private class SvgGlyphEntry {
@@ -280,7 +309,7 @@ public class SvgTextRenderer {
             shift: style.baselineShift(),
             decoration: effectiveTextDecoration(text, style, styles)
         )
-        let chars = ArrayList<SvgTextChar>()
+        var chars = ArrayList<SvgTextChar>()
         collectSvgTextChars(
             text,
             rootState,
@@ -291,16 +320,21 @@ public class SvgTextRenderer {
             styles: styles
         )
         applyRootTextAttributes(text, chars)
+        if (shouldReorderBidi(style)) {
+            chars = reorderBidiChars(chars, style)
+        }
 
         let count = chars.size
         let advances = ArrayList<Float64>()
         let paths = ArrayList<?SvgPathData>()
         let baselineOffsets = ArrayList<Float64>()
         let ascentValues = ArrayList<Float64>()
+        let resolvedFonts = ArrayList<Option<SvgFont>>()
         var missingGlyph = false
         for (index in 0..count) {
             let char = chars[index]
             let font = this.registry.resolve(char.family, char.weight, char.style)
+            resolvedFonts.add(font)
             match (font) {
                 case Some(value) =>
                     advances.add(value.advance(char.codePoint, char.fontSize))
@@ -325,6 +359,9 @@ public class SvgTextRenderer {
                     )
             }
         }
+
+        applyFontKerning(chars, resolvedFonts, advances, style)
+        applyFontLigatures(chars, resolvedFonts, advances, paths)
 
         let target = match (text.textLength) {
             case Some(value) => value.value
@@ -1196,5 +1233,124 @@ private func transformTextCommand(command: SvgPathCommand, matrix: SvgMatrix): S
                 ]
             )
         case HorizontalLineTo | VerticalLineTo | ClosePath => command
+    }
+}
+
+/** 竖排时不做行内双向重排（`direction` 只决定列序）。 */
+private func shouldReorderBidi(style: SvgComputedStyle): Bool {
+    let writingMode = style.writingMode()
+    if (writingMode == SvgWritingMode.Tb || writingMode == SvgWritingMode.TbRl) {
+        return false
+    }
+    style.direction() == SvgDirection.Rtl || style.unicodeBidi() != SvgUnicodeBidi.Normal
+}
+
+/** 按双向算法重排为视觉顺序，并对偶数层级的 RTL 字符做单层镜像。 */
+private func reorderBidiChars(chars: ArrayList<SvgTextChar>, style: SvgComputedStyle): ArrayList<SvgTextChar> {
+    let codePoints = ArrayList<Int64>()
+    for (char in chars) {
+        codePoints.add(char.codePoint)
+    }
+    let rtl = style.direction() == SvgDirection.Rtl
+    let levels = if (style.unicodeBidi() == SvgUnicodeBidi.BidiOverride) {
+        svgBidiOverrideLevels(codePoints.toArray(), rtl)
+    } else {
+        svgBidiLevels(codePoints.toArray(), rtl)
+    }
+    let order = svgBidiVisualOrder(levels)
+    let result = ArrayList<SvgTextChar>()
+    for (logical in order) {
+        let original = chars[logical]
+        let resolved = if (levels[logical] % 2 != 0) {
+            svgMirrorBidiCodePoint(original.codePoint)
+        } else {
+            original.codePoint
+        }
+        result.add(original.copyWithCodePoint(resolved))
+    }
+    result
+}
+
+/** 同一字体、同一字号的相邻字符应用字距。 */
+private func applyFontKerning(
+    chars: ArrayList<SvgTextChar>,
+    fonts: ArrayList<Option<SvgFont>>,
+    advances: ArrayList<Float64>,
+    style: SvgComputedStyle
+): Unit {
+    if (style.fontKerning() == SvgFontKerning.None) {
+        return
+    }
+    if (chars.size < 2) {
+        return
+    }
+    for (index in 0..chars.size - 1) {
+        let left = chars[index]
+        let right = chars[index + 1]
+        if (left.fontSize != right.fontSize || left.family != right.family ||
+            left.weight != right.weight || left.style != right.style) {
+            continue
+        }
+        let font = match (fonts[index]) {
+            case Some(value) => value
+            case None => continue
+        }
+        match (font) {
+            case truetype: SvgTrueTypeFont =>
+                if (truetype.hasKerning()) {
+                    advances[index] += truetype.kerningAdjust(left.codePoint, right.codePoint, left.fontSize)
+                }
+            case _ => ()
+        }
+    }
+}
+
+/** 应用 GSUB `liga`：用连字字形替换簇内字形。 */
+private func applyFontLigatures(
+    chars: ArrayList<SvgTextChar>,
+    fonts: ArrayList<Option<SvgFont>>,
+    advances: ArrayList<Float64>,
+    paths: ArrayList<?SvgPathData>
+): Unit {
+    if (chars.size < 2) {
+        return
+    }
+    var index: Int64 = 0
+    while (index < chars.size - 1) {
+        let font = match (fonts[index]) {
+            case Some(value) => value
+            case None =>
+                index++
+                continue
+        }
+        match (font) {
+            case truetype: SvgTrueTypeFont =>
+                if (!truetype.hasLigatures()) {
+                    index++
+                    continue
+                }
+                let remaining = ArrayList<Int64>()
+                for (position in index..chars.size) {
+                    remaining.add(chars[position].codePoint)
+                }
+                match (truetype.ligatureAt(remaining.toArray(), 0)) {
+                    case Some(found) =>
+                        let glyph = found[0]
+                        let consumed = found[1]
+                        if (consumed < 2) {
+                            index++
+                            continue
+                        }
+                        advances[index] = truetype.advanceById(glyph, chars[index].fontSize)
+                        paths[index] = truetype.pathById(glyph, chars[index].fontSize)
+                        for (offset in 1..consumed) {
+                            advances[index + offset] = 0.0
+                            paths[index + offset] = Option<SvgPathData>.None
+                        }
+                        index += consumed
+                    case None => index++
+                }
+            case _ => index++
+        }
     }
 }

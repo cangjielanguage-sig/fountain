@@ -525,6 +525,26 @@ marker 的派生位置、数量与朝向不变。
 </svg>
 ```
 
+### 字距与标准连字
+
+TrueType 字体在布局阶段读取 `GPOS` Pair Adjustment（format 1 / 2，仅 x advance）与
+`kern` format 0；两者同时存在时 `GPOS` 优先。字距只修改相邻字形的推进量，以字体设计单位
+读取并按 `font-size / unitsPerEm` 缩放，单字形 `advance(codePoint, fontSize)` 的语义不变。
+`font-kerning: none` 关闭，`normal` 强制启用，`auto` 在字体含表时启用；跨 `tspan` 的
+字体或字号变化处不配对。
+
+`GSUB` 只处理 `liga` 特征的 Lookup Type 4 format 1：单次最多消费 4 个字形，lookup 深度
+上限 8；连字簇以连字字形的 advance 与轮廓参与布局，并消费簇内首个字符的列表项。
+`kern` 条目与 GPOS pair 集上限均为 65536，超限忽略该表 / 子表并记 warning，不中断文本渲染。
+
+### 双向文本
+
+文本布局按 UAX#9 子集分段：方向类别覆盖 L / R / AL / EN / AN / WS / ON / B，按
+`direction` 求段落层级，数字在 RTL 段落内保持 LTR，中性字符按两侧强类型解析，成对括号做
+单层镜像。`unicode-bidi: normal` 自然重排、`embed` 建立与方向一致的嵌入层、
+`bidi-override` 强制按段落方向排列。`writing-mode: tb-*` 时不做行内重排，`direction` 只
+决定列顺序。阿拉伯 / 印度系复杂脚本整形与竖排连字不在支持范围内。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

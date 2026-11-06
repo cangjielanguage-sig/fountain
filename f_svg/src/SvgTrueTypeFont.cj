@@ -103,6 +103,10 @@ public class SvgTrueTypeFont <: SvgFont {
     private let cmapSubReader: SvgTtfTableReader
     private let cmapSegments: ArrayList<SvgCmapSegment>
     private let cmapGroups: ArrayList<SvgCmapGroup>
+    /** 可选 OpenType 布局表；缺失或损坏时为 `None`。 */
+    private let kernPairs: ?SvgKernPairs
+    private let gposPairs: ?SvgGposPairs
+    private let ligatureTable: ?SvgGsubLigatures
 
     private init(
         unitsPerEmValue: Int64,
@@ -117,7 +121,10 @@ public class SvgTrueTypeFont <: SvgFont {
         cmapFormat: Int64,
         cmapSubReader: SvgTtfTableReader,
         cmapSegments: ArrayList<SvgCmapSegment>,
-        cmapGroups: ArrayList<SvgCmapGroup>
+        cmapGroups: ArrayList<SvgCmapGroup>,
+        kernPairs: ?SvgKernPairs,
+        gposPairs: ?SvgGposPairs,
+        ligatureTable: ?SvgGsubLigatures
     ) {
         this.unitsPerEmValue = unitsPerEmValue
         this.ascenderValue = ascenderValue
@@ -132,6 +139,9 @@ public class SvgTrueTypeFont <: SvgFont {
         this.cmapSubReader = cmapSubReader
         this.cmapSegments = cmapSegments
         this.cmapGroups = cmapGroups
+        this.kernPairs = kernPairs
+        this.gposPairs = gposPairs
+        this.ligatureTable = ligatureTable
     }
 
     public prop unitsPerEm: Int64 {
@@ -222,6 +232,19 @@ public class SvgTrueTypeFont <: SvgFont {
         let segments = ArrayList<SvgCmapSegment>()
         let groups = ArrayList<SvgCmapGroup>()
         let cmapParsed = SvgTrueTypeFont.parseCmap(cmapReader, segments, groups)
+        let layoutWarnings = ArrayList<String>()
+        let kern = match (directory.table("kern")) {
+            case Some(table) => SvgKernPairs.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
+            case None => Option<SvgKernPairs>.None
+        }
+        let gpos = match (directory.table("GPOS")) {
+            case Some(table) => SvgGposPairs.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
+            case None => Option<SvgGposPairs>.None
+        }
+        let ligatures = match (directory.table("GSUB")) {
+            case Some(table) => SvgGsubLigatures.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
+            case None => Option<SvgGsubLigatures>.None
+        }
         SvgTrueTypeFont(
             unitsPerEm,
             ascender,
@@ -235,7 +258,10 @@ public class SvgTrueTypeFont <: SvgFont {
             cmapParsed.format,
             cmapParsed.reader,
             segments,
-            groups
+            groups,
+            kern,
+            gpos,
+            ligatures
         )
     }
 
@@ -246,6 +272,70 @@ public class SvgTrueTypeFont <: SvgFont {
             throw SvgException("无法读取字体文件 ${path}", kind: SvgErrorKind.Syntax)
         }
         parse(bytes)
+    }
+
+    /** 字体是否提供字距（GPOS 优先，其次 kern）。 */
+    internal func hasKerning(): Bool {
+        this.gposPairs.isSome() || this.kernPairs.isSome()
+    }
+
+    /** 相邻字形的 x advance 调整（设计单位换算到目标字号）。 */
+    internal func kerningAdjust(left: Int64, right: Int64, fontSize: Float64): Float64 {
+        let leftGlyph = match (this.glyphIndex(left)) {
+            case Some(value) => value
+            case None => return 0.0
+        }
+        let rightGlyph = match (this.glyphIndex(right)) {
+            case Some(value) => value
+            case None => return 0.0
+        }
+        let units = match (this.gposPairs) {
+            case Some(value) => value.adjust(leftGlyph, rightGlyph)
+            case None => match (this.kernPairs) {
+                case Some(value) => value.adjust(leftGlyph, rightGlyph)
+                case None => 0
+            }
+        }
+        Float64(units) * fontSize / Float64(this.unitsPerEmValue)
+    }
+
+    /** 字体是否提供 `liga` 连字。 */
+    internal func hasLigatures(): Bool {
+        this.ligatureTable.isSome()
+    }
+
+    /** 从 `start` 起匹配最长连字，返回 `(连字字形 id, 消费字符数)`。 */
+    internal func ligatureAt(codePoints: Array<Int64>, start: Int64): ?(Int64, Int64) {
+        let table = match (this.ligatureTable) {
+            case Some(value) => value
+            case None => return Option<(Int64, Int64)>.None
+        }
+        let glyphs = ArrayList<Int64>()
+        for (codePoint in codePoints) {
+            match (this.glyphIndex(codePoint)) {
+                case Some(value) => glyphs.add(value)
+                case None => glyphs.add(0)
+            }
+        }
+        table.findLigature(glyphs.toArray(), start)
+    }
+
+    /** 按字形 id 取 advance（不经过 cmap）。 */
+    internal func advanceById(gid: Int64, fontSize: Float64): Float64 {
+        let metricIndex = if (gid < this.numberOfHMetrics) { gid } else { this.numberOfHMetrics - 1 }
+        let advance = this.hmtxReader.u16(metricIndex * 4)
+        Float64(advance) * fontSize / Float64(this.unitsPerEmValue)
+    }
+
+    /** 按字形 id 取轮廓。 */
+    internal func pathById(gid: Int64, fontSize: Float64): ?SvgPathData {
+        let commands = this.parseGlyph(gid, 0)
+        let scale = fontSize / Float64(this.unitsPerEmValue)
+        let scaled = ArrayList<SvgPathCommand>()
+        for (command in commands) {
+            scaled.add(scaleTtfCommand(command, scale))
+        }
+        Some(SvgPathData(scaled.toArray()))
     }
 
     public func advance(codePoint: Int64, fontSize: Float64): Float64 {
