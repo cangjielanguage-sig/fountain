@@ -24,7 +24,19 @@ class Crc64Hw {
         false
     }
 
-    static func update(_: UInt64, _: Array<Byte>, _: Int64): ?UInt64 {
+    static func supports(_: UInt64): Bool {
+        false
+    }
+
+    static func supportsNormal(_: UInt64): Bool {
+        false
+    }
+
+    static func updateNormal(_: UInt64, _: Array<Byte>, _: Int64): ?UInt64 {
+        None
+    }
+
+    static func update(_: UInt64, _: Array<Byte>, _: Int64, _: UInt64): ?UInt64 {
         None
     }
 

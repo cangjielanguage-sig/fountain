@@ -202,13 +202,27 @@ class CrcEngine {
     func update(crc: UInt64, data: Array<Byte>): UInt64 {
         var c = crc & mask
         // CRC-64/XZ 家族：数据量达到阈值时走生成式折叠核，尾部仍用表路径。
-        if (width == 64 && refin && poly == 0x42F0E1EBA9EA3693u64 && data.size >= 256) {
+        if (width == 64 && refin && Crc64Hw.supports(poly) && data.size >= 256) {
             let aligned = data.size - (data.size % 16)
             if (aligned >= 16) {
-                if (let Some(raw) <- Crc64Hw.update(c, data, aligned)) {
+                if (let Some(raw) <- Crc64Hw.update(c, data, aligned, poly)) {
                     var t = raw
                     for (i in aligned..data.size) {
                         t = (t >> 8) ^ reflectedTable[Int64((t ^ UInt64(data[i])) & 0xFFu64)]
+                    }
+                    return t
+                }
+            }
+        }
+        // 非反射 64 位（ecma182 / we）：正常域折叠核。
+        if (width == 64 && !refin && Crc64Hw.supportsNormal(poly) && data.size >= 256) {
+            let aligned = data.size - (data.size % 16)
+            if (aligned >= 16) {
+                if (let Some(raw) <- Crc64Hw.updateNormal(c, data, aligned)) {
+                    var t = raw
+                    for (i in aligned..data.size) {
+                        t = ((t << 8) & mask) ^
+                            normalTable[Int64(((t >> 56) ^ UInt64(data[i])) & 0xFFu64)]
                     }
                     return t
                 }

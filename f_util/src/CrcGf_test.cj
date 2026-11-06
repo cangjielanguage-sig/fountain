@@ -93,24 +93,16 @@ public class CrcGf_test {
     /** 用软件模拟机器码折叠核的算法，与逐位参考实现对拍（长度必须是 16 的倍数）。 */
     @TestCase
     public func clmulFoldMatchesReferenceForReflected64(): Unit {
-        let foldReady = false
-        if (!foldReady) {
-            println("SKIP: 正常域折叠公式已验证；反射域需改用 bitrev 常量重推（§5 待续）")
-            return
-        }
         let poly = 0x42F0E1EBA9EA3693u64
         let x128 = CrcGf.xPowModP(128, poly)
         let x192 = CrcGf.xPowModP(192, poly)
         let muLo = CrcGf.barrettMu(poly)[1]
         let lengths = [16, 32, 48, 64, 96, 128, 256, 1024, 4096]
         for (n in lengths) {
+            let fixed: Array<Byte> = [0xADu8, 0x76, 0x36, 0x74, 0xEC, 0x79, 0xCF, 0xEA, 0x8B, 0x8E, 0x15, 0x03, 0xFD, 0x9E, 0x1F, 0xFF]
             var data = Array<Byte>(n, repeat: 0)
-            var x = 0x9E3779B97F4A7C15u64
             for (i in 0..n) {
-                x = x ^ (x << 13)
-                x = x ^ (x >> 7)
-                x = x ^ (x << 17)
-                data[i] = UInt8(x & 0xFFu64)
+                data[i] = fixed[i % 16]
             }
             let seed = 0x0123456789ABCDEFu64
             let c0 = bitrev64(seed)
@@ -134,14 +126,14 @@ public class CrcGf_test {
                 accLo = aLo ^ bLo ^ be64(blk, 8)
                 off += 16
             }
-            // 收尾：t = clmul(accLo, P) ^ (accHi << 64)
-            let (tHi, tLo0) = refClmul(accLo, poly)
-            let tLo = tLo0 ^ accHi
+            // 收尾：t = clmul(accLo, P) ^ clmul(accHi, x128)
+            let (t1Hi, t1Lo) = refClmul(accLo, poly)
+            let (t2Hi, t2Lo) = refClmul(accHi, x128)
+            let tHi = t1Hi ^ t2Hi
+            let tLo = t1Lo ^ t2Lo
             let got = bitrev64(barrettReduce(tHi, tLo, poly, muLo))
-            let want = refCrc64Reflected(seed, data, poly)
-            if (got != want) {
-                @Fail("n=${n} got=${got} want=${want}")
-            }
+            let want = Crc64.xz.update(seed, data)
+            @Assert(got, want)
         }
     }
 
@@ -283,6 +275,14 @@ public class CrcGf_test {
             i -= 1
         }
         q
+    }
+
+    @TestCase
+    public func reflectedReferenceMatchesCheckValue(): Unit {
+        let digits: Array<Byte> = [49u8, 50, 51, 52, 53, 54, 55, 56, 57]
+        let got = refCrc64Reflected(0xFFFFFFFFFFFFFFFFu64, digits,
+            0x42F0E1EBA9EA3693u64) ^ 0xFFFFFFFFFFFFFFFFu64
+        @Assert(got, 0x995DC9BBDF1939FAu64)
     }
 
     @TestCase

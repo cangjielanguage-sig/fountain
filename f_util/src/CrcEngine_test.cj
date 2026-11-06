@@ -392,16 +392,19 @@ public class CrcEngine_test {
             println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
             return
         }
+        let variants = [Crc64.xz, Crc64.iso, Crc64.redis, Crc64.jones, Crc64.ecma182, Crc64.we]
         let lengths = [256, 257, 272, 1024, 4095, 4096, 4097, 65537]
-        let c0 = Crc64.xz.initRegister()
-        for (n in lengths) {
-            let data = pseudoBytes(n)
-            let hw = Crc64.xz.update(c0, data)
-            Crc64Hw.setNativeEnabled(false)
-            let sw = Crc64.xz.update(c0, data)
-            Crc64Hw.setNativeEnabled(true)
-            Crc64Hw.resetForTest()
-            @Assert(hw, sw)
+        for (variant in variants) {
+            let c0 = variant.initRegister()
+            for (n in lengths) {
+                let data = pseudoBytes(n)
+                let hw = variant.update(c0, data)
+                Crc64Hw.setNativeEnabled(false)
+                let sw = variant.update(c0, data)
+                Crc64Hw.setNativeEnabled(true)
+                Crc64Hw.resetForTest()
+                @Assert(hw, sw)
+            }
         }
     }
 
@@ -445,9 +448,9 @@ public class CrcEngine_test {
         }
         let c0 = Crc64.xz.initRegister()
         let data = pseudoBytes(1024 * 1024)
-        Crc64Hw.update(c0, data, 1024 * 1024)
+        Crc64Hw.update(c0, data, 1024 * 1024, 0x42F0E1EBA9EA3693u64)
         let start = MonoTime.now()
-        let maybeValue = Crc64Hw.update(c0, data, 1024 * 1024)
+        let maybeValue = Crc64Hw.update(c0, data, 1024 * 1024, 0x42F0E1EBA9EA3693u64)
         let nanos = (MonoTime.now() - start).toNanoseconds()
         let value = match (maybeValue) {
             case Some(v) => v
@@ -459,11 +462,11 @@ public class CrcEngine_test {
         let seconds = Float64(nanos) / 1.0e9
         let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
         let frame = pseudoBytes(4096)
-        Crc64Hw.update(c0, frame, 4096)
+        Crc64Hw.update(c0, frame, 4096, 0x42F0E1EBA9EA3693u64)
         let s2 = MonoTime.now()
         var sink = 0u64
         for (_ in 0..1000) {
-            match (Crc64Hw.update(c0, frame, 4096)) {
+            match (Crc64Hw.update(c0, frame, 4096, 0x42F0E1EBA9EA3693u64)) {
                 case Some(v) => sink = v
                 case None => @Fail("4 KiB 测量时硬件入口返回 None")
             }
