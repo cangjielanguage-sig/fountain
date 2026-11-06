@@ -68,6 +68,8 @@ public func crc32(data: String): UInt32
 public func crc32<T>(s: T): UInt16 where T <: ToString 
 ```
 
+**Hardware acceleration (Linux x86_64 / aarch64)**: `Crc32.crc32c` uses the SSE4.2 `crc32` instruction on x86_64 and `crc32c*` on aarch64; `Crc32.isoHdlc` / `jamcrc` use PCLMULQDQ folding on x86_64 and `crc32*` on aarch64. The machine code is generated on first use (`mmap` RW → `mprotect` RX, called through `CFunc`) and produces bit-identical results to the software path. It falls back to software when the CPU lacks the feature, `mprotect` is blocked by policy, or `F_UTIL_CRC_HW=0` is set; other OS/architectures always use software. **No third-party runtime dependency and no C shim** (the generator only needs libc `mmap`/`mprotect` and aarch64 `getauxval`).
+
 ## crc64
 ```cj
 
@@ -82,6 +84,12 @@ public func crc64(data: String): UInt64
 @Frozen
 public func crc64<T>(s: T): UInt16 where T <: ToString 
 ```
+
+**Hardware acceleration (Linux x86_64 / aarch64)**: all six built-in `Crc64` variants (`ecma182` / `we` / `xz` / `iso` / `redis` / `jones`) switch to the generated folding kernel for inputs of 256 bytes or more (`PCLMULQDQ` on x86_64, `PMULL` on aarch64), producing bit-identical results to the software path; the top-level `crc64()` (backed by `redis`) benefits as well. The table path itself now uses slicing-by-8 for 64-bit and slicing-by-2 for 16-bit (`UInt16` entries). `F_UTIL_CRC_HW=off` (or `0`) forces software, `on` (or `1`) forces an attempt, and unset/`auto` selects automatically; other OS/architectures always use software. No C shim, no third-party runtime dependency.
+
+**Measured (aarch64, default `cjpm test` build, 1 MiB)**: CRC-64/XZ table path 98 MB/s, hardware path 7450 MB/s, 4 KiB single call 777 ns, CRC-16/MODBUS table path 52 MB/s.
+
+**Measured (x86_64, WSL Ubuntu 24.04, `-O2`, 1 MiB)**: CRC-64/XZ hardware path 11.7 GB/s, 4 KiB single call 475 ns; all six variants 11.1–12.6 GB/s, 4 KiB 429–483 ns.
 
 ## wyhash
 

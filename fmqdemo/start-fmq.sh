@@ -22,6 +22,8 @@ RUN_DIR=${FMQDEMO_RUN_DIR:-/tmp/fmqdemo}
 TOPIC=${FMQDEMO_TOPIC:-/fmqdemo}
 QUEUES=${FMQDEMO_QUEUES:-2}
 GROUP=${FMQDEMO_GROUP:-demoGroup}
+# 【必填】本机在集群内的唯一主机号：MessageID 拒绝 hostId=0
+PROTOCOL_HOST_ID=${protocol_hostId:-1}
 
 FRESH=0
 BUILD=1
@@ -43,7 +45,7 @@ lib_path() {
 export LD_LIBRARY_PATH="$(lib_path "${FMQ_DIR}")$(lib_path "${ROOT}/f_mq/target/release")$(lib_path "${HERE}/target/release")${LD_LIBRARY_PATH:-}"
 
 manager() {
-  env mqClient_hosts="${NODES}" mqServer_port="${PORT}" "${FMQ_BIN_ORIG}" manager \
+  env mqClient_hosts="${NODES}" mqServer_port="${PORT}" protocol_hostId="${PROTOCOL_HOST_ID}" "${FMQ_BIN_ORIG}" manager \
     --server="127.0.0.1:${PORT}" "$@"
 }
 
@@ -75,6 +77,7 @@ else
   env \
     mqClient_hosts="${NODES}" \
     mqServer_port="${PORT}" \
+    protocol_hostId="${PROTOCOL_HOST_ID}" \
     mqServer_ackTimeout=2s \
     mqServer_deadMsgThreshold=2 \
     mqServer_deadMsgTTL=1h \

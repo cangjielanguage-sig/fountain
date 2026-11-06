@@ -72,8 +72,10 @@ export logger_appender_FmqConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.
 #export logger_appender_FmqFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
 #export logger_appender_FmqFile_rotateDuration='DAY'
 
-# 多节点部署时每台机器设置唯一值（f_protocol 的配置，默认 0）：否则记录里的 MessageID 无法区分节点。
-#export protocol_hostId='1'
+# 【必填】本机在集群内的唯一主机号（f_protocol 的配置，必须非 0）：
+# MessageID 拒绝 hostId=0，(pid, tid, 时间戳) 跨机器会重复，集群维度只能靠它区分。
+# 多节点部署时每台机器改成不同的值（外部已设置则沿用）
+export protocol_hostId="${protocol_hostId:-1}"
 
 # ---------------------------------------------------------------------------
 # 进程管理（以下内容不需要按部署修改）

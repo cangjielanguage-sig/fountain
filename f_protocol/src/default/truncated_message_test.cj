@@ -132,7 +132,7 @@ public class Truncated_message_test {
     public func declaredLenMatchesWrittenPayload(): Unit {
         // 服务端响应的真实载荷形状：Array<String>（订阅返回的主机列表）
         let data: Array<String> = ['127.0.0.1:1203,1.000000']
-        let frame = wireOf(Message.resp(MessageID(pid: 1, tid: 1, hostId: 0),
+        let frame = wireOf(Message.resp(MessageID(pid: 1, tid: 1, hostId: 1),
             qos: QoS.AtMostOnce, ack: false, data: data))
         @Assert(lenOf(frame) == frame.size - 6 - 4)
         let decoded = Message.decode<Array<String>>(DribbleInputStream(frame, frame.size))

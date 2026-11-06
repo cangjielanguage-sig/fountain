@@ -32,7 +32,7 @@ class MQPayloadTest {
         var bytes: Array<Byte> = []
         try {
             codec.encode(value.toData())
-            bytes = codec.finish().asBytes().getOrThrow()
+            bytes = codec.finish().asBytes().getOrThrow().clone()
         } finally {
             codec.release()
         }

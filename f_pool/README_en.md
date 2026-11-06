@@ -348,12 +348,19 @@ These two layers are the foundation of `Pool` / `KeyPool` (`BasePool` is in `fou
 
 - **`Releasable`** (`BytesCopier.cj`): `release()` must be **idempotent**, and is used to give borrowed pool items back;
 - **Byte pools (the foundation of `f_codec` encoding buffers)**:
-  - `BytesCopier <: BytesCopyTo & BytesCopyFrom` (`byteSize(): ?Int64`, `asBytes(): ?Array<Byte>`);
+  - `BytesCopier <: BytesCopyTo & BytesCopyFrom` (`byteSize(): ?Int64`, `asBytes(): ?Array<Byte>`,
+    `frameBytes(headroom, tail): ?Array<Byte>` —— unsupported by default, overridden by the single-buffer implementation to return the whole-frame view);
   - `PooledBufferBytesCopyTo` / `PooledBufferedBytesCopyFrom` (borrowing `ArrayPool<Byte>` for streaming copies);
   - `ChainedBytesCopyTo <: Releasable` (`release` cascades to its children);
-  - `BytesListOutputStream` (`OutputStream & BytesCopyTo & Releasable`, `release()` idempotent, `isEmpty` / `reset`) and
-    `BytesListOutputStream.builder(...)` / `BytesListOutputStreamBuilder.build(timeout!)`
+  - `BytesListOutputStream` (`OutputStream & BytesCopyTo & Releasable`): a **single growable buffer**; `write` copies into it
+    with one `copyTo`, `asBytes()` returns the `[start, start+len)` view (zero copy), `release()` is idempotent, plus `isEmpty` / `reset`;
+    the scalar hot path uses `writeByte` / `writeUInt64BE(value, count)` / `writeUInt32BE`, avoiding temporary arrays for type heads and small integers;
+  - `BytesListOutputStream.builder(...)` (`capacity` = buffer bytes, 8192 by default; `clearOnReturning` defaults to `false`;
+    `localCacheSize` = per-thread cached buffers, **2** by default, 0 = disabled) /
+    `BytesListOutputStreamBuilder.build(timeout!, headroom!)`; `frameBytes(headroom, tail)` returns the whole-frame view
+    (head/tail reserved) so framing can patch the header and CRC in place without re-allocating the frame
     —— the counterparts of `setBytesPool(...)` of `f_codec` and the `rpc_codec*` configuration of `f_rpc`;
+    cached buffers are returned to the **borrowing thread's** cache, and cross-thread returns only lock that thread's own cache;
 - **`PoolDiagnostics`** (`diagnostics/PoolDiagnostics.cj`): `snapshot()` / `dump()` / `redirectWarningsTo(...)` /
   `installCrashHandler(...)` / `uninstallCrashHandler()` / `CRASH_DUMP_ON_FATAL`, used together with `[FOUNTAIN_POOL.diag]`
   logging to collect evidence of pool anomalies;
@@ -370,7 +377,7 @@ These two layers are the foundation of `Pool` / `KeyPool` (`BasePool` is in `fou
 The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
 
 - Module level: `public func next(): ?Unit`
-- `BytesListOutputStream`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`, `func write(bytes: Array<Byte>): Unit`
+- `BytesListOutputStream`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`, `func write(bytes: Array<Byte>): Unit`, `func writeByte(value: UInt8): Unit`, `func writeUInt64BE(value: UInt64, count: Int64): Unit`, `func writeUInt32BE(value: UInt32): Unit`, `func byteSize(): ?Int64`, `func asBytes(): ?Array<Byte>`, `func frameBytes(headroom: Int64, tail: Int64): ?Array<Byte>`
 - `ChainedBytesCopyTo`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
 - `PooledBufferBytesCopyTo`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
 - `PooledBufferedBytesCopyFrom`: `func copy(from!: InputStream, closeFromOnEnd!: Bool = false, closeToOnEnd!: Bool = true): Unit`

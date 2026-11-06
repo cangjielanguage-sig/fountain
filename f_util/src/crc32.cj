@@ -63,6 +63,8 @@ public class Crc32 {
         bzip2, mpeg2, posix, xfer, q
     ]
     private let engine: CrcEngine
+    /** 可由生成式硬件路径加速的变体；其余为 `Unsupported`。 */
+    private let hwKind: CrcHwKind
     /** RevEng 名称（如 `CRC-32/ISO-HDLC`）。 */
     public let name: String
     /** 该变体对 `"123456789"` 的标准检查值。 */
@@ -71,18 +73,49 @@ public class Crc32 {
     public init(name: String, poly: UInt64, initValue: UInt64, refin: Bool, refout: Bool, xorout: UInt64, check: UInt64) {
         this.name = name
         this.engine = CrcEngine(32, poly, initValue, refin, refout, xorout)
+        this.hwKind = Crc32.classifyHw(poly, initValue, refin, refout, xorout)
         this.checkValue = UInt32(check & 0xFFFFFFFFu64)
+    }
+
+    private static func classifyHw(poly: UInt64, initValue: UInt64, refin: Bool, refout: Bool,
+        xorout: UInt64): CrcHwKind {
+        if (!refin || !refout || initValue != 0xFFFFFFFFu64) {
+            return CrcHwKind.Unsupported
+        }
+        if (poly == 0x1EDC6F41u64 && xorout == 0xFFFFFFFFu64) {
+            return CrcHwKind.Crc32c
+        }
+        if (poly == 0x04C11DB7u64 && xorout == 0xFFFFFFFFu64) {
+            return CrcHwKind.Iso
+        }
+        CrcHwKind.Unsupported
     }
     public func initRegister(): UInt32 {
         UInt32(engine.initRegister())
     }
     public func update(crc: UInt32, data: Array<Byte>): UInt32 {
+        if (hwKind == CrcHwKind.Iso) {
+            // 生成函数只处理 16 字节整数倍，尾部由软件补齐
+            let aligned = data.size - (data.size % 16)
+            if (aligned > 0) {
+                if (let Some(raw) <- Crc32Hw.update(CrcHwKind.Iso, crc, data[0..aligned])) {
+                    return UInt32(engine.update(UInt64(raw), data[aligned..]))
+                }
+            }
+        } else if (hwKind == CrcHwKind.Crc32c) {
+            if (let Some(value) <- Crc32Hw.update(CrcHwKind.Crc32c, crc, data)) {
+                return value
+            }
+        }
         UInt32(engine.update(UInt64(crc), data))
     }
     public func finish(crc: UInt32): UInt32 {
         UInt32(engine.finish(UInt64(crc)))
     }
     public func compute(data: Array<Byte>): UInt32 {
+        if (hwKind != CrcHwKind.Unsupported) {
+            return finish(update(initRegister(), data))
+        }
         UInt32(engine.compute(data))
     }
     public func compute(s: String): UInt32 {

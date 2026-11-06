@@ -181,14 +181,14 @@ public class CodeBuffer {
 }
 
 // ---- libc（Linux）----
-
+@FastNative
 foreign func mmap(addr: CPointer<UInt8>, length: Int64, prot: Int32, flags: Int32, fd: Int32,
     offset: Int64): CPointer<UInt8>
-
+@FastNative
 foreign func mprotect(addr: CPointer<UInt8>, length: Int64, prot: Int32): Int32
-
+@FastNative
 foreign func munmap(addr: CPointer<UInt8>, length: Int64): Int32
-
+@FastNative
 foreign func sysconf(name: Int32): Int64
-
+@FastNative
 foreign func __clear_cache(begin: CPointer<UInt8>, end: CPointer<UInt8>): Unit
