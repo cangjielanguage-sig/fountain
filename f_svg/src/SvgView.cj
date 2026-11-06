@@ -59,6 +59,8 @@ public class SvgView <: SvgElement {
             ) ?? SvgPreserveAspectRatio.Default
         }
         set(value) {
+            // 与 viewBox 的 None 删除语义不同：设置默认值会显式写出属性，
+            // 因为 preserveAspectRatio 的 getter 无法区分“未写”和“写了默认值”。
             this.setAttr("preserveAspectRatio", value.toString())
         }
     }

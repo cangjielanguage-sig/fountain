@@ -44,6 +44,31 @@ public class SvgViewM4_test {
         @Assert(again.viewTarget == view.viewTarget)
     }
 
+    /** 修改 view 字段后写回再解析，值保持不变。 */
+    @TestCase
+    public func mutableRoundTrip(): Unit {
+        let document = svgDoc('<view id="v" viewBox="0 0 10 10"/>')
+        let view = document.views()[0]
+        view.viewBox = tryParseSvgViewBox("1 2 30 40")
+        view.preserveAspectRatio = tryParseSvgPreserveAspectRatio("none").getOrThrow()
+        view.viewTarget = Some("x y")
+        let reparsed = SvgParser.parse(document.toString())
+        let again = reparsed.views()[0]
+        @Assert(again.viewBox == view.viewBox)
+        @Assert(again.preserveAspectRatio == view.preserveAspectRatio)
+        @Assert(again.viewTarget == Some("x y"))
+
+        // setter 写入默认值时会显式写出属性，而不是删除属性。
+        again.preserveAspectRatio = SvgPreserveAspectRatio.Default
+        @Assert(again.attr("preserveAspectRatio").isSome())
+        @Assert(SvgParser.parse(reparsed.toString()).views()[0].preserveAspectRatio ==
+            SvgPreserveAspectRatio.Default)
+
+        // viewBox = None 删除属性。
+        again.viewBox = None
+        @Assert(again.attr("viewBox").isNone())
+    }
+
     /** views() 文档顺序与 view(id) 查找。 */
     @TestCase
     public func documentQueries(): Unit {
