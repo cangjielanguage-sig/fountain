@@ -54,6 +54,39 @@ private func m4BaselineY(name: String, size!: Float64 = 10.0): Float64 {
 
 @Test
 public class SvgTextBaselineM4_test {
+    /** 样式化 tspan 的基线偏移必须进入渲染包围盒。 */
+    @TestCase
+    public func renderBoundsUsesComputedStyles(): Unit {
+        let document = SvgParser.parse(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">' +
+            '<text x="0" y="30" font-family="Hershey" font-size="20">' +
+            '<tspan style="baseline-shift:super">A</tspan></text></svg>'
+        )
+        let root = document.root
+        let styles = SvgStyleResolver().compute(root)
+        let list = SvgRenderTreeBuilder().build(document)
+        var command: ?SvgDisplayCommand = None
+        for (candidate in list.commands) {
+            if (candidate.kind == SvgDisplayCommandKind.Text) {
+                command = Some(candidate)
+            }
+        }
+        @Assert(command.isSome())
+        let textCommand = command.getOrThrow()
+        let style = textCommand.style.getOrThrow()
+        let text = textCommand.textElement.getOrThrow()
+        let expected = SvgTextRenderer().layout(
+            text,
+            style: style,
+            root: Some(root),
+            styles: Some(styles)
+        ).bounds.getOrThrow()
+        let unstyled = SvgTextRenderer().layout(text, style: style, root: Some(root))
+            .bounds.getOrThrow()
+        @Assert(!(expected == unstyled))
+        @Assert(textCommand.bounds.getOrThrow() == expected)
+    }
+
     /** 基线表的偏移值。 */
     @TestCase
     public func offsetTable(): Unit {

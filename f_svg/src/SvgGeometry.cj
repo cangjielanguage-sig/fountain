@@ -33,7 +33,8 @@ public class SvgGeometry {
     public static func bounds(
         element: SvgElement,
         style!: SvgComputedStyle,
-        fonts!: ?SvgFontRegistry = None
+        fonts!: ?SvgFontRegistry = None,
+        styles!: ?SvgComputedStyleTree = None
     ): ?SvgBounds {
         match (element) {
             case rect: SvgRect => return rectBounds(rect)
@@ -43,7 +44,7 @@ public class SvgGeometry {
             case polyline: SvgPolyline => return pointsBounds(polyline.points)
             case polygon: SvgPolygon => return pointsBounds(polygon.points)
             case path: SvgPath => return pathElementBounds(path)
-            case text: SvgTextElement => return textElementBounds(text, style, fonts)
+            case text: SvgTextElement => return textElementBounds(text, style, fonts, styles)
             case _ => ()
         }
         None
@@ -100,7 +101,8 @@ public class SvgGeometry {
         element: SvgElement,
         style!: SvgComputedStyle,
         fonts!: ?SvgFontRegistry = None,
-        root!: ?SvgElement = None
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
     ): ?SvgBounds {
         match (element) {
             case text: SvgTextElement =>
@@ -109,9 +111,14 @@ public class SvgGeometry {
                     case None => SvgFontRegistry.defaultRegistry()
                 }
                 let renderer = SvgTextRenderer(registry: registry)
-                var bounds = renderer.layout(text, style: style, root: root).bounds
+                var bounds = renderer.layout(text, style: style, root: root, styles: styles).bounds
                 // 装饰线在基线之外，必须并入渲染包围盒，否则裁剪快路径会漏裁。
-                match (renderer.decorationOutline(text, style: style, root: root)) {
+                match (renderer.decorationOutline(
+                    text,
+                    style: style,
+                    root: root,
+                    styles: styles
+                )) {
                     case Some(path) =>
                         match (pathDataBounds(path)) {
                             case Some(decoration) =>
@@ -124,7 +131,7 @@ public class SvgGeometry {
                     case None => ()
                 }
                 bounds
-            case _ => bounds(element, style: style, fonts: fonts)
+            case _ => bounds(element, style: style, fonts: fonts, styles: styles)
         }
     }
 
@@ -868,13 +875,14 @@ private func ancestorTransform(element: SvgElement): SvgMatrix {
 private func textElementBounds(
     text: SvgTextElement,
     style: SvgComputedStyle,
-    fonts: ?SvgFontRegistry
+    fonts: ?SvgFontRegistry,
+    styles: ?SvgComputedStyleTree
 ): ?SvgBounds {
     let registry = match (fonts) {
         case Some(value) => value
         case None => SvgFontRegistry.defaultRegistry()
     }
-    let layout = SvgTextRenderer(registry: registry).layout(text, style: style)
+    let layout = SvgTextRenderer(registry: registry).layout(text, style: style, styles: styles)
     if (layout.missingGlyph) {
         return None
     }

@@ -375,7 +375,8 @@ public class SvgRenderTreeBuilder {
                     text,
                     style: style,
                     fonts: context.fonts,
-                    root: Some(context.root)
+                    root: Some(context.root),
+                    styles: Some(context.styles)
                 )
                 let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
                 let maskElement = this.resolveUrlRef(style.get("mask"), context)
