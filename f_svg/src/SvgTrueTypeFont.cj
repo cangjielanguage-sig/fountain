@@ -34,11 +34,13 @@ internal class SvgFontFileAccess {
         File.readFrom(path)
     }
 
-    static func count(): Int64 {
+    @When[test]
+    public static func count(): Int64 {
         readCount.load()
     }
 
-    static func reset(): Unit {
+    @When[test]
+    public static func reset(): Unit {
         readCount.store(0)
     }
 }
