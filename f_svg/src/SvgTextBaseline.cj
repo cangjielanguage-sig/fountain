@@ -228,7 +228,7 @@ public class SvgTextBaseline {
         fontSize: Float64
     ): Float64 {
         match (value) {
-            case Auto | Alphabetic => 0.0
+            case Auto | Alphabetic => 0.0 * fontSize
             case TextBeforeEdge => -ascent
             case Hanging => -0.8 * ascent
             case Middle | Central => (descent - ascent) / 2.0

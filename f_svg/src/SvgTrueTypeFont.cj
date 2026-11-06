@@ -122,6 +122,9 @@ public class SvgTrueTypeFont <: SvgFont {
 
     public static func parse(bytes: Array<Byte>): SvgTrueTypeFont {
         let directory = SvgTtfTableDirectory.parse(bytes)
+        if (directory.size < 7) {
+            throw SvgException("TrueType 必需表数量不足", kind: SvgErrorKind.Syntax)
+        }
         if (directory.table("CFF ").isSome()) {
             throw SvgException("不支持 CFF / OTF 轮廓", kind: SvgErrorKind.Unsupported)
         }

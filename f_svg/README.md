@@ -263,6 +263,77 @@ let compressed = writeGzip(document)        // mtime 固定 0，同文档同字�
 gzip 解压输出 64 MiB、滤镜区域同 `maxPixels`、pattern tile 4 × 1024 × 1024、
 pattern / marker 引用深度 64；所有检查都发生在分配大缓冲之前。
 
+## M4：渲染保真、文本排版与查询 API
+
+M4 只新增带默认值的行为与查询方法，`SvgRenderOptions` 仅追加 `languages`（默认 `["en"]`）。
+未声明 M4 属性的文档，渲染输出与 M3 逐字节一致；唯一条件性差异是 marker 内容越出
+`markerWidth × markerHeight` 时按 SVG 1.1 裁剪（M3 快照均不越界，仍逐字节一致）。
+
+### 能力
+
+| 组 | 能力 | 入口 |
+|---|---|---|
+| A | `clip` / `overflow` / `vector-effect` | `SvgClipProperty` / `SvgClipCoverage` / `SvgOverflow` / `SvgVectorEffect` |
+| A | 7 类新滤镜原语 | `SvgFeComponentTransfer` / `SvgFeMorphology` / `SvgFeConvolveMatrix` / `SvgFeTurbulence` / `SvgFeDisplacementMap` / `SvgFeImage` |
+| A | 光照 | `SvgFeDiffuseLighting` / `SvgFeSpecularLighting` / `SvgFeDistantLight` / `SvgFePointLight` / `SvgFeSpotLight` |
+| A | pattern 视口 | `SvgPattern.viewBox` / `preserveAspectRatio` |
+| B | 基线 / 装饰 / 竖排 | `SvgTextBaseline` / `SvgTextDecoration` / `SvgTextWritingMode` |
+| B | textPath 扩展 | `SvgTextPath.side` / `method` / `spacing` |
+| B | TrueType | `SvgTrueTypeFont.parse` / `load`，`cmap` 4/12、简单 + 复合字形 |
+| C | 文档查询 | `SvgView` / `SvgDocument.views()` / `view(id)` / `switch` / `SvgDocument.anchors()` |
+| C | 几何 API | `SvgPathData.totalLength` / `pointAtLength`、`SvgGeometry.ctm` / `screenCTM` |
+
+### A：裁剪、溢出与非缩放描边
+
+```cangjie
+let document = SvgParser.parse(
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\">" +
+    "<g clip=\"rect(0, 20, 20, 0)\">" +
+    "<rect width=\"40\" height=\"40\" fill=\"red\" vector-effect=\"non-scaling-stroke\"/>" +
+    "</g></svg>"
+)
+let bitmap = SvgRenderer().render(document)
+```
+
+- `clip` 走覆盖率蒙版，可随元素 CTM 旋转；与 `clip-path` 同时存在时先 `clip` 后 `clip-path`。
+- `overflow` 只对 marker / symbol / pattern / 嵌套 svg 生效；`scroll` / `auto` 归一为 `hidden`。
+- `vector-effect="non-scaling-stroke"` 把描边宽度与虚线段长按 `1 / sqrt(|det(CTM)|)` 换算。
+
+### B：基线、装饰、竖排与 TrueType
+
+```cangjie
+let registry = SvgFontRegistry()
+registry.register("MyFont", SvgTrueTypeFont.load(Path("my.ttf")))
+let options = SvgRenderOptions(fonts: registry)
+```
+
+- `dominant-baseline` / `alignment-baseline` / `baseline-shift` 叠加顺序固定：基线表 → dominant → shift。
+- `text-decoration` 不继承，但沿最近声明祖先向下传播；逐字形生成装饰线并随切线旋转。
+- `writing-mode="tb-rl"` 沿 y 递增排布、列沿 x 递减，字形顺时针 90°；与 `textPath` 冲突时忽略并 warning。
+- `textPath` 的 `side` / `method="stretch"` / `spacing="exact"` 均带 M3 兼容缺省。
+
+### C：view、switch、anchors 与几何查询
+
+```cangjie
+let views = document.views()
+let anchors = document.anchors()
+let length = SvgPathData.parse("M0 0 L100 0").totalLength()
+let point = SvgPathData.parse("M0 0 L100 0").pointAtLength(50)
+let ctm = SvgGeometry.ctm(document.elementsByTag("rect")[0])
+```
+
+- `switch` 按子元素顺序求值，`systemLanguage` 与 `SvgRenderOptions.languages` 做 `-` 边界的前缀匹配。
+- `view` 只提供模型与 `SvgViewport.forView` 换算，不参与默认渲染，也不实现 `url(#view)` 导航。
+- `anchors()` 只返回解析后保留的链接；外部 `href` 仍按既有安全策略移除。
+
+### M4 限制
+
+- `pattern` 的 `overflow="visible"` 不向相邻 tile 扩展；tile 仍是采样周期。
+- TTF 只支持 TrueType 轮廓：CFF / OTF 抛 `Unsupported`；不解析 hinting / `GSUB` / `GPOS` / `kern`，
+  字距只来自 `hmtx`。渲染过程不读取字体文件，字体必须由调用方显式加载。
+- `feImage` 只接受 `data:image/png` 与 provider，并与 `<image>` 共享单次渲染解码预算。
+- `ctm` 不计入 `use` 实例化产生的额外变换。
+
 ## 值类型
 
 所有值类型对**规范形式可表示**的值满足 `parse(toString(x)) == x`；`parse` 失败抛 `SvgException`，

@@ -42,5 +42,18 @@ package fountain::f_svg
  * M3 仍不内置 CJK 字体、不解码 JPEG / WebP / GIF、不访问网络，也不执行脚本。
  * 外部图像只能来自 `data:image/png` 或调用方注入的 `SvgImageResourceProvider`；
  * 默认渲染选项的输出与 M2 逐字节一致。
+ *
+ * M4 补齐渲染保真、文本排版与查询 API：
+ *
+ * - `clip` / `overflow` / `vector-effect`，以及 marker / symbol / 嵌套 svg 的视口裁剪；
+ * - 分量传递、形态学、卷积、湍流、位移、`feImage` 与三种光源的漫反射 / 高光；
+ * - `pattern` 的 `viewBox` / `preserveAspectRatio`；
+ * - 文本基线、`baseline-shift`、`alignment-baseline`、装饰线、竖排与 `textPath` 扩展；
+ * - TrueType 字体解析（`cmap` 4/12、简单 / 复合 `glyf`）；
+ * - `view` / `switch` / `anchors()`、`SvgPathData.totalLength` / `pointAtLength`、
+ *   `SvgGeometry.ctm` / `screenCTM`。
+ *
+ * M4 仍只接受 `data:image/png` 与 provider；字体只由调用方显式 `parse` / `load`，
+ * 渲染过程不读取文件系统或网络。未声明 M4 属性时输出与 M3 逐字节一致。
  * 底层 XML 全部交给 `fountain::f_xml`，本模块不实现第二套 XML 词法器。
  */

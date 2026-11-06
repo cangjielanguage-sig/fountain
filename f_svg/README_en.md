@@ -257,6 +257,81 @@ base64 text 32 MiB, gzip output 64 MiB, filter region bounded by `maxPixels`,
 pattern tile 4 × 1024 × 1024, pattern/marker reference depth 64. Every check happens
 before large buffers are allocated.
 
+## M4: rendering fidelity, text layout and query APIs
+
+M4 only adds behaviour behind default values and new queries; `SvgRenderOptions` only gains
+`languages` (default `["en"]`). Documents that do not use M4 properties render byte-identically
+to M3. The only conditional difference is marker content clipped to `markerWidth × markerHeight`
+as required by SVG 1.1; the M1–M3 snapshots do not overflow and stay byte-identical.
+
+### Capabilities
+
+| Group | Capability | Entry points |
+|---|---|---|
+| A | `clip` / `overflow` / `vector-effect` | `SvgClipProperty` / `SvgClipCoverage` / `SvgOverflow` / `SvgVectorEffect` |
+| A | Seven new filter primitives | `SvgFeComponentTransfer` / `SvgFeMorphology` / `SvgFeConvolveMatrix` / `SvgFeTurbulence` / `SvgFeDisplacementMap` / `SvgFeImage` |
+| A | Lighting | `SvgFeDiffuseLighting` / `SvgFeSpecularLighting` / `SvgFeDistantLight` / `SvgFePointLight` / `SvgFeSpotLight` |
+| A | Pattern viewport | `SvgPattern.viewBox` / `preserveAspectRatio` |
+| B | Baseline / decoration / vertical text | `SvgTextBaseline` / `SvgTextDecoration` / `SvgTextWritingMode` |
+| B | textPath extensions | `SvgTextPath.side` / `method` / `spacing` |
+| B | TrueType | `SvgTrueTypeFont.parse` / `load`, `cmap` 4/12, simple + composite glyphs |
+| C | Document queries | `SvgView` / `SvgDocument.views()` / `view(id)` / `switch` / `SvgDocument.anchors()` |
+| C | Geometry APIs | `SvgPathData.totalLength` / `pointAtLength`, `SvgGeometry.ctm` / `screenCTM` |
+
+### A: clip, overflow and non-scaling stroke
+
+```cangjie
+let document = SvgParser.parse(
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\">" +
+    "<g clip=\"rect(0, 20, 20, 0)\">" +
+    "<rect width=\"40\" height=\"40\" fill=\"red\" vector-effect=\"non-scaling-stroke\"/>" +
+    "</g></svg>"
+)
+let bitmap = SvgRenderer().render(document)
+```
+
+- `clip` is a coverage mask that follows the element CTM; with `clip-path`, `clip` is applied first.
+- `overflow` only affects marker / symbol / pattern / nested `svg`; `scroll` and `auto` normalise to `hidden`.
+- `vector-effect="non-scaling-stroke"` divides stroke width and dash lengths by `sqrt(|det(CTM)|)`.
+
+### B: baseline, decoration, vertical text and TrueType
+
+```cangjie
+let registry = SvgFontRegistry()
+registry.register("MyFont", SvgTrueTypeFont.load(Path("my.ttf")))
+let options = SvgRenderOptions(fonts: registry)
+```
+
+- Baseline calculation order is fixed: baseline table → `dominant-baseline` → `baseline-shift`.
+- `text-decoration` is not inherited but propagates from the nearest declaring ancestor; strips are
+  generated per glyph and rotate with the glyph.
+- `writing-mode="tb-rl"` advances along y and stacks columns right-to-left, rotating glyphs 90° clockwise.
+  It is ignored with a warning when `textPath` is present.
+- `textPath` `side`, `method="stretch"` and `spacing="exact"` keep M3-compatible defaults.
+
+### C: view, switch, anchors and geometry queries
+
+```cangjie
+let views = document.views()
+let anchors = document.anchors()
+let length = SvgPathData.parse("M0 0 L100 0").totalLength()
+let point = SvgPathData.parse("M0 0 L100 0").pointAtLength(50)
+let ctm = SvgGeometry.ctm(document.elementsByTag("rect")[0])
+```
+
+- `switch` evaluates children in document order; `systemLanguage` is prefix-matched against
+  `SvgRenderOptions.languages` with `-` boundaries.
+- `view` is model-only: it does not render by default and `url(#view)` navigation is not implemented.
+- `anchors()` only reports links kept by the existing security policy; external `href` is still removed.
+
+### M4 limitations
+
+- `pattern` `overflow="visible"` does not extend into adjacent tiles; the tile remains the sampling period.
+- TTF supports TrueType outlines only: CFF / OTF raises `Unsupported`. Hinting, `GSUB`, `GPOS` and `kern`
+  are not parsed; spacing comes from `hmtx` only. Rendering never opens font files.
+- `feImage` accepts only `data:image/png` and providers, sharing the per-render decode budget with `<image>`.
+- `ctm` does not include transforms introduced by `use` instantiation.
+
 ## Value types
 
 Every value type satisfies `parse(toString(x)) == x` for values representable in

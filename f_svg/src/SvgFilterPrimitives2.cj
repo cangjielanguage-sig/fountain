@@ -307,13 +307,6 @@ internal func writeSvgNumberList(element: SvgElement, name: String, value: ?SvgN
     }
 }
 
-internal func readSvgNumberArray(element: SvgElement, name: String): Array<Float64> {
-    match (readSvgNumberList(element, name)) {
-        case Some(list) => list.values
-        case None => Array<Float64>()
-    }
-}
-
 internal func writeSvgNumberArray(element: SvgElement, name: String, value: Array<Float64>): Unit {
     element.setAttr(name, SvgNumberList(value).toString())
 }
