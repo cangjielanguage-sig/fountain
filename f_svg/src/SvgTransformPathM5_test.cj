@@ -100,6 +100,21 @@ public class SvgTransformPathM5_test {
         @Assert(m5PointNear(left, right.x, right.y))
     }
 
+    /** marker 裁剪判定计入 transform-origin，避免漏裁剪。 */
+    @TestCase
+    public func markerTransformOriginKeepsClip(): Unit {
+        let bitmap = m5RenderSvg(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\">" +
+            "<defs><marker id=\"m\" markerWidth=\"10\" markerHeight=\"10\" refX=\"0\" refY=\"0\" " +
+            "markerUnits=\"userSpaceOnUse\" viewBox=\"0 0 10 10\">" +
+            "<rect width=\"2\" height=\"2\" fill=\"red\" transform=\"scale(2)\" " +
+            "transform-origin=\"50% 50%\" transform-box=\"fill-box\"/></marker></defs>" +
+            "<path d=\"M20 20 L30 20\" stroke=\"none\" fill=\"none\" marker-start=\"url(#m)\"/></svg>"
+        )
+        @Assert(bitmap.pixel(21, 21).alpha > 0.5)
+        @Assert(bitmap.pixel(19, 21).alpha == 0.0)
+    }
+
     /** getCTM 对容器 fill-box 使用内容包围盒，与显示列表矩阵一致。 */
     @TestCase
     public func ctmContainerFillBoxMatchesRender(): Unit {

@@ -1328,7 +1328,7 @@ private func markerContentFitsIn(
                     // 子元素自身的 marker 会扩展绘制范围，无法只凭路径包围盒判定。
                     return false
                 }
-                let childMatrix = matrix.multiply(elementTransformMatrix(child))
+                var childBounds: ?SvgBounds = Option<SvgBounds>.None
                 match (child) {
                     case shape: SvgShape =>
                         if (style.stroke().kind != SvgPaintKind.None) {
@@ -1338,7 +1338,32 @@ private func markerContentFitsIn(
                             case Some(value) => value
                             case None => return false
                         }
-                        let box = match (pathDataBounds(path)) {
+                        childBounds = match (pathDataBounds(path)) {
+                            case Some(value) => Some(value)
+                            case None => return false
+                        }
+                    case container: SvgContainer =>
+                        childBounds = svgBBoxOf(
+                            container,
+                            SvgBBoxRequest(
+                                SvgBBoxOptions(),
+                                styles,
+                                viewportWidth: width,
+                                viewportHeight: height
+                            )
+                        )
+                    case _ => return false
+                }
+                let childMatrix = matrix.multiply(effectiveElementTransform(
+                    child,
+                    style: Some(style),
+                    bounds: childBounds,
+                    viewportWidth: width,
+                    viewportHeight: height
+                ))
+                match (child) {
+                    case shape: SvgShape =>
+                        let box = match (childBounds) {
                             case Some(value) => value
                             case None => return false
                         }
