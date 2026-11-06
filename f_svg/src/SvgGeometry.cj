@@ -959,6 +959,18 @@ private func elementMatrix(
     var box: ?SvgBounds = Option<SvgBounds>.None
     if (resolved.transformBox() == SvgTransformBox.FillBox) {
         box = SvgGeometry.bounds(element, style: resolved)
+        if (box.isNone()) {
+            // 容器 / use 的自身几何盒由后代并集给出，与渲染路径保持一致。
+            box = svgBBoxOf(
+                element,
+                SvgBBoxRequest(
+                    SvgBBoxOptions(),
+                    styles,
+                    viewportWidth: viewportWidth,
+                    viewportHeight: viewportHeight
+                )
+            )
+        }
     }
     effectiveElementTransform(
         element,

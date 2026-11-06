@@ -100,6 +100,33 @@ public class SvgTransformPathM5_test {
         @Assert(m5PointNear(left, right.x, right.y))
     }
 
+    /** getCTM 对容器 fill-box 使用内容包围盒，与显示列表矩阵一致。 */
+    @TestCase
+    public func ctmContainerFillBoxMatchesRender(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\">" +
+            "<g id=\"g\" opacity=\"0.5\" transform=\"rotate(30)\" " +
+            "transform-origin=\"50% 50%\" transform-box=\"fill-box\">" +
+            "<rect x=\"10\" y=\"20\" width=\"20\" height=\"10\" fill=\"red\"/></g></svg>"
+        )
+        let group = document.elementById("g") ?? throw invalidValue("缺少组")
+        let list = SvgRenderTreeBuilder().build(document)
+        var rendered: ?SvgMatrix = None
+        for (command in list.commands) {
+            if (command.kind == SvgDisplayCommandKind.GroupBegin && command.tag == "g") {
+                rendered = Some(command.matrix)
+            }
+        }
+        let matrix = match (rendered) {
+            case Some(value) => value
+            case None => throw invalidValue("缺少组绘制指令")
+        }
+        let ctm = group.getCTM()
+        let left = ctm.apply(SvgPoint(15.0, 22.0))
+        let right = matrix.apply(SvgPoint(15.0, 22.0))
+        @Assert(m5PointNear(left, right.x, right.y))
+    }
+
     /** `screenCTM` 支持可选样式上下文，与 `ctm` 对齐。 */
     @TestCase
     public func screenCtmAcceptsStyles(): Unit {
