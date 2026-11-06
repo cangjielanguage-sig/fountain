@@ -112,6 +112,44 @@ See "loom orchestration" below.
 
 ---
 
+## API cheat sheet
+
+Find the entry point by task; details live in the section named on the right.
+
+| Task | Entry point | Section |
+|---|---|---|
+| One model call | `LLM.chatByName(llmName, LLMParams(model:, messages:))` | Model access |
+| Streaming | `LLM.chatStream(candidates, params, onDelta)` | Model access |
+| Failover across providers | `LLM.chat(candidates, params)` + `LLMConfs` | Model access |
+| Embed text | `Embedding.embed(llmName, EmbeddingParam(agentId: 0, session: '', input: '…'))` | Storage · Embeddings |
+| Write / query memories | `Stores.content().memory` → `add` / `get` / `list` / `search` | Storage · Contracts |
+| Write / query knowledge | `Stores.content().knowledge` → `upsert` / `get` / `search` / `docIds` | Storage · Contracts |
+| Skills / prompts / personas | `Stores.meta().skills` / `.prompts` / `.characters` | Storage · Contracts |
+| Add a tool | `@Bean` + `FunctionCalling<T>`, picked up by `FunctionMediator` | Model access · Tool calling |
+| Plan and run a flow from one sentence | `LoomWiring.wire(...)` → `execute` → `confirmFlow` → `executeNow` | loom orchestration |
+| Run a hand-written DAG | `LoomRunner().run(plan, host, start)` | loom · Hand-written flows |
+| Route a description to the best flow | `Supervisor.current().getOrThrow().dispatch(text)` | loom · Flow routing |
+| Send mail / IM message | `ChannelMediator.send(platform, account, msg)` or the `channelSend` tool | loom · Third-party channels |
+| Evaluate retrieval quality | `RetrievalEvalRunner.run(...)` | Retrieval evaluation |
+| Debug: is skill search really using vectors | `SkillCatalog.embedFailureDetail()` | loom · Skill injection |
+| Debug: did startup restore flows | `LoomBootstrap.startup(registry).restoreFailed` | loom · Flow routing |
+
+Three shortest working snippets (full examples in their sections):
+
+```cangjie
+// 1) call a model
+let resp = LLM.chatByName('deepseek-flash',
+    LLMParams(model: 'deepseek-flash', messages: messages))
+
+// 2) embed (endpoint defaults to http://127.0.0.1:8000/v1/embeddings)
+let vectors = Embedding.embed('bge-m3', EmbeddingParam(agentId: 0, session: '', input: 'text to embed'))
+
+// 3) hand a description to the right flow: routing + execution in one call
+let outcome = Supervisor.current().getOrThrow().dispatch('summarise today's commits')
+```
+
+---
+
 ## Model access
 
 ### Configuration loading
@@ -631,6 +669,67 @@ let outcome = RetrievalEvalRunner.run(InMemoryMetaStore(), './eval', 'bge-m3', m
 println(outcome.report)
 // outcome.embedFailures must be 0; otherwise the run measured keywords, not vectors
 ```
+
+---
+
+## Bundled script and DDL
+
+### `deploy_bge_m3.sh`: local BGE-M3 embedding service
+
+Installs BGE-M3 as an OpenAI-compatible `/v1/embeddings` endpoint (dense + sparse + colbert), which is exactly what `llm_embeddingUrl` points at by default.
+
+```bash
+sudo ./deploy_bge_m3.sh                    # install or update (idempotent)
+sudo ./deploy_bge_m3.sh status             # service / model / port
+sudo ./deploy_bge_m3.sh smoke              # one embedding round-trip
+sudo ./deploy_bge_m3.sh restart
+sudo ./deploy_bge_m3.sh uninstall          # stop service, remove unit (keep model)
+sudo ./deploy_bge_m3.sh uninstall --purge  # also delete /opt/bge-m3
+```
+
+What it does: system deps + dedicated venv (`/opt/bge-m3/venv`) → install torch(CPU)+transformers+fastapi+uvicorn →
+fetch weights from ModelScope (including the `sparse_linear.pt` / `colbert_linear.pt` projections) → serve `/v1/embeddings` →
+register a systemd unit and run a health check.
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `BGE_HOME` | `/opt/bge-m3` | Install root (venv / model / server.py) |
+| `BGE_PORT` | `8000` | Listen port, matching `llm_embeddingUrl` |
+| `BGE_THREADS` | `8` | torch thread count |
+| `BGE_PIP_INDEX` / `BGE_PIP_EXTRA` | Tsinghua mirror / empty | pip index and extra index |
+| `BGE_MODEL_BASE` | ModelScope `BAAI/bge-m3` | Weight source |
+| `BGE_FORCE_DOWNLOAD` | `0` | Set `1` to re-download weights |
+
+Dense-only still works: point `llm_embeddingUrl` at any OpenAI-compatible endpoint, but missing sparse/colbert marks results
+`degraded` and disables reranking (see `doc/known-limitations.md` §2).
+
+### `tables-pg.sql` / `tables-mysql.sql`: schema
+
+The two files mirror each other column by column — only types, identity and index syntax may differ, so **they must be changed together**. 20 tables:
+
+| Group | Tables |
+|---|---|
+| Model config | `llm_conf` |
+| Memory and knowledge | `llm_memory` / `llm_memory_kind` / `llm_memory_event` / `llm_memory_vector` / `llm_memory_token` / `llm_document` / `llm_document_chunk` |
+| Metadata | `llm_character` / `llm_character_binding` / `llm_channel_binding` / `llm_prompt` / `skills` / `skill_references` / `llm_skill_version` / `agents` / `memory_summaries` / `agent_todo` |
+| Orchestration and usage | `llm_loom_flow` / `llm_token_usage` |
+
+```bash
+# PostgreSQL (needs pgvector >= 0.7, extension name "vector")
+psql "postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test" \
+     -c 'CREATE EXTENSION IF NOT EXISTS vector'
+psql "postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test" -f tables-pg.sql
+
+# MySQL (plain tables 8.0+; VECTOR columns and HNSW indexes need 9.2+)
+mysql -h127.0.0.1 -ufllm_test -p fllm_test < tables-mysql.sql
+```
+
+| Note | Detail |
+|---|---|
+| The 4 evolution tables are not here | `llm_skill_evolution` / `llm_skill_evolution_state` / `llm_skill_evolution_knowledge` / `llm_evolution_lease` are created idempotently at startup by `EvolutionStores` / `EvolutionStateStores` / `EvolutionLeases.bootstrap()` |
+| Existing tables are not altered | `CREATE TABLE IF NOT EXISTS` only creates; adding a column requires your own `ALTER TABLE` (and keeping both files in sync) |
+| Old MySQL / MariaDB | Drop the trailing vector-index statements (and the vector columns for MariaDB); retrieval degrades to "fetch candidates + compute in the app" — same results, just slower |
+| Keep in sync with code | Change `tables-pg.sql` first, then `tables-mysql.sql` and the fields in `src/model/po` |
 
 ---
 

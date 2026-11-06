@@ -114,6 +114,44 @@ let preview = service.execute(LoomRequest(
 
 ---
 
+## API 速查
+
+按「要做什么」找入口，细节点进对应章节。
+
+| 要做什么 | 入口 | 章节 |
+|---|---|---|
+| 调一次模型 | `LLM.chatByName(llmName, LLMParams(model:, messages:))` | 大模型访问 |
+| 流式输出 | `LLM.chatStream(candidates, params, onDelta)` | 大模型访问 |
+| 按候选容错 / 换平台 | `LLM.chat(candidates, params)` + `LLMConfs` | 大模型访问 |
+| 文本向量化 | `Embedding.embed(llmName, EmbeddingParam(agentId: 0, session: '', input: '…'))` | 存储 · 向量化 |
+| 写/查记忆 | `Stores.content().memory` → `add` / `get` / `list` / `search` | 存储 · 契约 |
+| 写/查知识 | `Stores.content().knowledge` → `upsert` / `get` / `search` / `docIds` | 存储 · 契约 |
+| 技能 / 提示词 / 人格 | `Stores.meta().skills` / `.prompts` / `.characters` | 存储 · 契约 |
+| 加一个工具 | `@Bean` + `FunctionCalling<T>`，`FunctionMediator` 自动装载 | 大模型访问 · 工具调用 |
+| 一句话生成流程并执行 | `LoomWiring.wire(...)` → `service.execute` → `confirmFlow` → `executeNow` | loom 编排 |
+| 直接跑手写 DAG | `LoomRunner().run(plan, host, start)` | loom 编排 · 手工定义流程 |
+| 一段描述交给最合适的流程 | `Supervisor.current().getOrThrow().dispatch(text)` | loom 编排 · 流程路由 |
+| 给邮件 / IM 发消息 | `ChannelMediator.send(platform, account, msg)` 或 `channelSend` 工具 | loom 编排 · 第三方平台通道 |
+| 评测检索质量 | `RetrievalEvalRunner.run(...)` | 检索评测 |
+| 排障：技能检索是否在跑向量 | `SkillCatalog.embedFailureDetail()` | loom 编排 · 技能注入 |
+| 排障：启动是否恢复了流程 | `LoomBootstrap.startup(registry).restoreFailed` | loom 编排 · 流程路由 |
+
+三段最短可用代码（完整示例见各自章节）：
+
+```cangjie
+// 1) 调模型
+let resp = LLM.chatByName('deepseek-flash',
+    LLMParams(model: 'deepseek-flash', messages: messages))
+
+// 2) 向量化（端点默认 http://127.0.0.1:8000/v1/embeddings）
+let vectors = Embedding.embed('bge-m3', EmbeddingParam(agentId: 0, session: '', input: '要向量化的文本'))
+
+// 3) 一段描述交给流程：选路 + 执行一步到位
+let outcome = Supervisor.current().getOrThrow().dispatch('把今天的提交汇总一下')
+```
+
+---
+
 ## 大模型访问
 
 ### 配置装载
@@ -642,6 +680,67 @@ let outcome = RetrievalEvalRunner.run(InMemoryMetaStore(), './eval', 'bge-m3', m
 println(outcome.report)
 // outcome.embedFailures 必须为 0，否则测的是关键词而不是向量
 ```
+
+---
+
+## 配套脚本与建表
+
+### `deploy_bge_m3.sh`：本机 BGE-M3 向量服务
+
+把 BGE-M3 装成一个 OpenAI 兼容的 `/v1/embeddings` 端点（dense + sparse + colbert 三路），`llm_embeddingUrl` 的默认值就指向它。
+
+```bash
+sudo ./deploy_bge_m3.sh                    # 安装或更新（幂等，可重复执行）
+sudo ./deploy_bge_m3.sh status             # 看服务 / 模型 / 端口状态
+sudo ./deploy_bge_m3.sh smoke              # 打一发 embedding 自检
+sudo ./deploy_bge_m3.sh restart            # 重启服务
+sudo ./deploy_bge_m3.sh uninstall          # 停服务、删 unit（保留模型）
+sudo ./deploy_bge_m3.sh uninstall --purge  # 连 /opt/bge-m3 一起删
+```
+
+脚本做的事：系统依赖与独立 venv（默认 `/opt/bge-m3/venv`）→ 装 torch(CPU)+transformers+fastapi+uvicorn →
+从 ModelScope 下权重（含 `sparse_linear.pt` / `colbert_linear.pt` 两个投影）→ 起 `/v1/embeddings` →
+注册 systemd 并做健康检查。
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `BGE_HOME` | `/opt/bge-m3` | 安装根目录（venv / model / server.py） |
+| `BGE_PORT` | `8000` | 监听端口，对应 `llm_embeddingUrl` |
+| `BGE_THREADS` | `8` | torch 线程数 |
+| `BGE_PIP_INDEX` / `BGE_PIP_EXTRA` | 清华镜像 / 空 | pip 源与附加源 |
+| `BGE_MODEL_BASE` | ModelScope `BAAI/bge-m3` | 权重源 |
+| `BGE_FORCE_DOWNLOAD` | `0` | 置 `1` 强制重下权重 |
+
+只跑 dense 也能用：把 `llm_embeddingUrl` 指向任意 OpenAI 兼容端点即可，但 sparse / colbert 缺失时检索结果会标
+`degraded` 且重排失效（见 `doc/known-limitations.md` §2）。
+
+### `tables-pg.sql` / `tables-mysql.sql`：建表
+
+两个文件列定义一一对应，只允许类型、自增与索引语法不同，**必须同步改**。共 20 张表：
+
+| 分组 | 表 |
+|---|---|
+| 模型配置 | `llm_conf` |
+| 记忆与知识 | `llm_memory` / `llm_memory_kind` / `llm_memory_event` / `llm_memory_vector` / `llm_memory_token` / `llm_document` / `llm_document_chunk` |
+| 元数据 | `llm_character` / `llm_character_binding` / `llm_channel_binding` / `llm_prompt` / `skills` / `skill_references` / `llm_skill_version` / `agents` / `memory_summaries` / `agent_todo` |
+| 编排与用量 | `llm_loom_flow` / `llm_token_usage` |
+
+```bash
+# PostgreSQL（需要 pgvector >= 0.7，扩展名 vector）
+psql "postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test" \
+     -c 'CREATE EXTENSION IF NOT EXISTS vector'
+psql "postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test" -f tables-pg.sql
+
+# MySQL（普通表 8.0+；VECTOR 列与 HNSW 索引需 9.2+）
+mysql -h127.0.0.1 -ufllm_test -p fllm_test < tables-mysql.sql
+```
+
+| 注意 | 说明 |
+|---|---|
+| 演进族 4 张表不在这里 | `llm_skill_evolution` / `llm_skill_evolution_state` / `llm_skill_evolution_knowledge` / `llm_evolution_lease` 由 `EvolutionStores` / `EvolutionStateStores` / `EvolutionLeases` 的 `bootstrap()` 在启动时幂等创建 |
+| 已存在的表不补列 | `CREATE TABLE IF NOT EXISTS` 只建不改；加列必须自己 `ALTER TABLE`（并同步两个文件） |
+| MySQL 旧版本 / MariaDB | 删掉文件末尾向量索引语句（MariaDB 连向量列一起删）即可，向量检索降级为「取候选 + 应用层计算」，结果不变只是慢 |
+| 与代码同步 | 改列先改 `tables-pg.sql`，再同步 `tables-mysql.sql` 与 `src/model/po` 的字段 |
 
 ---
 
