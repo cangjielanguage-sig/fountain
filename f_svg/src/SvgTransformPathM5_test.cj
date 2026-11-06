@@ -122,4 +122,27 @@ public class SvgTransformPathM5_test {
         let right = expected.apply(SvgPoint(17.0, 23.0))
         @Assert(m5PointNear(left, right.x, right.y))
     }
+
+    /** `screenCTM` 的 `view-box` 百分比原点使用显式视口尺寸。 */
+    @TestCase
+    public func screenCtmViewBoxOriginUsesViewport(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\">" +
+            "<rect id=\"r\" x=\"10\" y=\"20\" width=\"20\" height=\"10\" " +
+            "transform=\"rotate(30)\" transform-origin=\"50% 50%\" transform-box=\"view-box\"/></svg>"
+        )
+        let element = document.elementById("r") ?? throw invalidValue("缺少矩形")
+        let tree = SvgStyleResolver().compute(document.root, mediaWidth: 200.0, mediaHeight: 100.0)
+        let viewport = SvgViewportTransform(200.0, 100.0, SvgMatrix.identity, 1.0)
+        let screen = SvgGeometry.screenCTM(element, viewport, styles: tree)
+        let expected = SvgGeometry.ctm(
+            element,
+            styles: tree,
+            viewportWidth: 200.0,
+            viewportHeight: 100.0
+        )
+        let left = screen.apply(SvgPoint(17.0, 23.0))
+        let right = expected.apply(SvgPoint(17.0, 23.0))
+        @Assert(m5PointNear(left, right.x, right.y))
+    }
 }

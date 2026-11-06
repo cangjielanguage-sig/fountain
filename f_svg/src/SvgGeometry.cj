@@ -248,7 +248,12 @@ public class SvgGeometry {
     ): SvgMatrix {
         SvgMatrix.scale(viewport.devicePixelRatio, viewport.devicePixelRatio)
             .multiply(viewport.matrix)
-            .multiply(ctm(element, styles: styles))
+            .multiply(ctm(
+                element,
+                styles: styles,
+                viewportWidth: viewport.width,
+                viewportHeight: viewport.height
+            ))
     }
 }
 
