@@ -19,6 +19,7 @@ import std.env.getVariable
 import std.fs.{Directory, File, Path, exists}
 import std.random.Random
 
+@FastNative
 foreign {
     @When[os != "Windows"]
     func chmod(path: CString, mode: UInt32): Int32
