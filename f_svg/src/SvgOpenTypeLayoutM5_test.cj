@@ -171,23 +171,65 @@ internal func m5GsubTagged(
     m5LayoutTable(tag, 4, [Some(m5GsubSubtable(first, ligatures))])
 }
 
-/** GSUB：特性按顺序引用 `lookupCount` 个 lookup，仅第 `ruleIndex` 个含规则。 */
-internal func m5GsubChain(
-    lookupCount: Int64,
-    ruleIndex: Int64,
+/**
+ * GSUB 扩展 lookup 链：`wrappers` 层 Type 7 依次指向下一个 lookup，末端为 Type 4。
+ *
+ * feature 只引用第 0 个 lookup；末端 Type 4 的链深度为 `wrappers + 1`。
+ */
+internal func m5GsubExtensionChain(
+    wrappers: Int64,
     first: Int64,
     ligGlyph: Int64,
     rest: Array<Int64>
 ): Array<Byte> {
-    let subtables = ArrayList<?Array<Byte>>()
-    for (index in 1..lookupCount + 1) {
-        if (index == ruleIndex) {
-            subtables.add(Some(m5GsubSubtable(first, [(ligGlyph, rest)])))
+    let lookupCount = wrappers + 1
+    let featureListOffset = 30
+    let featureListSize = 14
+    let lookupListOffset = featureListOffset + featureListSize
+    let lookupListSize = 2 + 2 * lookupCount
+    let ligatureBody = m5GsubSubtable(first, [(ligGlyph, rest)])
+    let type4BodySize = 8 + Int64(ligatureBody.size)
+    let type7BodySize = 16
+
+    let offsets = ArrayList<Int64>()
+    var cursor = lookupListOffset + lookupListSize
+    for (index in 0..lookupCount) {
+        offsets.add(cursor - lookupListOffset)
+        cursor += if (index < wrappers) { type7BodySize } else { type4BodySize }
+    }
+
+    let w = M4ByteWriter()
+    w.u16(1).u16(0)
+    w.u16(10).u16(featureListOffset).u16(lookupListOffset)
+    // ScriptList：DFLT + 默认 LangSys 引用 feature 0。
+    w.u16(1)
+    w.tag("DFLT").u16(8)
+    w.u16(4).u16(0)
+    w.u16(0).u16(0xFFFF).u16(1).u16(0)
+    // FeatureList：单个 liga 特性只引用 lookup 0。
+    w.u16(1)
+    w.tag("liga").u16(8)
+    w.u16(0).u16(1).u16(0)
+    // LookupList。
+    w.u16(lookupCount)
+    for (offset in offsets) {
+        w.u16(offset)
+    }
+    for (index in 0..lookupCount) {
+        if (index < wrappers) {
+            w.u16(7).u16(0).u16(1).u16(8)
+            w.u16(1).u16(4)
+            let subtableAbsolute = lookupListOffset + offsets[index] + 8
+            let targetAbsolute = lookupListOffset + offsets[index + 1]
+            w.u32(targetAbsolute - subtableAbsolute)
         } else {
-            subtables.add(Option<Array<Byte>>.None)
+            w.u16(4).u16(0).u16(1).u16(8)
+            for (byte in ligatureBody) {
+                w.data.add(byte)
+            }
         }
     }
-    m5LayoutTable("liga", 4, subtables.toArray())
+    w.toArray()
 }
 
 @Test
@@ -346,12 +388,30 @@ public class SvgGsubM5_test {
         @Assert(sawLimit)
     }
 
+    /** 二层嵌套 lookup：扩展链中深度 2 的连字仍生效。 */
+    @TestCase
+    public func nestedLookupDepthTwo(): Unit {
+        let warnings = ArrayList<String>()
+        let table = SvgGsubLigatures.parse(
+            m5Table(m5GsubExtensionChain(1, 1, 10, [2]), "GSUB"),
+            warnings
+        )
+        match (table) {
+            case Some(value) =>
+                match (value.findLigature([1, 2], 0)) {
+                    case Some(found) => @Assert(found[0] == 10 && found[1] == 2)
+                    case None => @Fail("深度 2 的连字应命中")
+                }
+            case None => @Fail("二层嵌套 lookup 应解析成功")
+        }
+    }
+
     /** lookup 链深度 8 正常，深度 9 停止替换并告警。 */
     @TestCase
     public func lookupDepthLimit(): Unit {
         let allowedWarnings = ArrayList<String>()
         let allowed = SvgGsubLigatures.parse(
-            m5Table(m5GsubChain(8, 8, 1, 10, [2]), "GSUB"),
+            m5Table(m5GsubExtensionChain(7, 1, 10, [2]), "GSUB"),
             allowedWarnings
         )
         @Assert(allowed.isSome())
@@ -366,7 +426,7 @@ public class SvgGsubM5_test {
 
         let limitedWarnings = ArrayList<String>()
         let limited = SvgGsubLigatures.parse(
-            m5Table(m5GsubChain(9, 9, 1, 10, [2]), "GSUB"),
+            m5Table(m5GsubExtensionChain(8, 1, 10, [2]), "GSUB"),
             limitedWarnings
         )
         @Assert(limited.isNone())

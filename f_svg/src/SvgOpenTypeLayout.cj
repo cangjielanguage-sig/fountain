@@ -22,14 +22,12 @@ internal let CSS_GPOS_MAX_PAIRS: Int64 = 65536
 internal let CSS_GSUB_MAX_INPUT: Int64 = 4
 internal let CSS_GSUB_MAX_DEPTH: Int64 = 8
 
-/** FeatureList 中某个特性的 lookup 引用及其链深度（从 1 计）。 */
+/** FeatureList 中某个特性引用的 lookup 下标。 */
 private class SvgLayoutLookupRef {
     let index: Int64
-    let depth: Int64
 
-    init(index: Int64, depth: Int64) {
+    init(index: Int64) {
         this.index = index
-        this.depth = depth
     }
 }
 
@@ -92,16 +90,15 @@ private func cssLayoutFeatureIndices(
 }
 
 /**
- * 解析 ScriptList → FeatureList，收集指定特性引用的 lookup 与链深度。
+ * 解析 ScriptList → FeatureList，收集指定特性引用的 lookup 下标。
  *
- * `enforceDepth` 为真时，特性引用的第 9 个及之后的 lookup 被丢弃并告警。
+ * lookup 链深度由调用方在遍历嵌套 lookup（Extension / 链式上下文）时计算。
  */
 private func cssLayoutLookupRefs(
     reader: SvgTtfTableReader,
     featureTag: String,
     label: String,
-    warnings: ArrayList<String>,
-    enforceDepth: Bool
+    warnings: ArrayList<String>
 ): ?Array<SvgLayoutLookupRef> {
     let scriptListOffset = reader.u16(4)
     let featureListOffset = reader.u16(6)
@@ -127,12 +124,7 @@ private func cssLayoutLookupRefs(
         let featureOffset = featureListOffset + reader.u16(record + 4)
         let lookupCount = reader.u16(featureOffset + 2)
         for (position in 0..lookupCount) {
-            let depth = position + 1
-            if (enforceDepth && depth > CSS_GSUB_MAX_DEPTH) {
-                warnings.add("${label} lookup 深度超过 ${CSS_GSUB_MAX_DEPTH}，已停止后续替换")
-                continue
-            }
-            refs.add(SvgLayoutLookupRef(reader.u16(featureOffset + 4 + position * 2), depth))
+            refs.add(SvgLayoutLookupRef(reader.u16(featureOffset + 4 + position * 2)))
         }
     }
     if (refs.size == 0) {
@@ -140,6 +132,56 @@ private func cssLayoutLookupRefs(
         return None
     }
     Some(refs.toArray())
+}
+
+/**
+ * 递归收集 liga 连字子表：跟随 Extension lookup（Type 7）解析真实 lookup。
+ *
+ * `depth` 从特性直接引用的 lookup 起算为 1；超过上限时丢弃该分支并告警。
+ */
+private func cssCollectGsubLookup(
+    reader: SvgTtfTableReader,
+    lookupOffset: Int64,
+    depth: Int64,
+    warnings: ArrayList<String>,
+    subtableOffsets: ArrayList<Int64>
+): Unit {
+    if (depth > CSS_GSUB_MAX_DEPTH) {
+        warnings.add("GSUB lookup 深度超过 ${CSS_GSUB_MAX_DEPTH}，已停止后续替换")
+        return
+    }
+    if (lookupOffset + 6 > reader.length) {
+        warnings.add("GSUB lookup 截断，已忽略")
+        return
+    }
+    let lookupType = reader.u16(lookupOffset)
+    let subTableCount = reader.u16(lookupOffset + 4)
+    if (lookupType == 4) {
+        for (subIndex in 0..subTableCount) {
+            subtableOffsets.add(lookupOffset + reader.u16(lookupOffset + 6 + subIndex * 2))
+        }
+        return
+    }
+    if (lookupType == 7) {
+        for (subIndex in 0..subTableCount) {
+            let subOffset = lookupOffset + reader.u16(lookupOffset + 6 + subIndex * 2)
+            if (subOffset + 8 > reader.length) {
+                warnings.add("GSUB 扩展子表截断，已忽略")
+                continue
+            }
+            if (reader.u16(subOffset) != 1) {
+                warnings.add("GSUB 扩展子表 format 不受支持")
+                continue
+            }
+            cssCollectGsubLookup(
+                reader,
+                subOffset + reader.u32(subOffset + 4),
+                depth + 1,
+                warnings,
+                subtableOffsets
+            )
+        }
+    }
 }
 
 private func cssPairKey(left: Int64, right: Int64): Int64 {
@@ -255,7 +297,7 @@ internal class SvgGposPairs {
     static func parse(reader: SvgTtfTableReader, warnings: ArrayList<String>): ?SvgGposPairs {
         try {
             let lookupListOffset = reader.u16(8)
-            let refs = match (cssLayoutLookupRefs(reader, "kern", "GPOS", warnings, false)) {
+            let refs = match (cssLayoutLookupRefs(reader, "kern", "GPOS", warnings)) {
                 case Some(value) => value
                 case None => return Option<SvgGposPairs>.None
             }
@@ -515,32 +557,25 @@ internal class SvgGsubLigatures {
     static func parse(reader: SvgTtfTableReader, warnings: ArrayList<String>): ?SvgGsubLigatures {
         try {
             let lookupListOffset = reader.u16(8)
-            let refs = match (cssLayoutLookupRefs(reader, "liga", "GSUB", warnings, true)) {
+            let refs = match (cssLayoutLookupRefs(reader, "liga", "GSUB", warnings)) {
                 case Some(value) => value
                 case None => return Option<SvgGsubLigatures>.None
             }
             let result = SvgGsubLigatures()
             let lookupCount = reader.u16(lookupListOffset)
-            var parsed = false
+            let subtableOffsets = ArrayList<Int64>()
             for (reference in refs) {
                 if (reference.index >= lookupCount) {
                     warnings.add("GSUB lookupIndex 越界，已忽略")
                     continue
                 }
                 let lookupOffset = lookupListOffset + reader.u16(lookupListOffset + 2 + reference.index * 2)
-                if (lookupOffset + 6 > reader.length) {
-                    warnings.add("GSUB lookup 截断，已忽略")
-                    continue
-                }
-                if (reader.u16(lookupOffset) != 4) {
-                    continue
-                }
-                let subTableCount = reader.u16(lookupOffset + 4)
-                for (subIndex in 0..subTableCount) {
-                    let subOffset = lookupOffset + reader.u16(lookupOffset + 6 + subIndex * 2)
-                    if (parseGsubLigatureSubtable(reader, subOffset, result, warnings)) {
-                        parsed = true
-                    }
+                cssCollectGsubLookup(reader, lookupOffset, 1, warnings, subtableOffsets)
+            }
+            var parsed = false
+            for (subOffset in subtableOffsets) {
+                if (parseGsubLigatureSubtable(reader, subOffset, result, warnings)) {
+                    parsed = true
                 }
             }
             if (!parsed) {
