@@ -127,6 +127,50 @@ internal func m5LayoutTable(
     w.toArray()
 }
 
+/** GPOS：单个 lookup 内两个 PairPos format 2 子表，覆盖不同左字形。 */
+internal func m5GposFormat2Combined(
+    firstA: Int64,
+    secondA: Int64,
+    xAdvanceA: Int64,
+    firstB: Int64,
+    secondB: Int64,
+    xAdvanceB: Int64
+): Array<Byte> {
+    let subtableA = m5GposPairSubtable2(firstA, secondA, xAdvanceA)
+    let subtableB = m5GposPairSubtable2(firstB, secondB, xAdvanceB)
+    let featureListOffset = 30
+    let featureListSize = 14
+    let lookupListOffset = featureListOffset + featureListSize
+    let lookupListSize = 4
+    let lookupOffset = lookupListOffset + lookupListSize
+    let subtableAOffset = 10
+    let subtableBOffset = subtableAOffset + Int64(subtableA.size)
+
+    let w = M4ByteWriter()
+    w.u16(1).u16(0)
+    w.u16(10).u16(featureListOffset).u16(lookupListOffset)
+    // ScriptList。
+    w.u16(1)
+    w.tag("DFLT").u16(8)
+    w.u16(4).u16(0)
+    w.u16(0).u16(0xFFFF).u16(1).u16(0)
+    // FeatureList：kern → lookup 0。
+    w.u16(1)
+    w.tag("kern").u16(8)
+    w.u16(0).u16(1).u16(0)
+    // LookupList：一个 lookup。
+    w.u16(1).u16(lookupOffset - lookupListOffset)
+    // Lookup：Type 2，两个子表。
+    w.u16(2).u16(0).u16(2).u16(subtableAOffset).u16(subtableBOffset)
+    for (byte in subtableA) {
+        w.data.add(byte)
+    }
+    for (byte in subtableB) {
+        w.data.add(byte)
+    }
+    w.toArray()
+}
+
 /** GPOS PairPos format 1（`kern` 特性）。 */
 internal func m5GposFormat1(first: Int64, second: Int64, xAdvance: Int64): Array<Byte> {
     m5LayoutTable("kern", 2, [Some(m5GposPairSubtable1(first, second, xAdvance))])
@@ -258,6 +302,24 @@ public class SvgGposM5_test {
         match (table) {
             case Some(value) =>
                 @Assert(value.adjust(1, 2) == -70)
+                @Assert(value.adjust(9, 2) == 0)
+            case None => @Fail("应解析成功")
+        }
+    }
+
+    /** 多个 format 2 子表各自保留 class 矩阵，互不覆盖。 */
+    @TestCase
+    public func multipleFormatTwoSubtablesMerge(): Unit {
+        let warnings = ArrayList<String>()
+        let table = SvgGposPairs.parse(
+            m5Table(m5GposFormat2Combined(1, 2, -70, 3, 4, -90), "GPOS"),
+            warnings
+        )
+        @Assert(table.isSome())
+        match (table) {
+            case Some(value) =>
+                @Assert(value.adjust(1, 2) == -70)
+                @Assert(value.adjust(3, 4) == -90)
                 @Assert(value.adjust(9, 2) == 0)
             case None => @Fail("应解析成功")
         }

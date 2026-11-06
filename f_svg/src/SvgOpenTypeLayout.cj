@@ -262,14 +262,39 @@ internal class SvgKernPairs {
     }
 }
 
+/** 一个 PairPos format 2 子表的 class 定义与矩阵。 */
+internal class SvgGposClassPairs {
+    let class1 = HashMap<Int64, Int64>()
+    let class2 = HashMap<Int64, Int64>()
+    let matrix: Array<Int64>
+    let class2Count: Int64
+    let covered = HashMap<Int64, Bool>()
+
+    init(matrix: Array<Int64>, class2Count: Int64) {
+        this.matrix = matrix
+        this.class2Count = class2Count
+    }
+
+    /** 该表对该 pair 的值；左字形未被 Coverage 覆盖时返回 `None`。 */
+    func value(left: Int64, right: Int64): ?Int64 {
+        if (this.covered.get(left).isNone()) {
+            return None
+        }
+        let firstClass = this.class1.get(left) ?? 0
+        let secondClass = this.class2.get(right) ?? 0
+        let index = firstClass * this.class2Count + secondClass
+        if (index < 0 || index >= this.matrix.size) {
+            return None
+        }
+        Some(this.matrix[index])
+    }
+}
+
 /** GPOS Pair Adjustment（format 1 / 2）的 x advance 调整。 */
 internal class SvgGposPairs {
     let pairs = HashMap<Int64, Int64>()
-    let class1 = HashMap<Int64, Int64>()
-    let class2 = HashMap<Int64, Int64>()
-    var classMatrix: Array<Int64> = Array<Int64>()
-    var class2Count: Int64 = 0
-    let covered = HashMap<Int64, Bool>()
+    /** 每个 format 2 子表独立保存，避免多个子表的 class 编号互相覆盖。 */
+    let classPairs = ArrayList<SvgGposClassPairs>()
 
     private init() {}
 
@@ -278,20 +303,13 @@ internal class SvgGposPairs {
             case Some(value) => return value
             case None => ()
         }
-        if (this.classMatrix.size == 0) {
-            return 0
+        for (table in this.classPairs) {
+            match (table.value(left, right)) {
+                case Some(value) => return value
+                case None => ()
+            }
         }
-        // PairPos format 2 只对 Coverage 覆盖的左字形生效。
-        if (this.covered.get(left).isNone()) {
-            return 0
-        }
-        let firstClass = this.class1.get(left) ?? 0
-        let secondClass = this.class2.get(right) ?? 0
-        let index = firstClass * this.class2Count + secondClass
-        if (index < 0 || index >= this.classMatrix.size) {
-            return 0
-        }
-        this.classMatrix[index]
+        0
     }
 
     static func parse(reader: SvgTtfTableReader, warnings: ArrayList<String>): ?SvgGposPairs {
@@ -408,17 +426,17 @@ private func parseGposPairSubtable(
                 matrix.add(readGposXAdvance(reader, base, valueFormat1))
             }
         }
+        let classTable = SvgGposClassPairs(matrix.toArray(), class2Count)
         for ((glyph, value) in classes1) {
-            target.class1[glyph] = value
+            classTable.class1[glyph] = value
         }
         for ((glyph, value) in classes2) {
-            target.class2[glyph] = value
+            classTable.class2[glyph] = value
         }
         for (glyph in coverage) {
-            target.covered[glyph] = true
+            classTable.covered[glyph] = true
         }
-        target.classMatrix = matrix.toArray()
-        target.class2Count = class2Count
+        target.classPairs.add(classTable)
         return true
     }
     warnings.add("GPOS PairPos format ${format} 不受支持")
