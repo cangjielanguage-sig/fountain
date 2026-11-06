@@ -92,6 +92,8 @@ output: …（截断 400 字符）
 2. `KnowledgeChunker.split(content, maxChars: 400, overlap: 50)` 按字符滑窗切块，`overlap` 必须落在 `[0, maxChars)`；
 3. 逐块编码并落块表（`llm_document_chunk`）。
 
+切块单位是**字符**（rune）而非字节：同一段中文按字节切会落在字符中间并抛异常。历史数据若按旧的字节口径切过，建议按 `known-limitations.md` §5 重建索引后再检索。
+
 ### 3.2 检索
 
 `KnowledgeStore.search(KnowledgeQuery)` 是**块级**召回，返回 `KnowledgeHit`（块内容 + 所属 `docId` + 分数）：

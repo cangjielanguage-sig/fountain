@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.store
 
 import std.collection.*
@@ -30,28 +30,36 @@ public class KnowledgeChunker {
     private init() {
     }
 
-    public static func split(content: String, maxChars!: Int64 = DEFAULT_MAX_CHARS,
-                             overlap!: Int64 = DEFAULT_OVERLAP): ArrayList<String> {
-        if(maxChars <= 0){
+    public static func split(content: String, maxChars!: Int64 = DEFAULT_MAX_CHARS, overlap!: Int64 = DEFAULT_OVERLAP): ArrayList<String> {
+        if (maxChars <= 0) {
             throw IllegalArgumentException('maxChars must be positive, got ${maxChars}')
         }
-        if(overlap < 0 || overlap >= maxChars){
-            throw IllegalArgumentException(
-                'overlap must be in [0, maxChars), got ${overlap} (maxChars=${maxChars})')
+        if (overlap < 0 || overlap >= maxChars) {
+            throw IllegalArgumentException('overlap must be in [0, maxChars), got ${overlap} (maxChars=${maxChars})')
         }
         let chunks = ArrayList<String>()
-        if(content.isEmpty()){
+        if (content.isEmpty()) {
             return chunks
         }
+        // 先按 rune 展开：窗口与重叠都是「字符」，按字节切会把中文切坏并抛异常
+        let runes = ArrayList<Rune>()
+        for (rune in content.runes()) {
+            runes.add(rune)
+        }
+        let total = Int64(runes.size)
         let step = maxChars - overlap
         var start: Int64 = 0
-        while(start < Int64(content.size)){
-            let end = minOf(Int64(content.size), start + maxChars)
-            let piece = content[start..end]
-            if(!piece.isEmpty()){
+        while (start < total) {
+            let end = minOf(total, start + maxChars)
+            let builder = StringBuilder()
+            for (index in start..end) {
+                builder.append(runes[index])
+            }
+            let piece = builder.toString()
+            if (!piece.isEmpty()) {
                 chunks.add(piece)
             }
-            if(end >= Int64(content.size)){
+            if (end >= total) {
                 break
             }
             start += step
@@ -60,9 +68,9 @@ public class KnowledgeChunker {
     }
 
     private static func minOf(a: Int64, b: Int64): Int64 {
-        if(a < b){
+        if (a < b) {
             a
-        }else{
+        } else {
             b
         }
     }

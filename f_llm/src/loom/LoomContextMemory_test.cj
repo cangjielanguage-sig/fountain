@@ -204,6 +204,92 @@ class LoomContextMemory_test {
     }
 
     /** 模型总结模式：解析 JSON 后按返回内容写入 */
+    /** 中文长正文不能因为按字节截断而丢掉整次提炼 */
+    @TestCase
+    func testChineseLongTurnStillWrites(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 7, namespace: 'cn'))
+        try{
+            let host = ScriptedHost('')
+            LoomRunner().run(plan(), host, start())
+            let records = gateway.call('memory', 'list',
+                '{"userId":7,"namespace":"cn","offset":0,"limit":10}')
+            @Expect(records.contains('"kind":"note"'), true)
+            @Expect(records.contains('"kind":"experience"'), true)
+            @Expect(records.contains('…'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
+    /** 模型返回自然语言：按字段回落，仍然两条都写 */
+    @TestCase
+    func testInvalidSummaryFallsBackToRule(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 7, namespace: 'fb',
+            summarize: true, model: 'deepseek-flash'))
+        try{
+            let host = ScriptedHost('我觉得这次流程还不错')
+            LoomRunner().run(plan(), host, start())
+            let records = gateway.call('memory', 'list',
+                '{"userId":7,"namespace":"fb","offset":0,"limit":10}')
+            @Expect(records.contains('"kind":"note"'), true)
+            @Expect(records.contains('"kind":"experience"'), true)
+            @Expect(records.contains('结果：success'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
+    /** 模型只给 memory：经验仍用规则提炼补齐 */
+    @TestCase
+    func testPartialSummaryKeepsBothFields(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 7, namespace: 'part',
+            summarize: true, model: 'deepseek-flash'))
+        try{
+            let host = ScriptedHost('{"memory":"模型给的记忆"}')
+            LoomRunner().run(plan(), host, start())
+            let records = gateway.call('memory', 'list',
+                '{"userId":7,"namespace":"part","offset":0,"limit":10}')
+            @Expect(records.contains('模型给的记忆'), true)
+            @Expect(records.contains('结果：success'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
+    /** 模型把 memory 给成空串：该字段回落，experience 用模型结果 */
+    @TestCase
+    func testEmptyMemoryFieldFallsBack(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 7, namespace: 'mix',
+            summarize: true, model: 'deepseek-flash'))
+        try{
+            let host = ScriptedHost('{"memory":"","experience":"模型给的经验"}')
+            LoomRunner().run(plan(), host, start())
+            let records = gateway.call('memory', 'list',
+                '{"userId":7,"namespace":"mix","offset":0,"limit":10}')
+            @Expect(records.contains('模型给的经验'), true)
+            // memory 走的规则提炼，正文里带「上下文摘要」标记
+            @Expect(records.contains('上下文摘要'), true)
+        }finally{
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
     @TestCase
     func testSummarizeModeUsesModelOutput(): Unit {
         let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
@@ -258,5 +344,35 @@ class SummarizeHost <: LoomHost {
             return '{"memory":"提炼后的记忆","experience":"提炼后的经验"}'
         }
         'answer-${calls}'
+    }
+}
+
+/** 会返回超长中文与可定制总结回复的宿主 */
+class ScriptedHost <: LoomHost {
+    private var calls: Int64 = 0
+    private let summaryReply: String
+
+    public init(summaryReply: String) {
+        this.summaryReply = summaryReply
+    }
+
+    public func render(template: String, e: Event): String {
+        template
+    }
+
+    public func callTool(name: String, argsJson: String): String {
+        argsJson
+    }
+
+    public func callLlm(model: String, system: String, input: String): String {
+        calls++
+        if (input.contains('提炼两条内容')) {
+            return summaryReply
+        }
+        let builder = StringBuilder()
+        for (i in 0..800) {
+            builder.append('中')
+        }
+        builder.toString()
     }
 }

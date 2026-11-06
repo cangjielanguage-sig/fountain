@@ -12,13 +12,13 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 import std.collection.*
 import std.sync.*
-
 import fountain::f_data.*
+import fountain::f_llm.util.TextClip
 
 /** `synchronized` 块是 Unit 语义，序号用持有者带出 */
 class DocSeqBox {
@@ -49,10 +49,9 @@ public class LoomMemoryPolicy {
     /** 自动挑选的最低相关度 */
     public let skillMinScore: Float64
 
-    public init(enabled!: Bool = true, userId!: Int64 = 0, namespace!: String = 'loom',
-                maxTurns!: Int64 = 20, summarize!: Bool = false, model!: String = '',
-                writeKnowledge!: Bool = false, autoSkills!: Bool = true,
-                skillTopK!: Int64 = 3, skillMinScore!: Float64 = 0.2) {
+    public init(enabled!: Bool = true, userId!: Int64 = 0, namespace!: String = 'loom', maxTurns!: Int64 = 20,
+        summarize!: Bool = false, model!: String = '', writeKnowledge!: Bool = false, autoSkills!: Bool = true,
+        skillTopK!: Int64 = 3, skillMinScore!: Float64 = 0.2) {
         this.enabled = enabled
         this.userId = userId
         this.namespace = namespace
@@ -91,46 +90,59 @@ public class LoomMemoryExtractor {
      * @param host 宿主；仅 `summarize=true` 时用它发一次总结请求
      * @return 写入条数（0~2）
      */
-    public static func extract(flowName: String, turns: ArrayList<LlmTurn>,
-                               host: LoomHost, policy: LoomMemoryPolicy,
-                               outcome!: String = 'success'): Int64 {
-        if(turns.isEmpty()){
+    public static func extract(flowName: String, turns: ArrayList<LlmTurn>, host: LoomHost, policy: LoomMemoryPolicy,
+        outcome!: String = 'success'): Int64 {
+        if (turns.isEmpty()) {
             return 0
         }
         let digest = digestOf(turns, policy.maxTurns)
-        let verdict = if(outcome == 'success'){ 'success' }else{ outcome }
+        let verdict = if (outcome == 'success') {
+            'success'
+        } else {
+            outcome
+        }
         var memory = '结果：${verdict}\n流程 ${flowName} 的上下文摘要：\n${digest}'
         var experience = '结果：${verdict}\n流程 ${flowName} 执行了 ${turns.size} 次模型交互，'
             + '最后一次输出：\n${truncate(turns[turns.size - 1].output, 600)}'
 
-        if(policy.summarize && !policy.model.isEmpty()){
+        if (policy.summarize && !policy.model.isEmpty()) {
             let prompt = '以下是流程「${flowName}」执行过程的模型交互摘要：\n${digest}\n\n'
                 + '提炼两条内容，只输出 JSON：\n'
-                + '{"memory":"这次任务用到了哪些事实与结论","experience":"下次可复用的做法或踩过的坑"}'
+                +
+                '{"memory":"这次任务用到了哪些事实与结论","experience":"下次可复用的做法或踩过的坑"}'
             let text = Planner.stripFence(host.callLlm(policy.model, '', prompt))
             let parsed = parse(text)
-            memory = parsed[0]
-            experience = parsed[1]
+            // 按字段独立回落：模型只给一半时，另一半用规则提炼结果补齐
+            if (!parsed[0].trimAscii().isEmpty()) {
+                memory = parsed[0]
+            }
+            if (!parsed[1].trimAscii().isEmpty()) {
+                experience = parsed[1]
+            }
         }
 
         var written: Int64 = 0
-        if(LoomMemoryExtractor.write(policy, memory, '流程 ${flowName} 记忆', 'note')){
+        if (LoomMemoryExtractor.write(policy, memory, '流程 ${flowName} 记忆', 'note')) {
             written++
         }
         // 失败经验单独用一个 kind：后续统计成功率、筛演进样本时可以直接按 kind 查
-        let experienceKind = if(verdict == 'success'){ 'experience' }else{ 'experience_failed' }
-        if(LoomMemoryExtractor.write(policy, experience, '流程 ${flowName} 经验', experienceKind)){
+        let experienceKind = if (verdict == 'success') {
+            'experience'
+        } else {
+            'experience_failed'
+        }
+        if (LoomMemoryExtractor.write(policy, experience, '流程 ${flowName} 经验', experienceKind)) {
             written++
         }
-        if(policy.writeKnowledge && !memory.trimAscii().isEmpty()){
+        if (policy.writeKnowledge && !memory.trimAscii().isEmpty()) {
             let docId = 'loom:${flowName}:${nextDocSeq()}'
-            let payload = '{"docId":${FlowPlan.jsonQuote(docId)},'
-                + '"title":${FlowPlan.jsonQuote('流程 ${flowName} 记忆')},'
-                + '"content":${FlowPlan.jsonQuote(memory)}}'
-            try{
+            let payload = '{\"docId\":${FlowPlan.jsonQuote(docId)},'
+                + '\"title\":${FlowPlan.jsonQuote('流程 ${flowName} 记忆')},'
+                + '\"content\":${FlowPlan.jsonQuote(memory)}}'
+            try {
                 LoomHostApi.callStore('knowledge', 'upsert', payload)
                 written++
-            }catch(error: Exception){
+            } catch (error: Exception) {
                 ()
             }
         }
@@ -143,27 +155,26 @@ public class LoomMemoryExtractor {
     /** 知识文档 id 后缀：流程可重复执行，用递增序号避免互相覆盖 */
     private static func nextDocSeq(): Int64 {
         let box = DocSeqBox()
-        synchronized(seqMutex){
+        synchronized(seqMutex) {
             seq++
             box.value = seq
         }
         box.value
     }
 
-    private static func write(policy: LoomMemoryPolicy, content: String,
-                              title: String, kind: String): Bool {
-        if(content.trimAscii().isEmpty()){
+    private static func write(policy: LoomMemoryPolicy, content: String, title: String, kind: String): Bool {
+        if (content.trimAscii().isEmpty()) {
             return false
         }
-        let payload = '{"userId":${policy.userId},'
-            + '"namespace":${FlowPlan.jsonQuote(policy.namespace)},'
-            + '"title":${FlowPlan.jsonQuote(title)},'
-            + '"content":${FlowPlan.jsonQuote(content)},'
-            + '"kind":${FlowPlan.jsonQuote(kind)}}'
-        try{
+        let payload = '{\"userId\":${policy.userId},'
+            + '\"namespace\":${FlowPlan.jsonQuote(policy.namespace)},'
+            + '\"title\":${FlowPlan.jsonQuote(title)},'
+            + '\"content\":${FlowPlan.jsonQuote(content)},'
+            + '\"kind\":${FlowPlan.jsonQuote(kind)}}'
+        try {
             LoomHostApi.callStore('memory', 'add', payload)
             true
-        }catch(error: Exception){
+        } catch (error: Exception) {
             // 存储未装配时不影响流程结果
             false
         }
@@ -171,16 +182,16 @@ public class LoomMemoryExtractor {
 
     private static func digestOf(turns: ArrayList<LlmTurn>, maxTurns: Int64): String {
         var text = ''
-        let limit = if(maxTurns > 0 && Int64(turns.size) > maxTurns){
+        let limit = if (maxTurns > 0 && Int64(turns.size) > maxTurns) {
             Int64(turns.size) - maxTurns
-        }else{
+        } else {
             0
         }
         var index = limit
-        while(index < Int64(turns.size)){
+        while (index < Int64(turns.size)) {
             let turn = turns[index]
             text += '[${index + 1}] model=${turn.model}\n'
-            if(!turn.system.isEmpty()){
+            if (!turn.system.isEmpty()) {
                 text += 'system: ${truncate(turn.system, 300)}\n'
             }
             text += 'input: ${truncate(turn.input, 400)}\n'
@@ -194,14 +205,14 @@ public class LoomMemoryExtractor {
     private static func parse(text: String): Array<String> {
         let fallback = ['', '']
         let trimmed = text.trimAscii()
-        if(!trimmed.startsWith('{')){
+        if (!trimmed.startsWith('{')) {
             return fallback
         }
-        match(JsonValue.fromStr(trimmed) as JsonObject){
+        match (JsonValue.fromStr(trimmed) as JsonObject) {
             case Some(json) =>
                 let memory = fieldOf(json, 'memory')
                 let experience = fieldOf(json, 'experience')
-                if(memory.isEmpty() && experience.isEmpty()){
+                if (memory.isEmpty() && experience.isEmpty()) {
                     return fallback
                 }
                 [memory, experience]
@@ -210,20 +221,16 @@ public class LoomMemoryExtractor {
     }
 
     private static func fieldOf(json: JsonObject, key: String): String {
-        match(json.get(key)){
-            case Some(value) =>
-                match(value as JsonString){
-                    case Some(text) => text.value
-                    case None => ''
-                }
+        match (json.get(key)) {
+            case Some(value) => match (value as JsonString) {
+                case Some(text) => text.value
+                case None => ''
+            }
             case None => ''
         }
     }
 
     private static func truncate(text: String, limit: Int64): String {
-        if(Int64(text.size) <= limit){
-            return text
-        }
-        text[0..limit] + '…'
+        TextClip.clip(text, limit)
     }
 }

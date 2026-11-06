@@ -40,6 +40,29 @@ public class KnowledgeChunkerTest {
         @Expect(chunks[2], '6789')
     }
 
+    /** 中文按字符切块：不抛异常，每块不超过 400 字符 */
+    @TestCase
+    func testChineseLongContentSplitsByChars(): Unit {
+        let builder = StringBuilder()
+        for (i in 0..1000) {
+            builder.append('汉')
+        }
+        let content = builder.toString()
+
+        let chunks = KnowledgeChunker.split(content, maxChars: 400, overlap: 50)
+
+        @Expect(chunks.size > 1, true)
+        let expectedFirst = StringBuilder()
+        for (i in 0..400) {
+            expectedFirst.append('汉')
+        }
+        @Expect(chunks[0], expectedFirst.toString())
+        for (chunk in chunks) {
+            // 400 个汉字 = 1200 字节，超过就说明窗口按错了单位
+            @Expect(Int64(chunk.size) <= 1200, true)
+        }
+    }
+
     @TestCase
     func testEmptyContentYieldsNothing(): Unit {
         @Expect(KnowledgeChunker.split('').size, 0)
