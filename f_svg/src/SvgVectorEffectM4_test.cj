@@ -133,6 +133,27 @@ public class SvgVectorEffectM4_test {
         @Assert(found)
     }
 
+    /** 奇异 CTM：渲染按 none 回退并追加 warning，不抛异常。 */
+    @TestCase
+    public func singularCtmFallsBackToNone(): Unit {
+        let document = svgDoc(
+            '<line x1="0" y1="5" x2="20" y2="5" stroke="red" stroke-width="2" ' +
+            'vector-effect="non-scaling-stroke" transform="scale(0)"/>',
+            width: 20,
+            height: 20
+        )
+        let renderer = SvgRenderer()
+        let bitmap = renderer.render(document)
+        var found = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("non-scaling-stroke") && warning.contains("none")) {
+                found = true
+            }
+        }
+        @Assert(found)
+        @Assert(!bitmapHasInk(bitmap))
+    }
+
     /** non-scaling-stroke 与 clip / 渐变描边叠加仍然确定。 */
     @TestCase
     public func combined(): Unit {
