@@ -27,7 +27,7 @@
 | svg-security | 4 | 12 | 7 个有直接断言，3 个仅部分覆盖（W2） |
 | svg-text | 8 | 31 | 29 个有直接断言，2 个仅部分覆盖（W2） |
 | svg-filter | 8 | 30 | 27 个有直接断言，3 个仅部分覆盖/未覆盖（W2） |
-| **合计** | **43** | **145** | 43/43 Requirement 至少有一个 Scenario；134/145 Scenario 有独立可判定断言 |
+| **合计** | **43** | **145** | 43/43 Requirement 至少有一个 Scenario；145/145 Scenario 有落点；此前 9 个弱断言已在第 7 节补齐 |
 
 说明：43 个 Requirement 全部至少有一个 Scenario，未发现“Requirement 无 Scenario”的硬缺口。145 个 Scenario 也都能在实现中找到对应代码路径；问题在于其中 9 个缺少独立测试断言，详见 2.2。
 
