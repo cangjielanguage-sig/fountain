@@ -75,7 +75,7 @@
 - **语义影响面**：所有 CRC 调用方 —— `f_protocol` 帧校验（`f_protocol/src/default/Message.cj:95` / `:128` / `:297`）、`f_store` WAL 校验（`f_store/src/WAL.cj:125`、`f_store/src/WALRecordCodec.cj:39`）、`f_zip` 条目 CRC。**只改性能不改语义**，回归口径 = `f_util` 全量 `cjpm test` + 上述模块的 CRC 相关用例。
 - **修正一条既有表述**：`f_zip/doc/spec/add-f-zip-module/design.md` D16 与 `tasks.md` §18 的"不引 FFI / 硬件指令"需要改写为"不引 C/FFI/native 链接；硬件加速走 `f_util` 既有的生成式机器码（`CodeBuffer` + `CFunc`）"。落地时必须同提交改掉这两处（见 tasks §8），否则文档之间互相打脸。
 - **覆盖的入口**：顶层 `crc64()` 指向 `Crc64.redis`，本变更**覆盖**它（阶段一）。README 不再需要"默认入口未加速"的免责说明。
-- **实测（融合引擎 aarch64，`cjpm test` 默认构建，1 MiB）**：CRC-64/XZ 表路径 **98.35 MB/s**（改造前 ~20）；CRC-16/MODBUS 表路径 **52.37 MB/s**；CRC-64/XZ 生成式硬件路径 **7450.5 MB/s**，4 KiB 单次 **777.03 ns**；CRC-32 硬件路径 9182 MB/s（无回退）。x86_64 仅有离线编码与 `objdump` 核对，性能待真机回填。
+- **实测（融合引擎 aarch64，`cjpm test` 默认构建，1 MiB，健康时段）**：CRC-64/XZ 表路径 **98.7 MB/s**（改造前 ~20）；CRC-16/MODBUS 表路径 **51.7 MB/s**；6 个 CRC-64 变体的硬件路径 **6867~7433 MB/s**，4 KiB 单次 **813~853 ns**；CRC-32 硬件路径 6426~9182 MB/s（无回退）。x86_64 仅有离线编码与 `objdump` 核对，性能待真机回填。
 
 ## Out of Scope
 
