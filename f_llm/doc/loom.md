@@ -50,7 +50,10 @@ export llm_channels='[{"platform":"email","account":"work","from":"bot@example.c
 | `channelSend` | `platform, account?, to, subject, text?, html?, attachments?: [{filename, path}]` | `{"ok":true,"messageId":…}` 或 `{"ok":false,"error":…}` |
 | `channelInbox` | `platform, account?, limit?, downloadDir?` | 消息数组 JSON（含附件 `filename/size/path/saved/error`） |
 
-附件语义：发送按**路径**给出（路径不存在整封失败，不发出缺附件的信）；接收默认只给元数据，给 `downloadDir` 时落盘，同名顺延 `-2`，不覆盖已有文件。
+附件语义：
+
+- 发送：按**路径**给出，且必须落在 `llm_channelSendRoots`（或回落 `llm_fileSandboxPath`）内、是普通文件；路径不存在或越界都整封失败，不发出缺附件的信。
+- 接收：默认只给元数据；给 `downloadDir` 才落盘，文件名只取最后一段（`/`、`\` 都当分隔符），同名顺延 `-2`，不覆盖已有文件；进程内并发落盘由 `AttachmentSink` 的锁串行化。
 
 平台 `wechat` / `wecom` / `dingtalk` / `feishu` 只有常量、没有实现：`platforms()` 不列它们，调用时报 `channel platform not supported`。
 

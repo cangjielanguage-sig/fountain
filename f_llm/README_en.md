@@ -537,7 +537,7 @@ loomCallTool("channelInbox", '{"platform":"email","account":"work","downloadDir"
 | Platform / account | Addressed as `(platform, account)`; several accounts per platform; blank account falls back only when the platform has exactly one |
 | Adding a platform | Implement `Channel` plus one top-level `let _ = ChannelMediator.registerProvider('xxx', …)` |
 | Implemented | `email` (SMTP send / IMAP receive, attachments included); `wechat` / `wecom` / `dingtalk` / `feishu` are reserved names only |
-| Attachments | Send takes local paths (a missing file fails the whole send); receive saves files only with `downloadDir`, conflicts get `-2`, nothing is overwritten |
+| Attachments | Send takes local paths that must sit under an allowed root (otherwise the whole send fails); receive saves only with `downloadDir`, keeps the last path segment only, conflicts get `-2`, nothing is overwritten |
 
 ### Flow routing (Supervisor)
 
@@ -768,6 +768,7 @@ All environment variables, read once at startup.
 | `llm_supervisor` | `false` | Enable flow routing (Supervisor): compiled flows auto-register and can be dispatched by description |
 | `llm_loomOnNoUsable` | `false` | Auto-build a new flow when Supervisor finds no usable one; effective only with `llm_supervisor=true` |
 | `llm_channels` | empty | Third-party accounts (JSON array, one per account; invalid entries are skipped with a warning) |
+| `llm_channelSendRoots` | empty | Allowed roots for outgoing attachments (comma separated); falls back to `llm_fileSandboxPath`, otherwise attachments are disabled |
 
 ### Others
 

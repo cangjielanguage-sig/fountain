@@ -21,7 +21,9 @@ import std.time.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import fountain::f_config.Config
 import fountain::f_data.JsonString
+import fountain::f_llm.config.LLMConfig
 
 @Test
 class ChannelFunctions_test {
@@ -121,6 +123,7 @@ class ChannelFunctions_test {
         let dir = '/tmp/fllm-channel-smoke-${DateTime.now().toUnixTimeStamp().toMilliseconds()}'
         Directory.create(Path(dir), recursive: true)
         let outPath = '${dir}/out.txt'
+        Config.set<String>([(LLMConfig.LLM_CHANNEL_SEND_ROOTS, dir)])
         let file = File.create(Path(outPath))
         file.write(Array<Byte>(3, repeat: 65))
         file.close()

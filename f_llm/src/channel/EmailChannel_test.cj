@@ -17,9 +17,13 @@ package fountain::f_llm.channel
 
 import std.collection.*
 import std.fs.*
+import std.sync.*
 import std.time.*
 import std.unittest.*
 import std.unittest.testmacro.*
+
+import fountain::f_config.Config
+import fountain::f_llm.config.LLMConfig
 
 /** 假 transport：记录发出的消息，回放预设的收件箱；不碰网络 */
 class FakeEmailTransport <: EmailTransport {
@@ -61,6 +65,8 @@ class EmailChannel_test {
     @TestCase
     func testSendMapsMessageAndAttachments(): Unit {
         let dir = tempDir('send')
+        // 附件白名单：不配就只能发无附件的信
+        Config.set<String>([(LLMConfig.LLM_CHANNEL_SEND_ROOTS, dir)])
         let filePath = '${dir}/report.pdf'
         let file = File.create(Path(filePath))
         file.write(Array<Byte>(4, repeat: 65))
@@ -80,6 +86,7 @@ class EmailChannel_test {
         @Expect(transport.sent[0].text, '正文')
         @Expect(transport.sent[0].attachments.size, 1)
         @Expect(transport.sent[0].attachments[0].filename, 'report.pdf')
+        Config.remove(LLMConfig.LLM_CHANNEL_SEND_ROOTS)
     }
 
     @TestCase
@@ -149,6 +156,26 @@ class EmailChannel_test {
         @Expect(exists(Path(secondPath)), true)
     }
 
+    /** 并发落盘：同名附件必须落到两个不同路径，互不覆盖 */
+    @TestCase
+    func testConcurrentSaveKeepsBothFiles(): Unit {
+        let dir = tempDir('concurrent')
+        let first = spawn {
+            => AttachmentSink.save(dir, 'same.txt', Array<Byte>(2, repeat: 65))
+        }
+        let second = spawn {
+            => AttachmentSink.save(dir, 'same.txt', Array<Byte>(2, repeat: 66))
+        }
+        let (pathA, errorA) = first.get()
+        let (pathB, errorB) = second.get()
+
+        @Expect(errorA, '')
+        @Expect(errorB, '')
+        @Expect(pathA == pathB, false)
+        @Expect(exists(Path(pathA)), true)
+        @Expect(exists(Path(pathB)), true)
+    }
+
     @TestCase
     func testAttachmentFailsWhenDirectoryMissing(): Unit {
         let missing = '/tmp/fllm-channel-missing-${DateTime.now().toUnixTimeStamp().toMilliseconds()}'
@@ -156,6 +183,117 @@ class EmailChannel_test {
 
         @Expect(path, '')
         @Expect(error.contains('directory'), true)
+    }
+
+    // ---------- 附件安全 ----------
+
+    @TestCase
+    func testBareNameStripsPathSegments(): Unit {
+        @Expect(AttachmentSink.bareName('../../etc/passwd'), 'passwd')
+        @Expect(AttachmentSink.bareName('a\\b\\c.txt'), 'c.txt')
+        @Expect(AttachmentSink.bareName('..'), 'attachment.bin')
+        @Expect(AttachmentSink.bareName(''), 'attachment.bin')
+    }
+
+    @TestCase
+    func testSaveKeepsTraversalInsideDirectory(): Unit {
+        let dir = tempDir('traversal')
+        let (path, error) = AttachmentSink.save(dir, '../../evil.txt', Array<Byte>(1, repeat: 65))
+
+        @Expect(error, '')
+        @Expect(path.startsWith(dir), true)
+        @Expect(exists(Path(path)), true)
+        @Expect(path.contains('evil'), true)
+    }
+
+    @TestCase
+    func testSendAllowsAttachmentInsideRoots(): Unit {
+        let root = tempDir('roots-ok')
+        let filePath = '${root}/a.txt'
+        let file = File.create(Path(filePath))
+        file.write(Array<Byte>(1, repeat: 65))
+        file.close()
+
+        Config.set<String>([(LLMConfig.LLM_CHANNEL_SEND_ROOTS, root)])
+        try{
+            let transport = FakeEmailTransport()
+            let channel = EmailChannel('work', 'bot@example.com', transport)
+            let attachments = ArrayList<OutboundAttachment>()
+            attachments.add(OutboundAttachment('a.txt', filePath))
+
+            let receipt = channel.send(OutboundMessage('x@y.z', '主题', text: '正文', attachments: attachments))
+            @Expect(receipt.ok, true)
+            @Expect(transport.sent.size, 1)
+        }finally{
+            Config.remove(LLMConfig.LLM_CHANNEL_SEND_ROOTS)
+        }
+    }
+
+    @TestCase
+    func testSendRejectsAttachmentOutsideRoots(): Unit {
+        let root = tempDir('roots-in')
+        let outside = tempDir('roots-out')
+        let filePath = '${outside}/secret.txt'
+        let file = File.create(Path(filePath))
+        file.write(Array<Byte>(1, repeat: 65))
+        file.close()
+
+        Config.set<String>([(LLMConfig.LLM_CHANNEL_SEND_ROOTS, root)])
+        try{
+            let transport = FakeEmailTransport()
+            let channel = EmailChannel('work', 'bot@example.com', transport)
+            let attachments = ArrayList<OutboundAttachment>()
+            attachments.add(OutboundAttachment('secret.txt', filePath))
+
+            let receipt = channel.send(OutboundMessage('x@y.z', '主题', text: '正文', attachments: attachments))
+            @Expect(receipt.ok, false)
+            @Expect(receipt.error.contains('allowed roots'), true)
+            @Expect(transport.sent.size, 0)
+        }finally{
+            Config.remove(LLMConfig.LLM_CHANNEL_SEND_ROOTS)
+        }
+    }
+
+    @TestCase
+    func testSendRejectsWhenRootsUnconfigured(): Unit {
+        Config.remove(LLMConfig.LLM_CHANNEL_SEND_ROOTS)
+        Config.remove(LLMConfig.FILE_SANDBOX_PATH)
+        let dir = tempDir('roots-none')
+        let filePath = '${dir}/a.txt'
+        let file = File.create(Path(filePath))
+        file.write(Array<Byte>(1, repeat: 65))
+        file.close()
+
+        let transport = FakeEmailTransport()
+        let channel = EmailChannel('work', 'bot@example.com', transport)
+        let attachments = ArrayList<OutboundAttachment>()
+        attachments.add(OutboundAttachment('a.txt', filePath))
+
+        let receipt = channel.send(OutboundMessage('x@y.z', '主题', text: '正文', attachments: attachments))
+        @Expect(receipt.ok, false)
+        @Expect(receipt.error.contains('not configured'), true)
+        @Expect(transport.sent.size, 0)
+    }
+
+    @TestCase
+    func testSendRejectsDirectoryAsAttachment(): Unit {
+        let root = tempDir('roots-dir')
+        let nested = '${root}/folder'
+        Directory.create(Path(nested), recursive: true)
+
+        Config.set<String>([(LLMConfig.LLM_CHANNEL_SEND_ROOTS, root)])
+        try{
+            let transport = FakeEmailTransport()
+            let channel = EmailChannel('work', 'bot@example.com', transport)
+            let attachments = ArrayList<OutboundAttachment>()
+            attachments.add(OutboundAttachment('folder', nested))
+
+            let receipt = channel.send(OutboundMessage('x@y.z', '主题', text: '正文', attachments: attachments))
+            @Expect(receipt.ok, false)
+            @Expect(transport.sent.size, 0)
+        }finally{
+            Config.remove(LLMConfig.LLM_CHANNEL_SEND_ROOTS)
+        }
     }
 
     @TestCase

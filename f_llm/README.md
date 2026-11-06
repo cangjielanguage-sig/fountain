@@ -546,7 +546,7 @@ loomCallTool("channelInbox", '{"platform":"email","account":"work","downloadDir"
 | 平台 / 账号 | 中介者按 `(platform, account)` 寻址；同平台可多账号；账号留空仅当该平台只有一个实例才回落 |
 | 扩展新平台 | 实现 `Channel` + 一行顶层 `let _ = ChannelMediator.registerProvider('xxx', …)` 自动注册 |
 | 已实现 | `email`（SMTP 发 / IMAP 收，含附件）；`wechat` / `wecom` / `dingtalk` / `feishu` 仅预留常量 |
-| 附件 | 发送按路径给出（路径不存在整封失败）；接收给 `downloadDir` 才落盘，同名顺延 `-2`，不覆盖 |
+| 附件 | 发送按路径给出，且必须在允许根目录内（否则整封失败）；接收给 `downloadDir` 才落盘，文件名只取最后一段，同名顺延 `-2`，不覆盖 |
 
 ### 流程路由（Supervisor）
 
@@ -779,6 +779,7 @@ mysql -h127.0.0.1 -ufllm_test -p fllm_test < tables-mysql.sql
 | `llm_supervisor` | `false` | 打开流程路由（Supervisor）：已编译流程自动登记、可按描述派发 |
 | `llm_loomOnNoUsable` | `false` | Supervisor 判定无可用流程时自动编排新流程；仅 `llm_supervisor=true` 时生效 |
 | `llm_channels` | 空 | 第三方平台账号（JSON 数组，一条一个账号；单条非法只跳过并 warn） |
+| `llm_channelSendRoots` | 空 | 允许作为邮件附件的根目录（逗号分隔）；未配置时回落 `llm_fileSandboxPath`，都没有则禁用附件 |
 
 ### 其它
 

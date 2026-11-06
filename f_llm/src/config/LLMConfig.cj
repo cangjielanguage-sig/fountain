@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain::f_llm.config
 
+import std.collection.*
 import std.convert.*
 import std.env.*
 import std.fs.{Path, exists, Directory}
@@ -32,6 +33,8 @@ public struct LLMConfig {
     public static const LLM = 'llm'
     public static const AUTO = LLM + '_auto'
     public static const FILE_SANDBOX_PATH = LLM + '_fileSandboxPath'
+    /** 允许作为邮件附件的根目录（逗号分隔）；未配置时回落到 llm_fileSandboxPath */
+    public static const LLM_CHANNEL_SEND_ROOTS = LLM + '_channelSendRoots'
     public static const LLM_ACCESS_TRYING_COUNT = LLM + '_accessTryingCount'
     public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_accessTryingElapsed'
     public static const LLM_FAITHFUL_MEMORY_PATH = LLM + '_faithfulMemoryPath'
@@ -206,6 +209,29 @@ public struct LLMConfig {
     }
     public static func getFileSandboxPath(): Path {
         getPath(FILE_SANDBOX_PATH)
+    }
+    /**
+     * 允许发送的附件根目录；空列表表示附件能力关闭（由 `EmailChannel` 给出明确错误）。
+     *
+     * 优先 `llm_channelSendRoots`（逗号分隔），未配置时回落到 `llm_fileSandboxPath`。
+     */
+    public static func channelSendRoots(): ArrayList<String> {
+        let result = ArrayList<String>()
+        let raw = Config.getString(LLM_CHANNEL_SEND_ROOTS) ?? ''
+        if (!raw.trimAscii().isEmpty()) {
+            for (part in raw.split(',')) {
+                let item = part.trimAscii()
+                if (!item.isEmpty()) {
+                    result.add(item)
+                }
+            }
+            return result
+        }
+        let sandbox = Config.getString(FILE_SANDBOX_PATH) ?? ''
+        if (!sandbox.trimAscii().isEmpty()) {
+            result.add(sandbox.trimAscii())
+        }
+        result
     }
     public static func getLLMAccessTryingCount(): Int64 {
         Config.getValue<Int64>(LLM_ACCESS_TRYING_COUNT) ?? Int64.Max

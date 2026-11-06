@@ -17,7 +17,9 @@ package fountain::f_llm.channel
 
 import std.collection.*
 import std.fs.*
+import std.sync.*
 import fountain::f_email.{Email, MailMessage}
+import fountain::f_llm.config.LLMConfig
 import fountain::f_email.model.{FileBodySource, Secret}
 
 /** 收到的一封邮件里的附件：字节按需读，避免一次把全部附件读进内存 */
@@ -71,18 +73,61 @@ public class AttachmentSink {
     private init() {
     }
 
+    /** 落盘串行化：把「选名 + 创建」放进同一临界区，避免并发覆盖 */
+    private static let sinkMutex: Mutex = Mutex()
+    private static let FALLBACK_NAME = 'attachment.bin'
+    private static let MAX_NAME_CHARS = 120
+
+    /**
+     * 只保留最后一段文件名：`../../etc/passwd` → `passwd`，`a\\b\\c.txt` → `c.txt`。
+     *
+     * 规则：`/` 与 `\\` 都当分隔符；去掉控制字符；拒绝空名、`.`、`..`；超长按字符截断。
+     */
+    public static func bareName(filename: String): String {
+        let text = filename.trimAscii()
+        if (text.isEmpty()) {
+            return FALLBACK_NAME
+        }
+        var start = 0
+        for (index in 0..text.size) {
+            let byte = text[index]
+            if (byte == 47u8 || byte == 92u8) {
+                start = index + 1
+            }
+        }
+        let tail = text[start..]
+        let cleaned = StringBuilder()
+        var count = 0
+        for (rune in tail.runes()) {
+            if (rune < r'\u{20}' || rune == r'\u{7f}') {
+                continue
+            }
+            if (count >= MAX_NAME_CHARS) {
+                break
+            }
+            cleaned.append(rune)
+            count++
+        }
+        let name = cleaned.toString().trimAscii()
+        if (name.isEmpty() || name == '.' || name == '..') {
+            return FALLBACK_NAME
+        }
+        name
+    }
+
     /** 在 `directory` 里为 `filename` 找一个不冲突的名字（不含目录）：`a.txt` → `a-2.txt` */
     public static func freeName(directory: String, filename: String): String {
-        if (!exists(Path('${directory}/${filename}'))) {
-            return filename
+        let base = bareName(filename)
+        if (!exists(Path('${directory}/${base}'))) {
+            return base
         }
-        var stem = filename
+        var stem = base
         var extension = ''
-        match (filename.indexOf('.')) {
+        match (base.indexOf('.')) {
             case Some(dot) =>
                 if (dot > 0) {
-                    stem = filename[0..dot]
-                    extension = filename[dot..]
+                    stem = base[0..dot]
+                    extension = base[dot..]
                 }
             case None => ()
         }
@@ -94,7 +139,7 @@ public class AttachmentSink {
             }
             index++
         }
-        filename
+        base
     }
 
     /**
@@ -110,9 +155,13 @@ public class AttachmentSink {
         }
         var file: ?File = None
         try {
-            let name = freeName(dir, filename)
-            let target = '${dir}/${name}'
-            file = Some(File.create(Path(target)))
+            // 「选名 + 创建」在锁内完成：进程内并发不会拿到同一个名字
+            var target = ''
+            synchronized(sinkMutex) {
+                let name = freeName(dir, filename)
+                target = '${dir}/${name}'
+                file = Some(File.create(Path(target)))
+            }
             file.getOrThrow().write(bytes)
             (target, '')
         } catch (e: Exception) {
@@ -153,12 +202,57 @@ public class EmailChannel <: Channel {
     }
 
     public func send(message: OutboundMessage): SendReceipt {
+        let roots = LLMConfig.channelSendRoots()
         for (attachment in message.attachments) {
-            if (!exists(Path(attachment.path))) {
-                return SendReceipt.failure('attachment not found: ${attachment.filename} (${attachment.path})')
+            if (roots.isEmpty()) {
+                return SendReceipt.failure(
+                    'attachment directory not configured (llm_channelSendRoots): ${attachment.filename}')
+            }
+            match (checkAttachment(attachment, roots)) {
+                case Some(reason) => return SendReceipt.failure(reason)
+                case None => ()
             }
         }
         transport.send(message, sender)
+    }
+
+    /** 附件必须在允许根目录内、存在、且不是目录；返回拒绝原因（`None` 表示通过） */
+    private static func checkAttachment(attachment: OutboundAttachment, roots: ArrayList<String>): Option<String> {
+        if (!exists(Path(attachment.path))) {
+            return Some('attachment not found: ${attachment.filename} (${attachment.path})')
+        }
+        var actual = attachment.path
+        try {
+            actual = canonicalize(Path(attachment.path)).toString()
+        } catch (e: Exception) {
+            return Some('attachment path is not accessible: ${attachment.filename}')
+        }
+        for (root in roots) {
+            var base = root
+            try {
+                base = canonicalize(Path(root)).toString()
+            } catch (e: Exception) {
+                continue
+            }
+            let inside = actual == base || actual.startsWith('${base}/')
+            if (inside) {
+                if (isDirectory(Path(actual))) {
+                    return Some('attachment is a directory: ${attachment.filename}')
+                }
+                return None
+            }
+        }
+        Some('attachment outside allowed roots: ${attachment.filename} (${attachment.path})')
+    }
+
+    /** 目录判定：`<path>/.` 能解析说明是目录；文件/不存在都会抛 */
+    private static func isDirectory(path: Path): Bool {
+        try {
+            let _ = canonicalize(Path('${path}/.'))
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     public func receive(limit: Int64, downloadDir: String): ArrayList<InboundMessage> {
