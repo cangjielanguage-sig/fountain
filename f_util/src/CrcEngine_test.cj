@@ -170,7 +170,7 @@ public class CrcEngine_test {
      * 的表口径与反射 32 位不同，误用切片会整体漂移。
      */
     @TestCase
-    public func slicingOnlyAppliesToReflected32Bit(): Unit {
+    public func otherWidthsAndNonReflectedMatchReference(): Unit {
         let lengths = [0, 1, 3, 4, 5, 4095, 4096, 8193]
         let data = pseudoBytes(8193)
         for (len in lengths) {
@@ -203,6 +203,181 @@ public class CrcEngine_test {
         match (env.getVariable("F_UTIL_PERF")) {
             case Some(v) => v == "1"
             case None => false
+        }
+    }
+
+    /** 24 个 CRC-16 变体的参数表：只给测试参考实现用。 */
+    private func crc16Rows(): Array<(String, Crc16, UInt64, Bool)> {
+        [
+            ('CRC-16/XMODEM', Crc16.xmodem, 0x1021, false),
+            ('CRC-16/CCITT-FALSE', Crc16.ccittFalse, 0x1021, false),
+            ('CRC-16/GENIBUS', Crc16.genibus, 0x1021, false),
+            ('CRC-16/GSM', Crc16.gsm, 0x1021, false),
+            ('CRC-16/PROFIBUS', Crc16.profibus, 0x1DCF, false),
+            ('CRC-16/EN-13757', Crc16.en13757, 0x3D65, false),
+            ('CRC-16/T10-DIF', Crc16.t10Dif, 0x8BB7, false),
+            ('CRC-16/CDMA2000', Crc16.cdma2000, 0xC867, false),
+            ('CRC-16/CMS', Crc16.cms, 0x8005, false),
+            ('CRC-16/BUYPASS', Crc16.buypass, 0x8005, false),
+            ('CRC-16/DECT-R', Crc16.dectR, 0x0589, false),
+            ('CRC-16/DECT-X', Crc16.dectX, 0x0589, false),
+            ('CRC-16/TELEDISK', Crc16.teledisk, 0xA097, false),
+            ('CRC-16/SPI-FUJITSU', Crc16.spiFujitsu, 0x1021, false),
+            ('CRC-16/ARC', Crc16.arc, 0x8005, true),
+            ('CRC-16/MODBUS', Crc16.modbus, 0x8005, true),
+            ('CRC-16/USB', Crc16.usb, 0x8005, true),
+            ('CRC-16/MAXIM-DOW', Crc16.maximDow, 0x8005, true),
+            ('CRC-16/KERMIT', Crc16.kermit, 0x1021, true),
+            ('CRC-16/X-25', Crc16.x25, 0x1021, true),
+            ('CRC-16/MCRF4XX', Crc16.mcrf4xx, 0x1021, true),
+            ('CRC-16/RIELLO', Crc16.riello, 0x1021, true),
+            ('CRC-16/TMS37157', Crc16.tms37157, 0x1021, true),
+            ('CRC-16/DNP', Crc16.dnp, 0x3D65, true)
+        ]
+    }
+
+    /** Scenario: 24 个 CRC-16 变体在任意长度上与逐位参考实现一致。 */
+    @TestCase
+    public func slicingBy2MatchesReferenceForAllCrc16Variants(): Unit {
+        let lengths = [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 255, 256, 257, 4095, 4096, 4097, 65537]
+        for (row in crc16Rows()) {
+            let variant = row[1]
+            let poly = row[2]
+            let refin = row[3]
+            for (n in lengths) {
+                let data = pseudoBytes(n)
+                let c0 = variant.initRegister()
+                let actual = variant.update(c0, data)
+                let expected = refUpdate(16, poly, refin, UInt64(c0), data)
+                @Assert(UInt64(actual), expected)
+            }
+        }
+    }
+
+    /** Scenario: 边界字节（全 0x00 / 0xFF / 0x80 / 0x01）不因 16 位表项而丢高位。 */
+    @TestCase
+    public func slicingBy2EdgeBytesMatchReference(): Unit {
+        let samples: Array<Array<Byte>> = [
+            [0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8],
+            [0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8],
+            [0x80u8],
+            [0x01u8],
+            [0x80u8, 0x01u8, 0x80u8, 0x01u8, 0x80u8],
+            [0x00u8, 0xFFu8, 0x00u8, 0xFFu8, 0x00u8, 0xFFu8, 0x00u8, 0xFFu8, 0x00u8]
+        ]
+        for (row in crc16Rows()) {
+            let variant = row[1]
+            let poly = row[2]
+            let refin = row[3]
+            for (data in samples) {
+                let c0 = variant.initRegister()
+                let actual = variant.update(c0, data)
+                let expected = refUpdate(16, poly, refin, UInt64(c0), data)
+                @Assert(UInt64(actual), expected)
+            }
+        }
+    }
+
+    /** 6 个 CRC-64 变体的参数表：只给测试参考实现用（实现侧不应复制这些常量）。 */
+    private func crc64Rows(): Array<(String, Crc64, UInt64, Bool)> {
+        [
+            ('CRC-64/ECMA-182', Crc64.ecma182, 0x42F0E1EBA9EA3693, false),
+            ('CRC-64/WE', Crc64.we, 0x42F0E1EBA9EA3693, false),
+            ('CRC-64/XZ', Crc64.xz, 0x42F0E1EBA9EA3693, true),
+            ('CRC-64/GO-ISO', Crc64.iso, 0x000000000000001B, true),
+            ('CRC-64/REDIS', Crc64.redis, 0xAD93D23594C935A9, true),
+            ('CRC-64/JONES', Crc64.jones, 0xAD93D23594C935A9, true)
+        ]
+    }
+
+    /** Scenario: 6 个 CRC-64 变体在任意长度上与逐位参考实现一致（覆盖尾部与 8 字节边界）。 */
+    @TestCase
+    public func slicingBy8MatchesReferenceForAllCrc64Variants(): Unit {
+        let lengths = [0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 63, 64, 65, 255, 256, 257, 4095, 4096, 4097, 65537]
+        for (row in crc64Rows()) {
+            let variant = row[1]
+            let poly = row[2]
+            let refin = row[3]
+            for (n in lengths) {
+                let data = pseudoBytes(n)
+                let c0 = variant.initRegister()
+                let actual = variant.update(c0, data)
+                let expected = refUpdate(64, poly, refin, c0, data)
+                @Assert(actual, expected)
+            }
+        }
+    }
+
+    /** Scenario: 任意切分（含 8 字节边界内部）与一次累计等价。 */
+    @TestCase
+    public func slicingBy8SegmentedUpdatesMatchOneShot(): Unit {
+        let data = pseudoBytes(4097)
+        let patterns: Array<Array<Int64>> = [
+            [1, 3, 5],
+            [8, 16, 64],
+            [8, 8, 8],
+            [1],
+            [4096, 1]
+        ]
+        for (row in crc64Rows()) {
+            let variant = row[1]
+            let c0 = variant.initRegister()
+            let expected = variant.update(c0, data)
+            for (pattern in patterns) {
+                var crc = c0
+                var off = 0i64
+                var k = 0i64
+                while (off < data.size) {
+                    let step = pattern[k % pattern.size]
+                    let end = if (off + step > data.size) { data.size } else { off + step }
+                    crc = variant.update(crc, data[off..end])
+                    off = end
+                    k += 1
+                }
+                @Assert(crc, expected)
+            }
+        }
+    }
+
+    /** Scenario: CRC-64 表路径 1 MiB 吞吐达标（≥ 60 MB/s）。 */
+    @TestCase
+    public func throughputCrc64SlicingAtLeastSixtyMegabytesPerSecond(): Unit {
+        if (!perfEnabled()) {
+            println("SKIP: 未设置 F_UTIL_PERF=1，跳过 CRC-64 表路径吞吐用例")
+            return
+        }
+        let data = pseudoBytes(1024 * 1024)
+        Crc64.xz.compute(data)
+        let start = MonoTime.now()
+        let value = Crc64.xz.compute(data)
+        let nanos = (MonoTime.now() - start).toNanoseconds()
+        let megabytes = Float64(data.size) / (1024.0 * 1024.0)
+        let seconds = Float64(nanos) / 1.0e9
+        let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+        println('1 MiB CRC-64/XZ 表路径（${value}）：${nanos} ns，${mbPerSecond} MB/s')
+        if (mbPerSecond < 60.0) {
+            @Fail('CRC-64 表路径吞吐 ${mbPerSecond} MB/s 低于 60 MB/s 下限（1 MiB 样本）')
+        }
+    }
+
+    /** Scenario: CRC-16 表路径 1 MiB 吞吐达标（≥ 40 MB/s）。 */
+    @TestCase
+    public func throughputCrc16SlicingAtLeastFortyMegabytesPerSecond(): Unit {
+        if (!perfEnabled()) {
+            println("SKIP: 未设置 F_UTIL_PERF=1，跳过 CRC-16 表路径吞吐用例")
+            return
+        }
+        let data = pseudoBytes(1024 * 1024)
+        Crc16.modbus.compute(data)
+        let start = MonoTime.now()
+        let value = Crc16.modbus.compute(data)
+        let nanos = (MonoTime.now() - start).toNanoseconds()
+        let megabytes = Float64(data.size) / (1024.0 * 1024.0)
+        let seconds = Float64(nanos) / 1.0e9
+        let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+        println('1 MiB CRC-16/MODBUS 表路径（${value}）：${nanos} ns，${mbPerSecond} MB/s')
+        if (mbPerSecond < 40.0) {
+            @Fail('CRC-16 表路径吞吐 ${mbPerSecond} MB/s 低于 40 MB/s 下限（1 MiB 样本）')
         }
     }
 
