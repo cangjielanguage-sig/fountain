@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.sync.AtomicInt64
 import fountain::f_base.*
 
 /** 计算样式属性的来源，按优先级从低到高。 */
@@ -327,6 +328,9 @@ public class SvgComputedStyle <: ToString {
 
 /** 以元素身份为键的计算样式表。 */
 public class SvgComputedStyleTree {
+    /** 每次解析生成新版本，供单次渲染的 layout 缓存区分样式上下文。 */
+    internal let version: Int64 = SvgComputedStyleTree.nextVersion.fetchAdd(1)
+    private static let nextVersion = AtomicInt64(1)
     private let styles = HashMap<Int64, SvgComputedStyle>()
 
     internal func put(element: SvgElement, style: SvgComputedStyle): Unit {

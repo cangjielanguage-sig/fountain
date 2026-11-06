@@ -266,7 +266,7 @@ public class SvgRenderer {
                     case Some(value) => value
                     case None => return
                 }
-                let textRenderer = SvgTextRenderer(registry: registry)
+                let textRenderer = SvgTextRenderer(registry: registry, layoutCache: list.textLayouts)
                 let layout = textRenderer.outline(text, style: style, root: Some(list.root), styles: list.styles)
                 for (warning in textRenderer.warnings) {
                     this.warnings.add(warning)

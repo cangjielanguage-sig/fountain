@@ -135,6 +135,8 @@ public class SvgDisplayList {
     public let logicalHeight: Float64
     /** 构建该列表时使用的计算样式树；文本渲染据此读取 tspan / 祖先样式。 */
     internal let styles: ?SvgComputedStyleTree
+    /** 构建与光栅化共享的文本布局缓存；不跨渲染。 */
+    internal let textLayouts: ?SvgTextLayoutCache
 
     internal init(
         commands: Array<SvgDisplayCommand>,
@@ -143,7 +145,8 @@ public class SvgDisplayList {
         height: Int64,
         logicalWidth: Float64,
         logicalHeight: Float64,
-        styles!: ?SvgComputedStyleTree = None
+        styles!: ?SvgComputedStyleTree = None,
+        textLayouts!: ?SvgTextLayoutCache = None
     ) {
         this.commands = commands
         this.root = root
@@ -152,6 +155,7 @@ public class SvgDisplayList {
         this.logicalWidth = logicalWidth
         this.logicalHeight = logicalHeight
         this.styles = styles
+        this.textLayouts = textLayouts
     }
 }
 
@@ -200,6 +204,8 @@ public class SvgRenderTreeBuilder {
     public let warnings = ArrayList<String>()
     internal var guard: ?SvgRenderGuard = None
     internal var languages: Array<String> = ["en"]
+    /** 单次渲染的文本布局缓存；随显示列表交给光栅化阶段。 */
+    private let textLayouts = SvgTextLayoutCache()
 
     internal func attachGuard(value: SvgRenderGuard): Unit {
         this.guard = Some(value)
@@ -254,7 +260,16 @@ public class SvgRenderTreeBuilder {
                 }
             case None => ()
         }
-        SvgDisplayList(commands.toArray(), root, outputWidth, outputHeight, logicalWidth, logicalHeight, styles: Some(styles))
+        SvgDisplayList(
+            commands.toArray(),
+            root,
+            outputWidth,
+            outputHeight,
+            logicalWidth,
+            logicalHeight,
+            styles: Some(styles),
+            textLayouts: this.textLayouts
+        )
     }
 
     /** 以给定初始矩阵渲染容器子内容（pattern tile 等内部复用）。 */
@@ -295,7 +310,8 @@ public class SvgRenderTreeBuilder {
             height,
             Float64(width),
             Float64(height),
-            styles: Some(styles)
+            styles: Some(styles),
+            textLayouts: this.textLayouts
         )
     }
 
@@ -333,7 +349,16 @@ public class SvgRenderTreeBuilder {
             clipQuads: Array<Array<SvgPoint>>()
         )
         this.walkElement(element, context, commands)
-        SvgDisplayList(commands.toArray(), element, outputWidth, outputHeight, Float64(width), Float64(height), styles: Some(styles))
+        SvgDisplayList(
+            commands.toArray(),
+            element,
+            outputWidth,
+            outputHeight,
+            Float64(width),
+            Float64(height),
+            styles: Some(styles),
+            textLayouts: this.textLayouts
+        )
     }
 
     private func walkChildren(
@@ -384,14 +409,16 @@ public class SvgRenderTreeBuilder {
                     style: style,
                     fonts: context.fonts,
                     root: Some(context.root),
-                    styles: Some(context.styles)
+                    styles: Some(context.styles),
+                    layoutCache: this.textLayouts
                 )
                 let clipBounds = SvgGeometry.renderClipBounds(
                     text,
                     style: style,
                     fonts: context.fonts,
                     root: Some(context.root),
-                    styles: Some(context.styles)
+                    styles: Some(context.styles),
+                    layoutCache: this.textLayouts
                 )
                 let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
                 let maskElement = this.resolveUrlRef(style.get("mask"), context)

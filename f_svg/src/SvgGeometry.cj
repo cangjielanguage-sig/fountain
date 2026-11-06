@@ -103,7 +103,8 @@ public class SvgGeometry {
         style!: SvgComputedStyle,
         fonts!: ?SvgFontRegistry = None,
         root!: ?SvgElement = None,
-        styles!: ?SvgComputedStyleTree = None
+        styles!: ?SvgComputedStyleTree = None,
+        layoutCache!: ?SvgTextLayoutCache = None
     ): ?SvgBounds {
         match (element) {
             case text: SvgTextElement =>
@@ -111,7 +112,7 @@ public class SvgGeometry {
                     case Some(value) => value
                     case None => SvgFontRegistry.defaultRegistry()
                 }
-                let renderer = SvgTextRenderer(registry: registry)
+                let renderer = SvgTextRenderer(registry: registry, layoutCache: layoutCache)
                 renderer.layout(text, style: style, root: root, styles: styles).bounds
             case _ => bounds(element, style: style, fonts: fonts, styles: styles)
         }
@@ -127,7 +128,8 @@ public class SvgGeometry {
         style!: SvgComputedStyle,
         fonts!: ?SvgFontRegistry = None,
         root!: ?SvgElement = None,
-        styles!: ?SvgComputedStyleTree = None
+        styles!: ?SvgComputedStyleTree = None,
+        layoutCache!: ?SvgTextLayoutCache = None
     ): ?SvgBounds {
         match (element) {
             case text: SvgTextElement =>
@@ -135,28 +137,36 @@ public class SvgGeometry {
                     case Some(value) => value
                     case None => SvgFontRegistry.defaultRegistry()
                 }
-                let renderer = SvgTextRenderer(registry: registry)
+                let renderer = SvgTextRenderer(registry: registry, layoutCache: layoutCache)
                 var bounds = renderer.layout(text, style: style, root: root, styles: styles).bounds
                 // 装饰线在基线之外，必须并入裁剪包围盒，否则裁剪快路径会漏裁。
-                match (renderer.decorationOutline(
-                    text,
-                    style: style,
-                    root: root,
-                    styles: styles
-                )) {
-                    case Some(path) =>
-                        match (pathDataBounds(path)) {
-                            case Some(decoration) =>
-                                bounds = match (bounds) {
-                                    case Some(existing) => Some(existing.union(decoration))
-                                    case None => Some(decoration)
-                                }
-                            case None => ()
-                        }
-                    case None => ()
+                if (renderer.hasDecoration(text, style: style, root: root, styles: styles)) {
+                    match (renderer.decorationOutline(
+                        text,
+                        style: style,
+                        root: root,
+                        styles: styles
+                    )) {
+                        case Some(path) =>
+                            match (pathDataBounds(path)) {
+                                case Some(decoration) =>
+                                    bounds = match (bounds) {
+                                        case Some(existing) => Some(existing.union(decoration))
+                                        case None => Some(decoration)
+                                    }
+                                case None => ()
+                            }
+                        case None => ()
+                    }
                 }
                 bounds
-            case _ => renderBounds(element, style: style, fonts: fonts, styles: styles)
+            case _ => renderBounds(
+                element,
+                style: style,
+                fonts: fonts,
+                styles: styles,
+                layoutCache: layoutCache
+            )
         }
     }
 

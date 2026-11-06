@@ -67,6 +67,35 @@ internal class SvgDecorationRun {
     }
 }
 
+/** 单次渲染内复用的布局结果及其产生的 warning。 */
+internal class SvgCachedTextLayout {
+    let layout: SvgTextLayout
+    let warnings: Array<String>
+
+    init(layout: SvgTextLayout, warnings: Array<String>) {
+        this.layout = layout
+        this.warnings = warnings
+    }
+}
+
+/**
+ * 单次渲染的文本布局缓存。
+ *
+ * 键包含元素身份、计算样式树版本与根元素身份；缓存随渲染树构建器创建，
+ * 由 `SvgDisplayList` 持有并在光栅化阶段复用，不跨渲染。
+ */
+internal class SvgTextLayoutCache {
+    private let entries = HashMap<String, SvgCachedTextLayout>()
+
+    func get(key: String): ?SvgCachedTextLayout {
+        this.entries.get(key)
+    }
+
+    func put(key: String, entry: SvgCachedTextLayout): Unit {
+        this.entries[key] = entry
+    }
+}
+
 /** 文本布局结果。 */
 public class SvgTextLayout {
     public let glyphs: Array<SvgTextGlyph>
@@ -183,12 +212,57 @@ public class SvgTextRenderer {
     public let warnings = ArrayList<String>()
     private let registry: SvgFontRegistry
     private let glyphCache = HashMap<String, SvgGlyphEntry>()
+    private let layoutCache: ?SvgTextLayoutCache
 
     public init(registry!: SvgFontRegistry = SvgFontRegistry.defaultRegistry()) {
         this.registry = registry
+        this.layoutCache = None
+    }
+
+    internal init(registry!: SvgFontRegistry, layoutCache!: ?SvgTextLayoutCache) {
+        this.registry = registry
+        this.layoutCache = layoutCache
     }
 
     public func layout(
+        text: SvgTextElement,
+        style!: SvgComputedStyle,
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
+    ): SvgTextLayout {
+        match ((this.layoutCache, styles)) {
+            case (Some(cache), Some(styleTree)) =>
+                let rootIdentity = match (root) {
+                    case Some(value) => value.identity
+                    case None => 0
+                }
+                let key = "${text.identity}|${styleTree.version}|${rootIdentity}"
+                match (cache.get(key)) {
+                    case Some(entry) =>
+                        for (warning in entry.warnings) {
+                            this.warnings.add(warning)
+                        }
+                        return entry.layout
+                    case None =>
+                        let start = this.warnings.size
+                        let value = this.layoutUncached(
+                            text,
+                            style: style,
+                            root: root,
+                            styles: styles
+                        )
+                        let produced = ArrayList<String>()
+                        for (index in start..this.warnings.size) {
+                            produced.add(this.warnings[index])
+                        }
+                        cache.put(key, SvgCachedTextLayout(value, produced.toArray()))
+                        return value
+                }
+            case _ => return this.layoutUncached(text, style: style, root: root, styles: styles)
+        }
+    }
+
+    private func layoutUncached(
         text: SvgTextElement,
         style!: SvgComputedStyle,
         root!: ?SvgElement = None,
@@ -489,6 +563,22 @@ public class SvgTextRenderer {
         }
         let resultBounds: ?SvgBounds = if (hasBounds) { Some(bounds) } else { None }
         SvgTextLayout(glyphs.toArray(), total, resultBounds, missingGlyph)
+    }
+
+    /** 布局结果中是否存在装饰线；复用缓存，不额外排版。 */
+    internal func hasDecoration(
+        text: SvgTextElement,
+        style!: SvgComputedStyle,
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
+    ): Bool {
+        let layout = this.layout(text, style: style, root: root, styles: styles)
+        for (glyph in layout.glyphs) {
+            if (!glyph.decoration.isNone()) {
+                return true
+            }
+        }
+        false
     }
 
     /** 装饰线路径；与字形使用同一旋转矩阵，按字形逐个生成。 */
