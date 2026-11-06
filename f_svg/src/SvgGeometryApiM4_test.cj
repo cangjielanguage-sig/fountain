@@ -55,6 +55,17 @@ public class SvgPathMeasureM4_test {
         @Assert(near(corner.y, 4.0))
     }
 
+    /** 只有 MoveTo 的零长度路径返回该起点。 */
+    @TestCase
+    public func pointAtMoveOnlyPath(): Unit {
+        let path = SvgPathData.parse("M10 20")
+        @Assert(near(path.totalLength(), 0.0))
+        let start = path.pointAtLength(0.0)
+        @Assert(near(start.x, 10.0) && near(start.y, 20.0))
+        let beyond = path.pointAtLength(100.0)
+        @Assert(near(beyond.x, 10.0) && near(beyond.y, 20.0))
+    }
+
     /** 空路径与非正容差。 */
     @TestCase
     public func emptyAndTolerance(): Unit {

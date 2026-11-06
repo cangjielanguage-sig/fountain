@@ -246,7 +246,7 @@ public class SvgTextBaseline {
         offset(SvgAlignmentBaseline.toDominant(value), ascent, descent, fontSize)
     }
 
-    /** `baseline-shift` 的 y 偏移：关键字按字号比例，正值向上。 */
+    /** `baseline-shift` 的 y 偏移（正值向下）：`sub` 向下、`super` 向上。 */
     public static func shift(value: SvgBaselineShift, fontSize: Float64): Float64 {
         match (value) {
             case Baseline => 0.0

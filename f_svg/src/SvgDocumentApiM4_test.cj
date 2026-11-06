@@ -108,6 +108,8 @@ public class SvgViewM4_test {
 
         let noBox = SvgView()
         @Assert(SvgViewport.forView(noBox, 10.0, 10.0) == SvgMatrix.identity)
+        let noBoxError = expectSvgException({=> SvgViewport.forView(noBox, 0.0, 10.0)})
+        @Assert(noBoxError.kind == SvgErrorKind.InvalidValue)
 
         let error = expectSvgException({=> SvgViewport.forView(view, 0.0, 10.0)})
         @Assert(error.kind == SvgErrorKind.InvalidValue)
@@ -303,5 +305,23 @@ public class SvgAnchorM4_test {
         @Assert(anchors[0].href.isNone())
         @Assert(anchors[0].target == "")
         @Assert(anchors[1].href == Some("#z"))
+    }
+
+    /** a 容器本身不改变渲染结果。 */
+    @TestCase
+    public func anchorRendersLikeContainer(): Unit {
+        let withAnchor = svgDoc(
+            '<a href="#x"><rect width="10" height="10" fill="red"/></a>',
+            width: 10,
+            height: 10
+        )
+        let withoutAnchor = svgDoc(
+            '<rect width="10" height="10" fill="red"/>',
+            width: 10,
+            height: 10
+        )
+        let first = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(withAnchor)
+        let second = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(withoutAnchor)
+        @Assert(first.pixels == second.pixels)
     }
 }

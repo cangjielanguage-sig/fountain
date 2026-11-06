@@ -148,6 +148,16 @@ internal class SvgPathMeasure {
         tolerance: Float64
     ): SvgMeasuredPoint {
         // 与 textPath 使用同一细分精度，保证落点逐点一致。
-        sample(buildSegments(path, tolerance, refine: false), distance)
+        let segments = buildSegments(path, tolerance, refine: false)
+        if (segments.size == 0) {
+            for (command in path.commands) {
+                if (command.kind == SvgPathCommandKind.MoveTo && command.values.size >= 2) {
+                    return SvgMeasuredPoint(command.values[0], command.values[1], 0.0)
+                }
+                break
+            }
+            return SvgMeasuredPoint(0.0, 0.0, 0.0)
+        }
+        sample(segments, distance)
     }
 }

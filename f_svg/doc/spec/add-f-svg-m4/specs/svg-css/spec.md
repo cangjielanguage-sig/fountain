@@ -30,7 +30,7 @@
 
 计算阶段 SHALL 归一化 M4 属性值：
 
-- `clip` 接受 `auto` 或 `rect(<top>, <right>, <bottom>, <left>)`，四分量各为长度或 `auto`；
+- `clip` 接受 `auto`、`none` 或 `rect(<top>, <right>, <bottom>, <left>)`，四分量各为长度或 `auto`；`none` 是 `auto` 的别名（不裁剪）；
 - `overflow` 的 `scroll` / `auto` SHALL 归一为 `hidden`；非法值 SHALL 回退到初始值 `hidden` 并记 warning；
 - `baseline-shift` 的百分比 SHALL 在计算阶段解析为相对当前 `font-size` 的像素长度；`baseline` / `sub` / `super` 保留关键字；
 - `text-decoration` SHALL 输出去重后按 `underline` → `overline` → `line-through` 顺序的关键字列表；

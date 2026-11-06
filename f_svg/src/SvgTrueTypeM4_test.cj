@@ -66,7 +66,7 @@ internal class M4ByteWriter {
     }
 }
 
-private let M4_TTF_TABLES: Array<String> = [
+internal let M4_TTF_TABLES: Array<String> = [
     "cmap", "glyf", "head", "hhea", "hmtx", "loca", "maxp"
 ]
 
@@ -245,7 +245,7 @@ internal func m4BuildTtf(
     writer.toArray()
 }
 
-private func m4TableEntryOffset(tag: String): Int64 {
+internal func m4TableEntryOffset(tag: String): Int64 {
     var index = 0
     while (index < M4_TTF_TABLES.size) {
         if (M4_TTF_TABLES[index] == tag) {
@@ -256,122 +256,11 @@ private func m4TableEntryOffset(tag: String): Int64 {
     -1
 }
 
-private func m4WriteU32(target: Array<Byte>, offset: Int64, value: Int64): Unit {
+internal func m4WriteU32(target: Array<Byte>, offset: Int64, value: Int64): Unit {
     target[offset] = UInt8((value >> 24) & 0xFF)
     target[offset + 1] = UInt8((value >> 16) & 0xFF)
     target[offset + 2] = UInt8((value >> 8) & 0xFF)
     target[offset + 3] = UInt8(value & 0xFF)
-}
-
-@Test
-public class SvgTrueTypeTablesM4_test {
-    /** 表目录、be16 / be32 / i16 边界读取与截断。 */
-    @TestCase
-    public func tableDirectoryAndReaders(): Unit {
-        let bytes = m4BuildTtf()
-        let directory = SvgTtfTableDirectory.parse(bytes)
-        @Assert(directory.size == 7)
-        let head = directory.table("head").getOrThrow()
-        @Assert(head.tag == "head")
-        @Assert(head.length == 54)
-        @Assert(head.offset > 0)
-        @Assert(directory.table("missing").isNone())
-
-        @Assert(readTtfU16(bytes, head.offset + 18) == 1000)
-        @Assert(readTtfI16(bytes, head.offset + 50) == 0)
-        @Assert(readTtfU32(bytes, 0) == 0x00010000)
-
-        let u16Error = expectSvgException({=> readTtfU16(bytes, Int64(bytes.size) - 1)})
-        @Assert(u16Error.kind == SvgErrorKind.Syntax)
-        let u32Error = expectSvgException({=> readTtfU32(bytes, Int64(bytes.size) - 2)})
-        @Assert(u32Error.kind == SvgErrorKind.Syntax)
-
-        let truncated = bytes[0..100]
-        let truncationError = expectSvgException({=> SvgTtfTableDirectory.parse(truncated)})
-        @Assert(truncationError.kind == SvgErrorKind.Syntax)
-
-        let maxp = directory.table("maxp").getOrThrow()
-        @Assert(readTtfU16(bytes, maxp.offset + 4) == 3)
-    }
-
-    /** loca 非单调抛 Syntax。 */
-    @TestCase
-    public func locaNonMonotonic(): Unit {
-        let bytes = m4BuildTtf()
-        let directory = SvgTtfTableDirectory.parse(bytes)
-        let loca = directory.table("loca").getOrThrow()
-        // 短 loca：把第 3 项改小，破坏单调性。
-        bytes[loca.offset + 6] = 0
-        bytes[loca.offset + 7] = 0
-        let error = expectSvgException({=> SvgTrueTypeFont.parse(bytes)})
-        @Assert(error.kind == SvgErrorKind.Syntax)
-    }
-
-    /** 表数与表长上限在读取表体前失败。 */
-    @TestCase
-    public func tableLimits(): Unit {
-        let tooMany = m4BuildTtf()
-        tooMany[4] = 0
-        tooMany[5] = 65
-        let countError = expectSvgException({=> SvgTtfTableDirectory.parse(tooMany)})
-        @Assert(countError.kind == SvgErrorKind.Limit)
-
-        let tooLong = m4BuildTtf()
-        // 第一个目录项从 12 开始：tag(4) checksum(4) offset(4) length(4)
-        let huge = 17 * 1024 * 1024
-        tooLong[24] = UInt8((huge >> 24) & 0xFF)
-        tooLong[25] = UInt8((huge >> 16) & 0xFF)
-        tooLong[26] = UInt8((huge >> 8) & 0xFF)
-        tooLong[27] = UInt8(huge & 0xFF)
-        let lengthError = expectSvgException({=> SvgTtfTableDirectory.parse(tooLong)})
-        @Assert(lengthError.kind == SvgErrorKind.Limit)
-    }
-
-    /** 表 tag 必须是 4 字节 ASCII；非法 tag 抛 Syntax 而非运行时异常。 */
-    @TestCase
-    public func nonAsciiTag(): Unit {
-        let bytes = m4BuildTtf()
-        bytes[12] = 0xFF
-        let error = expectSvgException({=> SvgTtfTableDirectory.parse(bytes)})
-        @Assert(error.kind == SvgErrorKind.Syntax)
-    }
-
-    /** head / hhea / maxp 的声明长度不足必须在读取字段前抛 Syntax。 */
-    @TestCase
-    public func declaredTableLengths(): Unit {
-        for (tag in ["head", "hhea", "maxp"]) {
-            let bytes = m4BuildTtf()
-            let entry = m4TableEntryOffset(tag)
-            m4WriteU32(bytes, entry + 12, 0)
-            let error = expectSvgException({=> SvgTrueTypeFont.parse(bytes)})
-            @Assert(error.kind == SvgErrorKind.Syntax)
-        }
-    }
-
-    /** cmap 子表声明长度不足必须在解析段表前抛 Syntax。 */
-    @TestCase
-    public func cmapSubtableLength(): Unit {
-        let bytes = m4BuildTtf()
-        let directory = SvgTtfTableDirectory.parse(bytes)
-        let cmap = directory.table("cmap").getOrThrow()
-        // cmap 头 4 字节 + 1 条记录 8 字节，子表从记录中的偏移 12 开始。
-        let subtable = cmap.offset + 12
-        bytes[subtable + 2] = 0
-        bytes[subtable + 3] = 10
-        let error = expectSvgException({=> SvgTrueTypeFont.parse(bytes)})
-        @Assert(error.kind == SvgErrorKind.Syntax)
-    }
-
-    /** 文件在 loca 表中间被截断。 */
-    @TestCase
-    public func locaTruncatedInMiddle(): Unit {
-        let bytes = m4BuildTtf()
-        let directory = SvgTtfTableDirectory.parse(bytes)
-        let loca = directory.table("loca").getOrThrow()
-        let truncated = bytes[0..loca.offset + 3]
-        let error = expectSvgException({=> SvgTrueTypeFont.parse(truncated)})
-        @Assert(error.kind == SvgErrorKind.Syntax)
-    }
 }
 
 @Test
