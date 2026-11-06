@@ -223,4 +223,30 @@ public class SvgFilterNoiseM4_test {
         })
         @Assert(oversized.kind == SvgErrorKind.Limit)
     }
+
+    /** 单次渲染内 `<image>` 与 `feImage` 共用同一个解码预算。 */
+    @TestCase
+    public func sharedBudgetWithinSingleRender(): Unit {
+        let firstData = "data:image/png;base64," + toBase64String(
+            m4SamplePng(2, 2, SvgColor.fromRgb(0, 0, 255))
+        )
+        let secondData = "data:image/png;base64," + toBase64String(
+            m4SamplePng(2, 2, SvgColor.fromRgb(255, 0, 0))
+        )
+        let document = svgDoc(
+            '<image x="0" y="0" width="4" height="4" href="${firstData}"/>' +
+            '<filter id="f"><feImage href="${secondData}"/></filter>' +
+            '<rect x="0" y="0" width="4" height="4" fill="red" filter="url(#f)"/>',
+            width: 8,
+            height: 8
+        )
+        let images = SvgImageResource(budget: SvgDecodeBudget(4))
+        let renderer = SvgRenderer(
+            options: SvgRenderOptions(samplesPerPixel: 1),
+            sessionImages: images,
+            sessionGuard: SvgRenderGuard()
+        )
+        let error = expectSvgException({=> renderer.render(document)})
+        @Assert(error.kind == SvgErrorKind.Limit)
+    }
 }

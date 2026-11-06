@@ -117,14 +117,17 @@ public class SvgTrueTypeTables_test {
         @Assert(error.kind == SvgErrorKind.Syntax)
     }
 
-    /** 文件在 loca 表中间被截断。 */
+    /** 文件完整、但 loca 表声明长度不足：目录解析通过后在表级读取阶段失败。 */
     @TestCase
     public func locaTruncatedInMiddle(): Unit {
         let bytes = m4BuildTtf()
+        let entry = m4TableEntryOffset("loca")
+        let loca = SvgTtfTableDirectory.parse(bytes).table("loca").getOrThrow()
+        // 文件仍完整，只把 loca 的声明长度缩短 2 字节（短 loca 需要 8 字节）。
+        m4WriteU32(bytes, entry + 12, loca.length - 2)
         let directory = SvgTtfTableDirectory.parse(bytes)
-        let loca = directory.table("loca").getOrThrow()
-        let truncated = bytes[0..loca.offset + 3]
-        let error = expectSvgException({=> SvgTrueTypeFont.parse(truncated)})
+        @Assert(directory.table("loca").getOrThrow().length == 6)
+        let error = expectSvgException({=> SvgTrueTypeFont.parse(bytes)})
         @Assert(error.kind == SvgErrorKind.Syntax)
     }
 }

@@ -182,9 +182,21 @@ public class SvgSecurity_test {
         @Assert(error.kind == SvgErrorKind.Limit)
     }
 
-    /** 字体族为文件 URL 时渲染器不读取文件，只按缺失字体降级。 */
+    /**
+     * 字体族为文件 URL 时渲染器不读取文件，只按缺失字体降级。
+     *
+     * `parse(Array<Byte>)` 是纯内存路径；显式 `load(Path)` 才会访问文件系统，
+     * 这里用不存在的路径反证两条路径的边界。
+     */
     @TestCase
     public func renderDoesNotLoadFontFiles(): Unit {
+        let font = SvgTrueTypeFont.parse(m4BuildTtf())
+        @Assert(font.glyphPath(65, 12.0).isSome())
+        let loadError = expectSvgException({=>
+            SvgTrueTypeFont.load(Path("/definitely-not-a-font/f_svg-m4.ttf"))
+        })
+        @Assert(loadError.kind == SvgErrorKind.Syntax)
+
         let document = SvgParser.parse(
             "<svg width=\"20\" height=\"20\">" +
             "<text x=\"0\" y=\"15\" font-family=\"file:///etc/fonts/not-a-font.ttf\" " +

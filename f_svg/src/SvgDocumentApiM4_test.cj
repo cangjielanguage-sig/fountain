@@ -209,6 +209,14 @@ public class SvgSwitchM4_test {
         )
         @Assert(SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
             .render(emptyLanguage).pixel(5, 5).red > 200)
+
+        let emptyExtensions = svgDoc(
+            '<switch><rect requiredExtensions="" width="10" height="10" fill="red"/></switch>',
+            width: 10,
+            height: 10
+        )
+        @Assert(SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(emptyExtensions).pixel(5, 5).red > 200)
     }
 
     /** requiredFeatures / requiredExtensions / 全部不满足 / display 交互。 */
