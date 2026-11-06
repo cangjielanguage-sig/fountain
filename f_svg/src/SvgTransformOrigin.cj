@@ -93,20 +93,20 @@ internal func effectiveElementTransform(
         }
     }
     let box = match (style) {
-        case Some(value) => value.get("transform-box") ?? "view-box"
+        case Some(value) => value.transformBox()
         case None => match (element.attr("transform-box")) {
-            case Some(value) => value.toAsciiLower()
-            case None => "view-box"
+            case Some(value) => SvgTransformBox.fromNameOrDefault(value)
+            case None => SvgTransformBox.ViewBox
         }
     }
-    if (originText.trimAscii() == "0 0" && box == "view-box") {
+    if (originText.trimAscii() == "0 0" && box == SvgTransformBox.ViewBox) {
         return matrix
     }
     var referenceWidth = viewportWidth
     var referenceHeight = viewportHeight
     var referenceX = 0.0
     var referenceY = 0.0
-    if (box == "fill-box") {
+    if (box == SvgTransformBox.FillBox) {
         match (bounds) {
             case Some(value) =>
                 referenceX = value.x

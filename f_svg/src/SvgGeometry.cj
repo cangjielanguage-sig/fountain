@@ -910,7 +910,7 @@ private func elementMatrix(
         case None => return elementMatrix(element)
     }
     var box: ?SvgBounds = Option<SvgBounds>.None
-    if (resolved.get("transform-box") == Some("fill-box")) {
+    if (resolved.transformBox() == SvgTransformBox.FillBox) {
         box = SvgGeometry.bounds(element, style: resolved)
     }
     effectiveElementTransform(

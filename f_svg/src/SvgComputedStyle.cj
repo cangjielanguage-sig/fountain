@@ -355,6 +355,11 @@ public class SvgComputedStyle <: ToString {
         SvgFontKerning.fromName(this.get("font-kerning") ?? "auto") ?? SvgFontKerning.Auto
     }
 
+    /** `transform-box` 的参考盒；未知值回退 `view-box`。 */
+    public func transformBox(): SvgTransformBox {
+        SvgTransformBox.fromNameOrDefault(this.get("transform-box"))
+    }
+
     /** 绘制顺序（未声明时取默认值）。 */
     public func paintOrder(): SvgPaintOrder {
         svgPaintOrderOf(this.get("paint-order"))

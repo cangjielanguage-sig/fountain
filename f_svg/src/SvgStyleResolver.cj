@@ -706,10 +706,10 @@ public class SvgStyleResolver <: ToString {
                 return None
             case "transform-origin" => return normalizeCssTransformOrigin(text)
             case "transform-box" =>
-                if (textLower == "view-box" || textLower == "fill-box") {
-                    return Some(textLower)
+                match (SvgTransformBox.fromName(textLower)) {
+                    case Some(box) => return Some(box.toString())
+                    case None => return None
                 }
-                return None
             case "direction" =>
                 if (textLower == "ltr" || textLower == "rtl") {
                     return Some(textLower)
