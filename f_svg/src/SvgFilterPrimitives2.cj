@@ -908,8 +908,20 @@ internal func morphologyFilterBuffer(
         radiusX = if (radiusX > 0.0) { radiusX } else { 0.0 }
         radiusY = if (radiusY > 0.0) { radiusY } else { 0.0 }
     }
-    let pixelRadiusX = Int64(round(radiusX * scaleX))
-    let pixelRadiusY = Int64(round(radiusY * scaleY))
+    let pixelLimit = min(4096, max(input.width, input.height))
+    let scaledRadiusX = radiusX * scaleX
+    let scaledRadiusY = radiusY * scaleY
+    // 半径上限与滤镜区域相称，避免不可信文档用巨大半径制造 O(r²) 计算。
+    if (!isFiniteSvgNumber(scaledRadiusX) || !isFiniteSvgNumber(scaledRadiusY) ||
+        scaledRadiusX > Float64(pixelLimit) + 0.5 ||
+        scaledRadiusY > Float64(pixelLimit) + 0.5) {
+        throw SvgException(
+            "feMorphology 的像素半径超过上限 ${pixelLimit}",
+            kind: SvgErrorKind.Limit
+        )
+    }
+    let pixelRadiusX = Int64(round(scaledRadiusX))
+    let pixelRadiusY = Int64(round(scaledRadiusY))
     if (pixelRadiusX <= 0 && pixelRadiusY <= 0) {
         return input.copy()
     }

@@ -60,6 +60,18 @@ public class SvgLimitsM4_test {
         @Assert(expectSvgException({=>
             feImageFilterBuffer(buffer, budgetImage, resource, warnings)
         }).kind == SvgErrorKind.Limit)
+
+        let smallMorphology = SvgFeMorphology()
+        smallMorphology.radius = SvgNumberList([100.0])
+        @Assert(expectSvgException({=>
+            morphologyFilterBuffer(m4Buffer(4, 4, SvgColor.White), smallMorphology, 1.0, 1.0, warnings)
+        }).kind == SvgErrorKind.Limit)
+
+        let hugeMorphology = SvgFeMorphology()
+        hugeMorphology.radius = SvgNumberList([1000000000.0])
+        @Assert(expectSvgException({=>
+            morphologyFilterBuffer(m4Buffer(100, 100, SvgColor.White), hugeMorphology, 1.0, 1.0, warnings)
+        }).kind == SvgErrorKind.Limit)
     }
 
     /** M4 warning 含属性名或元素路径，且 Renderer / Document 均累积。 */

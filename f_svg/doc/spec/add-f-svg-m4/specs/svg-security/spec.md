@@ -8,6 +8,7 @@
 
 - `feConvolveMatrix` 的 `order` 任一维超过 9；
 - `feTurbulence` 的 `numOctaves` 超过 8；
+- `feMorphology` 的像素半径任一维超过 `min(4096, max(区域宽, 区域高))`；
 - `feImage` 与 `<image>` 共享单次渲染累计解码像素预算，超出时抛 `Limit`。
 
 `feImage` 的 `data:` 长度 SHALL 复用 `<image>` 的 base64 长度上限；非法参数与不可用资源 SHALL 降级为 warning，不抛异常。
@@ -21,6 +22,11 @@
 
 - **WHEN** `numOctaves="9"`
 - **THEN** 抛 `SvgException(kind: Limit)`
+
+#### Scenario: 形态学半径超限
+
+- **WHEN** `radius="1000000000"`，滤镜区域 100×100
+- **THEN** 抛 `SvgException(kind: Limit)`，不进入半径循环
 
 #### Scenario: 解码预算共享
 
