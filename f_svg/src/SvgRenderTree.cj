@@ -60,7 +60,10 @@ public class SvgDisplayCommand {
     public let path: ?SvgPathData
     public let textElement: ?SvgTextElement
     public let style: ?SvgComputedStyle
+    /** 绘制用包围盒（文本不含装饰线，`objectBoundingBox` 渐变以此为准）。 */
     public let bounds: ?SvgBounds
+    /** 裁剪 / 滤镜用包围盒；文本含装饰线，其余与 `bounds` 相同。 */
+    public let clipBounds: ?SvgBounds
     public let opacity: Float64
     public let clipPath: ?SvgElement
     public let mask: ?SvgElement
@@ -86,6 +89,7 @@ public class SvgDisplayCommand {
         textElement!: ?SvgTextElement = None,
         style!: ?SvgComputedStyle = None,
         bounds!: ?SvgBounds = None,
+        clipBounds!: ?SvgBounds = None,
         opacity!: Float64 = 1.0,
         clipPath!: ?SvgElement = None,
         mask!: ?SvgElement = None,
@@ -104,6 +108,10 @@ public class SvgDisplayCommand {
         this.textElement = textElement
         this.style = style
         this.bounds = bounds
+        this.clipBounds = match (clipBounds) {
+            case Some(value) => Some(value)
+            case None => bounds
+        }
         this.opacity = opacity
         this.clipPath = clipPath
         this.mask = mask
@@ -378,6 +386,13 @@ public class SvgRenderTreeBuilder {
                     root: Some(context.root),
                     styles: Some(context.styles)
                 )
+                let clipBounds = SvgGeometry.renderClipBounds(
+                    text,
+                    style: style,
+                    fonts: context.fonts,
+                    root: Some(context.root),
+                    styles: Some(context.styles)
+                )
                 let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
                 let maskElement = this.resolveUrlRef(style.get("mask"), context)
                 let filterElement = this.resolveUrlRef(style.get("filter"), context)
@@ -392,7 +407,7 @@ public class SvgRenderTreeBuilder {
                         maskElement,
                         context.clipRect,
                         filterElement,
-                        bounds,
+                        clipBounds,
                         clip,
                         context.clipQuads
                     )
@@ -405,6 +420,7 @@ public class SvgRenderTreeBuilder {
                         textElement: Some(text),
                         style: Some(style),
                         bounds: bounds,
+                        clipBounds: clipBounds,
                         opacity: if (filterElement.isSome()) { 1.0 } else { style.opacity() },
                         clipPath: if (filterElement.isSome()) { None } else { clipPath },
                         mask: if (filterElement.isSome()) { None } else { maskElement },

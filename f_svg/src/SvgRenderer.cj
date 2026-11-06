@@ -210,7 +210,7 @@ public class SvgRenderer {
                                         layer = filters.apply(
                                             filter,
                                             layer,
-                                            command.bounds ?? SvgBounds.empty(),
+                                            command.clipBounds ?? SvgBounds.empty(),
                                             command.matrix,
                                             this.options
                                         )
@@ -225,7 +225,7 @@ public class SvgRenderer {
                             command.clipPath,
                             command.mask,
                             command.matrix,
-                            command.bounds,
+                            command.clipBounds,
                             list.root,
                             command.clipQuads
                         )
@@ -641,7 +641,7 @@ public class SvgRenderer {
  * 造成与 M3 的 1 级字节漂移；描边指令按描边宽度放宽边界。
  */
 private func clipRectCoversCommand(command: SvgDisplayCommand, rect: SvgBounds): Bool {
-    let box = match (command.bounds) {
+    let box = match (command.clipBounds) {
         case Some(value) => value
         case None =>
             match (command.path) {

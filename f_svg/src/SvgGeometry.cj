@@ -92,10 +92,11 @@ public class SvgGeometry {
     }
 
     /**
-     * 渲染阶段使用的包围盒。
+     * 渲染阶段使用的绘制包围盒。
      *
      * 与公开 `bounds` 的唯一区别：文本缺字时仍返回占位字形布局的包围盒，
      * 避免滤镜 / 蒙版区域退化为空导致整段文本消失。公开 `bounds` 的契约不变。
+     * 文本的装饰线不并入此包围盒；`objectBoundingBox` 渐变仍需按字形布局范围取样。
      */
     internal static func renderBounds(
         element: SvgElement,
@@ -111,8 +112,32 @@ public class SvgGeometry {
                     case None => SvgFontRegistry.defaultRegistry()
                 }
                 let renderer = SvgTextRenderer(registry: registry)
+                renderer.layout(text, style: style, root: root, styles: styles).bounds
+            case _ => bounds(element, style: style, fonts: fonts, styles: styles)
+        }
+    }
+
+    /**
+     * 渲染阶段的裁剪 / 滤镜包围盒：在绘制包围盒基础上并入文本装饰线。
+     *
+     * 装饰线在基线之外，若不并入会让裁剪快路径漏裁下划线 / 上划线 / 删除线。
+     */
+    internal static func renderClipBounds(
+        element: SvgElement,
+        style!: SvgComputedStyle,
+        fonts!: ?SvgFontRegistry = None,
+        root!: ?SvgElement = None,
+        styles!: ?SvgComputedStyleTree = None
+    ): ?SvgBounds {
+        match (element) {
+            case text: SvgTextElement =>
+                let registry = match (fonts) {
+                    case Some(value) => value
+                    case None => SvgFontRegistry.defaultRegistry()
+                }
+                let renderer = SvgTextRenderer(registry: registry)
                 var bounds = renderer.layout(text, style: style, root: root, styles: styles).bounds
-                // 装饰线在基线之外，必须并入渲染包围盒，否则裁剪快路径会漏裁。
+                // 装饰线在基线之外，必须并入裁剪包围盒，否则裁剪快路径会漏裁。
                 match (renderer.decorationOutline(
                     text,
                     style: style,
@@ -131,7 +156,7 @@ public class SvgGeometry {
                     case None => ()
                 }
                 bounds
-            case _ => bounds(element, style: style, fonts: fonts, styles: styles)
+            case _ => renderBounds(element, style: style, fonts: fonts, styles: styles)
         }
     }
 

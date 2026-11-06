@@ -137,6 +137,54 @@ public class SvgTextDecorationM4_test {
         @Assert(redStart)
     }
 
+    /**
+     * 装饰线不改变文本 fill 的 objectBoundingBox 渐变几何。
+     *
+     * 绘制用的 bounds 必须只包含字形布局范围；装饰线的范围只用于裁剪 / 滤镜。
+     */
+    @TestCase
+    public func decorationKeepsTextFillBounds(): Unit {
+        let plain = svgDoc(
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/>' +
+            '</linearGradient></defs>' +
+            '<text x="0" y="30" font-family="Hershey" font-size="20" fill="url(#g)">A</text>',
+            width: 30,
+            height: 40
+        )
+        let decorated = svgDoc(
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/>' +
+            '</linearGradient></defs>' +
+            '<text x="0" y="30" font-family="Hershey" font-size="20" fill="url(#g)" ' +
+            'text-decoration="underline">A</text>',
+            width: 30,
+            height: 40
+        )
+        var plainBounds: ?SvgBounds = None
+        for (command in SvgRenderTreeBuilder().build(plain).commands) {
+            if (command.kind == SvgDisplayCommandKind.Text) {
+                plainBounds = command.bounds
+            }
+        }
+        var decoratedBounds: ?SvgBounds = None
+        for (command in SvgRenderTreeBuilder().build(decorated).commands) {
+            if (command.kind == SvgDisplayCommandKind.Text) {
+                decoratedBounds = command.bounds
+            }
+        }
+        @Assert(plainBounds.isSome() && decoratedBounds.isSome())
+        @Assert(plainBounds.getOrThrow() == decoratedBounds.getOrThrow())
+
+        let plainBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(plain)
+        let decoratedBitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+            .render(decorated)
+        let plainColor = plainBitmap.pixel(5, 21)
+        let decoratedColor = decoratedBitmap.pixel(5, 21)
+        @Assert(plainColor.alpha > 0.2 && decoratedColor.alpha > 0.2)
+        @Assert(plainColor == decoratedColor)
+    }
+
     /** 同一文本内 tspan 不断开。 */
     @TestCase
     public func tspanContinuity(): Unit {
