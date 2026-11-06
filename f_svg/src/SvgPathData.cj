@@ -304,6 +304,17 @@ public class SvgPathData <: ToString {
         out.toString()
     }
 
+    /** 按扁平化容差计算总弧长。 */
+    public func totalLength(tolerance!: Float64 = 0.25): Float64 {
+        SvgPathMeasure.totalLength(this, tolerance)
+    }
+
+    /** 弧长处的点；负值钳制到起点、超长钳制到终点。 */
+    public func pointAtLength(distance: Float64, tolerance!: Float64 = 0.25): SvgPoint {
+        let point = SvgPathMeasure.pointAt(this, distance, tolerance)
+        SvgPoint(point.x, point.y)
+    }
+
     public operator func ==(that: SvgPathData): Bool {
         this.commands == that.commands
     }

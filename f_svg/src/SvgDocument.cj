@@ -49,6 +49,43 @@ public class SvgDocument <: ToString {
         result
     }
 
+    /** 按文档顺序返回全部 `view` 元素。 */
+    public func views(): ArrayList<SvgView> {
+        let all = this.elementsByTag("view")
+        let result = ArrayList<SvgView>()
+        for (element in all) {
+            match (element) {
+                case view: SvgView => result.add(view)
+                case _ => ()
+            }
+        }
+        result
+    }
+
+    /** 按 id 返回第一个 `view`；不存在或类型不符返回 `None`。 */
+    public func view(id: String): ?SvgView {
+        match (this.elementById(id)) {
+            case Some(element) =>
+                match (element) {
+                    case view: SvgView => Some(view)
+                    case _ => None
+                }
+            case None => None
+        }
+    }
+
+    /** 按文档顺序返回全部 `a` 链接信息。 */
+    public func anchors(): ArrayList<SvgAnchorInfo> {
+        let result = ArrayList<SvgAnchorInfo>()
+        for (node in this.root.children) {
+            match (node) {
+                case ElementNode(child) => collectSvgAnchors(child, result)
+                case _ => ()
+            }
+        }
+        result
+    }
+
     public func toXmlDocument(): XmlDocument {
         let document = XmlDocument()
         document.declaration = this.declaration
@@ -92,6 +129,30 @@ private func collectSvgElementsByTag(element: SvgElement, tag: String, result: A
     for (node in element.children) {
         match (node) {
             case ElementNode(child) => collectSvgElementsByTag(child, tag, result)
+            case _ => ()
+        }
+    }
+}
+
+private func collectSvgAnchors(element: SvgElement, result: ArrayList<SvgAnchorInfo>): Unit {
+    match (element) {
+        case container: SvgContainer =>
+            if (container.kind == SvgContainerKind.Anchor) {
+                match (readSvgHref(element)) {
+                    case Some(href) =>
+                        if (href.trimAscii().size > 0) {
+                            result.add(
+                                SvgAnchorInfo(element, Some(href), element.attr("target") ?? "")
+                            )
+                        }
+                    case None => ()
+                }
+            }
+        case _ => ()
+    }
+    for (node in element.children) {
+        match (node) {
+            case ElementNode(child) => collectSvgAnchors(child, result)
             case _ => ()
         }
     }

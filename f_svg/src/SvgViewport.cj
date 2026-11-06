@@ -15,6 +15,41 @@ limitations under the License.
 */
 package fountain::f_svg
 
+/** 根视口到设备坐标的变换快照。 */
+public struct SvgViewportTransform {
+    public let width: Float64
+    public let height: Float64
+    /** `viewBox` → 逻辑画布的矩阵。 */
+    public let matrix: SvgMatrix
+    public let devicePixelRatio: Float64
+
+    public init(width: Float64, height: Float64, matrix: SvgMatrix, devicePixelRatio: Float64) {
+        this.width = width
+        this.height = height
+        this.matrix = matrix
+        this.devicePixelRatio = devicePixelRatio
+    }
+
+    public static func from(
+        root: SvgRoot,
+        options!: SvgRenderOptions = SvgRenderOptions()
+    ): SvgViewportTransform {
+        let viewport = SvgViewport.from(root, 300.0, 150.0)
+        let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
+        let logicalHeight = if (options.height > 0) {
+            Float64(options.height)
+        } else {
+            viewport.height
+        }
+        SvgViewportTransform(
+            logicalWidth,
+            logicalHeight,
+            viewport.transform(root),
+            options.devicePixelRatio
+        )
+    }
+}
+
 /**
  * 视口尺寸与 `viewBox` 到设备坐标的映射。
  *
@@ -58,9 +93,28 @@ public struct SvgViewport {
         )
     }
 
+    /**
+     * `view` 元素到视口的映射。
+     *
+     * 无 `viewBox` 时返回单位矩阵；视口宽高非正抛 `InvalidValue`。
+     */
+    public static func forView(view: SvgView, viewportWidth: Float64, viewportHeight: Float64): SvgMatrix {
+        if (!isFiniteSvgNumber(viewportWidth) || !isFiniteSvgNumber(viewportHeight) ||
+            viewportWidth <= 0.0 || viewportHeight <= 0.0) {
+            throw invalidValue(
+                "view 视口宽高必须为正，实际 ${viewportWidth}×${viewportHeight}"
+            )
+        }
+        match (view.viewBox) {
+            case Some(box) =>
+                let aspect = view.preserveAspectRatio
+                aspect.toMatrix(box, viewportWidth, viewportHeight)
+            case None => SvgMatrix.identity
+        }
+    }
+
     /** 嵌套 svg 矩阵：`M_parent × translate(x,y) × toMatrix(viewBox, width, height)`。 */
-    public static func nestedTransform(
-        parent: SvgMatrix,
+    public static func nestedTransform(        parent: SvgMatrix,
         child: SvgRoot,
         parentWidth: Float64,
         parentHeight: Float64

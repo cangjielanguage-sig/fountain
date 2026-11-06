@@ -180,6 +180,7 @@ private class SvgRenderTreeContext {
 public class SvgRenderTreeBuilder {
     public let warnings = ArrayList<String>()
     internal var guard: ?SvgRenderGuard = None
+    internal var languages: Array<String> = ["en"]
 
     internal func attachGuard(value: SvgRenderGuard): Unit {
         this.guard = Some(value)
@@ -198,6 +199,7 @@ public class SvgRenderTreeBuilder {
 
     public func build(document: SvgDocument, options!: SvgRenderOptions = SvgRenderOptions()): SvgDisplayList {
         this.ensureGuard()
+        this.languages = options.languages
         let root = document.root
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(root)
@@ -284,6 +286,7 @@ public class SvgRenderTreeBuilder {
             throw invalidValue("render(element) 的宽高必须为正")
         }
         this.ensureGuard()
+        this.languages = options.languages
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(element)
         for (warning in resolver.warnings) {
@@ -436,18 +439,9 @@ public class SvgRenderTreeBuilder {
         )
         let childCommands = ArrayList<SvgDisplayCommand>()
         if (container.kind == SvgContainerKind.Switch) {
-            for (node in container.children) {
-                match (node) {
-                    case ElementNode(child) =>
-                        match (context.styles.get(child)) {
-                            case Some(childStyle) => if (childStyle.display() != "none") {
-                                this.walkElement(child, childContext, childCommands)
-                                break
-                            }
-                            case None => ()
-                        }
-                    case _ => ()
-                }
+            match (SvgSwitch.select(container, context.styles, this.languages)) {
+                case Some(child) => this.walkElement(child, childContext, childCommands)
+                case None => ()
             }
         } else {
             this.walkChildren(container, childContext, childCommands)

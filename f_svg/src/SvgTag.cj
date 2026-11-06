@@ -63,6 +63,7 @@ public class SvgTag {
             case "feDistantLight" => Some(SvgFeDistantLight())
             case "fePointLight" => Some(SvgFePointLight())
             case "feSpotLight" => Some(SvgFeSpotLight())
+            case "view" => Some(SvgView())
             case "style" | "title" | "desc" | "metadata" => Some(SvgElement(tag))
             case "g" | "defs" | "symbol" | "clipPath" | "mask" | "switch" | "a" |
                 "foreignObject" =>
@@ -85,7 +86,7 @@ public class SvgTag {
                 "feTile" | "feComponentTransfer" | "feFuncR" | "feFuncG" | "feFuncB" |
                 "feFuncA" | "feMorphology" | "feConvolveMatrix" | "feTurbulence" |
                 "feDisplacementMap" | "feImage" | "feDiffuseLighting" | "feSpecularLighting" |
-                "feDistantLight" | "fePointLight" | "feSpotLight" => true
+                "feDistantLight" | "fePointLight" | "feSpotLight" | "view" => true
             case _ => false
         }
     }

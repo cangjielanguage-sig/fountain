@@ -112,6 +112,64 @@ public class SvgGeometry {
             case _ => bounds(element, style: style, fonts: fonts)
         }
     }
+
+    /**
+     * 元素局部坐标到根用户空间的矩阵。
+     *
+     * 包含各级 `transform` 与嵌套 `svg` 的 `viewBox` / `preserveAspectRatio`；
+     * 不包含根 `viewBox` 与 `use` 实例化产生的变换。
+     */
+    public static func ctm(element: SvgElement): SvgMatrix {
+        let chain = ArrayList<SvgElement>()
+        var current: ?SvgElement = Some(element)
+        while (true) {
+            match (current) {
+                case Some(node) =>
+                    chain.add(node)
+                    current = node.parent
+                case None => break
+            }
+        }
+        if (chain.size == 0) {
+            return SvgMatrix.identity
+        }
+        let top = chain[chain.size - 1]
+        let root = match (top) {
+            case value: SvgRoot => value
+            case _ => return SvgMatrix.identity
+        }
+        let viewport = SvgViewport.from(root, 300.0, 150.0)
+        var width = viewport.width
+        var height = viewport.height
+        var matrix = SvgMatrix.identity
+        var index = chain.size - 1
+        while (index >= 0) {
+            let node = chain[index]
+            if (node == root) {
+                matrix = matrix.multiply(elementMatrix(node))
+            } else {
+                match (node) {
+                    case nested: SvgRoot =>
+                        matrix = SvgViewport.nestedTransform(matrix, nested, width, height)
+                            .multiply(elementMatrix(nested))
+                        let nestedViewport = SvgViewport.nestedViewport(nested, width, height)
+                        width = nestedViewport.width
+                        height = nestedViewport.height
+                    case _ =>
+                        matrix = matrix.multiply(elementMatrix(node))
+                }
+            }
+            index--
+        }
+        matrix
+    }
+
+    /** `ctm × viewport.matrix × scale(dpr)`。 */
+    public static func screenCTM(element: SvgElement, viewport: SvgViewportTransform): SvgMatrix {
+        ctm(element)
+            .multiply(viewport.matrix)
+            .multiply(SvgMatrix.scale(viewport.devicePixelRatio, viewport.devicePixelRatio))
+    }
 }
 
 private func rectBounds(rect: SvgRect): ?SvgBounds {
@@ -760,6 +818,13 @@ private func tipAt(
     dirX = dirX / dirLength
     dirY = dirY / dirLength
     tips.add(SvgPoint(vertex.x + dirX * half * ratio, vertex.y + dirY * half * ratio))
+}
+
+private func elementMatrix(element: SvgElement): SvgMatrix {
+    match (element.transform) {
+        case Some(transform) => transform.toMatrix()
+        case None => SvgMatrix.identity
+    }
 }
 
 private func ancestorTransform(element: SvgElement): SvgMatrix {

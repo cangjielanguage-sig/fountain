@@ -45,24 +45,6 @@ public class SvgTextPlacement {
     }
 }
 
-private class SvgPathSegment {
-    let x0: Float64
-    let y0: Float64
-    let x1: Float64
-    let y1: Float64
-    let start: Float64
-    let length: Float64
-
-    init(x0: Float64, y0: Float64, x1: Float64, y1: Float64, start: Float64, length: Float64) {
-        this.x0 = x0
-        this.y0 = y0
-        this.x1 = x1
-        this.y1 = y1
-        this.start = start
-        this.length = length
-    }
-}
-
 /**
  * `textPath` 弧长排版：把字形 advance 序列映射到扁平化路径的弧长上。
  *
@@ -86,25 +68,11 @@ public class SvgTextPathLayout {
         dxOffsets!: Array<Float64> = Array<Float64>()
     ): Array<SvgTextPlacement> {
         this.pathEmpty = false
-        let contours = flattenPathData(path, SvgMatrix.identity, 0.25)
-        let segments = ArrayList<SvgPathSegment>()
+        let segments = SvgPathMeasure.buildSegments(path, 0.25, refine: false)
         var total: Float64 = 0.0
-        for (contour in contours) {
-            var index = 1
-            while (index < contour.size) {
-                let previous = contour[index - 1]
-                let current = contour[index]
-                let dx = current.x - previous.x
-                let dy = current.y - previous.y
-                let length = sqrt(dx * dx + dy * dy)
-                if (length > 0.0) {
-                    segments.add(
-                        SvgPathSegment(previous.x, previous.y, current.x, current.y, total, length)
-                    )
-                    total += length
-                }
-                index++
-            }
+        if (segments.size > 0) {
+            let last = segments[segments.size - 1]
+            total = last.start + last.length
         }
         if (total <= 0.0) {
             this.pathEmpty = true
@@ -159,8 +127,8 @@ public class SvgTextPathLayout {
                 truncated = true
                 break
             }
-            let origin = samplePoint(segments, cursor)
-            let center = samplePoint(segments, centerDistance)
+            let origin = SvgPathMeasure.sample(segments, cursor)
+            let center = SvgPathMeasure.sample(segments, centerDistance)
             var originX = origin.x
             var originY = origin.y
             var centerX = center.x
@@ -190,37 +158,4 @@ public class SvgTextPathLayout {
         }
         result.toArray()
     }
-}
-
-private class SvgPathSample {
-    let x: Float64
-    let y: Float64
-    let angle: Float64
-
-    init(x: Float64, y: Float64, angle: Float64) {
-        this.x = x
-        this.y = y
-        this.angle = angle
-    }
-}
-
-private func samplePoint(segments: ArrayList<SvgPathSegment>, distance: Float64): SvgPathSample {
-    var last = segments[0]
-    for (segment in segments) {
-        last = segment
-        if (distance <= segment.start + segment.length) {
-            let offset = distance - segment.start
-            let parameter = if (segment.length > 0.0) {
-                offset / segment.length
-            } else {
-                0.0
-            }
-            let x = segment.x0 + (segment.x1 - segment.x0) * parameter
-            let y = segment.y0 + (segment.y1 - segment.y0) * parameter
-            let angle = atan2(segment.y1 - segment.y0, segment.x1 - segment.x0) * 180.0 /
-                3.141592653589793
-            return SvgPathSample(x, y, angle)
-        }
-    }
-    SvgPathSample(last.x1, last.y1, 0.0)
 }
