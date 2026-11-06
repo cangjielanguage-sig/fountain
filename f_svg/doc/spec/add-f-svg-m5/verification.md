@@ -407,3 +407,50 @@ CRITICAL=10
 ### 8.4 结论
 
 CRITICAL=0；第 2 节要求的 WARNING 全部落地；第 3 节 SUGGESTION 已处理；第 4 节记录不改项未动。M1–M4 公开 API 语义未改，17 张既有快照逐字节一致。
+
+## 9. 第二轮复验修复（fix-plan-2 / verify-report-2）
+
+- 执行日期：2026-11-07
+- 分支：`feature/f_svg`
+- 修复基线：`8555821b`；修复提交：`d56b44cc` … `dfecdaa8`
+- 纪律：每项先加失败用例并确认失败原因，再实现；`cjpm test` 全绿后独立提交
+- 说明：`openspec/` 被 `.gitignore` 忽略，N2/N5 的规范修改仅在工作树生效，归档步骤再并入主规格
+
+### 9.1 CRITICAL
+
+| 编号 | 结论 | 实现与用例 |
+|---|---|---|
+| N1 | **已清除** | `@font-face` 的目标改由 `src: local(<family>)` 提供（`SvgFont.cj`、`CssStyleSheet.cj` 保存 `src` 原文）。注册 `Brand` 并声明 `Body -> local(Brand)` 时文本命中 Brand；`local(Missing)` 不建别名并 warning；`url(...)` 不加载文件，同名已注册时保留恒等别名。用例：`CssFontAliasM5_test.localSourceAliasesRegisteredFamily` / `localSourceWithoutRegisteredTarget` / `urlSourceKeepsIdentityAlias`；删除自证的 `aliasHitsRegisteredFamily`，并把 `weightFallsBackToNormal` / `inputRegistryNotPolluted` / `rendererAppliesAlias` 改为 Brand 目标 |
+
+### 9.2 WARNING
+
+| 编号 | 结论 | 实现与用例 |
+|---|---|---|
+| N2 | **已落地** | `openspec/specs/svg-css/spec.md` 的「跳过不支持构造」场景改为 `@import` / `@supports`，删除与 `@media` 支持矛盾的旧断言；M5 新 Requirement 的归档同步按 fix-plan 第 3 节留待归档步骤 |
+| N3 | **已落地** | `SvgGeometry.screenCTM` 把 `viewport.width/height` 传入 `ctm`，与 `getScreenCTM` 一致。用例：`SvgTransformPathM5_test.screenCtmViewBoxOriginUsesViewport`（根无宽高时仍使用显式视口） |
+| N4 | **已落地** | `nestedSvgClipRect` 使用 `viewBox.minX/minY/width/height`。用例：`SvgBBoxM5_test.nestedViewBoxClipUsesOrigin`（`viewBox="10 10 100 100"`） |
+| N5 | **已落地** | delta `svg-css` 明确几何属性百分比按视口对应轴换算、允许与绝对长度混合，其余属性仍无效。用例：`CssGeometryCalcM5_test.mixedUnitsUseViewportAxes`（x/width 用宽、y/height 用高） |
+| N6 | **已落地** | GSUB 深度改为 Extension lookup（Type 7）链的真实嵌套层级，特性直接引用为第 1 层；第 9 层停止并 warning。用例：`SvgGsubM5_test.nestedLookupDepthTwo`、`lookupDepthLimit`（7 层包装 + 第 8 层连字正常，8 层包装 + 第 9 层停止） |
+| N8 | **已落地** | `getCTM` 的容器 fill-box 退化为 `svgBBoxOf` 内容包围盒，与渲染路径一致。用例：`SvgTransformPathM5_test.ctmContainerFillBoxMatchesRender` |
+| N9 | **已落地** | `markerContentFitsIn` 改用 `effectiveElementTransform`（传样式、包围盒与视口）。用例：`SvgTransformPathM5_test.markerTransformOriginKeepsClip`（scale 原点导致内容越界时必须裁剪） |
+| N10 | **已落地** | `README.md` / `README_en.md` 的元素级 API 代码块补 `mediaWidth` / `mediaHeight`，与 `SvgElement.cj` 实现一致 |
+| N11 | **已落地** | 恢复 `svgBidiOverrideLevels` 并用于 `bidiSegmentLevels`；直接用例 `SvgBidiM5_test.override` 断言 RTL/LTR 强制层级与视觉顺序 |
+| N12 | **已落地** | 每个 PairPos format 2 子表独立保存 class 定义与矩阵，`adjust` 按子表顺序取首个命中，避免后续子表覆盖。用例：`SvgGposM5_test.multipleFormatTwoSubtablesMerge` |
+
+### 9.3 记录不改项
+
+- `SvgFontRegistry` 的 `@font-face` weight/style 限定（M6）未动；
+- N7 `<use>` 自身混合样式（M6）未动；
+- 13.7 合并与主规格归档同步留待归档步骤；
+- M1–M4 公开 API 语义未改，未修改任何 M1–M4 测试与快照。
+
+### 9.4 门禁结果
+
+| 项目 | 结果 |
+|---|---|
+| 全量测试 | `TOTAL: 997 / PASSED: 997 / SKIPPED: 0 / ERROR: 0 / FAILED: 0` |
+| 构建 | `cjpm build success`；`f_svg/src` 0 warning（`cjpm clean` 后全量重编译，warning 仅来自 `f_base` / `f_xml`） |
+| 17 张 M1–M4 快照 | 17/17 SHA-256 与 `doc/perf-baseline.md` 逐字节一致 |
+| 公开 API | 仅新增 `CssFontFaceRule.src` 字段与内部辅助函数；既有公开签名与语义未变 |
+
+**结论：CRITICAL=0；第 2 节 N2–N6、N8–N12 全部落地；第 3 节记录不改项未动。**
