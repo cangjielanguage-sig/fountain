@@ -264,7 +264,7 @@ public class SvgRenderTreeBuilder {
             .multiply(viewport.transform(root))
             .multiply(elementTransformMatrix(root))
         let commands = ArrayList<SvgDisplayCommand>()
-        let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces)
+        let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces, this.warnings)
         match (styles.get(root)) {
             case Some(rootStyle) =>
                 if (rootStyle.display() != "none") {
@@ -314,7 +314,7 @@ public class SvgRenderTreeBuilder {
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
-        let derivedFonts = deriveRenderFonts(fonts, resolver.fontFaces)
+        let derivedFonts = deriveRenderFonts(fonts, resolver.fontFaces, this.warnings)
         let commands = ArrayList<SvgDisplayCommand>()
         let context = SvgRenderTreeContext(
             matrix,
@@ -358,7 +358,7 @@ public class SvgRenderTreeBuilder {
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
-        let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces)
+        let derivedFonts = deriveRenderFonts(options.fonts, resolver.fontFaces, this.warnings)
         let ratio = options.devicePixelRatio
         let outputWidth = maxInt64(1, ceilSvgPixel(Float64(width) * ratio))
         let outputHeight = maxInt64(1, ceilSvgPixel(Float64(height) * ratio))
@@ -1407,13 +1407,14 @@ private func findSvgElementPath(
 /** 以选项注册表为基座，把 `@font-face` 别名带入本次渲染。 */
 private func deriveRenderFonts(
     fonts: ?SvgFontRegistry,
-    faces: ArrayList<CssFontFaceRule>
+    faces: ArrayList<CssFontFaceRule>,
+    warnings: ArrayList<String>
 ): SvgFontRegistry {
     let base = match (fonts) {
         case Some(value) => value
         case None => SvgFontRegistry.defaultRegistry()
     }
-    SvgFontRegistry.derived(base, faces.toArray())
+    SvgFontRegistry.derived(base, faces.toArray(), warnings: warnings)
 }
 
 /** `use` 目标元素的计算画笔作为上下文帧；自身为 `context-*` 时视为无帧。 */

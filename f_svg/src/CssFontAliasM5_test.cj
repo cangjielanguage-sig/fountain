@@ -48,11 +48,11 @@ internal func m5AliasRules(text: String): Array<CssFontFaceRule> {
 
 @Test
 public class CssFontAliasM5_test {
-    /** 别名命中：声明 family 指向注册表中唯一的 family。 */
+    /** 别名命中：声明 family 与注册表中的 family 精确匹配。 */
     @TestCase
     public func aliasHitsRegisteredFamily(): Unit {
         let base = SvgFontRegistry()
-        base.register("Brand", M5FixedAdvanceFont())
+        base.register("Body", M5FixedAdvanceFont())
         let derived = SvgFontRegistry.derived(
             base,
             m5AliasRules("@font-face { font-family: Body; src: url(x.ttf) }")
@@ -69,7 +69,7 @@ public class CssFontAliasM5_test {
     @TestCase
     public func weightFallsBackToNormal(): Unit {
         let base = SvgFontRegistry()
-        base.register("Brand", M5FixedAdvanceFont())
+        base.register("Body", M5FixedAdvanceFont())
         let derived = SvgFontRegistry.derived(base, m5AliasRules("@font-face { font-family: Body }"))
         @Assert(derived.resolve("Body", "bold", "italic").isSome())
         @Assert(derived.resolve("Body", "700", "oblique").isSome())
@@ -84,18 +84,64 @@ public class CssFontAliasM5_test {
         @Assert(derived.resolve("Other", "normal", "normal").isNone())
     }
 
+    /** 默认注册表下目标缺失：不得映射到首个 family（Hershey），并记 warning。 */
+    @TestCase
+    public func missingTargetDoesNotUsePrimaryFamily(): Unit {
+        let warnings = ArrayList<String>()
+        let derived = SvgFontRegistry.derived(
+            SvgFontRegistry.defaultRegistry(),
+            m5AliasRules("@font-face { font-family: Missing }"),
+            warnings: warnings
+        )
+        @Assert(derived.resolve("Missing", "normal", "normal").isNone())
+        var sawMissing = false
+        for (warning in warnings) {
+            if (warning.contains("Missing")) {
+                sawMissing = true
+            }
+        }
+        @Assert(sawMissing)
+    }
+
+    /** 缺失别名时文本继续按 family 列表常规回退。 */
+    @TestCase
+    public func missingAliasFallsBackToNextFamily(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"80\" height=\"30\"><style>" +
+            "@font-face { font-family: Missing }\n" +
+            "text { font-family: Missing, sans-serif; font-size: 10px }</style>" +
+            "<text x=\"5\" y=\"20\">AB</text></svg>"
+        )
+        let renderer = SvgRenderer()
+        let bitmap = renderer.render(document)
+        var painted = false
+        for (index in 0..bitmap.pixels.size / 4) {
+            if (bitmap.pixels[index * 4 + 3] > 0) {
+                painted = true
+                break
+            }
+        }
+        @Assert(painted)
+        var sawMissing = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("Missing")) {
+                sawMissing = true
+            }
+        }
+        @Assert(sawMissing)
+    }
+
     /** 派生注册表不写入输入注册表，重复派生结果稳定。 */
     @TestCase
     public func inputRegistryNotPolluted(): Unit {
         let base = SvgFontRegistry()
-        base.register("Brand", M5FixedAdvanceFont())
-        @Assert(base.resolve("Body", "normal", "normal").isNone())
+        base.register("Body", M5FixedAdvanceFont())
         let aliases = m5AliasRules("@font-face { font-family: Body }")
         let first = SvgFontRegistry.derived(base, aliases)
         let second = SvgFontRegistry.derived(base, aliases)
         @Assert(first.resolve("Body", "normal", "normal").isSome())
         @Assert(second.resolve("Body", "normal", "normal").isSome())
-        @Assert(base.resolve("Body", "normal", "normal").isNone())
+        @Assert(base.resolve("Body", "normal", "normal").isSome())
     }
 
     /** 渲染器使用样式表别名：文本不再报告「未找到字体」，两次渲染一致。 */
@@ -108,7 +154,7 @@ public class CssFontAliasM5_test {
             "<text x=\"5\" y=\"20\">AB</text></svg>"
         )
         let base = SvgFontRegistry()
-        base.register("Brand", M5FixedAdvanceFont())
+        base.register("Body", M5FixedAdvanceFont())
         let renderer = SvgRenderer(
             options: SvgRenderOptions(samplesPerPixel: 1, fonts: base, width: 80, height: 30)
         )
@@ -124,6 +170,6 @@ public class CssFontAliasM5_test {
             options: SvgRenderOptions(samplesPerPixel: 1, fonts: base, width: 80, height: 30)
         ).render(document)
         @Assert(first.pixels == second.pixels)
-        @Assert(base.resolve("Body", "normal", "normal").isNone())
+        @Assert(base.resolve("Body", "normal", "normal").isSome())
     }
 }
