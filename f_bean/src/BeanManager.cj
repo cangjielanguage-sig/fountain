@@ -46,8 +46,8 @@ public class BeanManager <: Comparable<BeanManager> & ToString {
     }
 
     internal func doDestroy(): Unit {
-        if (let Some(b) <- _bean.load() && let x: Destroy <- b) {
-            x.destroy()
+        if (let Some(b) <- _bean.load()) {
+            generateDestroy(b)()
         }
     }
     /**
@@ -55,10 +55,12 @@ public class BeanManager <: Comparable<BeanManager> & ToString {
      * 同一自定义BeanScope且相同生命周期的的bean应在生命周期结束时统一调用本函数生成的函数销毁bean。
      */
     internal func generateDestroy(object: Object): () -> Unit {
-        {
-            => if (let x: Destroy <- object) {
-                x.destroy()
-            }
+        if(let x: Destroy <- object){
+            x.destroy
+        }else if(let x: Resource <- object){
+            x.close
+        }else{
+            {=>}
         }
     }
     internal func on(factory: BeanFactory): Bool {
