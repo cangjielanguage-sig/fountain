@@ -210,7 +210,8 @@ LoomWiring.wire({ model, system, user => /* 调 LLM；model 为空串时用默�
 
 - 存储按 `llm_metaStore` 选（与 `MetaStore` 共用）：`f_store`（默认）/ `memory` / `postgres` / `mysql`，未知取值直接抛错；
 - `LoomWiring.wire` 内部会 `restore()` 并重编译 `compiled` 流程，并安装 `DefaultLoomHost` 与存储网关；
-- 测试可传 `store:` 注入内存实现，避免占用默认数据目录；
+- 存储网关**懒建一次**：装配阶段不连存储，首次 `loomStore` / 工具调用时创建，之后 `loomStore`、`memoryCall`、`knowledgeIngest`、技能演进读取共用同一实例；
+- 测试可传 `store:` 注入内存实现、传 `gateway:` 注入自定义网关，避免占用默认数据目录；
 - 工具调用通过 `LoomServices.current()` 取服务实例。
 
 ## 临时上下文与记忆提炼

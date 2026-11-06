@@ -33,6 +33,25 @@ import fountain::f_llm.store.*
  * 之所以不放进 `StoreWiring`：chat 回调依赖具体的 LLM 客户端与模型配置，
  * 由宿主决定比框架内写死更可控（也便于测试替换）。
  */
+/** 懒建一次的网关持有者：首次 store 调用时建，之后复用 */
+class LoomGatewayHolder {
+    private var value: ?LoomStoreGateway = None
+
+    func get(injected: ?LoomStoreGateway): LoomStoreGateway {
+        match (injected) {
+            case Some(gateway) => return gateway
+            case None => ()
+        }
+        match (value) {
+            case Some(gateway) => return gateway
+            case None => ()
+        }
+        let built = LoomStoreGateway()
+        value = Some(built)
+        built
+    }
+}
+
 public class LoomWiring {
     private init() {
     }
@@ -56,7 +75,7 @@ public class LoomWiring {
         store!: ?LoomStore = None, memoryPolicy!: ?LoomMemoryPolicy = None,
         skillEmbedder!: ?(String) -> Array<Float64> = None, evolutionCron!: String = '', evolutionUserId!: Int64 = 0,
         evolutionNamespace!: String = 'loom', evolutionModel!: String = '', evolutionNameCandidates!: Bool = true,
-        evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy()): LoomService {
+        evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy(), gateway!: ?LoomStoreGateway = None): LoomService {
         let settings = StoreSettings.load()
         // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
         let chosen = match (store) {
@@ -68,9 +87,11 @@ public class LoomWiring {
         let planner = Planner({system, user => chat(plannerModel, system, user)})
         let service = LoomService(planner, registry)
         LoomServices.install(service)
-        // 默认存储网关：loomStore(kind, op, payload) 直接落到知识/记忆/技能 Store（惰性取容器）
+        // 默认存储网关：首次使用时建一次，之后所有入口共用
+        // （不在装配期直接建，避免启动即连存储；也不能每次调用都建，否则重复开库）
+        let gatewayHolder = LoomGatewayHolder()
         LoomHostApi.installStore({
-            kind, op, payload => LoomStoreGateway().call(kind, op, payload)
+            kind, op, payload => gatewayHolder.get(gateway).call(kind, op, payload)
         })
         // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
         LoomServices.installHost(DefaultLoomHost(chat))
@@ -93,7 +114,7 @@ public class LoomWiring {
         let _ = EvolutionLeases.bootstrap()
         // 技能演进统一由 SkillEvolutionJob 执行：配了 cron 就注册成周期任务
         registerEvolution(chat, evolutionCron, evolutionUserId, evolutionNamespace, evolutionModel,
-            evolutionNameCandidates, evolutionPolicy, skillEmbedder)
+            evolutionNameCandidates, evolutionPolicy, skillEmbedder, gatewayHolder, gateway)
         service
     }
 
@@ -122,7 +143,7 @@ public class LoomWiring {
     /** 注册周期演进任务；未配 cron 或未装调度器时什么都不做 */
     private static func registerEvolution(chat: (String, String, String) -> String, cron: String, userId: Int64,
         namespace: String, model: String, nameCandidates: Bool, policy: SkillEvolutionPolicy,
-        embedder: ?(String) -> Array<Float64>): Unit {
+        embedder: ?(String) -> Array<Float64>, holder: LoomGatewayHolder, injected: ?LoomStoreGateway): Unit {
         if (cron.trimAscii().isEmpty()) {
             return
         }
@@ -142,7 +163,7 @@ public class LoomWiring {
         let evolveChat = {system: String, user: String => chat(model, system, user)}
         SkillEvolutionJob.schedule('loom-skill-evolution', cron, scheduler, {=> Stores.meta().skills.list()},
             // 网关与存储都在任务触发时才构造：注册阶段不碰内容存储，避免启动即建连接
-            {=> SkillEvolutionJob.load(LoomStoreGateway(), userId, namespace)}, evolveChat, state, policy: policy,
+            {=> SkillEvolutionJob.load(holder.get(injected), userId, namespace)}, evolveChat, state, policy: policy,
             embedder: embedder, nameCandidates: nameCandidates, ledger: ledger, lease: lease,
             clock: {=> DateTime.now().toUnixTimeStamp().toSeconds()})
     }

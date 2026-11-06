@@ -43,12 +43,19 @@ import fountain::f_llm.store.*
  * 未列出的 op 一律抛 [LoomException]，避免「静默返回空」被流程当成真实结果。
  */
 public class LoomStoreGateway {
+    /** 构造计数：装配自检与测试用（包内可见，不对外暴露） */
+    static var buildCount: Int64 = 0
+
+    static func resetBuildCount(): Unit {
+        buildCount = 0
+    }
     private let content: ContentStore
     private let meta: MetaStore
     /** 演进报告表：可选，未装配时 `evolution.*` 抛可读错误 */
     private let evolution: ?EvolutionStore
 
     public init(content: ContentStore, meta: MetaStore, evolution!: ?EvolutionStore = None) {
+        buildCount++
         this.content = content
         this.meta = meta
         this.evolution = evolution
@@ -56,6 +63,7 @@ public class LoomStoreGateway {
 
     /** 容器用：取当前配置的内容族与元数据族 */
     public init() {
+        buildCount++
         this.content = Stores.content()
         this.meta = Stores.meta()
         // 零配置装配：报告表跟随 llm_metaStore（f_store / memory / postgres / mysql）

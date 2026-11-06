@@ -49,6 +49,16 @@ class LoomStoreGateway_test {
         @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":0}'), '[]')
     }
 
+    /** 构造计数：装配自检依赖它，必须真实自增 */
+    @TestCase
+    func testBuildCountTracksConstruction(): Unit {
+        LoomStoreGateway.resetBuildCount()
+        let _ = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        let _ = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        @Expect(LoomStoreGateway.buildCount, 2)
+        LoomStoreGateway.resetBuildCount()
+    }
+
     /** experience.list 不传 kind 时必须只返回经验 */
     @TestCase
     func testExperienceListFiltersByKind(): Unit {
