@@ -296,6 +296,90 @@ public class SvgFeFlood <: SvgFilterPrimitive {
     }
 }
 
+/** `feDropShadow` 原语：alpha 模糊 → 偏移 → flood 着色 → 与原图合并。 */
+public class SvgFeDropShadow <: SvgFilterPrimitive {
+    private let dxCache = SvgValueCache<SvgLength>()
+    private let dyCache = SvgValueCache<SvgLength>()
+    private let deviationCache = SvgValueCache<SvgNumberList>()
+    private let colorCache = SvgValueCache<SvgPaint>()
+    private let opacityCache = SvgValueCache<Float64>()
+
+    public init() {
+        super("feDropShadow")
+    }
+
+    /** 水平偏移；缺省 2。 */
+    public mut prop dx: SvgLength {
+        get() {
+            this.dxCache.get(this.attributesVersion, {=> readLength(this, "dx")}) ?? SvgLength(2.0)
+        }
+        set(value) {
+            writeLength(this, "dx", Some(value))
+        }
+    }
+
+    /** 垂直偏移；缺省 2。 */
+    public mut prop dy: SvgLength {
+        get() {
+            this.dyCache.get(this.attributesVersion, {=> readLength(this, "dy")}) ?? SvgLength(2.0)
+        }
+        set(value) {
+            writeLength(this, "dy", Some(value))
+        }
+    }
+
+    /** 1 或 2 个非负标准差；缺省单个 2。 */
+    public mut prop stdDeviation: SvgNumberList {
+        get() {
+            this.deviationCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("stdDeviation")) {
+                        case Some(text) =>
+                            try {
+                                Some(SvgNumberList.parse(text))
+                            } catch (_: SvgException) {
+                                None
+                            }
+                        case None => None
+                    }
+                }
+            ) ?? SvgNumberList([2.0])
+        }
+        set(value) {
+            this.setAttr("stdDeviation", value.toString())
+        }
+    }
+
+    /** 阴影颜色；缺省黑色。 */
+    public mut prop floodColor: SvgPaint {
+        get() {
+            this.colorCache.get(
+                this.attributesVersion,
+                {=>
+                    match (this.attr("flood-color")) {
+                        case Some(text) => tryParseSvgPaint(text)
+                        case None => None
+                    }
+                }
+            ) ?? SvgPaint.of(SvgColor.Black)
+        }
+        set(value) {
+            this.setAttr("flood-color", value.toString())
+        }
+    }
+
+    /** 阴影不透明度；缺省 1。 */
+    public mut prop floodOpacity: Float64 {
+        get() {
+            this.opacityCache.get(this.attributesVersion, {=> readFloat(this, "flood-opacity")}) ?? 1.0
+        }
+        set(value) {
+            writeFloat(this, "flood-opacity", Some(clampSvgUnit(value)))
+        }
+    }
+}
+
 /** `feBlend` 原语。 */
 public class SvgFeBlend <: SvgFilterPrimitive {
     private let modeCache = SvgValueCache<SvgBlendMode>()

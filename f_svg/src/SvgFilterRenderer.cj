@@ -68,10 +68,19 @@ public class SvgFilterRenderer {
             (userCornerY.x - userOrigin.x) * (userCornerY.x - userOrigin.x) +
             (userCornerY.y - userOrigin.y) * (userCornerY.y - userOrigin.y)
         )
-        let localX = filterAxis(x, objectBounds.x, objectBounds.width, objectUnits, viewportWidth)
-        let localY = filterAxis(y, objectBounds.y, objectBounds.height, objectUnits, viewportHeight)
-        let localWidth = filterAxis(width, 0.0, objectBounds.width, objectUnits, viewportWidth)
-        let localHeight = filterAxis(height, 0.0, objectBounds.height, objectUnits, viewportHeight)
+        var localX = filterAxis(x, objectBounds.x, objectBounds.width, objectUnits, viewportWidth)
+        var localY = filterAxis(y, objectBounds.y, objectBounds.height, objectUnits, viewportHeight)
+        var localWidth = filterAxis(width, 0.0, objectBounds.width, objectUnits, viewportWidth)
+        var localHeight = filterAxis(height, 0.0, objectBounds.height, objectUnits, viewportHeight)
+        // feDropShadow 的偏移与模糊会超出原图；按 |d| + 3σ 外扩区域。
+        // objectBoundingBox 与 userSpaceOnUse 的 local 坐标都在用户空间，可共用同一外扩量。
+        let shadowMargin = dropShadowRegionMargin(filter)
+        if (shadowMargin > 0.0) {
+            localX -= shadowMargin
+            localY -= shadowMargin
+            localWidth += shadowMargin * 2.0
+            localHeight += shadowMargin * 2.0
+        }
         let c0 = transform.apply(SvgPoint(localX, localY))
         let c1 = transform.apply(SvgPoint(localX + localWidth, localY))
         let c2 = transform.apply(SvgPoint(localX + localWidth, localY + localHeight))
@@ -348,6 +357,8 @@ private func applyFilterPrimitive(
             turbulenceFilterBuffer(input, turbulence, scaleX, scaleY, warnings)
         case displacement: SvgFeDisplacementMap =>
             displacementFilterBuffer(input, input2, displacement, scaleX, scaleY, warnings)
+        case shadow: SvgFeDropShadow =>
+            dropShadowFilterBuffer(input, shadow, scaleX, scaleY, warnings)
         case image: SvgFeImage =>
             feImageFilterBuffer(input, image, images, warnings)
         case diffuse: SvgFeDiffuseLighting =>
@@ -402,4 +413,32 @@ private func srgbChannel(value: Byte): Byte {
         1.055 * pow(channel, 1.0 / 2.4) - 0.055
     }
     UInt8(Int64(round(clampSvgUnit(encoded) * 255.0)))
+}
+
+/** 滤镜链中 feDropShadow 需要的区域外扩量（用户空间）。 */
+private func dropShadowRegionMargin(filter: SvgFilter): Float64 {
+    var margin = 0.0
+    for (primitive in filter.primitives) {
+        match (primitive) {
+            case shadow: SvgFeDropShadow =>
+                let deviations = shadow.stdDeviation.values
+                var sigmaX = 2.0
+                var sigmaY = 2.0
+                if (deviations.size == 1) {
+                    sigmaX = deviations[0]
+                    sigmaY = deviations[0]
+                } else if (deviations.size >= 2) {
+                    sigmaX = deviations[0]
+                    sigmaY = deviations[1]
+                }
+                let dx = if (shadow.dx.value < 0.0) { -shadow.dx.value } else { shadow.dx.value }
+                let dy = if (shadow.dy.value < 0.0) { -shadow.dy.value } else { shadow.dy.value }
+                let candidate = max(dx + 3.0 * max(0.0, sigmaX), dy + 3.0 * max(0.0, sigmaY))
+                if (candidate > margin) {
+                    margin = candidate
+                }
+            case _ => ()
+        }
+    }
+    margin
 }

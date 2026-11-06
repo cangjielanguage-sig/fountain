@@ -508,6 +508,23 @@ composited inside the group and never read outside content; `auto` adds no isola
 With no parent layer the backdrop is transparent. The `SvgBlendMode` used by `feBlend`
 keeps its five values and is unaffected.
 
+### Drop shadow
+
+`<feDropShadow>` is equivalent to "take input alpha -> gaussian blur -> offset by `dx` /
+`dy` -> tint with `flood-color` / `flood-opacity` -> source-over merge with the original",
+reusing the existing blur and composite primitives. Defaults are `dx=2`, `dy=2`,
+`stdDeviation=2`, `flood-color=black` and `flood-opacity=1`; negative `stdDeviation` and
+invalid colors fall back with a warning. The filter region is expanded by
+`|dx| + 3σ` / `|dy| + 3σ` on top of the `filterUnits` rectangle, then clipped to the
+canvas.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">
+  <defs><filter id="shadow"><feDropShadow dx="2" dy="2" stdDeviation="2"/></filter></defs>
+  <rect x="10" y="10" width="20" height="20" fill="red" filter="url(#shadow)"/>
+</svg>
+```
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;

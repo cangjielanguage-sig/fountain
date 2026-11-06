@@ -485,3 +485,50 @@ private func positiveMod(value: Int64, modulus: Int64): Int64 {
         remainder
     }
 }
+
+/** `feDropShadow`：alpha 模糊 → 偏移 → flood 着色 → 与原图 source-over 合并。 */
+internal func dropShadowFilterBuffer(
+    input: SvgFilterBuffer,
+    shadow: SvgFeDropShadow,
+    scaleX: Float64,
+    scaleY: Float64,
+    warnings: ArrayList<String>
+): SvgFilterBuffer {
+    let deviations = shadow.stdDeviation.values
+    var sigmaX = 2.0
+    var sigmaY = 2.0
+    if (deviations.size == 1) {
+        sigmaX = deviations[0]
+        sigmaY = deviations[0]
+    } else if (deviations.size >= 2) {
+        sigmaX = deviations[0]
+        sigmaY = deviations[1]
+    }
+    if (sigmaX < 0.0 || sigmaY < 0.0) {
+        warnings.add("feDropShadow 的 stdDeviation 含负值，按 0 处理")
+        sigmaX = max(0.0, sigmaX)
+        sigmaY = max(0.0, sigmaY)
+    }
+    let blurred = blurFilterBuffer(input, sigmaX * scaleX, sigmaY * scaleY)
+    let offset = offsetFilterBuffer(
+        blurred,
+        Int64(round(shadow.dx.value * scaleX)),
+        Int64(round(shadow.dy.value * scaleY))
+    )
+    let color = match (shadow.floodColor.color) {
+        case Some(value) => value
+        case None => SvgColor.Black
+    }
+    let flooded = floodFilterBuffer(input.width, input.height, color, shadow.floodOpacity)
+    let tinted = compositeFilterBuffer(
+        flooded,
+        offset,
+        SvgCompositeOperator.In,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+    )
+    // 阴影在下、原图在上。
+    compositeFilterBuffer(input, tinted, SvgCompositeOperator.Over, 0.0, 0.0, 0.0, 0.0)
+}

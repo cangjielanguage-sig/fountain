@@ -479,6 +479,21 @@ marker 的派生位置、数量与朝向不变。
 `auto` 不额外隔离。缺少父图层时以透明背景作为混合背景。`feBlend` 使用的
 `SvgBlendMode` 仍保持 5 个取值，不受影响。
 
+### 投影 feDropShadow
+
+`<feDropShadow>` 等价于「取输入 alpha → 高斯模糊 → 按 `dx` / `dy` 偏移 → 用
+`flood-color` / `flood-opacity` 着色 → 与原图 source-over 合并」，复用既有模糊与合成实现。
+缺省 `dx=2`、`dy=2`、`stdDeviation=2`、`flood-color=black`、`flood-opacity=1`；
+负 `stdDeviation` 与非法颜色回退缺省值并记 warning。滤镜区域会在 `filterUnits` 结果上
+按 `|dx| + 3σ`、`|dy| + 3σ` 外扩，再裁剪到画布。
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">
+  <defs><filter id="shadow"><feDropShadow dx="2" dy="2" stdDeviation="2"/></filter></defs>
+  <rect x="10" y="10" width="20" height="20" fill="red" filter="url(#shadow)"/>
+</svg>
+```
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

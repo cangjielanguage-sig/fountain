@@ -40,6 +40,7 @@ public class SvgTag {
             case "pattern" => Some(SvgPattern())
             case "marker" => Some(SvgMarker())
             case "feGaussianBlur" => Some(SvgFeGaussianBlur())
+            case "feDropShadow" => Some(SvgFeDropShadow())
             case "feOffset" => Some(SvgFeOffset())
             case "feFlood" => Some(SvgFeFlood())
             case "feBlend" => Some(SvgFeBlend())
@@ -81,7 +82,7 @@ public class SvgTag {
                 "text" | "tspan" | "textPath" | "linearGradient" | "radialGradient" | "stop" | "use" |
                 "image" | "g" | "defs" | "symbol" | "clipPath" | "mask" |
                 "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" |
-                "filter" | "pattern" | "marker" | "feGaussianBlur" | "feOffset" | "feFlood" |
+                "filter" | "pattern" | "marker" | "feGaussianBlur" | "feDropShadow" | "feOffset" | "feFlood" |
                 "feBlend" | "feComposite" | "feMerge" | "feMergeNode" | "feColorMatrix" |
                 "feTile" | "feComponentTransfer" | "feFuncR" | "feFuncG" | "feFuncB" |
                 "feFuncA" | "feMorphology" | "feConvolveMatrix" | "feTurbulence" |
