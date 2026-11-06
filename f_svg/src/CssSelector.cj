@@ -22,11 +22,15 @@ import fountain::f_base.*
 public enum CssCombinator <: Equatable<CssCombinator> & ToString {
     | Descendant
     | Child
+    | AdjacentSibling
+    | GeneralSibling
 
     public operator func ==(that: CssCombinator): Bool {
         match ((this, that)) {
             case (Descendant, Descendant) => true
             case (Child, Child) => true
+            case (AdjacentSibling, AdjacentSibling) => true
+            case (GeneralSibling, GeneralSibling) => true
             case _ => false
         }
     }
@@ -35,6 +39,8 @@ public enum CssCombinator <: Equatable<CssCombinator> & ToString {
         match (this) {
             case Descendant => "Descendant"
             case Child => "Child"
+            case AdjacentSibling => "AdjacentSibling"
+            case GeneralSibling => "GeneralSibling"
         }
     }
 }
@@ -45,15 +51,39 @@ public struct CssSelectorPart <: ToString {
     public let id: ?String
     public let classes: Array<String>
     public let combinator: ?CssCombinator
+    /** 有序简单选择器；属性 / 伪类只在这里出现。 */
+    public let simples: Array<CssSimpleSelectorKind>
 
     init(typeName: ?String, id: ?String, classes: Array<String>, combinator: ?CssCombinator) {
         this.typeName = typeName
         this.id = id
         this.classes = classes
         this.combinator = combinator
+        this.simples = Array<CssSimpleSelectorKind>()
+    }
+
+    init(
+        typeName: ?String,
+        id: ?String,
+        classes: Array<String>,
+        combinator: ?CssCombinator,
+        simples: Array<CssSimpleSelectorKind>
+    ) {
+        this.typeName = typeName
+        this.id = id
+        this.classes = classes
+        this.combinator = combinator
+        this.simples = simples
     }
 
     public func toString(): String {
+        if (this.simples.size > 0) {
+            let simplified = StringBuilder()
+            for (simple in this.simples) {
+                simplified.append(simple.toString())
+            }
+            return simplified.toString()
+        }
         let out = StringBuilder()
         match (this.typeName) {
             case Some(name) => out.append(name)
@@ -129,6 +159,10 @@ public class CssSelector <: ToString {
         this.combinators = combinators
         var specificity = CssSpecificity.zero
         for (part in parts) {
+            if (part.simples.size > 0) {
+                specificity = specificity.plus(cssSequenceSpecificity(part.simples))
+                continue
+            }
             var current = CssSpecificity(0, 0, 0)
             match (part.typeName) {
                 case Some(_) => current = CssSpecificity(0, 0, 1)
@@ -152,52 +186,77 @@ public class CssSelector <: ToString {
         let parts = ArrayList<CssSelectorPart>()
         let combinators = ArrayList<CssCombinator>()
         var i = 0
-        var sawWhitespace = false
+        var pending: ?CssCombinator = None
         while (true) {
+            let beforeSpaces = i
             i = skipCssSpaces(bytes, i)
+            let sawWhitespace = i > beforeSpaces
             if (i >= bytes.size) {
                 break
             }
-            if (bytes[i] == b'>') {
-                if (parts.size == 0) {
-                    throw invalidValue("选择器不能以子代组合符开头")
+            if (bytes[i] == b'>' || bytes[i] == b'+' || bytes[i] == b'~') {
+                if (parts.size == 0 || pending.isSome()) {
+                    throw invalidValue("选择器出现非法组合符「${text}」")
                 }
-                if (combinators.size == parts.size) {
-                    throw invalidValue("选择器出现连续组合符")
-                }
-                combinators.add(CssCombinator.Child)
+                pending = Some(
+                    match (bytes[i]) {
+                        case b'>' => CssCombinator.Child
+                        case b'+' => CssCombinator.AdjacentSibling
+                        case _ => CssCombinator.GeneralSibling
+                    }
+                )
                 i++
                 continue
             }
-            if (parts.size > 0 && combinators.size < parts.size) {
-                if (!sawWhitespace) {
-                    throw invalidValue("选择器缺少组合符「${text}」")
+            if (parts.size > 0) {
+                match (pending) {
+                    case Some(combinator) =>
+                        combinators.add(combinator)
+                        pending = None
+                    case None =>
+                        if (!sawWhitespace) {
+                            throw invalidValue("选择器缺少组合符「${text}」")
+                        }
+                        combinators.add(CssCombinator.Descendant)
                 }
-                combinators.add(CssCombinator.Descendant)
             }
-            let startIndex = i
-            i = parseCssSelectorPart(bytes, i)
-            if (i == startIndex) {
+            let sequence = parseCssSimpleSequence(trimmed, bytes, i)
+            if (sequence.end == i) {
                 throw invalidValue("无法解析选择器「${text}」")
             }
+            let combinator: ?CssCombinator = if (parts.size == 0) {
+                None
+            } else {
+                Some(combinators[parts.size - 1])
+            }
             parts.add(
-                buildCssSelectorPart(
-                    trimmed,
-                    startIndex,
-                    i,
-                    if (parts.size == 0) { None } else { Some(combinators[parts.size - 1]) }
+                CssSelectorPart(
+                    sequence.typeName,
+                    sequence.id,
+                    sequence.classes,
+                    combinator,
+                    sequence.simples
                 )
             )
-            sawWhitespace = false
-            let afterPart = i
-            i = skipCssSpaces(bytes, i)
-            sawWhitespace = i > afterPart
+            i = sequence.end
+        }
+        if (pending.isSome()) {
+            throw invalidValue("选择器不能以组合符结尾「${text}」")
         }
         if (parts.size == 0) {
             throw invalidValue("选择器不能为空")
         }
         if (combinators.size != parts.size - 1) {
             throw invalidValue("选择器组合符数量不匹配")
+        }
+        var totalSimples: Int64 = 0
+        for (part in parts) {
+            totalSimples += part.simples.size
+        }
+        if (totalSimples > CSS_MAX_SIMPLE_SELECTORS) {
+            throw invalidValue(
+                "选择器「${trimmed}」共 ${totalSimples} 个简单选择器，超过上限 ${CSS_MAX_SIMPLE_SELECTORS}"
+            )
         }
         CssSelector(parts.toArray(), combinators.toArray())
     }
@@ -208,7 +267,13 @@ public class CssSelector <: ToString {
     }
 
     private func matchPartAt(index: Int64, element: SvgElement): Bool {
-        if (!cssPartMatches(this.parts[index], element)) {
+        let part = this.parts[index]
+        let matched = if (part.simples.size > 0) {
+            cssSequenceMatches(part.simples, element)
+        } else {
+            cssPartMatches(part, element)
+        }
+        if (!matched) {
             return false
         }
         if (index == 0) {
@@ -233,6 +298,24 @@ public class CssSelector <: ToString {
                     }
                 }
                 false
+            case AdjacentSibling =>
+                match (cssPreviousElementSibling(element)) {
+                    case Some(previous) => this.matchPartAt(index - 1, previous)
+                    case None => false
+                }
+            case GeneralSibling =>
+                var current = cssPreviousElementSibling(element)
+                while (true) {
+                    match (current) {
+                        case Some(previous) =>
+                            if (this.matchPartAt(index - 1, previous)) {
+                                return true
+                            }
+                            current = cssPreviousElementSibling(previous)
+                        case None => return false
+                    }
+                }
+                false
         }
     }
 
@@ -243,6 +326,8 @@ public class CssSelector <: ToString {
                 match (this.combinators[index - 1]) {
                     case Child => out.append(" > ")
                     case Descendant => out.append(" ")
+                    case AdjacentSibling => out.append(" + ")
+                    case GeneralSibling => out.append(" ~ ")
                 }
             }
             out.append(this.parts[index].toString())
@@ -251,83 +336,12 @@ public class CssSelector <: ToString {
     }
 }
 
-private func skipCssSpaces(bytes: Array<Byte>, start: Int64): Int64 {
+internal func skipCssSpaces(bytes: Array<Byte>, start: Int64): Int64 {
     var i = start
     while (i < bytes.size && isCssSpace(bytes[i])) {
         i++
     }
     i
-}
-
-/** 返回复合选择器结束位置；遇到 `:` / `[` / `]` 抛错。 */
-private func parseCssSelectorPart(bytes: Array<Byte>, start: Int64): Int64 {
-    var i = start
-    var sawType = false
-    if (i < bytes.size && bytes[i] == b'*') {
-        sawType = true
-        i++
-    } else if (i < bytes.size && isCssIdentStart(bytes, i)) {
-        sawType = true
-        while (i < bytes.size && isCssIdentByte(bytes[i])) {
-            i++
-        }
-    }
-    var sawQualifier = false
-    while (i < bytes.size && (bytes[i] == b'.' || bytes[i] == b'#')) {
-        sawQualifier = true
-        i++
-        let nameStart = i
-        while (i < bytes.size && isCssIdentByte(bytes[i])) {
-            i++
-        }
-        if (i == nameStart) {
-            throw invalidValue("选择器限定符缺少名称")
-        }
-    }
-    if (i < bytes.size && (bytes[i] == b':' || bytes[i] == b'[' || bytes[i] == b']')) {
-        throw invalidValue("暂不支持的选择器语法")
-    }
-    if (!sawType && !sawQualifier) {
-        throw invalidValue("无法识别选择器")
-    }
-    i
-}
-
-private func buildCssSelectorPart(
-    text: String,
-    start: Int64,
-    end: Int64,
-    combinator: ?CssCombinator
-): CssSelectorPart {
-    let bytes = text.unsafeBytes()
-    var i = start
-    var typeName: ?String = None
-    if (bytes[i] == b'*') {
-        i++
-    } else if (isCssIdentStart(bytes, i)) {
-        let nameStart = i
-        while (i < end && isCssIdentByte(bytes[i])) {
-            i++
-        }
-        typeName = Some(decodeCssIdent(text[nameStart..i]))
-    }
-    var id: ?String = None
-    let classes = ArrayList<String>()
-    while (i < end && (bytes[i] == b'.' || bytes[i] == b'#')) {
-        let marker = bytes[i]
-        i++
-        let nameStart = i
-        while (i < end && isCssIdentByte(bytes[i])) {
-            i++
-        }
-        let name = decodeCssIdent(text[nameStart..i])
-        if (marker == b'#') {
-            id = Some(name)
-        } else {
-            classes.add(name)
-        }
-    }
-    CssSelectorPart(typeName, id, classes.toArray(), combinator)
 }
 
 /** 复合选择器与单个元素匹配：类型、id、全部 class 词。 */

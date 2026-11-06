@@ -409,12 +409,42 @@ exists and is skipped otherwise. M2 rendering scenes live in
 Performance reference values are recorded in
 [`doc/perf-baseline.md`](doc/perf-baseline.md).
 
+## M5 selector support
+
+`CssSelector.parse(text)` supports the following subset and shares one implementation
+with the `SvgStyleResolver` cascade and `querySelectorAll`:
+
+- type selectors, `*`, `#id`, `.class`;
+- attribute selectors `[attr]`, `[attr=v]`, `[attr~=v]`, `[attr|=v]`, `[attr^=v]`,
+  `[attr$=v]`, `[attr*=v]`; values may be bare identifiers, single-quoted or
+  double-quoted strings, and an `i` flag before `]` enables ASCII case-insensitive
+  comparison;
+- structural pseudo-classes `:root`, `:first-child`, `:last-child`, `:only-child`,
+  `:nth-child(An+B)`, `:first-of-type`, `:last-of-type`, `:nth-of-type(An+B)`,
+  `:only-of-type`, `:empty`; `An+B` accepts `odd` / `even` / integers / `n` / `-n+2`;
+- `:not(<simple selector>)`; only a single simple selector is allowed, nested and
+  compound arguments are rejected;
+- combinators: descendant (whitespace), child `>`, adjacent sibling `+`, general
+  sibling `~`.
+
+```cangjie
+let selector = CssSelector.parse("g > rect:not(.skip)[data-role^=badge] + circle")
+if (selector.matches(element)) {
+    // ...
+}
+```
+
+A single selector is capped at 256 simple selectors; beyond that the whole rule is
+skipped with a warning.
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;
 - XHTML semantics inside `foreignObject`;
-- Full CSS3: pseudo-classes, attribute selectors, media queries, `@font-face`, CSS transitions;
-- Bidirectional text, ligatures, glyph substitution, built-in CJK fonts, TTF/OTF parsing;
+- CSS animations/transitions, pseudo-elements (`::before` / `::after`),
+  `@supports` / `@layer` / `@container`;
+- Bidirectional text, ligatures, glyph substitution, built-in CJK fonts, TTF/OTF
+  parsing (M5 adds baseline ligatures and kerning, see the related sections);
 - SMIL extensions (`animateColor`, event-driven animation, scripts) and `textPath` `side`;
 - GPU/native raster backends.
 

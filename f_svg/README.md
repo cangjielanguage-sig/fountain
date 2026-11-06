@@ -400,12 +400,31 @@ cjpm test
 大样本冒烟使用仓库内 `.assets/README/module-dependencies.svg`（存在时执行，不存在时跳过）。
 性能参考值见 [`doc/perf-baseline.md`](doc/perf-baseline.md)。
 
+## M5 选择器能力
+
+`CssSelector.parse(text)` 支持以下子集，并与 `SvgStyleResolver` 的级联、`querySelectorAll` 共用同一实现：
+
+- 类型选择器、`*`、`#id`、`.class`；
+- 属性选择器 `[attr]`、`[attr=v]`、`[attr~=v]`、`[attr|=v]`、`[attr^=v]`、`[attr$=v]`、`[attr*=v]`，值可用裸标识符、单引号或双引号，右方括号前可加 `i` 做 ASCII 大小写不敏感比较；
+- 结构伪类 `:root`、`:first-child`、`:last-child`、`:only-child`、`:nth-child(An+B)`、`:first-of-type`、`:last-of-type`、`:nth-of-type(An+B)`、`:only-of-type`、`:empty`；`An+B` 接受 `odd` / `even` / 整数 / `n` / `-n+2`；
+- 否定伪类 `:not(<简单选择器>)`，参数只能是单个简单选择器，嵌套与复合参数会被拒绝；
+- 组合器：后代（空白）、子代 `>`、相邻兄弟 `+`、一般兄弟 `~`。
+
+```cangjie
+let selector = CssSelector.parse("g > rect:not(.skip)[data-role^=badge] + circle")
+if (selector.matches(element)) {
+    // ...
+}
+```
+
+单条选择器最多 256 个简单选择器；超出时整条规则跳过并写 warning。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；
 - `foreignObject` 内部 XHTML 语义；
-- 完整 CSS3：伪类、属性选择器、媒体查询、`@font-face`、CSS 动画/过渡；
-- 双向文本、连字、字形替换、内置 CJK 字体、TTF/OTF 解析；
+- CSS 动画/过渡、伪元素（`::before` / `::after`）、`@supports` / `@layer` / `@container`；
+- 双向文本、连字、字形替换、内置 CJK 字体、TTF/OTF 解析（M5 起支持基础连字与字距，见对应章节）；
 - SMIL 扩展（`animateColor`、事件驱动动画、脚本）与文本 `textPath` 的 `side` 属性；
 - GPU / native 光栅后端。
 

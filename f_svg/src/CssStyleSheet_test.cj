@@ -74,7 +74,7 @@ public class CssStyleSheet_test {
         @Assert(warnings.size == 3)
     }
 
-    /** 伪类与属性选择器整条跳过。 */
+    /** 未知伪类整条跳过；属性选择器与子代组合器正常解析（M5 契约）。 */
     @TestCase
     public func unsupportedSelectorsAreSkipped(): Unit {
         let warnings = ArrayList<String>()
@@ -84,9 +84,11 @@ public class CssStyleSheet_test {
             "g > circle { fill: blue }",
             warnings
         )
-        @Assert(sheet.rules.size == 1)
-        @Assert(sheet.rules[0].selectors[0].toString() == "g > circle")
-        @Assert(warnings.size == 2)
+        @Assert(sheet.rules.size == 2)
+        @Assert(sheet.rules[0].selectors[0].toString() == "rect[width]")
+        @Assert(sheet.rules[1].selectors[0].toString() == "g > circle")
+        @Assert(warnings.size == 1)
+        @Assert(warnings[0].contains("hover"))
     }
 
     /** 缺右花括号、缺分号、空块、多余分号。 */

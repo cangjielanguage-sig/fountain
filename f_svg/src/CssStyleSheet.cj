@@ -138,20 +138,15 @@ public class CssStyleSheet <: ToString {
             let parsed = parseCssDeclarations(tokens, i, warnings)
             let declarations = parsed.declarations
             i = parsed.position
-            let prelude = tokensToCssText(tokens, preludeStart, preludeEnd)
             let selectors = ArrayList<CssSelector>()
-            if (containsUnsupportedSelector(tokens, preludeStart, preludeEnd)) {
-                warnings.add("已跳过不支持的选择器「${prelude}」")
-            } else {
-                for (segment in splitCssSelectorList(tokens, preludeStart, preludeEnd)) {
-                    if (segment.size == 0) {
-                        continue
-                    }
-                    try {
-                        selectors.add(CssSelector.parse(segment))
-                    } catch (_: SvgException) {
-                        warnings.add("已跳过无法解析的选择器「${segment}」")
-                    }
+            for (segment in splitCssSelectorList(tokens, preludeStart, preludeEnd)) {
+                if (segment.size == 0) {
+                    continue
+                }
+                try {
+                    selectors.add(CssSelector.parse(segment))
+                } catch (error: SvgException) {
+                    warnings.add("已跳过无法解析的选择器「${segment}」：${error.message}")
                 }
             }
             if (selectors.size > 0) {
@@ -306,16 +301,6 @@ private func skipToCssDeclarationEnd(tokens: Array<CssToken>, start: Int64): Int
         i++
     }
     i
-}
-
-private func containsUnsupportedSelector(tokens: Array<CssToken>, start: Int64, end: Int64): Bool {
-    for (index in start..end) {
-        match (tokens[index].kind) {
-            case Colon | LeftBracket | RightBracket => return true
-            case _ => ()
-        }
-    }
-    false
 }
 
 /** 按顶层逗号拆分选择器列表，返回每个选择器的原始文本。 */
