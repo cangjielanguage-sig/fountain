@@ -153,6 +153,20 @@ public class SvgFilterNoiseM4_test {
         @Assert(m4AlphaAt(stretched, 0, 0) > 0)
         @Assert(m4ChannelAt(stretched, 0, 0, 0) > 200)
 
+        let meet = SvgFeImage()
+        meet.href = "mem://tex"
+        meet.preserveAspectRatio = tryParseSvgPreserveAspectRatio("xMidYMid meet").getOrThrow()
+        let met = feImageFilterBuffer(input, meet, images, warnings)
+        @Assert(m4AlphaAt(met, 0, 0) == 0)
+        @Assert(m4AlphaAt(met, 5, 5) > 0)
+
+        let slice = SvgFeImage()
+        slice.href = "mem://tex"
+        slice.preserveAspectRatio = tryParseSvgPreserveAspectRatio("xMidYMid slice").getOrThrow()
+        let sliced = feImageFilterBuffer(input, slice, images, warnings)
+        @Assert(m4AlphaAt(sliced, 0, 0) > 0)
+        @Assert(m4AlphaAt(sliced, 0, 5) > 0)
+
         let missing = SvgFeImage()
         let missingWarnings = ArrayList<String>()
         @Assert(m4AlphaAt(feImageFilterBuffer(input, missing, images, missingWarnings), 5, 5) == 0)
@@ -203,5 +217,10 @@ public class SvgFilterNoiseM4_test {
             feImageFilterBuffer(input, sharedImage, shared, ArrayList<String>())
         })
         @Assert(sharedError.kind == SvgErrorKind.Limit)
+
+        let oversized = expectSvgException({=>
+            images.loadDataUri(data, maxBase64Length: 4)
+        })
+        @Assert(oversized.kind == SvgErrorKind.Limit)
     }
 }

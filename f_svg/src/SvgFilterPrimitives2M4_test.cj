@@ -265,6 +265,47 @@ public class SvgFilterPrimitives2M4_test {
         @Assert(m4ChannelAt(preserved, 1, 1, 0) == 0)
     }
 
+    /** order 必须为正整数；非整数按直通处理并 warning。 */
+    @TestCase
+    public func convolveOrderMustBeInteger(): Unit {
+        let input = m4Buffer(3, 3, SvgColor.White)
+        let fractional = SvgFeConvolveMatrix()
+        fractional.order = SvgNumberList([2.6])
+        fractional.kernelMatrix = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        let warnings = ArrayList<String>()
+        @Assert(m4BuffersEqual(input, convolveFilterBuffer(input, fractional, warnings)))
+        @Assert(warnings.size > 0)
+        @Assert(warnings[0].contains("order"))
+
+        let zero = SvgFeConvolveMatrix()
+        zero.order = SvgNumberList([0.5])
+        let zeroWarnings = ArrayList<String>()
+        @Assert(m4BuffersEqual(input, convolveFilterBuffer(input, zero, zeroWarnings)))
+        @Assert(zeroWarnings.size > 0)
+    }
+
+    /** edgeMode="wrap" 按环绕取样，与 duplicate 行为不同。 */
+    @TestCase
+    public func convolveEdgeWrap(): Unit {
+        let input = m4TransparentBuffer(3, 3)
+        let corner = (2 * 3 + 2) * 4
+        input.pixels[corner] = 200
+        input.pixels[corner + 3] = 255
+        let kernel: Array<Float64> = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        let wrap = SvgFeConvolveMatrix()
+        wrap.kernelMatrix = kernel
+        wrap.edgeMode = SvgEdgeMode.Wrap
+        let wrapped = convolveFilterBuffer(input, wrap, ArrayList<String>())
+        @Assert(m4ChannelAt(wrapped, 0, 0, 0) == 200)
+
+        let duplicate = SvgFeConvolveMatrix()
+        duplicate.kernelMatrix = kernel
+        duplicate.edgeMode = SvgEdgeMode.Duplicate
+        let duplicated = convolveFilterBuffer(input, duplicate, ArrayList<String>())
+        @Assert(m4ChannelAt(duplicated, 0, 0, 0) == 0)
+    }
+
     /** 核长度不符、非有限、order 超限。 */
     @TestCase
     public func convolveValidation(): Unit {

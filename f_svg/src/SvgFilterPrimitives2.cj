@@ -994,15 +994,34 @@ internal func convolveFilterBuffer(
     var orderX: Int64 = 3
     var orderY: Int64 = 3
     if (orderValues.size == 1) {
-        orderX = Int64(round(orderValues[0]))
+        let value = orderValues[0]
+        if (!isFiniteSvgNumber(value) || value != floor(value) || value < 1.0) {
+            warnings.add("feConvolveMatrix 的 order 非正整数，按直通处理")
+            return input.copy()
+        }
+        if (value > 9.0) {
+            throw SvgException(
+                "feConvolveMatrix 的 order 超过 9×9 上限，实际 ${value}×${value}",
+                kind: SvgErrorKind.Limit
+            )
+        }
+        orderX = Int64(value)
         orderY = orderX
     } else if (orderValues.size >= 2) {
-        orderX = Int64(round(orderValues[0]))
-        orderY = Int64(round(orderValues[1]))
-    }
-    if (orderX <= 0 || orderY <= 0) {
-        warnings.add("feConvolveMatrix 的 order 非正整数，按直通处理")
-        return input.copy()
+        for (value in [orderValues[0], orderValues[1]]) {
+            if (!isFiniteSvgNumber(value) || value != floor(value) || value < 1.0) {
+                warnings.add("feConvolveMatrix 的 order 非正整数，按直通处理")
+                return input.copy()
+            }
+            if (value > 9.0) {
+                throw SvgException(
+                    "feConvolveMatrix 的 order 超过 9×9 上限，实际 ${value}×${value}",
+                    kind: SvgErrorKind.Limit
+                )
+            }
+        }
+        orderX = Int64(orderValues[0])
+        orderY = Int64(orderValues[1])
     }
     // 上限在分配任何缓冲之前检查。
     if (orderX > 9 || orderY > 9) {
