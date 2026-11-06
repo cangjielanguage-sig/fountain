@@ -85,7 +85,7 @@ public class DefaultCodec <: Codec & Releasable {
     public init(headroom!: Int64)
     /** 按配置重建「编码缓冲池」（超时取不到池项就抛，由调用方记录可见失败） */
     public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
-        maxWaiting!: Duration = Duration.second * 30): Unit
+        maxWaiting!: Duration = Duration.second * 30, localCacheSize!: Int64 = 2): Unit
     /** 按配置重建「字节数组池」；同时把 fileThreshold 设为 arraySize */
     public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024,
         arraySize!: Int64 = 4096, maxWaiting!: Duration = Duration.second * 30): Unit

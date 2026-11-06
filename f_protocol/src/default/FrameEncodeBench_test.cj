@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.env.getVariable
 import std.io.{BufferedInputStream, ByteBuffer, OutputStream}
 import std.runtime.{gc, getAllocatedHeapSize, getGCCount, getGCTime, setGCThreshold}
+import std.sync.Barrier
 import std.time.{DateTime, MonoTime}
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -51,6 +52,16 @@ private func envInt(name: String, defaultValue: Int64): Int64 {
         case Some(v) => Int64.parse(v)
         case None => defaultValue
     }
+}
+
+/** 按 `F_PROTOCOL_BENCH_LOCAL_CACHE` 重配编码缓冲池；返回实际使用的值（-1 = 不改默认）。 */
+private func configurePoolFromEnv(): Int64 {
+    let v = envInt("F_PROTOCOL_BENCH_LOCAL_CACHE", -1)
+    if (v >= 0) {
+        DefaultCodec.setBufferPool(initSize: 1024, minSize: 1024, maxSize: 1024,
+            maxWaiting: Duration.second * 30, localCacheSize: v)
+    }
+    v
 }
 
 /** 强制一次 GC 并等 GC 计数稳定：`gc()` 可能异步收尾，紧接着的窗口会把这次 GC 记进去。 */
@@ -95,7 +106,7 @@ private func bigEndianInt32(bytes: Array<Byte>, at: Int64): Int64 {
 }
 
 /** 分配量（字节/帧）与有效窗口数：窗口内发生 GC 或堆回缩的样本丢弃，取中位数。 */
-private func measureAllocPerFrame(msg: Message, sink: OutputStream, allocN: Int64): (Int64, Int64, Int64) {
+private func measureAllocPerFrameWith(allocN: Int64, action: () -> Unit): (Int64, Int64, Int64) {
     let samples = ArrayList<Int64>()
     var attempts = 0
     while (samples.size < 5 && attempts < 12) {
@@ -103,7 +114,7 @@ private func measureAllocPerFrame(msg: Message, sink: OutputStream, allocN: Int6
         let allocGcc0 = settleGc()
         let heap0 = getAllocatedHeapSize()
         for (_ in 0..allocN) {
-            msg.encode().copy(to: sink, closeToOnEnd: false)
+            action()
         }
         let heap1 = getAllocatedHeapSize()
         let allocGcc1 = getGCCount()
@@ -116,6 +127,125 @@ private func measureAllocPerFrame(msg: Message, sink: OutputStream, allocN: Int6
     }
     samples.sort()
     (samples[samples.size / 2], samples.size, attempts)
+}
+
+private func measureAllocPerFrame(msg: Message, sink: OutputStream, allocN: Int64): (Int64, Int64, Int64) {
+    measureAllocPerFrameWith(allocN, { => msg.encode().copy(to: sink, closeToOnEnd: false) })
+}
+
+private func writeInt32BE(bytes: Array<Byte>, at: Int64, value: Int64): Unit {
+    bytes[at] = UInt8((value >> 24) & 0xFF)
+    bytes[at + 1] = UInt8((value >> 16) & 0xFF)
+    bytes[at + 2] = UInt8((value >> 8) & 0xFF)
+    bytes[at + 3] = UInt8(value & 0xFF)
+}
+
+/** floor 组装：与生产帧同布局（头 + payload + CRC）。 */
+private func floorFrame(payload: Array<Byte>, command: Byte): Array<Byte> {
+    let frame = Array<Byte>(BENCH_FRAME_HEAD + payload.size + BENCH_FRAME_CRC, repeat: 0u8)
+    frame[0] = FRAME_VERSION
+    frame[1] = command
+    writeInt32BE(frame, 2, payload.size)
+    payload.copyTo(frame, 0, BENCH_FRAME_HEAD, payload.size)
+    writeInt32BE(frame, BENCH_FRAME_HEAD + payload.size,
+        Int64(crc32(frame[0 .. BENCH_FRAME_HEAD + payload.size])))
+    frame
+}
+
+/** no-CRC 生产路径复刻：编码 + 帧头，不写 CRC 尾部。 */
+private func encodeNoCrcInto(msg: Message, sink: OutputStream): Unit {
+    let bytes = DefaultCodec(headroom: BENCH_FRAME_HEAD)
+        .encode(msg.id.time).encode(msg.id.pid).encode(msg.id.tid).encode(msg.id.hostId)
+        .encode(msg.data).finish()
+    try {
+        let n = bytes.byteSize().getOrThrow()
+        if (let Some(frame) <- bytes.frameBytes(BENCH_FRAME_HEAD, 0)) {
+            frame[0] = FRAME_VERSION
+            frame[1] = msg.command.value
+            writeInt32BE(frame, 2, n)
+            sink.write(frame)
+        } else {
+            throw IllegalStateException('no-CRC bench expects a single-buffer frame')
+        }
+    } finally {
+        if (let r: Releasable <- bytes) {
+            r.release()
+        }
+    }
+}
+
+/** t 个线程各跑 n 帧生产路径，返回 (总字节数, 墙钟纳秒)。 */
+private func runThreaded(msg: Message, threads: Int64, n: Int64): (Int64, Int64) {
+    @Assert(threads > 0 && n >= 0)
+    let sinks = ArrayList<CountingNullOutputStream>()
+    for (_ in 0..threads) {
+        sinks.add(CountingNullOutputStream())
+    }
+    let barrier = Barrier(threads + 1)
+    let futures = ArrayList<Future<Unit>>()
+    for (i in 0..threads) {
+        let sink = sinks[i]
+        let f = spawn {
+            barrier.wait()
+            for (_ in 0..n) {
+                msg.encode().copy(to: sink, closeToOnEnd: false)
+            }
+        }
+        futures.add(f)
+    }
+    barrier.wait()
+    let start = MonoTime.now()
+    for (f in futures) {
+        f.get()
+    }
+    let elapsed = (MonoTime.now() - start).toNanoseconds()
+    var total = 0i64
+    for (s in sinks) {
+        total += s.total
+    }
+    (total, elapsed)
+}
+
+/** floor 采样：copyTo + crc32 + 空 sink，10 批取均值/p50/p99。 */
+private func measureFloor(frameBytes: Int64, n: Int64, warmup: Int64,
+    sink: CountingNullOutputStream): (Int64, Int64, Int64) {
+    let payloadLen = frameBytes - BENCH_FRAME_HEAD - BENCH_FRAME_CRC
+    @Assert(payloadLen > 0)
+    let payload = Array<Byte>(payloadLen, repeat: 0x5Au8)
+    let frame = Array<Byte>(frameBytes, repeat: 0u8)
+    frame[0] = FRAME_VERSION
+    frame[1] = Command.PUBLISH(AT_MOST_ONCE).value
+    writeInt32BE(frame, 2, payloadLen)
+    var checksum = 0u32
+    var seq = 0i64
+    for (_ in 0..warmup) {
+        seq++
+        frame[1] = UInt8(seq & 0xFF)
+        payload.copyTo(frame, 0, BENCH_FRAME_HEAD, payloadLen)
+        checksum ^= crc32(frame[0 .. BENCH_FRAME_HEAD + payloadLen])
+        sink.write(frame)
+    }
+    let batches: Int64 = 10
+    let perBatch = n / batches
+    @Assert(perBatch > 0)
+    let batchNs = ArrayList<Int64>()
+    var totalNs = 0i64
+    for (_ in 0..batches) {
+        let start = MonoTime.now()
+        for (_ in 0..perBatch) {
+            seq++
+            frame[1] = UInt8(seq & 0xFF)
+            payload.copyTo(frame, 0, BENCH_FRAME_HEAD, payloadLen)
+            checksum ^= crc32(frame[0 .. BENCH_FRAME_HEAD + payloadLen])
+            sink.write(frame)
+        }
+        let elapsed = (MonoTime.now() - start).toNanoseconds()
+        batchNs.add(elapsed / perBatch)
+        totalNs += elapsed
+    }
+    batchNs.sort()
+    println('FLOOR checksum=${checksum}')
+    (totalNs / n, batchNs[batchNs.size / 2], batchNs[batchNs.size - 1])
 }
 
 /**
@@ -230,6 +360,46 @@ public class FrameEncodeBench_test {
         @Assert(perFrame <= budget)
     }
 
+    /** 归因守卫 1：no-CRC 输出必须等于生产帧去掉最后 4 字节（逐字节）。 */
+    @TestCase
+    public func noCrcFrameMatchesProductionMinusCrc(): Unit {
+        let msg = benchMessage(4000)
+        let production = frameOf(msg)
+        let buf = ByteBuffer()
+        encodeNoCrcInto(msg, buf)
+        let got = buf.bytes()
+        @Assert(got.size == production.size - BENCH_FRAME_CRC)
+        var i = 0i64
+        while (i < got.size) {
+            @Assert(got[i] == production[i])
+            i++
+        }
+    }
+
+    /** 归因守卫 2：floor 组装的整帧必须与生产帧逐字节相同（含 CRC）。 */
+    @TestCase
+    public func floorFrameMatchesProductionFrame(): Unit {
+        let production = frameOf(benchMessage(4000))
+        let payload = production[BENCH_FRAME_HEAD .. production.size - BENCH_FRAME_CRC]
+        let frame = floorFrame(payload, production[1])
+        @Assert(frame.size == production.size)
+        var i = 0i64
+        while (i < production.size) {
+            @Assert(frame[i] == production[i])
+            i++
+        }
+    }
+
+    /** 归因守卫 3：多线程 harness 的字节计数必须正确（2 线程 × 100 帧）。 */
+    @TestCase
+    public func multiThreadHarnessCountsBytes(): Unit {
+        let msg = benchMessage(4000)
+        let frameBytes = frameOf(msg).size
+        let (bytes, elapsed) = runThreaded(msg, 2, 100)
+        @Assert(bytes == frameBytes * 100 * 2)
+        @Assert(elapsed > 0)
+    }
+
     /**
      * 基准主体。报告数值不做断言（时间断言在 WSL/共享机器上必然抖动）；
      * 采纳与否由 `f_protocol/doc/perf/frame-encode-4k.md` 按 design §7 判定。
@@ -249,6 +419,7 @@ public class FrameEncodeBench_test {
         let allocN = envInt("F_PROTOCOL_BENCH_ALLOC_N", 2_000)
         @Assert(n > 0 && warmup >= 0 && allocN > 0)
 
+        let localCache = configurePoolFromEnv()
         let msg = benchMessage(4000)
         let sink = CountingNullOutputStream()
         let probe = frameOf(msg)
@@ -304,6 +475,95 @@ public class FrameEncodeBench_test {
             'n=${n} warmup=${warmup} nsPerFrameWithGc=${nsWithGcTotal / n} nsPerFrame=${totalNs / n} ' +
             'batchP50=${p50} batchP99=${p99} allocBytesPerFrame=${allocPerFrame} allocN=${allocN} ' +
             'allocSamples=${allocSamples} allocAttempts=${allocAttempts} allocLowerBound=${allocLowerBound} ' +
-            'gcCount=${gcTotal} gcPer10k=${gcPer10k} gcTimeUs=${gcTimeUs}')
+            'gcCount=${gcTotal} gcPer10k=${gcPer10k} gcTimeUs=${gcTimeUs} localCache=${localCache}')
+    }
+
+    /** 归因基准 1：4KB `copyTo` + `crc32` + 空 sink，测不可约成本。 */
+    @TestCase
+    public func benchFloorCopyCrc(): Unit {
+        if (!benchEnabled()) {
+            println("SKIP: 未设置 F_PROTOCOL_BENCH=1，floor 基准不执行")
+            return
+        }
+        let n = envInt("F_PROTOCOL_BENCH_N", 50_000)
+        let warmup = envInt("F_PROTOCOL_BENCH_WARMUP", 5_000)
+        let frameBytes = frameOf(benchMessage(4000)).size
+        let sink = CountingNullOutputStream()
+        let (mean, p50, p99) = measureFloor(frameBytes, n, warmup, sink)
+        println('FLOOR frameBytes=${frameBytes} n=${n} nsPerFrame=${mean} batchP50=${p50} batchP99=${p99} ' +
+            'totalBytes=${sink.total}')
+    }
+
+    /** 归因基准 2：同一编码路径只去掉 CRC 尾部。 */
+    @TestCase
+    public func benchNoCrc(): Unit {
+        if (!benchEnabled()) {
+            println("SKIP: 未设置 F_PROTOCOL_BENCH=1，no-CRC 基准不执行")
+            return
+        }
+        let n = envInt("F_PROTOCOL_BENCH_N", 50_000)
+        let warmup = envInt("F_PROTOCOL_BENCH_WARMUP", 5_000)
+        let allocN = envInt("F_PROTOCOL_BENCH_ALLOC_N", 2_000)
+        @Assert(n > 0 && warmup >= 0 && allocN > 0)
+        let localCache = configurePoolFromEnv()
+        let msg = benchMessage(4000)
+        let sink = CountingNullOutputStream()
+        let frameBytes = frameOf(msg).size - BENCH_FRAME_CRC
+        for (_ in 0..warmup) {
+            encodeNoCrcInto(msg, sink)
+        }
+        let batches: Int64 = 10
+        let perBatch = n / batches
+        @Assert(perBatch > 0)
+        let batchNs = ArrayList<Int64>()
+        var totalNs = 0i64
+        for (_ in 0..batches) {
+            let start = MonoTime.now()
+            for (_ in 0..perBatch) {
+                encodeNoCrcInto(msg, sink)
+            }
+            let elapsed = (MonoTime.now() - start).toNanoseconds()
+            batchNs.add(elapsed / perBatch)
+            totalNs += elapsed
+        }
+        batchNs.sort()
+        let (alloc, allocSamples, _) = measureAllocPerFrameWith(allocN, { => encodeNoCrcInto(msg, sink) })
+        println('NOCRC frameBytes=${frameBytes} n=${n} nsPerFrame=${totalNs / n} ' +
+            'batchP50=${batchNs[batchNs.size / 2]} batchP99=${batchNs[batchNs.size - 1]} ' +
+            'allocBytesPerFrame=${alloc} allocSamples=${allocSamples} totalBytes=${sink.total} localCache=${localCache}')
+    }
+
+    /** 归因基准 3：1/4/8/16 线程吞吐与扩展比；`F_PROTOCOL_BENCH_THREADS` 可只跑单档。 */
+    @TestCase
+    public func benchMultiThread(): Unit {
+        if (!benchEnabled()) {
+            println("SKIP: 未设置 F_PROTOCOL_BENCH=1，多线程基准不执行")
+            return
+        }
+        let n = envInt("F_PROTOCOL_BENCH_MT_N", 20_000)
+        let only = envInt("F_PROTOCOL_BENCH_THREADS", 0)
+        let counts: Array<Int64> = if (only > 0) {
+            [only]
+        } else {
+            [1, 4, 8, 16]
+        }
+        @Assert(n > 0)
+        let localCache = configurePoolFromEnv()
+        let msg = benchMessage(4000)
+        let frameBytes = frameOf(msg).size
+        var baseFps = 0.0
+        var first = true
+        for (t in counts) {
+            let (bytes, elapsed) = runThreaded(msg, t, n)
+            @Assert(bytes == frameBytes * n * t)
+            let fps = Float64(n * t) * 1.0e9 / Float64(elapsed)
+            if (first) {
+                baseFps = fps
+                first = false
+            }
+            println('MT threads=${t} framesPerThread=${n} totalFrames=${n * t} elapsedMs=${elapsed / 1_000_000} ' +
+                'throughputFps=${Int64(fps)} nsPerFramePerThread=${Int64(Float64(elapsed) / Float64(n))} ' +
+                'scaling=${fps / baseFps} localCache=${localCache}')
+        }
     }
 }
