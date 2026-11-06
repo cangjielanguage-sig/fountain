@@ -16,11 +16,11 @@ limitations under the License.
 package fountain::f_util
 
 /**
- * 非「Linux x86_64」平台的空实现：永远没有 native 路径，全部走纯软件。
+ * 非 Linux 平台的空实现：永远没有 native 路径，全部走纯软件。
  *
- * aarch64 的生成式路径在 Phase 1 后续补上；在此之前它也走这个 stub。
+ * Linux 的两个目标（x86_64 / aarch64）各有一份生成式实现；只有这两种 target 存在。
  */
-@When[os != "Linux" || arch != "x86_64"]
+@When[os != "Linux"]
 class Crc32Hw {
     static func available(): Bool {
         false

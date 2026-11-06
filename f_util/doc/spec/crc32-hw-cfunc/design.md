@@ -95,6 +95,7 @@ done:  ret
 - CRC32C 与 ISO 均生成成功；ISO 单块折叠尖刀 4KB **393 ns/次**（含 acquire/FFI），与软件逐位一致。
 - 关键修复：96→64 折叠必须用 `(v0 >> 4) ^ product`，不能把原 `v0` 再异或进去；尖刀对拍发现并修正。
 - 最终 f_protocol：C p50 **1341 ns**（-62.4%）、floor 620 ns、no-CRC 627 ns；16T 绝对 2.78M fps（扩展 3.74×，宿主 load 11~18，需空闲复测）。
+- aarch64：`crc32x/crc32b`（ISO）与 `crc32cx/crc32cb`（CRC32C）各 56 字节；交叉汇编器核对，`qemu-aarch64` 上 64B/65B 对拍通过。真机数据待用户测试。
 
 ## 6. Crc32 集成
 

@@ -6,7 +6,7 @@
 - [x] 1.2 实现 Linux-only `CodeBuffer`（mmap RW → mprotect RX → `__clear_cache`），非 Linux stub。
 - [x] 1.3 CPU 探测：`/proc/cpuinfo` 的 `sse4_2` / `pclmulqdq`；`F_UTIL_CRC_HW=0` 关闭。
 - [x] 1.4 生成 x86_64 CRC32C（`crc32` 指令），汇编器核对字节；黄金向量/随机长度对拍。
-- [x] 1.5 aarch64 ISO/CRC32C：本机无 ARM；暂由 stub 覆盖，代码生成留待 ARM 环境（本变更不含）。
+- [x] 1.5 aarch64 ISO/CRC32C：`crc32x/crc32b` 与 `crc32cx/crc32cb` 各 56 字节；交叉汇编器核对，`qemu-aarch64` 上 64B/65B 对拍通过；真机待用户测试。
 - [x] 1.6 `Crc32` 接入：`hwKind` 判定、`compute/update` raw 快路径、空数组/失败回退。
 - [x] 1.7 f_util 生成式用例：CRC32C 黄金值 + 随机长度 + 增量 + 回退 + 4 线程（9/9 通过）。
 

@@ -229,9 +229,10 @@ MT：1T 277k fps；4T 3.59×；8T 5.59×；**16T 8.46×**。
 
 - `CodeBuffer`：`mmap` RW → 写机器码 → `mprotect` RX（W^X）→ `__clear_cache`；失败回退软件。
 - CPU 探测：`/proc/cpuinfo` 的 `sse4_2` / `pclmulqdq`；`F_UTIL_CRC_HW=0` 可强制关闭。
-- **CRC32C**：SSE4.2 `crc32` 指令（raw，8 字节循环 + 尾字节）。
-- **ISO-HDLC**：PCLMULQDQ 16 字节折叠 + Barrett 归约；只处理 16 字节整数倍，尾部由软件补。
-- 无第三方库、无 C 垫片；生成失败/非 x86_64 Linux 一律纯软件；CRC 值逐位不变（f_util 9 个生成式用例 + f_protocol 帧 CRC 全绿）。
+- **CRC32C**：x86_64 用 SSE4.2 `crc32`（raw，8 字节循环 + 尾字节）；aarch64 用 `crc32cx`/`crc32cb`。
+- **ISO-HDLC**：x86_64 用 PCLMULQDQ 16 字节折叠 + Barrett（只处理 16 字节整数倍，尾部软件补）；aarch64 用 `crc32x`/`crc32b`（函数内处理尾字节）。
+- 无第三方库、无 C 垫片；生成失败/非 Linux 一律纯软件；CRC 值逐位不变（f_util 9 个生成式用例 + f_protocol 帧 CRC 全绿）。
+- aarch64 机器码经交叉汇编器核对，并在 `qemu-aarch64` 上用 64B/65B 与 Python 参考对拍通过；真机性能待有 ARM 机器时补测。
 
 ### 数据（-O2，3 轮中位；宿主 load 11~18，MT 有噪声）
 

@@ -24,11 +24,11 @@ private func codegenBytes(n: Int64): Array<Byte> {
 }
 
 /**
- * 生成式硬件 CRC（x86_64：CRC32C 的 `crc32` + ISO-HDLC 的 PCLMULQDQ）。
+ * 生成式硬件 CRC（x86_64：`crc32` + PCLMULQDQ；aarch64：ARMv8 `crc32*`）。
  *
  * 没有对应 CPU 特性的机器上 `availableFor()` 为 false，相关用例打印 SKIP 并返回，不失败。
  */
-@When[os == "Linux" && arch == "x86_64"]
+@When[os == "Linux"]
 @Test
 public class Crc32CodegenTest {
     @TestCase
