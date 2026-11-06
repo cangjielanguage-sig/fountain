@@ -9,6 +9,7 @@
 | 记忆、知识、技能、人格、提示词 | `MemoryStore` / `KnowledgeStore` / `MetaStore` |
 | loom 编排（文本 → 流程 → 执行） | `fountain::f_llm.loom.LoomWiring` |
 | 流程路由（一段描述 → 选中并执行流程） | `fountain::f_llm.loom.Supervisor` |
+| 第三方平台通道（邮件收发，可扩展 IM） | `fountain::f_llm.channel.ChannelMediator` |
 | 技能演进（经验 → 技能，带 A/B 门禁） | `fountain::f_llm.loom.SkillEvolutionJob` |
 | 检索质量评测 | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
@@ -484,6 +485,31 @@ plan.persona = ''
 `scheduleCreate` 注册的流程任务由 `LoomScheduler`（`TicktockScheduler`，基于 `f_ticktock`）驱动；
 JIT 步骤在任务里执行时由 `JitTicktockTask` 承接。`LoomSchedules` 未安装时注册与触发都跳过。
 
+### 第三方平台通道（邮件）
+
+流程要把结果送出去时，走 `channel` 而不是直接调 `f_email`：
+
+```bash
+export llm_channels='[{"platform":"email","account":"work","from":"bot@example.com",
+  "user":"bot@example.com","password":"***","smtpHost":"smtp.example.com","smtpPort":465,
+  "imapHost":"imap.example.com","imapPort":993}]'
+```
+
+```cangjie
+// 流程步骤里（JIT / 工具循环均可）
+loomCallTool("channelSend",
+    '{"platform":"email","account":"work","to":"a@b.c","subject":"日报","text":"正文",' +
+    '"attachments":[{"filename":"report.pdf","path":"/tmp/report.pdf"}]}')
+loomCallTool("channelInbox", '{"platform":"email","account":"work","downloadDir":"/tmp/inbox"}')
+```
+
+| 能力 | 说明 |
+|---|---|
+| 平台 / 账号 | 中介者按 `(platform, account)` 寻址；同平台可多账号；账号留空仅当该平台只有一个实例才回落 |
+| 扩展新平台 | 实现 `Channel` + 一行顶层 `let _ = ChannelMediator.registerProvider('xxx', …)` 自动注册 |
+| 已实现 | `email`（SMTP 发 / IMAP 收，含附件）；`wechat` / `wecom` / `dingtalk` / `feishu` 仅预留常量 |
+| 附件 | 发送按路径给出（路径不存在整封失败）；接收给 `downloadDir` 才落盘，同名顺延 `-2`，不覆盖 |
+
 ### 流程路由（Supervisor）
 
 流程多了以后，调用方不必再记「该找哪个流程」：打开 `llm_supervisor`，流程编译成功即自动登记成路由目标，
@@ -653,6 +679,7 @@ println(outcome.report)
 | `llm_balanceLowThreshold` | 无 | 余额告警阈值 |
 | `llm_supervisor` | `false` | 打开流程路由（Supervisor）：已编译流程自动登记、可按描述派发 |
 | `llm_loomOnNoUsable` | `false` | Supervisor 判定无可用流程时自动编排新流程；仅 `llm_supervisor=true` 时生效 |
+| `llm_channels` | 空 | 第三方平台账号（JSON 数组，一条一个账号；单条非法只跳过并 warn） |
 
 ### 其它
 

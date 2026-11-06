@@ -24,6 +24,36 @@
 | `compiled` | 步骤闭包编译成功，可执行 |
 | `failed` | 启动重编译失败，需人工修 |
 
+## 第三方平台通道（channel）
+
+流程要把结果送出去（邮件 / IM），走 `fountain::f_llm.channel` 的统一接口，不直接依赖 `f_email`。
+
+| 组件 | 说明 |
+|---|---|
+| `Channel` | 平台无关接口：`platform` / `account` / `send` / `receive` / `close` |
+| `ChannelMediator` | 中介者：按 `(platform, account)` 寻址；同平台多账号；账号留空仅当该平台只有一个实例才回落 |
+| `ChannelProviders`（`ChannelMediator.registerProvider`） | 平台名 → 工厂，**各实现用文件顶层 `let` 自动注册**（Cangjie 无 static initializer） |
+| `ChannelBootstrap` | 读 `llm_channels` 逐条建实例并登记；**单条非法只跳过并记录，不中断启动** |
+| `EmailChannel` / `FEmailTransport` | 已实现平台：`email`，基于 `f_email`（SMTP 发、IMAP 收） |
+
+```bash
+export llm_channels='[{"platform":"email","account":"work","from":"bot@example.com",
+  "user":"bot@example.com","password":"***",
+  "smtpHost":"smtp.example.com","smtpPort":465,
+  "imapHost":"imap.example.com","imapPort":993}]'
+```
+
+流程内通过两个工具访问（JIT 里 `loomCallTool`，模型工具循环同样可用）：
+
+| 工具 | 参数 | 返回 |
+|---|---|---|
+| `channelSend` | `platform, account?, to, subject, text?, html?, attachments?: [{filename, path}]` | `{"ok":true,"messageId":…}` 或 `{"ok":false,"error":…}` |
+| `channelInbox` | `platform, account?, limit?, downloadDir?` | 消息数组 JSON（含附件 `filename/size/path/saved/error`） |
+
+附件语义：发送按**路径**给出（路径不存在整封失败，不发出缺附件的信）；接收默认只给元数据，给 `downloadDir` 时落盘，同名顺延 `-2`，不覆盖已有文件。
+
+平台 `wechat` / `wecom` / `dingtalk` / `feishu` 只有常量、没有实现：`platforms()` 不列它们，调用时报 `channel platform not supported`。
+
 ## Supervisor（流程路由）
 
 流程攒多以后，调用方不该再记「这段活该找哪个流程」。Supervisor 把已编译流程注册成路由目标，

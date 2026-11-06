@@ -67,6 +67,14 @@ public struct LLMConfig {
         Config.getValue<Bool>(LLM_LOOM_ON_NO_USABLE) ?? false
     }
 
+    /** 第三方平台账号配置（JSON 数组，一条一个账号） */
+    public static const LLM_CHANNELS = LLM + '_channels'
+
+    /** 原始 JSON 串；装配时由 `ChannelBootstrap` 解析 */
+    public static func channelsJson(): String {
+        Config.getString(LLM_CHANNELS) ?? ''
+    }
+
     /** 配置来源名：database（默认）/ env / file:<path> */
     public static const LLM_CONF_SOURCE = LLM + '_confSource'
     /** env 来源内联的配置 JSON 数组 */

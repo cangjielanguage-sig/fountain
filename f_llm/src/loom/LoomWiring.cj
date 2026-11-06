@@ -17,6 +17,7 @@ package fountain::f_llm.loom
 
 import std.collection.*
 import std.time.DateTime
+import fountain::f_llm.channel.*
 import fountain::f_llm.config.LLMConfig
 import fountain::f_llm.store.*
 
@@ -73,6 +74,8 @@ public class LoomWiring {
         })
         // 同一份 chat 回调兼作执行宿主：confirm+execute 时可直接跑一遍
         LoomServices.installHost(DefaultLoomHost(chat))
+        // 第三方平台通道：按 llm_channels 装配（未配置时什么都不做）
+        let _ = ChannelBootstrap.installFromConfig()
         // Supervisor：开关打开时用已编译流程播种路由表（重启后恢复的流程也在这里进来）
         installSupervisor(service, registry, chat, plannerModel)
         // 记忆策略：默认开启（规则提炼），需要模型总结时由调用方传入 summarize=true

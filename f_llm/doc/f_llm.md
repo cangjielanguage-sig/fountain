@@ -571,6 +571,7 @@ nDCG@k 用二值相关：`DCG = Σ gain_i / log2(i+1)`，`IDCG` 是期望文档�
 | 模型 | `llm_confSource` / `llm_confs` / `llm_confRefreshSeconds` / `llm_loadBalanceAlgo` / `llm_failureThreshold` / `llm_cooldownSeconds` / `llm_accessTryingCount` / `llm_accessTryingElapsed` / `llm_streamIdleTimeout` / `llm_streamMaxLineBytes` / `llm_prunerLlmName` / `llm_summarisingLlmName` |
 | 运行 | `llm_fileSandboxPath` / `llm_makingMemory` / `llm_summarisingModel` / `llm_summarisingActionKind` / `llm_toolResultMaxBytes` / `llm_fetchMaxBytes` / `llm_balanceLowThreshold` / `llm_db` / `hydra_filterFields` |
 | 路由 | `llm_supervisor`（默认关）/ `llm_loomOnNoUsable`（默认关，仅前者开启时生效） |
+| 通道 | `llm_channels`（JSON 数组，一条一个第三方平台账号） |
 
 ## 10. 失败与降级
 
