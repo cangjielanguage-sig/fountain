@@ -250,7 +250,8 @@ public static func screenCTM(element: SvgElement, viewport: SvgViewportTransform
 ```
 
 - `ctm` 从根到元素累乘 `transform` 与嵌套 `svg` 的 `viewBox` 变换；
-- `screenCTM` 再乘视口变换（`viewBox` + `preserveAspectRatio` + DPR）；
+- `screenCTM` 再乘视口变换（`viewBox` + `preserveAspectRatio` + DPR），顺序为
+  `scale(dpr) × viewport.matrix × ctm`，与渲染树一致；
 - 不含 `use` 实例化产生的额外变换（文档中说明）。
 
 **测试**：嵌套 `g` 的 CTM；嵌套 `svg` 的 viewBox；`screenCTM` 与渲染坐标一致。

@@ -134,6 +134,33 @@ public class SvgGeometryApiM4_test {
         @Assert(SvgGeometry.ctm(detached) == SvgMatrix.identity)
     }
 
+    /** 带元素变换与 viewBox meet 时，screenCTM 与渲染矩阵一致。 */
+    @TestCase
+    public func screenCtmWithTransform(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\" " +
+            "viewBox=\"0 0 50 50\"><g transform=\"translate(10,10)\">" +
+            "<rect width=\"10\" height=\"10\"/></g></svg>"
+        )
+        let rect = document.elementsByTag("rect")[0]
+        let options = SvgRenderOptions(devicePixelRatio: 2.0)
+        let viewport = SvgViewportTransform.from(document.root, options: options)
+        let matrix = SvgGeometry.screenCTM(rect, viewport)
+        let origin = matrix.apply(SvgPoint(0.0, 0.0))
+        @Assert(near(origin.x, 40.0) && near(origin.y, 40.0))
+
+        let list = SvgRenderTreeBuilder().build(document, options: options)
+        var compared = false
+        for (command in list.commands) {
+            if (command.kind == SvgDisplayCommandKind.FillPath) {
+                let rendered = command.matrix.apply(SvgPoint(0.0, 0.0))
+                @Assert(near(rendered.x, origin.x) && near(rendered.y, origin.y))
+                compared = true
+            }
+        }
+        @Assert(compared)
+    }
+
     /** screenCTM 叠加 viewBox 与 DPR，并与渲染矩阵一致。 */
     @TestCase
     public func screenCtm(): Unit {

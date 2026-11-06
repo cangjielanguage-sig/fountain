@@ -164,11 +164,11 @@ public class SvgGeometry {
         matrix
     }
 
-    /** `ctm × viewport.matrix × scale(dpr)`。 */
+    /** `scale(dpr) × viewport.matrix × ctm(element)`，与渲染器的设备矩阵顺序一致。 */
     public static func screenCTM(element: SvgElement, viewport: SvgViewportTransform): SvgMatrix {
-        ctm(element)
+        SvgMatrix.scale(viewport.devicePixelRatio, viewport.devicePixelRatio)
             .multiply(viewport.matrix)
-            .multiply(SvgMatrix.scale(viewport.devicePixelRatio, viewport.devicePixelRatio))
+            .multiply(ctm(element))
     }
 }
 
