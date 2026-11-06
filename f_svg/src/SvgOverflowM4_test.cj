@@ -191,6 +191,22 @@ public class SvgOverflowM4_test {
         @Assert(!m4OpaqueRed(bitmap, 5, 1))
     }
 
+    /** viewBox + 非零 ref 时，视口平移量必须是内容矩阵作用后的 ref。 */
+    @TestCase
+    public func markerViewBoxReferenceClips(): Unit {
+        let document = svgDoc(
+            '<marker id="m" markerWidth="10" markerHeight="10" refX="5" refY="5" ' +
+            'markerUnits="userSpaceOnUse" viewBox="0 0 5 5">' +
+            '<rect width="6" height="6" fill="red"/></marker>' +
+            '<line x1="30" y1="30" x2="40" y2="30" stroke="black" marker-start="url(#m)"/>',
+            width: 60,
+            height: 60
+        )
+        let bitmap = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1)).render(document)
+        @Assert(m4OpaqueRed(bitmap, 25, 25))
+        @Assert(!m4OpaqueRed(bitmap, 31, 25))
+    }
+
     /** 内容完全在视口内时保留不建蒙版的快路径。 */
     @TestCase
     public func markerContentFitsSkipsMask(): Unit {
