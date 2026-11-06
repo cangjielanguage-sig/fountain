@@ -68,6 +68,8 @@ public func crc32(data: String): UInt32
 public func crc32<T>(s: T): UInt16 where T <: ToString 
 ```
 
+**Hardware acceleration (Linux x86_64 / aarch64)**: `Crc32.crc32c` uses the SSE4.2 `crc32` instruction on x86_64 and `crc32c*` on aarch64; `Crc32.isoHdlc` / `jamcrc` use PCLMULQDQ folding on x86_64 and `crc32*` on aarch64. The machine code is generated on first use (`mmap` RW → `mprotect` RX, called through `CFunc`) and produces bit-identical results to the software path. It falls back to software when the CPU lacks the feature, `mprotect` is blocked by policy, or `F_UTIL_CRC_HW=0` is set; other OS/architectures always use software. **No third-party runtime dependency and no C shim** (the generator only needs libc `mmap`/`mprotect` and aarch64 `getauxval`).
+
 ## crc64
 ```cj
 
