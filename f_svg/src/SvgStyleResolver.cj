@@ -73,20 +73,26 @@ public class SvgStyleResolver <: ToString {
     private var mergedFontFaces: Array<CssFontFaceRule> = Array<CssFontFaceRule>()
     private var selectorIndex: ?CssSelectorIndex = None
     private var preparedRoot: ?Int64 = None
-    /** `@media` 宽度求值基准；缺省 300。 */
+    /** `@media` 与百分比长度求值基准；缺省 300×150。 */
     private var mediaWidth: Float64 = 300.0
+    private var mediaHeight: Float64 = 150.0
 
     public init(sheet!: CssStyleSheet = CssStyleSheet.empty()) {
         this.sheet = sheet
     }
 
     public func compute(root: SvgElement): SvgComputedStyleTree {
-        this.compute(root, mediaWidth: 300.0)
+        this.compute(root, mediaWidth: 300.0, mediaHeight: 150.0)
     }
 
-    /** 以给定逻辑视口宽度求值 `@media`。 */
-    public func compute(root: SvgElement, mediaWidth!: Float64): SvgComputedStyleTree {
+    /** 以给定逻辑视口求值 `@media` 与百分比几何长度。 */
+    public func compute(
+        root: SvgElement,
+        mediaWidth!: Float64,
+        mediaHeight!: Float64 = 150.0
+    ): SvgComputedStyleTree {
         this.mediaWidth = mediaWidth
+        this.mediaHeight = mediaHeight
         this.warnings.clear()
         this.prepare(Some(root))
         this.fontFaces.clear()
@@ -103,16 +109,18 @@ public class SvgStyleResolver <: ToString {
      * 独立调用时只使用外部样式表，不回溯真实祖先。
      */
     public func computeElement(element: SvgElement, parent: ?SvgComputedStyle): SvgComputedStyle {
-        this.computeElement(element, parent, mediaWidth: 300.0)
+        this.computeElement(element, parent, mediaWidth: 300.0, mediaHeight: 150.0)
     }
 
-    /** 计算单个元素，并以给定宽度求值 `@media`。 */
+    /** 计算单个元素，并以给定视口求值 `@media` 与百分比几何长度。 */
     public func computeElement(
         element: SvgElement,
         parent: ?SvgComputedStyle,
-        mediaWidth!: Float64
+        mediaWidth!: Float64,
+        mediaHeight!: Float64 = 150.0
     ): SvgComputedStyle {
         this.mediaWidth = mediaWidth
+        this.mediaHeight = mediaHeight
         this.prepare(None)
         this.cascade(element, parent)
     }
@@ -472,6 +480,16 @@ public class SvgStyleResolver <: ToString {
         }
     }
 
+    /** 百分比几何长度所用的视口参考；非几何属性返回 `None`。 */
+    private func cssCalcPercentReference(name: String): ?Float64 {
+        match (name) {
+            case "x" | "width" | "cx" | "rx" => Some(this.mediaWidth)
+            case "y" | "height" | "cy" | "ry" => Some(this.mediaHeight)
+            case "r" => Some((this.mediaWidth + this.mediaHeight) / 2.0)
+            case _ => Option<Float64>.None
+        }
+    }
+
     private func normalizeValue(
         name: String,
         raw: String,
@@ -496,7 +514,11 @@ public class SvgStyleResolver <: ToString {
             } else {
                 fontSizePx
             }
-            match (evaluateCssCalc(text[5..text.size - 1], baseFontSize)) {
+            match (evaluateCssCalc(
+                text[5..text.size - 1],
+                baseFontSize,
+                percentReference: this.cssCalcPercentReference(name)
+            )) {
                 case Some(value) =>
                     text = value
                     textLower = value.toAsciiLower()
@@ -530,6 +552,27 @@ public class SvgStyleResolver <: ToString {
                     } else {
                         return Some(formatSvgNumber(value))
                     }
+                    case None => return None
+                }
+            case "x" | "y" =>
+                match (SvgLength.tryParse(text)) {
+                    case Some(length) => return Some(length.toString())
+                    case None =>
+                        match (parseSvgLengthList(text)) {
+                            case Some(values) => if (values.size > 1) {
+                                return Some(text)
+                            } else {
+                                return None
+                            }
+                            case None => return None
+                        }
+                }
+            case "width" | "height" | "cx" | "cy" | "r" | "rx" | "ry" =>
+                if (textLower == "auto") {
+                    return Some("auto")
+                }
+                match (SvgLength.tryParse(text)) {
+                    case Some(length) => return Some(length.toString())
                     case None => return None
                 }
             case "font-size" =>
@@ -761,7 +804,8 @@ private func expandCustomValue(raw: String, custom: HashMap<String, String>): ?S
 /** `calc()` 只对长度属性生效。 */
 private func cssCalcAppliesTo(name: String): Bool {
     match (name) {
-        case "stroke-width" | "letter-spacing" | "word-spacing" | "font-size" | "stroke-dashoffset" => true
+        case "stroke-width" | "letter-spacing" | "word-spacing" | "font-size" | "stroke-dashoffset" |
+            "x" | "y" | "width" | "height" | "cx" | "cy" | "r" | "rx" | "ry" => true
         case _ => false
     }
 }

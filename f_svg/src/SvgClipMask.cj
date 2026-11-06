@@ -652,13 +652,16 @@ private func elementTransformMatrix(element: SvgElement): SvgMatrix {
     }
 }
 
-internal func elementPathData(element: SvgElement): ?SvgPathData {
+internal func elementPathData(
+    element: SvgElement,
+    style!: ?SvgComputedStyle = None
+): ?SvgPathData {
     match (element) {
         case rect: SvgRect =>
-            let width = lengthOrZero(rect.width)
-            let height = lengthOrZero(rect.height)
-            let x = lengthOrZero(rect.x)
-            let y = lengthOrZero(rect.y)
+            let width = lengthOrZero(svgStyledLength(style, "width", rect.width))
+            let height = lengthOrZero(svgStyledLength(style, "height", rect.height))
+            let x = lengthOrZero(svgStyledLength(style, "x", rect.x))
+            let y = lengthOrZero(svgStyledLength(style, "y", rect.y))
             return Some(
                 SvgPathData([
                     SvgPathCommand(SvgPathCommandKind.MoveTo, false, [x, y]),
@@ -669,19 +672,29 @@ internal func elementPathData(element: SvgElement): ?SvgPathData {
                 ])
             )
         case circle: SvgCircle =>
-            let radius = lengthOrZero(circle.r)
+            let radius = lengthOrZero(svgStyledLength(style, "r", circle.r))
             if (radius <= 0.0) {
                 return None
             }
-            return Some(pointsToPath(circlePolygonForStroke(lengthOrZero(circle.cx), lengthOrZero(circle.cy), radius, 0.25)))
+            return Some(pointsToPath(circlePolygonForStroke(
+                lengthOrZero(svgStyledLength(style, "cx", circle.cx)),
+                lengthOrZero(svgStyledLength(style, "cy", circle.cy)),
+                radius,
+                0.25
+            )))
         case ellipse: SvgEllipse =>
-            let rx = lengthOrZero(ellipse.rx)
-            let ry = lengthOrZero(ellipse.ry)
+            let rx = lengthOrZero(svgStyledLength(style, "rx", ellipse.rx))
+            let ry = lengthOrZero(svgStyledLength(style, "ry", ellipse.ry))
             if (rx <= 0.0 || ry <= 0.0) {
                 return None
             }
             return Some(
-                pointsToPath(ellipsePolygonForClip(lengthOrZero(ellipse.cx), lengthOrZero(ellipse.cy), rx, ry))
+                pointsToPath(ellipsePolygonForClip(
+                    lengthOrZero(svgStyledLength(style, "cx", ellipse.cx)),
+                    lengthOrZero(svgStyledLength(style, "cy", ellipse.cy)),
+                    rx,
+                    ry
+                ))
             )
         case polygon: SvgPolygon =>
             match (polygon.points) {

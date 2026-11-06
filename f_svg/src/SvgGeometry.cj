@@ -37,10 +37,10 @@ public class SvgGeometry {
         styles!: ?SvgComputedStyleTree = None
     ): ?SvgBounds {
         match (element) {
-            case rect: SvgRect => return rectBounds(rect)
-            case circle: SvgCircle => return circleBounds(circle)
-            case ellipse: SvgEllipse => return ellipseBounds(ellipse)
-            case line: SvgLine => return lineBounds(line)
+            case rect: SvgRect => return rectBounds(rect, style)
+            case circle: SvgCircle => return circleBounds(circle, style)
+            case ellipse: SvgEllipse => return ellipseBounds(ellipse, style)
+            case line: SvgLine => return lineBounds(line, style)
             case polyline: SvgPolyline => return pointsBounds(polyline.points)
             case polygon: SvgPolygon => return pointsBounds(polygon.points)
             case path: SvgPath => return pathElementBounds(path)
@@ -233,58 +233,81 @@ public class SvgGeometry {
     }
 }
 
-private func rectBounds(rect: SvgRect): ?SvgBounds {
-    let width = match (rect.width) {
+/** 优先读取计算样式中的长度；未声明或不可解析时回退元素属性。 */
+internal func svgStyledLength(
+    style: ?SvgComputedStyle,
+    name: String,
+    fallback: ?SvgLength
+): ?SvgLength {
+    match (style) {
+        case Some(value) =>
+            if (value.sourceOf(name) == CssStyleSource.Default) {
+                return fallback
+            }
+            match (value.get(name)) {
+                case Some(text) =>
+                    match (SvgLength.tryParse(text)) {
+                        case Some(length) => return Some(length)
+                        case None => return fallback
+                    }
+                case None => return fallback
+            }
+        case None => fallback
+    }
+}
+
+private func rectBounds(rect: SvgRect, style: ?SvgComputedStyle): ?SvgBounds {
+    let width = match (svgStyledLength(style, "width", rect.width)) {
         case Some(value) => value.value
         case None => return None
     }
-    let height = match (rect.height) {
+    let height = match (svgStyledLength(style, "height", rect.height)) {
         case Some(value) => value.value
         case None => return None
     }
     if (width < 0.0 || height < 0.0) {
         return None
     }
-    let x = lengthOrZero(rect.x)
-    let y = lengthOrZero(rect.y)
+    let x = lengthOrZero(svgStyledLength(style, "x", rect.x))
+    let y = lengthOrZero(svgStyledLength(style, "y", rect.y))
     Some(SvgBounds(x, y, width, height))
 }
 
-private func circleBounds(circle: SvgCircle): ?SvgBounds {
-    let radius = match (circle.r) {
+private func circleBounds(circle: SvgCircle, style: ?SvgComputedStyle): ?SvgBounds {
+    let radius = match (svgStyledLength(style, "r", circle.r)) {
         case Some(value) => value.value
         case None => return None
     }
     if (radius < 0.0) {
         return None
     }
-    let cx = lengthOrZero(circle.cx)
-    let cy = lengthOrZero(circle.cy)
+    let cx = lengthOrZero(svgStyledLength(style, "cx", circle.cx))
+    let cy = lengthOrZero(svgStyledLength(style, "cy", circle.cy))
     Some(SvgBounds(cx - radius, cy - radius, radius * 2.0, radius * 2.0))
 }
 
-private func ellipseBounds(ellipse: SvgEllipse): ?SvgBounds {
-    let rx = match (ellipse.rx) {
+private func ellipseBounds(ellipse: SvgEllipse, style: ?SvgComputedStyle): ?SvgBounds {
+    let rx = match (svgStyledLength(style, "rx", ellipse.rx)) {
         case Some(value) => value.value
         case None => return None
     }
-    let ry = match (ellipse.ry) {
+    let ry = match (svgStyledLength(style, "ry", ellipse.ry)) {
         case Some(value) => value.value
         case None => return None
     }
     if (rx < 0.0 || ry < 0.0) {
         return None
     }
-    let cx = lengthOrZero(ellipse.cx)
-    let cy = lengthOrZero(ellipse.cy)
+    let cx = lengthOrZero(svgStyledLength(style, "cx", ellipse.cx))
+    let cy = lengthOrZero(svgStyledLength(style, "cy", ellipse.cy))
     Some(SvgBounds(cx - rx, cy - ry, rx * 2.0, ry * 2.0))
 }
 
-private func lineBounds(line: SvgLine): ?SvgBounds {
-    let x1 = lengthOrZero(line.x1)
-    let y1 = lengthOrZero(line.y1)
-    let x2 = lengthOrZero(line.x2)
-    let y2 = lengthOrZero(line.y2)
+private func lineBounds(line: SvgLine, style: ?SvgComputedStyle): ?SvgBounds {
+    let x1 = lengthOrZero(svgStyledLength(style, "x1", line.x1))
+    let y1 = lengthOrZero(svgStyledLength(style, "y1", line.y1))
+    let x2 = lengthOrZero(svgStyledLength(style, "x2", line.x2))
+    let y2 = lengthOrZero(svgStyledLength(style, "y2", line.y2))
     Some(pointPairBounds(x1, y1, x2, y2))
 }
 

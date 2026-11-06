@@ -253,7 +253,7 @@ public class SvgRenderTreeBuilder {
         let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
         let logicalHeight = if (options.height > 0) { Float64(options.height) } else { viewport.height }
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(root, mediaWidth: logicalWidth)
+        let styles = resolver.compute(root, mediaWidth: logicalWidth, mediaHeight: logicalHeight)
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
@@ -310,7 +310,7 @@ public class SvgRenderTreeBuilder {
     ): SvgDisplayList {
         this.ensureGuard()
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(container, mediaWidth: Float64(width))
+        let styles = resolver.compute(container, mediaWidth: Float64(width), mediaHeight: Float64(height))
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
@@ -354,7 +354,7 @@ public class SvgRenderTreeBuilder {
         this.ensureGuard()
         this.languages = options.languages
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(element, mediaWidth: Float64(width))
+        let styles = resolver.compute(element, mediaWidth: Float64(width), mediaHeight: Float64(height))
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
@@ -759,7 +759,7 @@ public class SvgRenderTreeBuilder {
         if (style.visibility() == "hidden") {
             return
         }
-        let path = match (elementPathData(shape)) {
+        let path = match (elementPathData(shape, style: style)) {
             case Some(value) => value
             case None => return
         }
@@ -1021,10 +1021,10 @@ public class SvgRenderTreeBuilder {
         commands: ArrayList<SvgDisplayCommand>,
         style: SvgComputedStyle
     ): Unit {
-        let x = lengthOrZero(image.x)
-        let y = lengthOrZero(image.y)
-        let width = lengthOrZero(image.width)
-        let height = lengthOrZero(image.height)
+        let x = lengthOrZero(svgStyledLength(Some(style), "x", image.x))
+        let y = lengthOrZero(svgStyledLength(Some(style), "y", image.y))
+        let width = lengthOrZero(svgStyledLength(Some(style), "width", image.width))
+        let height = lengthOrZero(svgStyledLength(Some(style), "height", image.height))
         match (image.href) {
             case None => this.warnings.add("<image> 缺少 href，使用占位矩形")
             case Some(value) =>

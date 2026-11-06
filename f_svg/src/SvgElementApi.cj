@@ -83,12 +83,13 @@ internal func svgBBoxOf(
             "radialGradient" | "filter" | "style" | "stop" => return Option<SvgBounds>.None
         case _ => ()
     }
+    let style = svgStyleFor(element, styles)
     match (element) {
         case image: SvgImage =>
-            let x = lengthOrZero(image.x)
-            let y = lengthOrZero(image.y)
-            let width = lengthOrZero(image.width)
-            let height = lengthOrZero(image.height)
+            let x = lengthOrZero(svgStyledLength(Some(style), "x", image.x))
+            let y = lengthOrZero(svgStyledLength(Some(style), "y", image.y))
+            let width = lengthOrZero(svgStyledLength(Some(style), "width", image.width))
+            let height = lengthOrZero(svgStyledLength(Some(style), "height", image.height))
             if (width < 0.0 || height < 0.0) {
                 return Option<SvgBounds>.None
             }
@@ -101,7 +102,6 @@ internal func svgBBoxOf(
             return svgContainerBBox(root, options, styles)
         case _ => ()
     }
-    let style = svgStyleFor(element, styles)
     let base = if (options.stroke) {
         SvgGeometry.strokeBounds(element, style: style, fonts: options.fonts)
     } else {

@@ -52,8 +52,12 @@ private class CssCalcValue {
  * 只支持数字、`px` / `%` / `em`、`+` `-` `*` `/` 与括号；`*` / `/` 至少一侧为数字，
  * 百分比与绝对长度不得混用。失败返回 `None`。
  */
-internal func evaluateCssCalc(expression: String, fontSizePx: Float64): ?String {
-    let parser = CssCalcParser(expression, fontSizePx)
+internal func evaluateCssCalc(
+    expression: String,
+    fontSizePx: Float64,
+    percentReference!: ?Float64 = None
+): ?String {
+    let parser = CssCalcParser(expression, fontSizePx, percentReference)
     match (parser.parseAll()) {
         case Some(result) => Some(formatCssCalcValue(result))
         case None => None
@@ -72,13 +76,15 @@ private class CssCalcParser {
     private let text: String
     private let bytes: Array<Byte>
     private let fontSizePx: Float64
+    private let percentReference: ?Float64
     private var i: Int64 = 0
     private var depth: Int64 = 0
 
-    init(text: String, fontSizePx: Float64) {
+    init(text: String, fontSizePx: Float64, percentReference: ?Float64) {
         this.text = text
         this.bytes = text.unsafeBytes()
         this.fontSizePx = fontSizePx
+        this.percentReference = percentReference
     }
 
     func parseAll(): ?CssCalcValue {
@@ -223,7 +229,11 @@ private class CssCalcParser {
         }
         if (this.i < this.bytes.size && this.bytes[this.i] == b'%') {
             this.i++
-            return Some(CssCalcValue(value, CssCalcUnit.Percent))
+            match (this.percentReference) {
+                case Some(reference) =>
+                    return Some(CssCalcValue(value / 100.0 * reference, CssCalcUnit.Absolute))
+                case None => return Some(CssCalcValue(value, CssCalcUnit.Percent))
+            }
         }
         Some(CssCalcValue(value, CssCalcUnit.Number))
     }
