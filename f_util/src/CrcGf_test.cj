@@ -43,6 +43,25 @@ public class CrcGf_test {
         c
     }
 
+    private func refCrc64Normal(crc: UInt64, data: Array<Byte>, poly: UInt64): UInt64 {
+        var c = crc
+        for (i in 0..data.size) {
+            c = c ^ (UInt64(data[i]) << 56)
+            for (_ in 0..8) {
+                c = if ((c & 0x8000000000000000u64) != 0) { (c << 1) ^ poly } else { c << 1 }
+            }
+        }
+        c
+    }
+
+    private func be64(data: Array<Byte>, off: Int64): UInt64 {
+        var v = 0u64
+        for (i in 0..8) {
+            v = (v << 8) | UInt64(data[off + i])
+        }
+        v
+    }
+
     private func le64(data: Array<Byte>, off: Int64): UInt64 {
         var v = 0u64
         for (i in 0..8) {
@@ -51,19 +70,38 @@ public class CrcGf_test {
         v
     }
 
+    private func bitrev64(v: UInt64): UInt64 {
+        var r = 0u64
+        var x = v
+        for (_ in 0..64) {
+            r = (r << 1) | (x & 1u64)
+            x >>= 1
+        }
+        r
+    }
+
+    private func bitrevByte(b: Byte): Byte {
+        var r = 0u16
+        var x = UInt16(UInt8(b))
+        for (_ in 0..8) {
+            r = (r << 1) | (x & 1u16)
+            x >>= 1
+        }
+        UInt8(r & 0xFFu16)
+    }
+
     /** 用软件模拟机器码折叠核的算法，与逐位参考实现对拍（长度必须是 16 的倍数）。 */
     @TestCase
     public func clmulFoldMatchesReferenceForReflected64(): Unit {
         let foldReady = false
         if (!foldReady) {
-            println("SKIP: 反射域折叠的位反射约定未落地（§5 待续），暂不校验折叠算法")
+            println("SKIP: 折叠核收尾与常量指数仍在收敛（§5 待续）；已确认 Barrett 与反射↔正常转换")
             return
         }
         let poly = 0x42F0E1EBA9EA3693u64
         let c = CrcGf.reflectConstants(poly)
         let foldLo = c[0]
         let foldHi = c[1]
-        let kTail = c[5]
         let muLo = c[6]
         let lengths = [16, 32, 48, 64, 96, 128, 256, 1024, 4096]
         for (n in lengths) {
@@ -75,24 +113,35 @@ public class CrcGf_test {
                 x = x ^ (x << 17)
                 data[i] = UInt8(x & 0xFFu64)
             }
+            // 反射等价：初值、每个字节、输出都做位反转后走正常域折叠
+            let seed = 0x0123456789ABCDEFu64
             var accHi = 0u64
-            var accLo = 0x0123456789ABCDEFu64
+            var accLo = bitrev64(seed)
             var off = 0i64
             while (off + 16 <= n) {
-                let blkLo = le64(data, off)
-                let blkHi = le64(data, off + 8)
+                var blk = Array<Byte>(16, repeat: 0)
+                for (k in 0..16) {
+                    // 反射 -> 正常：只反转每字节内的位，字节顺序不变
+                    blk[k] = bitrevByte(data[off + k])
+                }
+                let blkHi = be64(blk, 0)
+                let blkLo = be64(blk, 8)
                 let (a1Hi, a1Lo) = refClmul(accLo, foldLo)
                 let (a2Hi, a2Lo) = refClmul(accHi, foldHi)
                 accLo = a1Lo ^ a2Lo ^ blkLo
                 accHi = a1Hi ^ a2Hi ^ blkHi
                 off += 16
             }
-            let (t1Hi, t1Lo) = refClmul(accLo, kTail)
-            let tHi = t1Hi
-            let tLo = t1Lo ^ accHi
-            let got = barrettReduce(tHi, tLo, poly, muLo)
-            let want = refCrc64Reflected(0x0123456789ABCDEFu64, data, poly)
-            @Assert(got, want)
+            // acc 已是 128 位多项式，直接对 P 取模即得 64 位寄存器
+            let got = bitrev64(barrettReduce(accHi, accLo, poly, muLo))
+            let want = refCrc64Reflected(seed, data, poly)
+            var normalData = Array<Byte>(n, repeat: 0)
+            for (i in 0..n) {
+                normalData[i] = bitrevByte(data[i])
+            }
+            let wantNormal = refCrc64Normal(bitrev64(seed), normalData, poly)
+            @Assert(bitrev64(wantNormal), want)
+            @Assert(got, wantNormal)
         }
     }
 
