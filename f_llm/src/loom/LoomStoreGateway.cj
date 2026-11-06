@@ -52,6 +52,9 @@ public class LoomStoreGateway {
     private let content: ContentStore
     private let meta: MetaStore
     /** 演进报告表：可选，未装配时 `evolution.*` 抛可读错误 */
+    /** 分页缺省：缺字段或非正数时用它，避免静默返回空 */
+    private static let DEFAULT_PAGE: Int64 = 50
+
     private let evolution: ?EvolutionStore
 
     public init(content: ContentStore, meta: MetaStore, evolution!: ?EvolutionStore = None) {
@@ -96,7 +99,7 @@ public class LoomStoreGateway {
                 }
             }
             if (action == 'docids') {
-                let ids = content.knowledge.docIds(intOf(args, 'offset'), intOf(args, 'limit'))
+                let ids = content.knowledge.docIds(intOf(args, 'offset'), pageOf(args))
                 return quotes(ids)
             }
             if (action == 'remove') {
@@ -142,16 +145,21 @@ public class LoomStoreGateway {
                 }
             }
             if (action == 'list') {
-                // 与 add / search 一致：experience 的默认 kind 由 defaultKind 补齐
-                let kindFilter = kindOf(args, defaultKind)
-                let records = if (kindFilter.isEmpty()) {
-                    content.memory.list(userId, strOf(args, 'namespace'), intOf(args, 'offset'), intOf(args, 'limit'))
+                // 与 add / search 一致：experience 覆盖成功与失败两种 kind
+                let wanted = kindsOf(args, defaultKind)
+                let offset = intOf(args, 'offset')
+                let limit = pageOf(args)
+                let records = if (wanted.isEmpty()) {
+                    content.memory.list(userId, strOf(args, 'namespace'), offset, limit)
                 } else {
                     // 交给 Store 过滤：先过滤再分页，不会出现「本页没有就判空」
-                    content
-                        .memory
-                        .listByKind(userId, strOf(args, 'namespace'), kindFilter, intOf(args, 'offset'),
-                            intOf(args, 'limit'))
+                    let merged = ArrayList<MemoryRecord>()
+                    for (kind in wanted) {
+                        for (record in content.memory.listByKind(userId, strOf(args, 'namespace'), kind, offset, limit)) {
+                            merged.add(record)
+                        }
+                    }
+                    merged
                 }
                 var text = '['
                 var first = true
@@ -170,11 +178,7 @@ public class LoomStoreGateway {
                 if (!namespace.isEmpty()) {
                     namespaces.add(namespace)
                 }
-                let kinds = ArrayList<String>()
-                let kindValue = kindOf(args, defaultKind)
-                if (!kindValue.isEmpty()) {
-                    kinds.add(kindValue)
-                }
+                let kinds = kindsOf(args, defaultKind)
                 let topK = intOf(args, 'topK')
                 let hits = content
                     .memory
@@ -357,6 +361,39 @@ public class LoomStoreGateway {
                 case None => ''
             }
             case None => ''
+        }
+    }
+
+    /**
+     * 经验覆盖两类 kind：成功与失败都算「经验」；其余 kind 走单值。
+     *
+     * 显式给了 kind 就以显式值为准（允许调用方只复盘成功或只看失败）。
+     */
+    private static func kindsOf(args: JsonObject, defaultKind: String): ArrayList<String> {
+        let result = ArrayList<String>()
+        let explicit = strOf(args, 'kind')
+        if (!explicit.isEmpty()) {
+            result.add(explicit)
+            return result
+        }
+        if (defaultKind == 'experience') {
+            result.add('experience')
+            result.add('experience_failed')
+            return result
+        }
+        if (!defaultKind.isEmpty()) {
+            result.add(defaultKind)
+        }
+        result
+    }
+
+    /** 分页条数：缺字段或非正数都按缺省 50 处理，避免「静默返回空」 */
+    private static func pageOf(args: JsonObject): Int64 {
+        let limit = intOf(args, 'limit')
+        if (limit > 0) {
+            limit
+        } else {
+            DEFAULT_PAGE
         }
     }
 

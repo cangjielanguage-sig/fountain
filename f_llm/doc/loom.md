@@ -281,6 +281,8 @@ LoomWiring.wire(chat, plannerModel: 'chat-pro',
 | 阶段 | 组件 | 作用 |
 |---|---|---|
 | 落经验 | `LoomMemoryExtractor` | 成功写 `kind=experience`，失败写 `kind=experience_failed` |
+| 读经验 | `loomStore("experience","search"/"list")` | 不指定 `kind` 时**同时覆盖**两类经验；显式 `kind` 时以显式值为准 |
+| 分页缺省 | `memory.list` / `knowledge.docIds` | 不传 `limit` 或传 `<=0` 时按 50 条处理，不会静默返回空数组 |
 | 水位线 | `EvolutionStateStore.lastRunAt / markRun` | 只处理 `at > 上次执行时间` 的素材；知识文档没有写入时间（`at=0`），始终参与 |
 | 归属发现 | `SkillMatcher.assign` | 素材池 = 成功经验 + 知识 → 已有技能（向量/关键词最近邻）；剩下的彼此聚类 → 新技能候选 |
 | 触发判定 | `SkillEvolutionPolicy.decide` | 样本数、成功率、冷却期（**门禁失败后冷却期翻倍**） |

@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 import std.collection.*
@@ -80,8 +80,8 @@ public class FlowPlan {
     }
 
     public func step(id: String): ?StepPlan {
-        for(item in steps){
-            if(item.id == id){
+        for (item in steps) {
+            if (item.id == id) {
                 return Some(item)
             }
         }
@@ -90,33 +90,49 @@ public class FlowPlan {
 
     /** 校验：步骤 id 唯一、边两端存在、无自环、kind 合法 */
     public func validate(): Unit {
-        if(name.trimAscii().isEmpty()){
+        if (name.trimAscii().isEmpty()) {
             throw LoomException('loom plan name must not be blank')
         }
         let seen = HashMap<String, Bool>()
-        for(item in steps){
-            if(item.id.trimAscii().isEmpty()){
+        for (item in steps) {
+            if (item.id.trimAscii().isEmpty()) {
                 throw LoomException('loom step id must not be blank')
             }
-            if(seen.contains(item.id)){
+            if (seen.contains(item.id)) {
                 throw LoomException('duplicate loom step id: ${item.id}')
             }
             seen[item.id] = true
-            match(item.kind){
-                case 'tool' | 'llm' | 'mcp' | 'jit' => ()
+            match (item.kind) {
+                case 'tool' | 'llm' | 'mcp' => ()
+                case 'jit' =>
+                    // jit 源码在编译期固化，{step.output} 不会被替换：与其留成字面量，不如直接拒绝
+                    for (token in seen.keys()) {
+                        if (item.input.contains('{${token}.output}') || item.input.contains('{${token}}')) {
+                            throw LoomException(
+                                'jit step does not support {…} template placeholders '
+                                    + '(${item.id} references ${token}): use an llm/tool step, '
+                                    + 'or call loomStore/loomCallTool inside the snippet')
+                        }
+                    }
+                    if (item.input.contains('{start.output}') || item.input.contains('{start}')) {
+                        throw LoomException(
+                            'jit step does not support {…} template placeholders '
+                                + '(${item.id} references start): use an llm/tool step, '
+                                + 'or call loomStore/loomCallTool inside the snippet')
+                    }
                 // http 尚未实现：明确拒绝，避免被当成 llm 步骤静默执行
                 case 'http' => throw LoomException('loom step kind http is not implemented yet: ${item.id}')
                 case _ => throw LoomException('unknown loom step kind: ${item.kind} (step ${item.id})')
             }
-            if(item.kind == 'tool' && item.tool.isEmpty()){
+            if (item.kind == 'tool' && item.tool.isEmpty()) {
                 throw LoomException('tool step must set tool: ${item.id}')
             }
         }
-        for(edge in edges){
-            if(step(edge.from).isNone() || step(edge.to).isNone()){
+        for (edge in edges) {
+            if (step(edge.from).isNone() || step(edge.to).isNone()) {
                 throw LoomException('edge refers to missing step: ${edge.from} -> ${edge.to}')
             }
-            if(edge.from == edge.to){
+            if (edge.from == edge.to) {
                 throw LoomException('loom plan must not contain self loop: ${edge.from}')
             }
         }
@@ -124,61 +140,61 @@ public class FlowPlan {
 
     public func toJson(): String {
         var text = '{\n'
-        text += '  "name": ${jsonQuote(name)},\n'
-        if(!persona.isEmpty()){
-            text += '  "persona": ${jsonQuote(persona)},\n'
+        text += '  \"name\": ${jsonQuote(name)},\n'
+        if (!persona.isEmpty()) {
+            text += '  \"persona\": ${jsonQuote(persona)},\n'
         }
         text += '  "steps": [\n'
-        for(index in 0..steps.size){
+        for (index in 0..steps.size) {
             text += '    ${steps[index].toJson()}'
-            if(index + 1 < steps.size){
+            if (index + 1 < steps.size) {
                 text += ','
             }
             text += '\n'
         }
         text += '  ],\n'
         text += '  "edges": ['
-        for(index in 0..edges.size){
-            if(index > 0){
+        for (index in 0..edges.size) {
+            if (index > 0) {
                 text += ', '
             }
             // jsonQuote 自带引号，这里不能再包一层
             text += '[${jsonQuote(edges[index].from)}, ${jsonQuote(edges[index].to)}]'
         }
         text += ']'
-        if(parallel){
+        if (parallel) {
             text += ',\n  "parallel": true'
         }
-        if(!notes.isEmpty()){
-            text += ',\n  "notes": ${jsonQuote(notes)}'
+        if (!notes.isEmpty()) {
+            text += ',\n  \"notes\": ${jsonQuote(notes)}'
         }
         text + '\n}'
     }
 
     internal static func jsonQuote(text: String): String {
         let out = ArrayList<Byte>()
-        for(byte in text.toArray()){
+        for (byte in text.toArray()) {
             let ch = UInt8(byte)
-            if(ch == 34u8){
+            if (ch == 34u8) {
                 out.add(92u8)
                 out.add(34u8)
-            }else if(ch == 92u8){
+            } else if (ch == 92u8) {
                 out.add(92u8)
                 out.add(92u8)
-            }else if(ch == 10u8){
+            } else if (ch == 10u8) {
                 out.add(92u8)
                 out.add(110u8)
-            }else if(ch == 13u8){
+            } else if (ch == 13u8) {
                 out.add(92u8)
                 out.add(114u8)
-            }else if(ch < 32u8){
+            } else if (ch < 32u8) {
                 out.add(92u8)
                 out.add(117u8)
                 out.add(48u8)
                 out.add(48u8)
                 out.add(hexOf(ch >> 4))
                 out.add(hexOf(ch & 0x0Fu8))
-            }else{
+            } else {
                 out.add(ch)
             }
         }
@@ -186,9 +202,9 @@ public class FlowPlan {
     }
 
     internal static func hexOf(value: UInt8): Byte {
-        if(value < 10u8){
+        if (value < 10u8) {
             48u8 + value
-        }else{
+        } else {
             97u8 + (value - 10u8)
         }
     }
@@ -196,22 +212,22 @@ public class FlowPlan {
 
 extend StepPlan {
     public func toJson(): String {
-        var text = '{"id": ${jsonQuote(id)}, "kind": ${jsonQuote(kind)}'
-        if(!tool.isEmpty()){
-            text += ', "tool": ${jsonQuote(tool)}'
+        var text = '{\"id\": ${jsonQuote(id)}, \"kind\": ${jsonQuote(kind)}'
+        if (!tool.isEmpty()) {
+            text += ', \"tool\": ${jsonQuote(tool)}'
         }
-        if(!model.isEmpty()){
-            text += ', "model": ${jsonQuote(model)}'
+        if (!model.isEmpty()) {
+            text += ', \"model\": ${jsonQuote(model)}'
         }
-        if(!system.isEmpty()){
-            text += ', "system": ${jsonQuote(system)}'
+        if (!system.isEmpty()) {
+            text += ', \"system\": ${jsonQuote(system)}'
         }
-        if(!input.isEmpty()){
-            text += ', "input": ${jsonQuote(input)}'
+        if (!input.isEmpty()) {
+            text += ', \"input\": ${jsonQuote(input)}'
         }
-        text += ', "args": ${args}'
-        text += ', "async": ${jsonQuote(async)}'
-        if(external){
+        text += ', \"args\": ${args}'
+        text += ', \"async\": ${jsonQuote(async)}'
+        if (external) {
             text += ', "external": true'
         }
         text + '}'

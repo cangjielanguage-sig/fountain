@@ -46,7 +46,71 @@ class LoomStoreGateway_test {
             '{"docId":"d1","title":"t","content":"hello"}'), 'ok')
         // 往返：写入后必须能列出，且 limit 生效（此前 JSON 数字解析失败会得到 []）
         @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":10}'), '["d1"]')
-        @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":0}'), '[]')
+        @Expect(gateway.call('knowledge', 'docIds', '{"offset":0,"limit":0}').contains('d1'), true)
+    }
+
+    /** 经验检索默认同时覆盖失败经验 */
+    @TestCase
+    func testExperienceSearchCoversFailedKind(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"成功经验","content":"okmarker","kind":"experience"}')
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"失败经验","content":"brokenmarker","kind":"experience_failed"}')
+
+        let hits = gateway.call('experience', 'search',
+            '{"userId":7,"namespace":"n","text":"marker","topK":10}')
+        @Expect(hits.contains('okmarker'), true)
+        @Expect(hits.contains('brokenmarker'), true)
+    }
+
+    /** 显式 kind 仍然优先：只要成功经验 */
+    @TestCase
+    func testExperienceSearchHonoursExplicitKind(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"成功经验","content":"okmarker","kind":"experience"}')
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"失败经验","content":"brokenmarker","kind":"experience_failed"}')
+
+        let hits = gateway.call('experience', 'search',
+            '{"userId":7,"namespace":"n","kind":"experience","text":"marker","topK":10}')
+        @Expect(hits.contains('okmarker'), true)
+        @Expect(hits.contains('brokenmarker'), false)
+    }
+
+    /** 不传 limit 时必须返回数据，而不是空数组 */
+    @TestCase
+    func testMemoryListWithoutLimitReturnsData(): Unit {
+        let gateway = gateway()
+        for (title in ['a', 'b', 'c']) {
+            let _ = gateway.call('memory', 'add',
+                '{"userId":7,"namespace":"n","title":"${title}","content":"body-${title}","kind":"note"}')
+        }
+        let list = gateway.call('memory', 'list', '{"userId":7,"namespace":"n"}')
+        @Expect(list.contains('body-a'), true)
+        @Expect(list.contains('body-c'), true)
+    }
+
+    /** limit<=0 按缺省处理，不当成「取 0 条」 */
+    @TestCase
+    func testMemoryListZeroLimitFallsBackToDefault(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('memory', 'add',
+            '{"userId":7,"namespace":"n","title":"a","content":"body-a","kind":"note"}')
+        let list = gateway.call('memory', 'list', '{"userId":7,"namespace":"n","limit":0}')
+        @Expect(list.contains('body-a'), true)
+    }
+
+    /** docIds 同样：不传 limit 不能返回空 */
+    @TestCase
+    func testDocIdsWithoutLimitReturnsData(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('knowledge', 'upsert', '{"docId":"d1","title":"t1","content":"c1"}')
+        let _ = gateway.call('knowledge', 'upsert', '{"docId":"d2","title":"t2","content":"c2"}')
+        let ids = gateway.call('knowledge', 'docIds', '{}')
+        @Expect(ids.contains('d1'), true)
+        @Expect(ids.contains('d2'), true)
     }
 
     /** 构造计数：装配自检依赖它，必须真实自增 */

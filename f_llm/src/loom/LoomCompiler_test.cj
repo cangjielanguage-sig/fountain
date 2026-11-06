@@ -41,6 +41,24 @@ class LoomCompiler_test {
         }
     }
 
+    /** jit 源码里的模板占位符必须编译期拒绝，而不是留成字面量 */
+    @TestCase
+    func testJitTemplatePlaceholderRejected(): Unit {
+        let plan = FlowPlan('jit-template')
+        let step = StepPlan('s1', 'jit')
+        step.input = 'let s1_result = "{start.output}"'
+        plan.steps.add(step)
+
+        var message = ''
+        try{
+            let _ = LoomCompiler().compileSteps(plan)
+        }catch(e: LoomException){
+            message = e.message
+        }
+        @Expect(message.contains('jit'), true)
+        @Expect(message.contains('template'), true)
+    }
+
     @TestCase
     func testCompilesToolStepThroughHostApi(): Unit {
         let step = StepPlan('call', 'tool')

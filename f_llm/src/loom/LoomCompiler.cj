@@ -12,11 +12,10 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 import std.collection.*
-
 import fountain::f_egraph.base.*
 import fountain::f_jit.*
 
@@ -53,13 +52,13 @@ public class LoomCompiler {
      * - `llm`：编译成 `{ input: String => loomCallLlm(…) }`。
      */
     public func compileStep(step: StepPlan): (Event) -> Event {
-        if(step.kind == 'jit'){
+        if (step.kind == 'jit') {
             return compileJit(step)
         }
-        if(step.kind == 'tool' || step.kind == 'mcp'){
+        if (step.kind == 'tool' || step.kind == 'mcp') {
             return compileTool(step)
         }
-        if(step.kind == 'llm'){
+        if (step.kind == 'llm') {
             return compileLlm(step)
         }
         throw LoomException('loom step kind is not executable: ${step.kind} (${step.id})')
@@ -68,7 +67,7 @@ public class LoomCompiler {
     public func compileSteps(plan: FlowPlan): HashMap<String, (Event) -> Event> {
         plan.validate()
         let result = HashMap<String, (Event) -> Event>()
-        for(item in plan.steps){
+        for (item in plan.steps) {
             result[item.id] = compileStep(item)
         }
         result
@@ -81,9 +80,10 @@ public class LoomCompiler {
 
     private func compileJit(step: StepPlan): (Event) -> Event {
         let fn = compiler.compile(jitSourceOf(step))
-        { e =>
-            let value = fn.call<String>([e])
-            LoomHostApi.taskEvent(e, step.id, value)
+        {
+            e =>
+                let value = fn.call<String>([e])
+                LoomHostApi.taskEvent(e, step.id, value)
         }
     }
 
@@ -104,20 +104,21 @@ public class LoomCompiler {
 
     private func compileTool(step: StepPlan): (Event) -> Event {
         let fn = compiler.compile(toolSourceOf(step))
-        { e =>
-            let args = LoomHostApi.render(step.args, e)
-            let value = fn.call<String>([args])
-            LoomHostApi.taskEvent(e, step.id, value)
+        {
+            e =>
+                let args = LoomHostApi.render(step.args, e)
+                let value = fn.call<String>([args])
+                LoomHostApi.taskEvent(e, step.id, value)
         }
     }
 
     private func compileLlm(step: StepPlan): (Event) -> Event {
         let fn = compiler.compile(llmSourceOf(step))
-        { e =>
-            let input = LoomHostApi.render(step.input, e)
-            let value = fn.call<String>([input])
-            LoomHostApi.taskEvent(e, step.id, value)
+        {
+            e =>
+                let input = LoomHostApi.render(step.input, e)
+                let value = fn.call<String>([input])
+                LoomHostApi.taskEvent(e, step.id, value)
         }
     }
-
 }
