@@ -29,7 +29,7 @@
 
 `SvgDocument` SHALL 提供 `anchors(): ArrayList<SvgAnchorInfo>`，按文档顺序返回所有 `a` 元素；`SvgAnchorInfo` SHALL 含 `element`、`href` 与 `target`。
 
-`href` SHALL 读取 `href` 或 `xlink:href`；`target` 缺省为空字符串。外部 `href` SHALL 按既有安全策略在解析期移除或拒绝，因此默认不会出现在 `anchors()` 中。
+`href` SHALL 读取 `href` 或 `xlink:href`，类型为 `?String`；缺失或为空时为 `None`，`a` 元素仍会被返回。`target` 缺省为空字符串。外部 `href` SHALL 按既有安全策略在解析期移除或拒绝，移除后该 `a` 以 `href=None` 返回。
 
 `anchors()` SHALL NOT 联网、不触发导航、不执行事件，也不改变渲染行为。
 
@@ -46,7 +46,7 @@
 #### Scenario: 外部链接移除
 
 - **WHEN** 解析 `<a href="https://example.com">x</a>` 且未放行外部引用
-- **THEN** `anchors()` 不包含该项，`warnings` 含外部引用告警
+- **THEN** `anchors()` 包含该项且 `href=None`，`warnings` 含外部引用告警
 
 ### Requirement: M4 滤镜原语元素
 

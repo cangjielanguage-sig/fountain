@@ -227,7 +227,9 @@ public class SvgAnchorM4_test {
         @Assert(anchors[2].href == Some("#z"))
 
         let external = svgDoc('<a href="https://example.com"><rect width="2" height="2"/></a>')
-        @Assert(external.anchors().size == 0)
+        let externalAnchors = external.anchors()
+        @Assert(externalAnchors.size == 1)
+        @Assert(externalAnchors[0].href.isNone())
         var warned = false
         for (warning in external.warnings) {
             if (warning.contains("外部引用")) {
@@ -235,5 +237,18 @@ public class SvgAnchorM4_test {
             }
         }
         @Assert(warned)
+    }
+
+    /** 无 href 的 a 同样返回，href 为 None。 */
+    @TestCase
+    public func anchorsWithoutHref(): Unit {
+        let document = svgDoc(
+            '<a><rect width="2" height="2"/></a><a href="#z"><rect width="2" height="2"/></a>'
+        )
+        let anchors = document.anchors()
+        @Assert(anchors.size == 2)
+        @Assert(anchors[0].href.isNone())
+        @Assert(anchors[0].target == "")
+        @Assert(anchors[1].href == Some("#z"))
     }
 }

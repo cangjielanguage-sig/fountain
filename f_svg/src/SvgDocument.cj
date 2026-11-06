@@ -138,15 +138,16 @@ private func collectSvgAnchors(element: SvgElement, result: ArrayList<SvgAnchorI
     match (element) {
         case container: SvgContainer =>
             if (container.kind == SvgContainerKind.Anchor) {
-                match (readSvgHref(element)) {
-                    case Some(href) =>
-                        if (href.trimAscii().size > 0) {
-                            result.add(
-                                SvgAnchorInfo(element, Some(href), element.attr("target") ?? "")
-                            )
+                let href: ?String = match (readSvgHref(element)) {
+                    case Some(value) =>
+                        if (value.trimAscii().size > 0) {
+                            Some(value)
+                        } else {
+                            None
                         }
-                    case None => ()
+                    case None => None
                 }
+                result.add(SvgAnchorInfo(element, href, element.attr("target") ?? ""))
             }
         case _ => ()
     }
