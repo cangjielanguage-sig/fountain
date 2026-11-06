@@ -89,6 +89,8 @@ public func crc64<T>(s: T): UInt16 where T <: ToString
 
 **实测（aarch64，`cjpm test` 默认构建，1 MiB）**：CRC-64/XZ 表路径 98 MB/s、硬件路径 7450 MB/s；4 KiB 单次 777 ns；CRC-16/MODBUS 表路径 52 MB/s。
 
+**实测（x86_64，WSL Ubuntu 24.04，`-O2`，1 MiB）**：CRC-64/XZ 硬件路径 11.7 GB/s、4 KiB 单次 475 ns；六个变体 11.1~12.6 GB/s、4 KiB 429~483 ns。
+
 ## wyhash
 
 ```cj
