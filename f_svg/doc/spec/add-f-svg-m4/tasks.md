@@ -141,11 +141,11 @@
 - [x] 18.2 更新 `f_svg/README.md`：M4 能力表、A/B/C 三组示例、`overflow` 在 pattern 上的限制、marker 裁剪与 `switch` 的条件性输出差异、TTF 加载边界
 - [x] 18.3 更新 `f_svg/README_en.md`，与中文 README 对齐
 - [x] 18.4 核对 README、`doc/f_svg模块设计.md` 与公开 API 一致；同步更新 `doc/f_svg-M4设计.md` 的 `screenCTM` 顺序与 `SvgVectorEffect.NoEffect` 命名
-- [x] 18.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning；运行 `cjpm test`，确认 691 条用例全绿（含 C1–C5 与 W1–W12 修复用例）
+- [x] 18.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning；运行 `cjpm test`，确认 710 条用例全绿（含 C1–C5、W1–W12 与终验 N2–N6 修复用例）
 - [x] 18.6 运行 `openspec validate add-f-svg-m4 --strict`（通过）；逐条核对每个 Requirement 至少一个 Scenario
   - 已由主流程执行核对并通过：10 个 delta spec 的每个 Requirement 均至少有一个 Scenario；本机无 `openspec` CLI，CLI 校验在具备环境的归档流程中补跑。
 - [x] 18.7 确认未新增模块 / 依赖，`f_svg/cjpm.toml`、根 `cjpm.toml`、`.modules` 无改动
-- [ ] 18.8 在 `feature/f-svg-m4` 上按组提交，最后合并回上游并删除分支（`git merge --no-ff`）
+- [ ] 18.8 合并回上游并删除分支（`git merge --no-ff`）——属共享分支操作，等待用户确认；当前停留在 `feature/f_svg`
   - 已在 `feature/f_svg` 按组提交；合并回共享上游 / 删除分支会影响其他 worktree，待用户确认后执行。
 
 ## Workflow follow-up
