@@ -32,6 +32,18 @@ public class SvgBBoxM5_test {
         @Assert(m5BoxNear(rect.getBBox(options: SvgBBoxOptions(clipped: true)), 60.0, 0.0, 40.0, 10.0))
     }
 
+    /** 嵌套 svg 的 viewBox min-x / min-y 参与 clipped 裁剪。 */
+    @TestCase
+    public func nestedViewBoxClipUsesOrigin(): Unit {
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\">" +
+            "<svg width=\"50\" height=\"50\" viewBox=\"10 10 100 100\">" +
+            "<rect id=\"r\" x=\"-50\" y=\"20\" width=\"100\" height=\"10\"/></svg></svg>"
+        )
+        let rect = document.elementById("r") ?? throw invalidValue("缺少矩形")
+        @Assert(m5BoxNear(rect.getBBox(options: SvgBBoxOptions(clipped: true)), 10.0, 20.0, 40.0, 10.0))
+    }
+
     /** display:none / visibility:hidden 不产生包围盒。 */
     @TestCase
     public func hiddenElementsHaveNoBBox(): Unit {

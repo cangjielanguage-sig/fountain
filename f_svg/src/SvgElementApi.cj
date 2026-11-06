@@ -289,7 +289,7 @@ private func nestedSvgClipRect(root: SvgRoot, request: SvgBBoxRequest): SvgBound
     match (root.attr("viewBox")) {
         case Some(text) =>
             match (tryParseSvgViewBox(text)) {
-                case Some(viewBox) => SvgBounds(0.0, 0.0, viewBox.width, viewBox.height)
+                case Some(viewBox) => SvgBounds(viewBox.minX, viewBox.minY, viewBox.width, viewBox.height)
                 case None => SvgBounds(0.0, 0.0, request.viewportWidth, request.viewportHeight)
             }
         case None =>
