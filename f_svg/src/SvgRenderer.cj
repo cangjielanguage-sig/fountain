@@ -287,7 +287,7 @@ public class SvgRenderer {
                 this.drawFill(bitmap, textCommand, list, style, patterns)
                 this.drawStroke(bitmap, textCommand, list, style, patterns)
                 // 纯色装饰线合并为一条路径，避免逐字形填充在接缝处二次混色；
-                // 渐变 / 图案按字形切分，使取样原点回到每个字形起点。
+                // 渐变 / 图案按字形切分，使 objectBoundingBox 以每个字形包围盒为基准。
                 if (style.fill().kind == SvgPaintKind.Reference) {
                     let decorationRuns = textRenderer.decorationRuns(
                         text,

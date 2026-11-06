@@ -512,8 +512,8 @@ public class SvgTextRenderer {
     }
 
     /**
-     * 按字形切分装饰线。每段携带该字形的包围盒，渐变按字形起点取样，
-     * 而不是按整段文本包围盒。
+     * 按字形切分装饰线。每段携带该字形的包围盒，`objectBoundingBox` 渐变
+     * 按字形包围盒建立，而不是复用整段文本的包围盒。
      */
     internal func decorationRuns(
         text: SvgTextElement,

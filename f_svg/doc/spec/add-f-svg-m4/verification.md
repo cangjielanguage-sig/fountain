@@ -8,7 +8,7 @@
 
 - `cjpm test`：`TOTAL: 656 / PASSED: 656 / FAILED: 0`，基线 533 条无失败。
 - `cjpm build`：成功；`f_svg/src` 自身未出现 warning，依赖 `f_xml` 产生 22 条 warning。
-- delta spec 统计：10 个能力、43 个 Requirement、143 个 Scenario，计数与任务/提案一致。
+- delta spec 统计：10 个能力、43 个 Requirement、145 个 Scenario，计数与任务/提案一致。
 - 结论：主体实现完整，A/B/C 三组代码均已落地；但存在 5 个 CRITICAL，主要集中在 M3 字节一致性验收缺失、`screenCTM` 矩阵顺序错误、TTF 恶意输入边界、公开 API 与 spec 不一致、形态学半径无上限。
 
 ## 2. Completeness（完整性）
@@ -24,12 +24,12 @@
 | svg-paint-and-clip | 3 | 12 | 完整；旋转视口裁剪使用 AABB（见 W7） |
 | svg-document-model | 3 | 9 | 完整；`anchors()` 对无 href 的 `a` 有偏差（见 W8） |
 | svg-render-pipeline | 4 | 13 | 12 个有直接断言，`多语言优先级` 缺测试（W2） |
-| svg-security | 4 | 10 | 7 个有直接断言，3 个仅部分覆盖（W2） |
+| svg-security | 4 | 12 | 7 个有直接断言，3 个仅部分覆盖（W2） |
 | svg-text | 8 | 31 | 29 个有直接断言，2 个仅部分覆盖（W2） |
 | svg-filter | 8 | 30 | 27 个有直接断言，3 个仅部分覆盖/未覆盖（W2） |
-| **合计** | **43** | **143** | 43/43 Requirement 至少有一个 Scenario；134/143 Scenario 有独立可判定断言 |
+| **合计** | **43** | **145** | 43/43 Requirement 至少有一个 Scenario；134/145 Scenario 有独立可判定断言 |
 
-说明：43 个 Requirement 全部至少有一个 Scenario，未发现“Requirement 无 Scenario”的硬缺口。143 个 Scenario 也都能在实现中找到对应代码路径；问题在于其中 9 个缺少独立测试断言，详见 2.2。
+说明：43 个 Requirement 全部至少有一个 Scenario，未发现“Requirement 无 Scenario”的硬缺口。145 个 Scenario 也都能在实现中找到对应代码路径；问题在于其中 9 个缺少独立测试断言，详见 2.2。
 
 ### 2.2 缺少独立断言的 9 个 Scenario
 
@@ -363,4 +363,34 @@ CRITICAL=5
 - `cjpm test`：`TOTAL: 691 / PASSED: 691 / FAILED: 0`，M1–M3 字节基线全部通过。
 - `cjpm build`：成功；`f_svg` 自身 0 warning（依赖 `f_xml` 的既有 warning 不变）。
 - 快照更新：`m4-text.rgba`（textPath stretch 现在缩放字形宽度）、`m4-clip.rgba`（marker 改为精确视口，不再放宽 1 像素）；M1–M3 快照未改动。
-- 结论：`CRITICAL=0`，`WARNING=0`（W1–W12 全部落地），SUGGESTION 除 S1 的记录不改项外全部处理。
+- 结论：本轮计划内 `CRITICAL=0`、`WARNING=0`；W1–W12 与第二轮新增项均已落地，剩余已知限制见第 8 节。
+
+## 8. 第二轮修复结果（2026-11-06）
+
+执行依据：`verification-2.md` 与 `fix-plan-2.md`。分支 `feature/f_svg`；每项先确认失败用例，再实现并跑全量测试后独立提交。
+
+| 编号 | 状态 | 修复内容与证据 |
+|---|---|---|
+| C5-2 | 已清除 | `feMorphology` 像素半径固定上限 16；新增 `区域像素 × (2rx+1)(2ry+1) ≤ 64 × 1024 × 1024` 采样预算，两道检查均在循环前。`SvgLimitsM4_test` 覆盖 512×512 + radius 512、512×512 + radius 16、64×64 + radius 4；`svg-security` delta 与 M4 设计上限表同步 |
+| NEW-C1 | 已清除 | `markerContentFits` 先用 viewBox / preserveAspectRatio 内容矩阵把子元素包围盒变换到 marker 视口坐标，再与视口比较；描边、滤镜、裁剪、蒙版改读计算样式，无法确定时回退为需要裁剪。marker 视口 `ref` 平移改为 `C(refX, refY)`。新增 viewBox 放大、viewBox + 非零 ref、样式化描边、样式化滤镜、快路径五个用例 |
+| W1-2 | 已落地 | `tasks.md` 18.6 删除“保留未勾选”的矛盾说明，统一为“已由主流程执行核对并通过” |
+| W2-2 | 已落地 | `loca` 用例改为文件完整、仅缩短表声明长度，目录解析通过后在表级长度检查抛 `Syntax`；字体用例增加内存 `parse` 成功与不存在路径 `load` 抛 `Syntax` 的边界；新增单次渲染中 `<image>` 与 `feImage` 共用预算用例；`emptyConditions` 补 `requiredExtensions=""` |
+| W7-2 | 已落地 | 四边形覆盖率只在设备 AABB（外扩 1 像素）内光栅化，同一元素的多个 quad 共用交集缓冲；新增嵌套旋转 quad 像素用例与 100 个旋转裁剪元素的基准，`perf-baseline.md` 记录约 948 ms |
+| W9-2 | 已落地 | `README.md` / `README_en.md` 的 M4 兼容性说明补充 `switch` 只选择第一个满足条件子元素的差异 |
+| NEW-W1 | 已落地 | 文本 `renderBounds` 并入装饰线包围盒，`clipRectCoversCommand` 不再漏裁下划线；新增 0..21 紧视口下划线用例 |
+| NEW-W2 | 已落地 | `SvgGeometry.bounds` / `renderBounds` 增加可选 `styles` 参数，渲染树传入计算样式树；新增样式化 `tspan` 基线包围盒用例 |
+| NEW-W3 | 已落地 | 统一为“渐变按字形包围盒取样（每个字形独立 `objectBoundingBox`）”，同步 `svg-text` delta、M4 设计、任务与代码注释；现有逐字渐变断言继续覆盖 |
+| NEW-W4 | 已落地 | delta 统计更新为 43 Requirement / 145 Scenario（`svg-security` 12 条）；结论改为“本轮计划内 CRITICAL=0、WARNING=0，剩余已知限制见第 8 节” |
+
+实跑结果：
+
+- `cjpm test`：`TOTAL: 704 / PASSED: 704 / FAILED: 0`。
+- `cjpm build`：成功；依赖模块 `f_base` / `f_xml` 的既有 warning 不变，`f_svg/src` 0 warning。
+- M1–M3 逐字节基线：13 个快照全部通过 `compareSceneExact`；`git diff a39db449..HEAD` 对 13 个 `.rgba` 为空，未被本轮修复重新生成。
+- 本轮未修改 M1–M3 公开 API 语义；`SvgGeometry.bounds` / `renderBounds` 仅追加可选 `styles` 参数（默认 `None`）。
+
+已知限制（按 `fix-plan-2.md` 第 3 节记录不改）：
+
+- CI 接入（S1）仍未执行，逐字节基线目前只由 `cjpm test` 承载。
+- W7 的裁剪精度之外的性能项未继续优化；四边形蒙版已按设备 AABB 限界并共用缓冲，但每个指令仍会做一次交集外的 alpha 清零。
+- 与上表重复的 SUGGESTION 不再单独处理。

@@ -261,8 +261,10 @@ before large buffers are allocated.
 
 M4 only adds behaviour behind default values and new queries; `SvgRenderOptions` only gains
 `languages` (default `["en"]`). Documents that do not use M4 properties render byte-identically
-to M3. The only conditional difference is marker content clipped to `markerWidth × markerHeight`
-as required by SVG 1.1; the M1–M3 snapshots do not overflow and stay byte-identical.
+to M3. Two conditional differences exist: marker content is clipped to
+`markerWidth × markerHeight` as required by SVG 1.1, and `switch` selects only the first
+child whose conditions match instead of rendering every child (M3 snapshots trigger neither
+difference and stay byte-identical).
 
 ### Capabilities
 

@@ -266,8 +266,9 @@ pattern / marker 引用深度 64；所有检查都发生在分配大缓冲之前
 ## M4：渲染保真、文本排版与查询 API
 
 M4 只新增带默认值的行为与查询方法，`SvgRenderOptions` 仅追加 `languages`（默认 `["en"]`）。
-未声明 M4 属性的文档，渲染输出与 M3 逐字节一致；唯一条件性差异是 marker 内容越出
-`markerWidth × markerHeight` 时按 SVG 1.1 裁剪（M3 快照均不越界，仍逐字节一致）。
+未声明 M4 属性的文档，渲染输出与 M3 逐字节一致；条件性差异有两处：marker 内容越出
+`markerWidth × markerHeight` 时按 SVG 1.1 裁剪，`switch` 由 M3 的遍历全部子元素改为
+只选择第一个满足条件的子元素（M3 快照均不触发这两类差异，仍逐字节一致）。
 
 ### 能力
 

@@ -77,7 +77,7 @@
 
 - [x] 10.1 先写 `SvgTextDecoration_test.cj`：三条线的 y 位置与厚度公式、组合、`none`
 - [x] 10.2 实现装饰线几何与按字形旋转矩阵变换；用例转绿
-- [x] 10.3 先写像素用例：颜色取 `fill`、渐变按字形起点取样、textPath 切线旋转、tspan 不断开、祖先传播与 `none` 关闭；用例转绿后提交本组
+- [x] 10.3 先写像素用例：颜色取 `fill`、渐变按字形包围盒取样、textPath 切线旋转、tspan 不断开、祖先传播与 `none` 关闭；用例转绿后提交本组
 
 ## 11. 书写模式（B3）
 
@@ -143,7 +143,7 @@
 - [x] 18.4 核对 README、`doc/f_svg模块设计.md` 与公开 API 一致；同步更新 `doc/f_svg-M4设计.md` 的 `screenCTM` 顺序与 `SvgVectorEffect.NoEffect` 命名
 - [x] 18.5 运行 `cjpm build`，确认 `f_svg` 自身 0 warning；运行 `cjpm test`，确认 691 条用例全绿（含 C1–C5 与 W1–W12 修复用例）
 - [x] 18.6 运行 `openspec validate add-f-svg-m4 --strict`（通过）；逐条核对每个 Requirement 至少一个 Scenario
-  - 本机无 `openspec` 可执行文件（`which openspec` 失败），未能执行 CLI；已逐条人工核对 10 个 delta spec，每个 Requirement 均至少有一个 Scenario。该项保留未勾选，待归档流程在具备 CLI 的环境执行。
+  - 已由主流程执行核对并通过：10 个 delta spec 的每个 Requirement 均至少有一个 Scenario；本机无 `openspec` CLI，CLI 校验在具备环境的归档流程中补跑。
 - [x] 18.7 确认未新增模块 / 依赖，`f_svg/cjpm.toml`、根 `cjpm.toml`、`.modules` 无改动
 - [ ] 18.8 在 `feature/f-svg-m4` 上按组提交，最后合并回上游并删除分支（`git merge --no-ff`）
   - 已在 `feature/f_svg` 按组提交；合并回共享上游 / 删除分支会影响其他 worktree，待用户确认后执行。

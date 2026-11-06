@@ -140,7 +140,7 @@
 ### 3.2 装饰线（M4-B2）
 
 - `text-decoration` 支持 `none` / `underline` / `overline` / `line-through` 及组合；
-- 颜色取当前 `fill`（渐变按字形起点取样，简化）；
+- 颜色取当前 `fill`（渐变按字形包围盒取样，每个字形独立 `objectBoundingBox`）；
 - 厚度 `max(1, fontSize / 14)`；下划线在基线下方 `fontSize × 0.10`，上划线在 ascent 处，删除线在 `ascent × 0.55`；
 - 装饰线随字形旋转（textPath / rotate），不跨越 `tspan` 断开；
 - `text-decoration` 不可继承，但祖先设置时对后代文本生效（按 SVG 语义向下传播）。

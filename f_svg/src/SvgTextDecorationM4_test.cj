@@ -119,7 +119,7 @@ public class SvgTextDecorationM4_test {
         let firstEnd = bitmap.pixel(13, 32)
         @Assert(firstEnd.alpha > 0.2)
         @Assert(firstEnd.blue > 170 && firstEnd.red < 90)
-        // 第二个字形起点重新接近渐变起点（红）。
+        // 第二个字形按自身包围盒重新建立渐变，起点接近渐变起点（红）。
         var found = false
         var redStart = false
         for (y in 31..35) {

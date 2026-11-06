@@ -43,7 +43,7 @@ Hershey 字体 SHALL 使用 `ascent = 0.8 × fontSize`、`descent = 0.2 × fontS
 
 系统 SHALL 按计算样式 `text-decoration` 为字形绘制装饰线：`underline` 位于基线下 `0.10 × fontSize`，`overline` 位于 `ascent` 处，`line-through` 位于 `0.55 × ascent`；厚度 SHALL 为 `max(1, fontSize / 14)`。
 
-颜色 SHALL 取当前 `fill`，渐变按字形起点取样。装饰线 SHALL 随字形旋转（含 `textPath` 切线），同一文本内不因 `tspan` 断开。
+颜色 SHALL 取当前 `fill`，渐变按字形包围盒取样（每个字形独立 `objectBoundingBox`）。装饰线 SHALL 随字形旋转（含 `textPath` 切线），同一文本内不因 `tspan` 断开。
 
 `text-decoration` SHALL NOT 被继承，但祖先元素的声明 SHALL 向下传播到后代文本；后代再次声明时以最近祖先的声明为准。
 
