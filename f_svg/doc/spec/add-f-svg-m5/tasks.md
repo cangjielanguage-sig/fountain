@@ -133,7 +133,7 @@
 - [ ] 13.2 用 `SvgSnapshotM5_test` 比对 17 张既有快照，确认逐字节一致
 - [ ] 13.3 新增并复核 `m5-selector`、`m5-media`、`m5-blend`、`m5-drop-shadow`、`m5-transform-origin`、`m5-shaping`、`m5-bidi`、`m5-element-api` 快照，确认同输入重复渲染逐字节一致
 - [ ] 13.4 运行 `cjpm build`，确认 `f_svg` 自身 0 warning
-- [ ] 13.5 运行 `openspec validate add-f-svg-m5 --strict`，确认无 warning / error
+- [x] 13.5 运行 `openspec validate add-f-svg-m5 --strict`（通过，无 warning / error）
 - [ ] 13.6 更新 `CHANGELOG` 的 M5 条目，列明新增属性、API、上限与兼容性边界；对照 `proposal.md` 确认无遗漏项
 - [ ] 13.7 按仓库分支流程 `git merge --no-ff` 回 `master` 并删除 `feature/f-svg-m5`，确认合并后 `cjpm test` 仍全绿
 
