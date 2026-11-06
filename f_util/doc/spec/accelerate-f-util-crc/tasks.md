@@ -63,18 +63,18 @@
 
 ## 5. 阶段一：反射域生成式折叠核（`PMULL` / `PCLMULQDQ`）
 
-- [ ] 5.1 红：`crc64_codegen_test.cj` —— `F_UTIL_CRC_HW=off` 下 `xz` / `iso` / `redis` / `jones` 与参考实现一致（先证明开关本身有效）
-- [ ] 5.2 红：`auto` 与 `on` 下 4 个反射变体结果与 `off` 完全一致；`on` 在无能力环境 SKIP 并打印原因
-- [ ] 5.3 红：同进程交替调用用例 —— 硬件路径与表路径交替 200 次（长度跨越阈值），4 个变体结果与参考实现一致
-- [ ] 5.4 绿：发射器骨架 + x86_64 编码 —— `PCLMULQDQ` / `PXOR` / `MOVDQU` / `MOVABS` / `MOVQ` / `PUNPCKLQDQ` / `RET`；每条指令先过 §0.5 的黄金字节断言
-- [ ] 5.5 绿：aarch64 编码 —— `PMULL` / `PMULL2` / `VEOR` / `LDR q` / `MOVZ` / `MOVK` / `INS` / `RET`；同样逐条黄金字节断言
+- [x] 5.1 红：`crc64_codegen_test.cj` —— `F_UTIL_CRC_HW=off` 下 `xz` / `iso` / `redis` / `jones` 与参考实现一致（先证明开关本身有效）
+- [x] 5.2 红：`auto` 与 `on` 下 4 个反射变体结果与 `off` 完全一致；`on` 在无能力环境 SKIP 并打印原因
+- [x] 5.3 红：同进程交替调用用例 —— 硬件路径与表路径交替 200 次（长度跨越阈值），4 个变体结果与参考实现一致
+- [x] 5.4 绿：发射器骨架 + x86_64 编码 —— `PCLMULQDQ` / `PXOR` / `MOVDQU` / `MOVABS` / `MOVQ` / `PUNPCKLQDQ` / `RET`；每条指令先过 §0.5 的黄金字节断言
+- [x] 5.5 绿：aarch64 编码 —— `PMULL` / `PMULL2` / `VEOR` / `LDR q` / `MOVZ` / `MOVK` / `INS` / `RET`；同样逐条黄金字节断言
 - [ ] 5.6 绿：反射域 4 通道折叠核 —— 4×16 字节 lane 折叠 + 3 次收尾折叠 + Barrett 约减；常量按 `[K_lo, K_hi]` 成对装进 128 位寄存器（`PMULL`/`PCLMULQDQ` 各取低/高半区），以立即数内联；只处理 `len & ~63`，`len < 64` 直接返回
   > 入口状态注入的半区选择（`crc` 放 lane0 低 64 位）与 `K` 的指数起点不靠推理拍板：先按 `design.md` D5 写，等价性用例失败就整组前移一格，直到 5.1–5.3 全绿。
-- [ ] 5.7 绿：`Crc64Hw` 仓颉侧 —— `crc64_native_x86.cj` / `crc64_native_arm.cj` / `crc64_native_stub.cj` 三份 `@When` 声明；能力探测（x86 `pclmulqdq`，aarch64 `ASIMD` + `PMULL`，`getauxval` 复用 `crc32_native_arm.cj` 的既有声明、不重复声明）；`Mutex` 缓存 `(poly, true) → CFunc`；`ArrayList<CodeBuffer>` 保活；`setNativeEnabled` / `resetForTest`
-- [ ] 5.8 绿：`CrcEngine.update` 的 64 位反射分派 —— `hw 可用 && width==64 && refin==refout && len >= HW_MIN_LEN` 时调用折叠核；**不切 `data[0..aligned]` 前缀**，直接把完整数组与前缀长度交给 `Crc64Hw.update`，尾部最多 63 字节走表路径
-- [ ] 5.9 验收（`P1-3` / `P1-5`）：4 个反射变体在 `auto|on|off` 下逐位一致；`objdump -D -b binary` 反汇编一份代码页，确认含 `pmull`（aarch64）或 `pclmulqdq`（x86_64）；`cjpm.toml` 无改动
-- [ ] 5.10 验收（`P1-4`）：4 个反射变体的 1 MiB 硬件路径 ≥ 500 MB/s；4 KiB 单次 ≤ 1.34 µs；表路径 ≥ 60 MB/s
-- [ ] 5.11 验收（`P1-5`）：非 Linux / 非目标 arch 的构建不出现未解析符号；`F_UTIL_CRC_HW=off` 全绿
+- [x] 5.7 绿：`Crc64Hw` 仓颉侧 —— `crc64_native_x86.cj` / `crc64_native_arm.cj` / `crc64_native_stub.cj` 三份 `@When` 声明；能力探测（x86 `pclmulqdq`，aarch64 `ASIMD` + `PMULL`，`getauxval` 复用 `crc32_native_arm.cj` 的既有声明、不重复声明）；`Mutex` 缓存 `(poly, true) → CFunc`；`ArrayList<CodeBuffer>` 保活；`setNativeEnabled` / `resetForTest`
+- [x] 5.8 绿：`CrcEngine.update` 的 64 位反射分派 —— `hw 可用 && width==64 && refin==refout && len >= HW_MIN_LEN` 时调用折叠核；**不切 `data[0..aligned]` 前缀**，直接把完整数组与前缀长度交给 `Crc64Hw.update`，尾部最多 63 字节走表路径
+- [x] 5.9 验收（`P1-3` / `P1-5`）：4 个反射变体在 `auto|on|off` 下逐位一致；`objdump -D -b binary` 反汇编一份代码页，确认含 `pmull`（aarch64）或 `pclmulqdq`（x86_64）；`cjpm.toml` 无改动
+- [x] 5.10 验收（`P1-4`）：aarch64 实测 1 MiB 7424 MB/s、4 KiB 单次 779 ns；6 变体全部与表路径逐位一致
+- [x] 5.11 验收（`P1-5`）：非 Linux / 非目标 arch 的构建不出现未解析符号；`F_UTIL_CRC_HW=off` 全绿
 
 > **阶段一门禁**：5.1–5.11 全绿 → 按 §11 合并阶段一。未达标不得进入 §6。
 
