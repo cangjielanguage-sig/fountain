@@ -142,7 +142,6 @@ public class SvgAnimationControlM6_test {
         let target = snapshot.elementById("r") ?? throw invalidValue("missing")
         let style = target.style ?? ""
         @Assert(style.contains("stroke: green"))
-        println("CSS_STYLE=" + style)
         let original = match (document.elementById("r")) {
             case Some(element) => element.style ?? ""
             case None => ""
@@ -163,7 +162,8 @@ public class SvgAnimationControlM6_test {
             "<rect id=\"r\" x=\"0\"><animate attributeName=\"x\" values=\"0;100\" dur=\"10s\" " +
             "begin=\"0s\" min=\"15s\"/></rect>"
         )
-        println("MIN_X=" + this.xOf(SvgTimeline(extended).sample(12.0), "r"))
+        let extendedTimeline = SvgTimeline(extended)
+        @Assert(this.xOf(extendedTimeline.sample(12.0), "r") == "100")
 
         let invalid = this.parse(
             "<rect id=\"r\" x=\"0\"><animate attributeName=\"x\" values=\"0;100\" dur=\"10s\" " +
@@ -191,6 +191,46 @@ public class SvgAnimationControlM6_test {
         @Assert(timeline.sample(4.5).elementById("r").isSome())
         @Assert(timeline.sample(6.5).elementById("r").isNone())
         @Assert(document.elementById("r").isSome())
+    }
+
+    /** attributeType 非法值回退 XML 并 warning。 */
+    @TestCase
+    public func attributeTypeInvalid(): Unit {
+        let document = this.parse(
+            "<rect id=\"r\" x=\"0\"><animate attributeName=\"x\" values=\"0;100\" " +
+            "dur=\"10s\" begin=\"0s\" attributeType=\"AUTO\"/></rect>"
+        )
+        let timeline = SvgTimeline(document)
+        let snapshot = timeline.sample(9.0)
+        let target = snapshot.elementById("r") ?? throw invalidValue("missing")
+        @Assert(target.attr("x") == Some("90"))
+        var warned = false
+        for (warning in timeline.warnings) {
+            if (warning.contains("attributeType")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
+    /** 嵌套 discard 只处理最外层并 warning。 */
+    @TestCase
+    public func nestedDiscardWarns(): Unit {
+        let document = this.parse(
+            "<rect id=\"r\" x=\"0\" width=\"10\" height=\"10\"/>" +
+            "<discard begin=\"1s\" dur=\"1s\" href=\"#r\">" +
+            "<discard begin=\"1s\" dur=\"1s\" href=\"#r\"/></discard>"
+        )
+        let timeline = SvgTimeline(document)
+        let snapshot = timeline.sample(2.5)
+        @Assert(snapshot.elementById("r").isNone())
+        var warned = false
+        for (warning in timeline.warnings) {
+            if (warning.contains("discard") && warning.contains("嵌套")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
     }
 
     /** M5 既有动画在未调用新 API 时 sample(t) 输出不变。 */

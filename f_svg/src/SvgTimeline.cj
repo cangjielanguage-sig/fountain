@@ -176,7 +176,9 @@ public class SvgTimeline {
             let visitingBegin = HashMap<String, Bool>()
             spec.begin = resolveAnimationTime(spec, true, this.specById, this.warnings, visitingBegin)
             let total = spec.totalDuration()
-            let defaultEnd = if (isInfSvg(total)) { Float64.Inf } else { spec.begin + total }
+            let defaultEnd = if (isInfSvg(total)) { Float64.Inf } else {
+                spec.begin + maxFloat(total, spec.minValue)
+            }
             let visitingEnd = HashMap<String, Bool>()
             spec.end = match (spec.endRaw) {
                 case Some(_) => resolveAnimationTime(spec, false, this.specById, this.warnings, visitingEnd)
@@ -227,6 +229,7 @@ public class SvgTimeline {
     private func applyDiscards(snapshot: SvgDocument, time: Float64): Unit {
         for (element in this.discards) {
             if (svgDiscardNestingDepth(element) > 1) {
+                this.warnings.add("discard 嵌套深度超过 1，仅处理最外层")
                 continue
             }
             let begin = match (element.attr("id")) {
@@ -510,7 +513,13 @@ private func buildAnimationSpec(
         minValue = 0.0
         maxValue = Float64.Inf
     }
-    let attributeType = (element.attr("attributeType") ?? "XML").trimAscii().toAsciiUpper()
+    var attributeType = (element.attr("attributeType") ?? "XML").trimAscii().toAsciiUpper()
+    if (attributeType != "XML" && attributeType != "CSS") {
+        warnings.add(
+            "动画 attributeType「${attributeType}」不合法，已回退 XML"
+        )
+        attributeType = "XML"
+    }
     Some(
         SvgAnimationSpec(
             element,
@@ -774,6 +783,16 @@ private func animationStateAt(
             return SvgAnimationState(true, 1.0, iteration)
         }
         return SvgAnimationState(false, 0.0, 0)
+    }
+    // `min` 延长活动时长时，简单时长耗尽后保持末帧，直到活动结束。
+    if (spec.minValue > 0.0 && !isInfSvg(total) && time >= begin + total &&
+        time < activeEnd) {
+        let lastIteration = if (spec.dur > 0.0 && !isInfSvg(spec.dur)) {
+            Int64(maxFloat(0.0, ceil(total / spec.dur) - 1.0))
+        } else {
+            0
+        }
+        return SvgAnimationState(true, 1.0, lastIteration)
     }
     let local = time - begin
     if (spec.dur <= 0.0 || isInfSvg(spec.dur)) {
