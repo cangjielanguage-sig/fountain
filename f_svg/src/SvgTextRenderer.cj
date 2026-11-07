@@ -1928,7 +1928,12 @@ private func applyFontContextShaping(
     }
 }
 
-/** 请求百分比与最终字体均满足条件时做水平合成缩放；精确匹配不再二次缩放。 */
+/**
+ * 请求百分比与最终字体未精确匹配时做水平合成缩放。
+ *
+ * 合成系数为 `请求值 / 实际命中面 stretch`，因此请求 80%、仅有 75% 面时
+ * 会放大 `80/75`；只有精确命中才跳过。
+ */
 private func applyFontStretchSynthesis(
     chars: ArrayList<SvgTextChar>,
     advances: ArrayList<Float64>,
@@ -1936,13 +1941,15 @@ private func applyFontStretchSynthesis(
 ): Unit {
     for (index in 0..chars.size) {
         let percent = chars[index].stretch
-        if (percent == 100.0 || percent <= 0.0) {
+        if (percent <= 0.0 || !isFiniteSvgNumber(percent)) {
             continue
         }
-        if (chars[index].matchedStretch != 100.0) {
+        let matched = chars[index].matchedStretch
+        let base = if (matched > 0.0 && isFiniteSvgNumber(matched)) { matched } else { 100.0 }
+        if (percent == base) {
             continue
         }
-        let factor = percent / 100.0
+        let factor = percent / base
         match (paths[index]) {
             case Some(path) => paths[index] = Some(scalePathX(path, factor))
             case None => ()

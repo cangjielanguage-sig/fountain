@@ -92,6 +92,15 @@ public class SvgFontStretchMatchM6_test {
         @Assert(abs(condensed.advance - 7.5) < 1e-9)
     }
 
+    /** 无精确匹配时按「请求值 / 选中面 stretch」合成缩放。 */
+    @TestCase
+    public func synthesisUsesMatchedStretch(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("OnlyCondensed", M6StretchFont(8.0), stretch: 75.0)
+        let requested = layoutFor("OnlyCondensed", "80%", registry)
+        @Assert(abs(requested.advance - 8.0 * 80.0 / 75.0) < 1e-9)
+    }
+
     private func layoutFor(family: String, stretch: String, registry: SvgFontRegistry): SvgTextLayout {
         let document = SvgParser.parse(
             "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"" + family +
