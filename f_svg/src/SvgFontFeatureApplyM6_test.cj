@@ -76,6 +76,32 @@ public class SvgFontFeatureApplyM6_test {
         @Assert(abs(kernZero.advance - 10.0) < 1e-9)
     }
 
+    /** 上下文连字 clig 默认开启，受 font-variant-ligatures 与特性设置控制。 */
+    @TestCase
+    public func contextualLigatureFeature(): Unit {
+        let font = SvgTrueTypeFont.parse(
+            m5BuildLayoutTtf(
+                [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 700],
+                gsub: m5GsubTagged("clig", 3, [(10, [4])])
+            )
+        )
+        let registry = SvgFontRegistry()
+        registry.register("Test", font)
+        let normal = layout("<text font-family=\"Test\" font-size=\"10\">fi</text>", registry)
+        @Assert(normal.glyphs.size == 1)
+        let none = layout(
+            "<text font-family=\"Test\" font-size=\"10\" font-variant-ligatures=\"none\">fi</text>",
+            registry
+        )
+        @Assert(none.glyphs.size == 2)
+        let disabled = layout(
+            "<text font-family=\"Test\" font-size=\"10\" " +
+            "font-feature-settings=\"&quot;clig&quot; 0\">fi</text>",
+            registry
+        )
+        @Assert(disabled.glyphs.size == 2)
+    }
+
     /** 历史连字 hlig 需要显式开启。 */
     @TestCase
     public func historicalLigatureFeature(): Unit {

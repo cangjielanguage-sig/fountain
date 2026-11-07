@@ -109,6 +109,8 @@ public class SvgTrueTypeFont <: SvgFont {
     private let ligatureTable: ?SvgGsubLigatures
     /** 历史连字 `hlig` 表；缺失时为 `None`。 */
     private let hligTable: ?SvgGsubLigatures
+    /** 上下文连字 `clig` 表；缺失时为 `None`。 */
+    private let cligTable: ?SvgGsubLigatures
     /** M6 上下文替换表；无 Type 5 / 6 子表时为 `None`。 */
     private let gsubContext: ?SvgGsubContextTable
     /** `OS/2.sxHeight`；缺表或非法时为 `None`。 */
@@ -132,6 +134,7 @@ public class SvgTrueTypeFont <: SvgFont {
         gposPairs: ?SvgGposPairs,
         ligatureTable: ?SvgGsubLigatures,
         hligTable: ?SvgGsubLigatures,
+        cligTable: ?SvgGsubLigatures,
         gsubContext: ?SvgGsubContextTable,
         xHeightValue: ?Int64
     ) {
@@ -152,6 +155,7 @@ public class SvgTrueTypeFont <: SvgFont {
         this.gposPairs = gposPairs
         this.ligatureTable = ligatureTable
         this.hligTable = hligTable
+        this.cligTable = cligTable
         this.gsubContext = gsubContext
         this.xHeightValue = xHeightValue
     }
@@ -278,6 +282,15 @@ public class SvgTrueTypeFont <: SvgFont {
                 )
             case None => Option<SvgGsubLigatures>.None
         }
+        let cligatures = match (directory.table("GSUB")) {
+            case Some(table) =>
+                SvgGsubLigatures.parse(
+                    SvgTtfTableReader(bytes, table),
+                    ArrayList<String>(),
+                    featureTag: "clig"
+                )
+            case None => Option<SvgGsubLigatures>.None
+        }
         let gsubContext = match (directory.table("GSUB")) {
             case Some(table) => SvgGsubContextTable.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
             case None => Option<SvgGsubContextTable>.None
@@ -308,6 +321,7 @@ public class SvgTrueTypeFont <: SvgFont {
             gpos,
             ligatures,
             hligatures,
+            cligatures,
             gsubContext,
             xHeight
         )
@@ -355,6 +369,7 @@ public class SvgTrueTypeFont <: SvgFont {
     private func ligatureTableFor(feature: String): ?SvgGsubLigatures {
         match (feature) {
             case "hlig" => this.hligTable
+            case "clig" => this.cligTable
             case _ => this.ligatureTable
         }
     }

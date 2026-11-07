@@ -1787,7 +1787,7 @@ private func applyFontKerning(
     }
 }
 
-/** 应用 GSUB Type 4 连字，按 `liga` / `hlig` 特性开关选择连字表。 */
+/** 应用 GSUB Type 4 连字，按 `liga` / `hlig` / `clig` 特性开关选择连字表。 */
 private func applyFontLigatures(
     chars: ArrayList<SvgTextChar>,
     fonts: ArrayList<Option<SvgFont>>,
@@ -1800,7 +1800,8 @@ private func applyFontLigatures(
     }
     let ligaEnabled = features.enabled("liga")
     let hligEnabled = features.enabled("hlig")
-    if (!ligaEnabled && !hligEnabled) {
+    let cligEnabled = features.enabled("clig")
+    if (!ligaEnabled && !hligEnabled && !cligEnabled) {
         return
     }
     var index: Int64 = 0
@@ -1819,11 +1820,19 @@ private func applyFontLigatures(
                 }
                 let useHlig = hligEnabled && truetype.hasLigatureFeature("hlig")
                 let useLiga = !useHlig && ligaEnabled && truetype.hasLigatureFeature("liga")
-                if (!useHlig && !useLiga) {
+                let useClig = !useHlig && !useLiga && cligEnabled &&
+                    truetype.hasLigatureFeature("clig")
+                if (!useHlig && !useLiga && !useClig) {
                     index++
                     continue
                 }
-                let feature = if (useHlig) { "hlig" } else { "liga" }
+                let feature = if (useHlig) {
+                    "hlig"
+                } else if (useLiga) {
+                    "liga"
+                } else {
+                    "clig"
+                }
                 let remaining = ArrayList<Int64>()
                 var runEnd = index + 1
                 while (runEnd < chars.size) {
