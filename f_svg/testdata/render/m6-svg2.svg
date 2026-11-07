@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <rect width="64" height="64" fill="#ffffff"/>
+  <path d="M8 50 L20 18 L32 50" fill="none" stroke="#cc3300" stroke-width="8"
+        stroke-linejoin="miter-clip" stroke-miterlimit="1.2"/>
+  <path d="M36 50 L48 18 L60 50" fill="none" stroke="#0066cc" stroke-width="8"
+        stroke-linejoin="arcs"/>
+  <rect x="4" y="4" width="16" height="8" fill="#339933"
+        vector-effect="non-scaling-size"/>
+</svg>
