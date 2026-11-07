@@ -319,4 +319,25 @@ class EmailChannel_test {
         @Expect(messages[0].attachments[0].error.contains('imap body lost'), true)
         @Expect(messages[1].subject, '第二封')
     }
+
+    /** 目标路径其实是文件：落盘失败并给出原因 */
+    @TestCase
+    func testSaveFailsWhenTargetIsAFile(): Unit {
+        let dir = tempDir('notdir')
+        let blocker = '${dir}/blocker'
+        File.create(Path(blocker)).close()
+
+        let (path, error) = AttachmentSink.save(blocker, 'a.txt', Array<Byte>(1, repeat: 65))
+        @Expect(path, '')
+        @Expect(error.isEmpty(), false)
+    }
+
+    /** 远端给的绝对路径被压成单文件名，落在下载目录内 */
+    @TestCase
+    func testAbsoluteRemoteNameIsNeutralized(): Unit {
+        let dir = tempDir('absname')
+        let (path, error) = AttachmentSink.save(dir, '/etc/passwd', Array<Byte>(1, repeat: 65))
+        @Expect(error, '')
+        @Expect(path, '${dir}/passwd')
+    }
 }

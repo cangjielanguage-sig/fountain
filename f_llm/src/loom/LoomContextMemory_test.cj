@@ -352,6 +352,47 @@ class LoomContextMemory_test {
             LoomContextLog.clear()
         }
     }
+
+    /** 没有对话轮就没有提炼：不写任何东西 */
+    @TestCase
+    func testExtractWithNoTurnsWritesNothing(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        try {
+            let policy = LoomMemoryPolicy(userId: 7, namespace: 'empty')
+            let written = LoomMemoryExtractor.extract('empty-flow', ArrayList<LlmTurn>(),
+                MemoryHost(), policy)
+            @Expect(written, 0)
+            let records = gateway.call('memory', 'list',
+                '{"userId":7,"namespace":"empty","offset":0,"limit":10}')
+            @Expect(records, '[]')
+        } finally {
+            LoomHostApi.resetStore()
+        }
+    }
+
+    /** 写知识失败只吞掉那一条，记忆与经验照写 */
+    @TestCase
+    func testWriteKnowledgeFailureDoesNotBreakExtract(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        // 只让 knowledge 分支抛错
+        LoomHostApi.installStore({ kind, op, payload =>
+            if (kind == 'knowledge') {
+                throw LoomException('knowledge store down')
+            }
+            gateway.call(kind, op, payload)
+        })
+        try {
+            let policy = LoomMemoryPolicy(userId: 7, namespace: 'kb-fail', writeKnowledge: true)
+            let turns = ArrayList<LlmTurn>()
+            turns.add(LlmTurn('m', 'sys', 'in', 'out'))
+            let written = LoomMemoryExtractor.extract('kb-flow', turns, MemoryHost(), policy)
+            // note + experience 都写进去了，知识那条失败被吞
+            @Expect(written, 2)
+        } finally {
+            LoomHostApi.resetStore()
+        }
+    }
 }
 
 

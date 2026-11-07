@@ -87,4 +87,30 @@ class StoreFunctions_test {
         let result = function.call(ingestParam('{"nextEvent":"next","title":"t"}'))
         @Expect(textOf(result).contains('requires docId'), true)
     }
+
+    /** memoryCall 的 remove 走的是精确 id，而不是随便删一条 */
+    @TestCase
+    func testMemoryCallRemoveUsesExactId(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        let fn = MemoryCallFunction(gateway: gateway)
+
+        let add = MemoryCallParam()
+        add.nextEvent = 'done'
+        add.op = 'add'
+        add.payload = '{"userId":0,"namespace":"loom","title":"t","content":"c","kind":"note"}'
+        let added = fn.call(add)
+        let id = (added.result as JsonString).getOrThrow().value.trimAscii()
+        @Expect(id.isEmpty(), false)
+
+        let remove = MemoryCallParam()
+        remove.nextEvent = 'done'
+        remove.op = 'remove'
+        remove.payload = '{"userId":0,"id":' + id + '}'
+        let removed = fn.call(remove)
+        @Expect((removed.result as JsonString).getOrThrow().value.contains('true'), true)
+
+        // 再删一次：false，证明前一次真的删掉了这一条
+        let again = fn.call(remove)
+        @Expect((again.result as JsonString).getOrThrow().value.contains('false'), true)
+    }
 }
