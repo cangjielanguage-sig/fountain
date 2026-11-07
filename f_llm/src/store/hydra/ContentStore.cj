@@ -171,7 +171,40 @@ class HydraKnowledgeStore <: KnowledgeStore {
                 scores[hit.id] = current + hit.score * 0.1f64
             }
         }
-        for((id, score) in scores){
+        // 每个候选都要 transport.get 一次正文（N+1）。先按分数排序、只取前 bound 个，
+        // 把远程往返从「候选数」压到「需要的条数量级」；不够再顺延，保证 limit 仍能填满。
+        let ranked = ArrayList<String>()
+        for((id, value) in scores){
+            ranked.add(id)
+        }
+        // 选择排序（候选最多几百，O(n²) 远小于一次远程往返）
+        for(position in 0..ranked.size){
+            var best = position
+            for(candidate in position + 1..ranked.size){
+                let left = scores.get(ranked[candidate]) ?? 0.0f64
+                let right = scores.get(ranked[best]) ?? 0.0f64
+                if(left > right){
+                    best = candidate
+                }
+            }
+            if(best != position){
+                let temp = ranked[position]
+                ranked[position] = ranked[best]
+                ranked[best] = temp
+            }
+        }
+        var bound = query.limit * 4
+        if(bound < 20){
+            bound = 20
+        }
+        if(bound > ranked.size){
+            bound = ranked.size
+        }
+        var index = 0
+        while(index < ranked.size && Int64(hits.size) < query.limit){
+            let id = ranked[index]
+            let score = scores.get(id) ?? 0.0f64
+            index++
             match(transport.get(KB, id)){
                 case Some(record) =>
                     let parts = id.split('#')
@@ -185,6 +218,10 @@ class HydraKnowledgeStore <: KnowledgeStore {
                     hits.add(KnowledgeHit(docId, Int64.tryParse(parts[1]) ?? 0,
                                           record.payload, score))
                 case None => ()
+            }
+            // 前 bound 个都取完还没凑够时，放宽到全量继续找（正确性优先于省往返）
+            if(index >= bound && Int64(hits.size) < query.limit){
+                bound = ranked.size
             }
         }
         KnowledgeSearch.rank(hits, query.limit)

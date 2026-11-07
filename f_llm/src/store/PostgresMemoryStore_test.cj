@@ -252,6 +252,23 @@ public class SqlMemoryStoreTest {
         @Expect(results[1].score < 0.64f64 && results[1].score > 0.62f64, true)
     }
 
+
+    /** 重排只对融合分最高的前 bound 个候选做，不再每个候选一次 colbert */
+    @TestCase
+    func testRerankOnlyQueriesTopCandidates(): Unit {
+        let repo = FakeMemoryRepository()
+        for (id in 0..100) {
+            repo.hits.add(MemoryHit(memoryRecord(id + 1, 'note'), 0.9f64))
+        }
+        let store = SqlMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5, rerank: true))
+
+        @Expect(results.size, 5)
+        // bound = max(topK * 4, 20) = 20：100 个候选只查 20 次
+        @Expect(repo.colbertCalls, 20)
+    }
+
     @TestCase
     func testRerankFalseSkipsColbert(): Unit {
         let repo = FakeMemoryRepository()

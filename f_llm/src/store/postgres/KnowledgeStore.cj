@@ -55,7 +55,7 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
      * @param pageSize      词面召回的每页条数（测试可调小以强制翻页）
      * @param maxCandidates 词面召回的总候选上限
      */
-    public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 1000) {
+    public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 400) {
         if (pageSize <= 0 || maxCandidates < pageSize) {
             throw IllegalArgumentException(
                 'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')

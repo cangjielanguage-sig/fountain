@@ -115,15 +115,43 @@ public class SqlMemoryStore <: MemoryStore {
             scored.add(MemoryHit(record, fused * MemoryKinds.weightOf(record.kind), degraded: degraded))
         }
 
-        // colbert 重排：只改顺序，不改候选集，也不改 hit.score
+        // colbert 重排：只改顺序，不改候选集，也不改 hit.score。
+        // 每候选一次 repo.colbert() 就是一次 DB 往返，候选上千时纯属浪费——
+        // 只对融合分最高的前 bound 个候选算，其余按 0 分（排在重排结果之后）。
         let rerankScores = HashMap<Int64, Float64>()
+        for (hit in scored) {
+            rerankScores[hit.record.id] = 0.0f64
+        }
         if (query.rerank) {
             let queryVectors = embedder.embedColbert(query.text)
-            for (hit in scored) {
-                match (repo.colbert(hit.record.id)) {
-                    case Some(vectors) => rerankScores[hit.record.id] = RetrievalScoring.rerank(
+            var bound = query.topK * 4
+            if (bound < 20) {
+                bound = 20
+            }
+            if (bound > scored.size) {
+                bound = scored.size
+            }
+            let taken = HashMap<Int64, Bool>()
+            for (_ in 0..bound) {
+                var best = -1
+                for (index in 0..scored.size) {
+                    let id = scored[index].record.id
+                    if (taken.contains(id)) {
+                        continue
+                    }
+                    if (best < 0 || scored[index].score > scored[best].score) {
+                        best = index
+                    }
+                }
+                if (best < 0) {
+                    break
+                }
+                let id = scored[best].record.id
+                taken[id] = true
+                match (repo.colbert(id)) {
+                    case Some(vectors) => rerankScores[id] = RetrievalScoring.rerank(
                         maxSim(queryVectors, vectors.title), maxSim(queryVectors, vectors.content))
-                    case None => rerankScores[hit.record.id] = 0.0f64
+                    case None => rerankScores[id] = 0.0f64
                 }
             }
         }

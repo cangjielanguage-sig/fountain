@@ -52,7 +52,7 @@ public class MySqlKnowledgeStore <: KnowledgeStore & RootService {
         this.maxCandidates = maxCandidates
     }
 
-    public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 1000) {
+    public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 400) {
         if (pageSize <= 0 || maxCandidates < pageSize) {
             throw IllegalArgumentException(
                 'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
