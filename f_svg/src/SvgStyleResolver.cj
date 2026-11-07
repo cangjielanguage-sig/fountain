@@ -694,11 +694,7 @@ public class SvgStyleResolver <: ToString {
                         }
                     case None => return None
                 }
-            case "text-decoration" =>
-                match (SvgTextDecoration.tryParse(text)) {
-                    case Some(value) => return Some(value.toString())
-                    case None => return None
-                }
+            case "text-decoration" => return normalizeSvgTextDecorationShorthand(text)
             case "writing-mode" =>
                 match (SvgWritingMode.fromName(textLower)) {
                     case Some(value) => return Some(value.toString())
@@ -814,6 +810,78 @@ public class SvgStyleResolver <: ToString {
                     return Some(textLower)
                 }
                 return None
+            case "font-stretch" =>
+                match (SvgFontStretch.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "font-variant" =>
+                if (textLower == "normal") {
+                    return Some("normal")
+                }
+                if (textLower.contains("small-caps")) {
+                    return Some("small-caps")
+                }
+                return None
+            case "font-variant-ligatures" =>
+                if (textLower == "normal" || textLower == "none" ||
+                    textLower.contains("common-ligatures") ||
+                    textLower.contains("discretionary-ligatures") ||
+                    textLower.contains("historical-ligatures") ||
+                    textLower.contains("contextual")) {
+                    return Some(textLower)
+                }
+                return None
+            case "font-size-adjust" =>
+                if (textLower == "none") {
+                    return Some("none")
+                }
+                match (tryParseSvgFloat(text)) {
+                    case Some(value) => if (value > 0.0 && isFiniteSvgNumber(value)) {
+                        return Some(formatSvgNumber(value))
+                    } else {
+                        return None
+                    }
+                    case None => return None
+                }
+            case "font-feature-settings" => return Some(text)
+            case "text-decoration-line" =>
+                match (parseSvgDecorationLines(text)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "text-decoration-style" =>
+                match (SvgTextDecorationStyle.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "text-decoration-color" =>
+                if (textLower == "currentcolor") {
+                    return Some("currentColor")
+                }
+                return this.normalizeColor(text)
+            case "text-decoration-thickness" =>
+                if (textLower == "auto") {
+                    return Some("auto")
+                }
+                match (SvgLength.tryParse(text)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "text-underline-position" =>
+                match (SvgTextUnderlinePosition.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "pathLength" =>
+                match (tryParseSvgFloat(text)) {
+                    case Some(value) => if (value >= 0.0 && isFiniteSvgNumber(value)) {
+                        return Some(formatSvgNumber(value))
+                    } else {
+                        return None
+                    }
+                    case None => return None
+                }
             case _ => return None
         }
     }
@@ -943,5 +1011,38 @@ private func collectCssStyleTexts(element: SvgElement, out: ArrayList<String>): 
             case ElementNode(child) => collectCssStyleTexts(child, out)
             case _ => ()
         }
+    }
+}
+
+/** 简写规范化：纯线型返回规范顺序；含 style 关键字时保留原文供 getter 读取。 */
+private func normalizeSvgTextDecorationShorthand(text: String): ?String {
+    let lower = text.trimAscii().toAsciiLower()
+    let words = splitCssWhitespaceWords(lower)
+    var sawNone = false
+    var sawLine = false
+    var sawStyle = false
+    for (word in words) {
+        match (word) {
+            case "none" => sawNone = true
+            case "underline" | "overline" | "line-through" => sawLine = true
+            case "solid" | "double" | "dotted" | "dashed" | "wavy" => sawStyle = true
+            case _ => ()
+        }
+    }
+    if (sawNone) {
+        if (words.size > 1) {
+            return Option<String>.None
+        }
+        return Some("none")
+    }
+    if (!sawLine) {
+        return Option<String>.None
+    }
+    if (sawStyle) {
+        return Some(text.trimAscii())
+    }
+    match (parseSvgDecorationLines(lower)) {
+        case Some(value) => Some(value.toString())
+        case None => Option<String>.None
     }
 }

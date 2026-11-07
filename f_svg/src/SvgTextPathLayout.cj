@@ -68,7 +68,8 @@ public class SvgTextPathLayout {
         spacing!: SvgTextPathSpacing = SvgTextPathSpacing.Auto,
         sideOffsets!: Array<Float64> = Array<Float64>(),
         dxOffsets!: Array<Float64> = Array<Float64>(),
-        letterSpacings!: Array<Float64> = Array<Float64>()
+        letterSpacings!: Array<Float64> = Array<Float64>(),
+        pathLengthRatio!: Float64 = 1.0
     ): Array<SvgTextPlacement> {
         this.pathEmpty = false
         this.stretchScale = 1.0
@@ -102,7 +103,7 @@ public class SvgTextPathLayout {
         var start = if (startOffset.unit == SvgLengthUnit.Percent) {
             startOffset.value / 100.0 * total
         } else {
-            startOffset.value
+            startOffset.value * pathLengthRatio
         }
         if (start < 0.0) {
             start = 0.0

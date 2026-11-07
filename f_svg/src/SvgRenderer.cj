@@ -460,8 +460,17 @@ public class SvgRenderer {
             }
         }
         let effectiveStrokeWidth = style.strokeWidth().value * strokeScale
-        let effectiveDashArray = scaleStrokeDash(strokeDashValues(style), strokeScale)
-        let effectiveDashOffset = style.strokeDashOffset().value * strokeScale
+        var effectiveDashArray = scaleStrokeDash(strokeDashValues(style), strokeScale)
+        var effectiveDashOffset = style.strokeDashOffset().value * strokeScale
+        let declaredPathLength = style.pathLengthValue()
+        if (declaredPathLength > 0.0) {
+            let actualLength = path.totalLength()
+            if (actualLength > 0.0) {
+                let ratio = actualLength / declaredPathLength
+                effectiveDashArray = scaleStrokeDash(effectiveDashArray, ratio)
+                effectiveDashOffset *= ratio
+            }
+        }
         let color = match (paint.kind) {
             case None => return
             case ContextFill | ContextStroke => return

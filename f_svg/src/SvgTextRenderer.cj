@@ -438,6 +438,9 @@ public class SvgTextRenderer {
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
             applyFontKerning(chars, resolvedFonts, advances, style)
         }
+        applyFontStretchSynthesis(chars, advances, paths, style)
+        applySmallCaps(chars, resolvedFonts, advances, paths, style, this.warnings)
+        applyFontSizeAdjust(chars, resolvedFonts, advances, paths, style, this.warnings)
 
         if (shouldReorderBidi(style, chars)) {
             let arrangement = bidiArrangement(chars, style)
@@ -1644,4 +1647,110 @@ private func applyFontLigatures(
             case _ => index++
         }
     }
+}
+
+/** 百分比 font-stretch 且最终字体为 100% 时做水平合成缩放。 */
+private func applyFontStretchSynthesis(
+    chars: ArrayList<SvgTextChar>,
+    advances: ArrayList<Float64>,
+    paths: ArrayList<?SvgPathData>,
+    style: SvgComputedStyle
+): Unit {
+    let percent = style.fontStretch().percentage()
+    if (percent == 100.0 || percent <= 0.0) {
+        return
+    }
+    let factor = percent / 100.0
+    for (index in 0..paths.size) {
+        match (paths[index]) {
+            case Some(path) => paths[index] = Some(scalePathX(path, factor))
+            case None => ()
+        }
+        advances[index] = advances[index] * factor
+    }
+}
+
+/** 合成 small-caps：小写 ASCII 用大写字形并按 0.8 等比缩放。 */
+private func applySmallCaps(
+    chars: ArrayList<SvgTextChar>,
+    fonts: ArrayList<Option<SvgFont>>,
+    advances: ArrayList<Float64>,
+    paths: ArrayList<?SvgPathData>,
+    style: SvgComputedStyle,
+    warnings: ArrayList<String>
+): Unit {
+    if (style.fontVariantCaps() != "small-caps") {
+        return
+    }
+    for (index in 0..chars.size) {
+        let codePoint = chars[index].codePoint
+        if (codePoint < 97 || codePoint > 122) {
+            continue
+        }
+        let font = match (fonts[index]) {
+            case Some(value) => value
+            case None => continue
+        }
+        let upper = codePoint - 32
+        match (font.glyphPath(upper, chars[index].fontSize)) {
+            case Some(path) =>
+                paths[index] = Some(scalePathUniform(path, 0.8))
+                advances[index] = advances[index] * 0.8
+            case None =>
+                warnings.add("small-caps 缺少大写字形 ${upper}，保留原字形")
+        }
+    }
+}
+
+/** `font-size-adjust`：按 OS/2 x-height 比例修正字形与 advance。 */
+private func applyFontSizeAdjust(
+    chars: ArrayList<SvgTextChar>,
+    fonts: ArrayList<Option<SvgFont>>,
+    advances: ArrayList<Float64>,
+    paths: ArrayList<?SvgPathData>,
+    style: SvgComputedStyle,
+    warnings: ArrayList<String>
+): Unit {
+    let adjust = match (style.fontSizeAdjust()) {
+        case Some(value) => value
+        case None => return
+    }
+    for (index in 0..chars.size) {
+        let font = match (fonts[index]) {
+            case Some(value) => value
+            case None => continue
+        }
+        let ratio = match (font) {
+            case truetype: SvgTrueTypeFont => truetype.xHeightRatio()
+            case _ => Option<Float64>.None
+        }
+        let xHeight = match (ratio) {
+            case Some(value) => value
+            case None =>
+                warnings.add("font-size-adjust 缺少 OS/2 x-height，已忽略")
+                return
+        }
+        if (xHeight <= 0.0) {
+            return
+        }
+        let factor = adjust / xHeight
+        if (factor == 1.0) {
+            continue
+        }
+        match (paths[index]) {
+            case Some(path) => paths[index] = Some(scalePathUniform(path, factor))
+            case None => ()
+        }
+        advances[index] = advances[index] * factor
+    }
+}
+
+/** 两轴等比缩放路径。 */
+private func scalePathUniform(path: SvgPathData, factor: Float64): SvgPathData {
+    let commands = ArrayList<SvgPathCommand>()
+    let matrix = SvgMatrix.scale(factor, factor)
+    for (command in path.commands) {
+        commands.add(transformTextCommand(command, matrix))
+    }
+    SvgPathData(commands.toArray())
 }

@@ -34,6 +34,10 @@ public interface SvgFont {
 /** 字体注册表：按 family 列表回退，weight / style 未命中时回退 normal / normal。 */
 public class SvgFontRegistry {
     private let fonts = HashMap<String, SvgFont>()
+    /** stretch 维度独立存储；键为 `family|weight|style|stretch`。 */
+    private let stretchFonts = HashMap<String, SvgFont>()
+    /** 每个 family/weight/style 已注册的 stretch 列表。 */
+    private let stretchValues = HashMap<String, ArrayList<Float64>>()
     private let registeredFamilies = HashMap<String, Bool>()
     /** 派生注册表的委托目标；`None` 表示自身持有字体。 */
     private var base: ?SvgFontRegistry = None
@@ -43,8 +47,28 @@ public class SvgFontRegistry {
     public init() {}
 
     public func register(family: String, font: SvgFont): Unit {
+        this.register(family, font, stretch: 100.0)
+    }
+
+    /** 按 stretch 百分比注册；未指定 stretch 的旧调用等价于 100%。 */
+    public func register(family: String, font: SvgFont, stretch!: Float64): Unit {
         let normalized = normalizeSvgFontFamily(family)
-        this.fonts[SvgFontRegistry.key(normalized, "normal", "normal")] = font
+        let percent = if (stretch > 0.0 && isFiniteSvgNumber(stretch)) { stretch } else { 100.0 }
+        if (percent == 100.0) {
+            this.fonts[SvgFontRegistry.key(normalized, "normal", "normal")] = font
+        }
+        this.stretchFonts[SvgFontRegistry.stretchKey(normalized, "normal", "normal", percent)] = font
+        let groupKey = SvgFontRegistry.key(normalized, "normal", "normal")
+        match (this.stretchValues.get(groupKey)) {
+            case Some(list) =>
+                if (!list.contains(percent)) {
+                    list.add(percent)
+                }
+            case None =>
+                let created = ArrayList<Float64>()
+                created.add(percent)
+                this.stretchValues[groupKey] = created
+        }
         if (this.registeredFamilies.get(normalized).isNone()) {
             this.registeredFamilies[normalized] = true
         }
@@ -102,20 +126,42 @@ public class SvgFontRegistry {
     }
 
     public func resolve(family: String, weight: String, style: String): ?SvgFont {
+        this.resolve(family, weight, style, stretch: 100.0)
+    }
+
+    /** 先精确百分比，再取已注册 stretch 中差值最小者，最后回退 100%。 */
+    public func resolve(family: String, weight: String, style: String, stretch!: Float64): ?SvgFont {
         let normalizedWeight = weight.trimAscii().toAsciiLower()
         let normalizedStyle = style.trimAscii().toAsciiLower()
+        let target = if (stretch > 0.0 && isFiniteSvgNumber(stretch)) { stretch } else { 100.0 }
         for (name in splitSvgFontFamilies(family)) {
             match (this.aliases.get(name)) {
                 case Some(target) =>
                     match (this.base) {
                         case Some(delegate) =>
-                            match (delegate.resolve(target, weight, style)) {
+                            match (delegate.resolve(target, weight, style, stretch: 100.0)) {
                                 case Some(font) => return Some(font)
                                 case None => ()
                             }
                         case None => ()
                     }
                 case None => ()
+            }
+            match (this.stretchFonts.get(
+                SvgFontRegistry.stretchKey(name, normalizedWeight, normalizedStyle, target)
+            )) {
+                case Some(font) => return Some(font)
+                case None => ()
+            }
+            let groupKey = SvgFontRegistry.key(name, normalizedWeight, normalizedStyle)
+            let nearest = SvgFontRegistry.nearestStretch(this.stretchValues.get(groupKey), target)
+            if (nearest.isSome()) {
+                match (this.stretchFonts.get(
+                    SvgFontRegistry.stretchKey(name, normalizedWeight, normalizedStyle, nearest ?? 100.0)
+                )) {
+                    case Some(font) => return Some(font)
+                    case None => ()
+                }
             }
             match (this.fonts.get(SvgFontRegistry.key(name, normalizedWeight, normalizedStyle))) {
                 case Some(font) => return Some(font)
@@ -127,8 +173,30 @@ public class SvgFontRegistry {
             }
         }
         match (this.base) {
-            case Some(delegate) => delegate.resolve(family, weight, style)
-            case None => None
+            case Some(delegate) => delegate.resolve(family, weight, style, stretch: target)
+            case None => Option<SvgFont>.None
+        }
+    }
+
+    private static func nearestStretch(values: ?ArrayList<Float64>, target: Float64): ?Float64 {
+        match (values) {
+            case Some(list) =>
+                var best: ?Float64 = None
+                var bestDelta = 0.0
+                for (value in list) {
+                    let delta = if (value > target) { value - target } else { target - value }
+                    match (best) {
+                        case Some(_) => if (delta < bestDelta) {
+                            best = Some(value)
+                            bestDelta = delta
+                        }
+                        case None =>
+                            best = Some(value)
+                            bestDelta = delta
+                    }
+                }
+                best
+            case None => Option<Float64>.None
         }
     }
 
@@ -145,6 +213,15 @@ public class SvgFontRegistry {
 
     private static func key(family: String, weight: String, style: String): String {
         "${family}|${weight}|${style}"
+    }
+
+    private static func stretchKey(
+        family: String,
+        weight: String,
+        style: String,
+        stretch: Float64
+    ): String {
+        "${family}|${weight}|${style}|${formatSvgNumber(stretch)}"
     }
 }
 

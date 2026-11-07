@@ -658,6 +658,24 @@ let options = SvgRenderOptions(
 四个提示属性都可继承，缺省 `auto` 不改变既有输出。`optimizeSpeed` 等提示只影响
 本次绘制的采样与插值，不改变几何或布局。
 
+## M6：字体与文本细节
+
+- **`font-stretch`**：9 个关键字与百分比；`SvgFontRegistry.register(..., stretch:)` /
+  `resolve(..., stretch:)` 先精确匹配，再取最近百分比，最后回退 100%。百分比与 100%
+  字体组合时按比例做水平合成缩放。
+- **`font-variant: small-caps`**：小写 ASCII 使用大写字形并等比缩放到 0.8，advance 同步；
+  缺大写字形时保留原字形并 warning。
+- **`font-size-adjust`**：按 TTF `OS/2.sxHeight / unitsPerEm` 修正字形与 advance；
+  缺表时忽略并 warning。
+- **`font-feature-settings` / `font-variant-ligatures`**：解析 4 字符 tag 开关（`0`/`1`/`on`/`off`），
+  条目上限 64；`font-feature-settings` 覆盖 `font-variant-ligatures`，`font-kerning` 最后覆盖 `kern`。
+  默认集合与 M5 等价（`liga`/`clig` 开，`dlig`/`hlig` 关）。
+- **`text-decoration` 长属性**：`-line` / `-style` / `-color` / `-thickness` 与
+  `text-underline-position`；简写展开为长属性。`double` 画两条平行线，`dotted` / `dashed`
+  按厚度切段，`wavy` 以厚度为振幅生成正弦折线。
+- **`pathLength`**：声明长度用于校准 `stroke-dasharray` / `stroke-dashoffset` 与
+  `textPath` 的绝对 `startOffset`；百分比仍按实际弧长，非法值忽略并 warning。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

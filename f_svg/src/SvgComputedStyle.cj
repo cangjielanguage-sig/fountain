@@ -137,7 +137,18 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("transform-box", false, "view-box"),
     SvgPropertySpec("direction", true, "ltr"),
     SvgPropertySpec("unicode-bidi", false, "normal"),
-    SvgPropertySpec("font-kerning", true, "auto")
+    SvgPropertySpec("font-kerning", true, "auto"),
+    SvgPropertySpec("font-stretch", true, "normal"),
+    SvgPropertySpec("font-variant", true, "normal"),
+    SvgPropertySpec("font-variant-ligatures", true, "normal"),
+    SvgPropertySpec("font-size-adjust", true, "none"),
+    SvgPropertySpec("font-feature-settings", true, "normal"),
+    SvgPropertySpec("text-decoration-line", false, "none"),
+    SvgPropertySpec("text-decoration-style", false, "solid"),
+    SvgPropertySpec("text-decoration-color", false, "currentColor"),
+    SvgPropertySpec("text-decoration-thickness", false, "auto"),
+    SvgPropertySpec("text-underline-position", true, "auto"),
+    SvgPropertySpec("pathLength", false, "0")
 ]
 
 internal func findSvgPropertySpec(name: String): ?SvgPropertySpec {
@@ -384,7 +395,113 @@ public class SvgComputedStyle <: ToString {
     }
 
     public func textDecoration(): SvgTextDecoration {
-        SvgTextDecoration.tryParse(this.get("text-decoration") ?? "none") ?? SvgTextDecoration.none
+        if (this.sourceOf("text-decoration-line") != CssStyleSource.Default) {
+            match (this.get("text-decoration-line")) {
+                case Some(value) =>
+                    match (parseSvgDecorationLines(value)) {
+                        case Some(parsed) => return parsed
+                        case None => ()
+                    }
+                case None => ()
+            }
+        }
+        parseSvgDecorationLines(this.get("text-decoration") ?? "none") ?? SvgTextDecoration.none
+    }
+
+    public func fontStretch(): SvgFontStretch {
+        SvgFontStretch.fromName(this.get("font-stretch") ?? "normal") ?? SvgFontStretch.Normal
+    }
+
+    /** `font-variant` 的 caps 关键字；M6 只支持 `normal` / `small-caps`。 */
+    public func fontVariantCaps(): String {
+        let lower = (this.get("font-variant") ?? "normal").trimAscii().toAsciiLower()
+        if (lower.contains("small-caps")) {
+            return "small-caps"
+        }
+        "normal"
+    }
+
+    /** `font-variant-ligatures` 的规范值；多值取首个可识别项。 */
+    public func fontVariantLigatures(): String {
+        let lower = (this.get("font-variant-ligatures") ?? "normal").trimAscii().toAsciiLower()
+        for (value in ["none", "common-ligatures", "discretionary-ligatures", "historical-ligatures", "contextual"]) {
+            if (lower.contains(value)) {
+                return value
+            }
+        }
+        "normal"
+    }
+
+    public func fontSizeAdjust(): ?Float64 {
+        match (this.get("font-size-adjust")) {
+            case Some(text) =>
+                if (text.trimAscii().toAsciiLower() == "none") {
+                    return Option<Float64>.None
+                }
+                match (tryParseSvgFloat(text)) {
+                    case Some(value) => if (value > 0.0 && isFiniteSvgNumber(value)) {
+                        Some(value)
+                    } else {
+                        Option<Float64>.None
+                    }
+                    case None => Option<Float64>.None
+                }
+            case None => Option<Float64>.None
+        }
+    }
+
+    public func fontFeatures(): SvgFontFeatures {
+        SvgFontFeatures.fromStyle(this)
+    }
+
+    public func textDecorationStyle(): SvgTextDecorationStyle {
+        let shorthand = (this.get("text-decoration") ?? "").toAsciiLower()
+        for (name in ["dotted", "dashed", "double", "wavy"]) {
+            if (shorthand.contains(name)) {
+                return SvgTextDecorationStyle.fromName(name) ?? SvgTextDecorationStyle.Solid
+            }
+        }
+        SvgTextDecorationStyle.fromName(this.get("text-decoration-style") ?? "solid") ??
+            SvgTextDecorationStyle.Solid
+    }
+
+    public func textDecorationColor(): ?SvgColor {
+        match (this.get("text-decoration-color")) {
+            case Some(text) =>
+                if (text.trimAscii().toAsciiLower() == "currentcolor") {
+                    return Some(this.color())
+                }
+                SvgColor.tryParse(text)
+            case None => Option<SvgColor>.None
+        }
+    }
+
+    public func textDecorationThickness(): ?SvgLength {
+        match (this.get("text-decoration-thickness")) {
+            case Some(text) =>
+                if (text.trimAscii().toAsciiLower() == "auto") {
+                    return Option<SvgLength>.None
+                }
+                SvgLength.tryParse(text)
+            case None => Option<SvgLength>.None
+        }
+    }
+
+    public func textUnderlinePosition(): SvgTextUnderlinePosition {
+        SvgTextUnderlinePosition.fromName(this.get("text-underline-position") ?? "auto") ??
+            SvgTextUnderlinePosition.Auto
+    }
+
+    public func textDecorationSpec(): SvgTextDecorationSpec {
+        SvgTextDecorationSpec.fromStyle(this)
+    }
+
+    /** `pathLength` 声明值；`0` 表示未声明。 */
+    public func pathLengthValue(): Float64 {
+        match (tryParseSvgFloat(this.get("pathLength") ?? "0")) {
+            case Some(value) => if (value > 0.0 && isFiniteSvgNumber(value)) { value } else { 0.0 }
+            case None => 0.0
+        }
     }
 
     public func writingMode(): SvgWritingMode {
@@ -470,4 +587,30 @@ private func parseLengthOrDefault(text: ?String, fallback: SvgLength): SvgLength
         case Some(value) => SvgLength.tryParse(value) ?? fallback
         case None => fallback
     }
+}
+
+/** 容错解析装饰线关键字；忽略 style / color / thickness 关键字。 */
+internal func parseSvgDecorationLines(text: String): ?SvgTextDecoration {
+    let lower = text.trimAscii().toAsciiLower()
+    if (lower.size == 0) {
+        return Option<SvgTextDecoration>.None
+    }
+    if (lower == "none") {
+        return Some(SvgTextDecoration.none)
+    }
+    var underline = false
+    var overline = false
+    var lineThrough = false
+    for (word in splitCssWhitespaceWords(lower)) {
+        match (word) {
+            case "underline" => underline = true
+            case "overline" => overline = true
+            case "line-through" => lineThrough = true
+            case _ => ()
+        }
+    }
+    if (!underline && !overline && !lineThrough) {
+        return Option<SvgTextDecoration>.None
+    }
+    Some(SvgTextDecoration(underline: underline, overline: overline, lineThrough: lineThrough))
 }

@@ -107,6 +107,8 @@ public class SvgTrueTypeFont <: SvgFont {
     private let kernPairs: ?SvgKernPairs
     private let gposPairs: ?SvgGposPairs
     private let ligatureTable: ?SvgGsubLigatures
+    /** `OS/2.sxHeight`；缺表或非法时为 `None`。 */
+    private let xHeightValue: ?Int64
 
     private init(
         unitsPerEmValue: Int64,
@@ -124,7 +126,8 @@ public class SvgTrueTypeFont <: SvgFont {
         cmapGroups: ArrayList<SvgCmapGroup>,
         kernPairs: ?SvgKernPairs,
         gposPairs: ?SvgGposPairs,
-        ligatureTable: ?SvgGsubLigatures
+        ligatureTable: ?SvgGsubLigatures,
+        xHeightValue: ?Int64
     ) {
         this.unitsPerEmValue = unitsPerEmValue
         this.ascenderValue = ascenderValue
@@ -142,11 +145,24 @@ public class SvgTrueTypeFont <: SvgFont {
         this.kernPairs = kernPairs
         this.gposPairs = gposPairs
         this.ligatureTable = ligatureTable
+        this.xHeightValue = xHeightValue
     }
 
     public prop unitsPerEm: Int64 {
         get() {
             this.unitsPerEmValue
+        }
+    }
+
+    /** `OS/2.sxHeight / unitsPerEm`；缺表返回 `None`。 */
+    internal func xHeightRatio(): ?Float64 {
+        match (this.xHeightValue) {
+            case Some(value) => if (value > 0 && this.unitsPerEmValue > 0) {
+                Some(Float64(value) / Float64(this.unitsPerEmValue))
+            } else {
+                Option<Float64>.None
+            }
+            case None => Option<Float64>.None
         }
     }
 
@@ -245,6 +261,14 @@ public class SvgTrueTypeFont <: SvgFont {
             case Some(table) => SvgGsubLigatures.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
             case None => Option<SvgGsubLigatures>.None
         }
+        let xHeight = match (directory.table("OS/2")) {
+            case Some(table) => if (table.length >= 88) {
+                Some(SvgTtfTableReader(bytes, table).i16(86))
+            } else {
+                Option<Int64>.None
+            }
+            case None => Option<Int64>.None
+        }
         SvgTrueTypeFont(
             unitsPerEm,
             ascender,
@@ -261,7 +285,8 @@ public class SvgTrueTypeFont <: SvgFont {
             groups,
             kern,
             gpos,
-            ligatures
+            ligatures,
+            xHeight
         )
     }
 
