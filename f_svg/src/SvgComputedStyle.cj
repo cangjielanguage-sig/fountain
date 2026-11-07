@@ -96,6 +96,8 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("word-spacing", true, "0"),
     SvgPropertySpec("visibility", true, "visible"),
     SvgPropertySpec("display", false, "inline"),
+    SvgPropertySpec("pointer-events", true, "auto"),
+    SvgPropertySpec("cursor", true, "auto"),
     SvgPropertySpec("clip-path", false, "none"),
     SvgPropertySpec("mask", false, "none"),
     SvgPropertySpec("clip-rule", true, "nonzero"),
@@ -291,6 +293,16 @@ public class SvgComputedStyle <: ToString {
 
     public func visibility(): String {
         this.get("visibility") ?? "visible"
+    }
+
+    /** 命中测试使用的 `pointer-events` 值；未知值回退 `auto`。 */
+    public func pointerEvents(): SvgPointerEvents {
+        SvgPointerEvents.fromName(this.get("pointer-events") ?? "auto") ?? SvgPointerEvents.Auto
+    }
+
+    /** 光标关键字；M6 不加载资源。 */
+    public func cursor(): String {
+        this.get("cursor") ?? "auto"
     }
 
     public func display(): String {

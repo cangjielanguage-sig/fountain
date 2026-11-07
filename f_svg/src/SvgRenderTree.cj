@@ -253,7 +253,16 @@ public class SvgRenderTreeBuilder {
         let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
         let logicalHeight = if (options.height > 0) { Float64(options.height) } else { viewport.height }
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(root, mediaWidth: logicalWidth, mediaHeight: logicalHeight)
+        let styles = resolver.compute(
+            root,
+            interaction: SvgInteractionState(
+                hoveredIds: options.hoveredIds,
+                focusedIds: options.focusedIds,
+                root: Some(root)
+            ),
+            mediaWidth: logicalWidth,
+            mediaHeight: logicalHeight
+        )
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }
@@ -363,7 +372,16 @@ public class SvgRenderTreeBuilder {
         this.ensureGuard()
         this.languages = options.languages
         let resolver = SvgStyleResolver()
-        let styles = resolver.compute(element, mediaWidth: Float64(width), mediaHeight: Float64(height))
+        let styles = resolver.compute(
+            element,
+            interaction: SvgInteractionState(
+                hoveredIds: options.hoveredIds,
+                focusedIds: options.focusedIds,
+                root: Some(element)
+            ),
+            mediaWidth: Float64(width),
+            mediaHeight: Float64(height)
+        )
         for (warning in resolver.warnings) {
             this.warnings.add(warning)
         }

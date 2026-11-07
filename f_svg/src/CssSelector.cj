@@ -255,13 +255,18 @@ public class CssSelector <: ToString {
 
     /** 从右端开始匹配；后代组合符逐级回溯祖先，子代只检查直接父元素。 */
     public func matches(element: SvgElement): Bool {
-        this.matchPartAt(this.parts.size - 1, element)
+        this.matches(element, SvgInteractionState.empty())
     }
 
-    private func matchPartAt(index: Int64, element: SvgElement): Bool {
+    /** 带静态交互状态匹配；`interaction` 只影响 `:hover` / `:focus`。 */
+    public func matches(element: SvgElement, interaction: SvgInteractionState): Bool {
+        this.matchPartAt(this.parts.size - 1, element, interaction)
+    }
+
+    private func matchPartAt(index: Int64, element: SvgElement, interaction: SvgInteractionState): Bool {
         let part = this.parts[index]
         let matched = if (part.simples.size > 0) {
-            cssSequenceMatches(part.simples, element)
+            cssSequenceMatches(part.simples, element, interaction: interaction)
         } else {
             cssPartMatches(part, element)
         }
@@ -274,7 +279,7 @@ public class CssSelector <: ToString {
         match (this.combinators[index - 1]) {
             case Child =>
                 match (element.parent) {
-                    case Some(parent) => this.matchPartAt(index - 1, parent)
+                    case Some(parent) => this.matchPartAt(index - 1, parent, interaction)
                     case None => false
                 }
             case Descendant =>
@@ -282,7 +287,7 @@ public class CssSelector <: ToString {
                 while (true) {
                     match (current) {
                         case Some(parent) =>
-                            if (this.matchPartAt(index - 1, parent)) {
+                            if (this.matchPartAt(index - 1, parent, interaction)) {
                                 return true
                             }
                             current = parent.parent
@@ -292,7 +297,7 @@ public class CssSelector <: ToString {
                 false
             case AdjacentSibling =>
                 match (cssPreviousElementSibling(element)) {
-                    case Some(previous) => this.matchPartAt(index - 1, previous)
+                    case Some(previous) => this.matchPartAt(index - 1, previous, interaction)
                     case None => false
                 }
             case GeneralSibling =>
@@ -300,7 +305,7 @@ public class CssSelector <: ToString {
                 while (true) {
                     match (current) {
                         case Some(previous) =>
-                            if (this.matchPartAt(index - 1, previous)) {
+                            if (this.matchPartAt(index - 1, previous, interaction)) {
                                 return true
                             }
                             current = cssPreviousElementSibling(previous)

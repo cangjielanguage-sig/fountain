@@ -589,6 +589,33 @@ let box = rect.getBBox(options: SvgBBoxOptions(stroke: true))
 let hits = root.querySelectorAll("rect:not(.skip) + circle")
 ```
 
+## M6：静态交互（无脚本）
+
+M6 的 `:hover` / `:focus` 只做静态状态求值，不接事件循环、不执行脚本。
+
+- **`pointer-events`**：支持 `auto` / `none` / `visiblePainted` / `visibleFill` /
+  `visibleStroke` / `visible` / `painted` / `fill` / `stroke` / `all` / `bounding-box`；
+  只进入计算样式，不改变绘制。`none` 连同子树退出命中。
+- **`cursor`**：校验 CSS 关键字白名单并存入计算样式；`url(...)` 与未知值回退 `auto`
+  并 warning，不加载光标资源。
+- **`:hover` / `:focus`**：通过 `SvgRenderOptions.hoveredIds` / `focusedIds` 求值；
+  未提供时永不匹配，因此未使用交互特性的文档输出与 M5 逐字节一致。
+  `:focus` 只匹配 `focusedIds` 中第一个可解析的元素。
+- **`SvgHitTest`**：`hitTest(root, point, options:)` 接收设备坐标，按 DPR 与根
+  `viewBox` 逆变换后逐元素判定，返回后绘制者在前（顶层在前）的命中链。
+  填充按扁平化轮廓与 `fill-rule` 判定，描边按中心线距离与端点帽判定；
+  `image` 按矩形、`text` 按字形轮廓、容器只在 `all` / `bounding-box` 时参与。
+  `maxElements` 超限抛 `Limit`。
+
+```cangjie
+let options = SvgRenderOptions(hoveredIds: ["button"], focusedIds: ["search"])
+let bitmap = SvgRenderer(options: options).render(document)
+let hits = SvgHitTest().hitTest(document, SvgPoint(120.0, 80.0), options: options)
+```
+
+安全边界：`pointer-events` / `cursor` 不会触发链接、事件或资源加载；
+外部光标 URL 与原有安全策略一致，默认在解析期移除。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

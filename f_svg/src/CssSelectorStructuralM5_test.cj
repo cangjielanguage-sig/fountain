@@ -143,7 +143,7 @@ public class CssSelectorStructuralM5_test {
     /** 未知伪类与伪元素被拒绝。 */
     @TestCase
     public func unknownPseudoIsRejected(): Unit {
-        for (selector in [":hover", "::before", ":nth-child", ":nth-child()", ":not()"]) {
+        for (selector in [":active", "::before", ":nth-child", ":nth-child()", ":not()"]) {
             var threw = false
             try {
                 CssSelector.parse(selector)

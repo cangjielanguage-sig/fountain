@@ -73,9 +73,12 @@ public class SvgStyleResolver <: ToString {
     private var mergedFontFaces: Array<CssFontFaceRule> = Array<CssFontFaceRule>()
     private var selectorIndex: ?CssSelectorIndex = None
     private var preparedRoot: ?Int64 = None
+    private var hasPrepared: Bool = false
     /** `@media` 与百分比长度求值基准；缺省 300×150。 */
     private var mediaWidth: Float64 = 300.0
     private var mediaHeight: Float64 = 150.0
+    /** 本次求值的静态交互状态；空状态让 `:hover` / `:focus` 永不匹配。 */
+    private var interaction: SvgInteractionState = SvgInteractionState.empty()
 
     public init(sheet!: CssStyleSheet = CssStyleSheet.empty()) {
         this.sheet = sheet
@@ -88,11 +91,13 @@ public class SvgStyleResolver <: ToString {
     /** 以给定逻辑视口求值 `@media` 与百分比几何长度。 */
     public func compute(
         root: SvgElement,
+        interaction!: SvgInteractionState = SvgInteractionState.empty(),
         mediaWidth!: Float64,
         mediaHeight!: Float64 = 150.0
     ): SvgComputedStyleTree {
         this.mediaWidth = mediaWidth
         this.mediaHeight = mediaHeight
+        this.interaction = interaction
         this.warnings.clear()
         this.prepare(Some(root))
         this.fontFaces.clear()
@@ -116,11 +121,13 @@ public class SvgStyleResolver <: ToString {
     public func computeElement(
         element: SvgElement,
         parent: ?SvgComputedStyle,
+        interaction!: SvgInteractionState = SvgInteractionState.empty(),
         mediaWidth!: Float64,
         mediaHeight!: Float64 = 150.0
     ): SvgComputedStyle {
         this.mediaWidth = mediaWidth
         this.mediaHeight = mediaHeight
+        this.interaction = interaction
         this.prepare(Option<SvgElement>.None)
         this.cascade(element, parent)
     }
@@ -149,7 +156,7 @@ public class SvgStyleResolver <: ToString {
             case Some(element) => Some(element.identity)
             case None => None
         }
-        if (this.preparedRoot == key) {
+        if (this.hasPrepared && this.preparedRoot == key) {
             return
         }
         let rules = ArrayList<CssRule>()
@@ -188,6 +195,7 @@ public class SvgStyleResolver <: ToString {
         this.mergedFontFaces = faces.toArray()
         this.selectorIndex = CssSelectorIndex(this.mergedRules)
         this.preparedRoot = key
+        this.hasPrepared = true
     }
 
     private func parseStyleText(text: String): CssStyleSheet {
@@ -415,7 +423,7 @@ public class SvgStyleResolver <: ToString {
             var matched = false
             var specificity = CssSpecificity.zero
             for (selector in rule.selectors) {
-                if (selector.matches(element)) {
+                if (selector.matches(element, this.interaction)) {
                     if (!matched || selector.specificity.compareTo(specificity) > 0) {
                         specificity = selector.specificity
                         matched = true
@@ -710,6 +718,12 @@ public class SvgStyleResolver <: ToString {
                     return Some(textLower)
                 }
                 return None
+            case "pointer-events" =>
+                match (SvgPointerEvents.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "cursor" => return Some(SvgCursor.parse(text, this.warnings).toString())
             case "display" =>
                 if (textLower == "inline" || textLower == "block" || textLower == "none" || textLower == "inline-block") {
                     return Some(textLower)

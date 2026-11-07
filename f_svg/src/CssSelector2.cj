@@ -103,6 +103,8 @@ public enum CssPseudoClass <: Equatable<CssPseudoClass> & ToString {
     | NthOfType(Int64, Int64)
     | OnlyOfType
     | Empty
+    | Hover
+    | Focus
     | Not(CssSimpleSelector)
 
     public operator func ==(that: CssPseudoClass): Bool {
@@ -117,6 +119,8 @@ public enum CssPseudoClass <: Equatable<CssPseudoClass> & ToString {
             case (NthOfType(a1, b1), NthOfType(a2, b2)) => a1 == a2 && b1 == b2
             case (OnlyOfType, OnlyOfType) => true
             case (Empty, Empty) => true
+            case (Hover, Hover) => true
+            case (Focus, Focus) => true
             case (Not(left), Not(right)) => left == right
             case _ => false
         }
@@ -134,6 +138,8 @@ public enum CssPseudoClass <: Equatable<CssPseudoClass> & ToString {
             case NthOfType(a, b) => ":nth-of-type(${formatCssAnB(a, b)})"
             case OnlyOfType => ":only-of-type"
             case Empty => ":empty"
+            case Hover => ":hover"
+            case Focus => ":focus"
             case Not(inner) => ":not(${inner.toString()})"
         }
     }
@@ -450,6 +456,8 @@ private func parseCssPseudoClass(
             case "last-of-type" => CssPseudoClass.LastOfType
             case "only-of-type" => CssPseudoClass.OnlyOfType
             case "empty" => CssPseudoClass.Empty
+            case "hover" => CssPseudoClass.Hover
+            case "focus" => CssPseudoClass.Focus
             case _ => throw invalidValue("不支持的伪类「:${name}」")
         }
     }
@@ -759,8 +767,12 @@ private func isCssWhitespaceText(text: String): Bool {
     true
 }
 
-/** 伪类求值。 */
-internal func cssPseudoMatches(pseudo: CssPseudoClass, element: SvgElement): Bool {
+/** 伪类求值；`interaction` 只影响 `:hover` / `:focus`。 */
+internal func cssPseudoMatches(
+    pseudo: CssPseudoClass,
+    element: SvgElement,
+    interaction!: ?SvgInteractionState = None
+): Bool {
     match (pseudo) {
         case Root => element.parent.isNone()
         case FirstChild => cssElementSiblingIndex(element) == 1
@@ -772,9 +784,26 @@ internal func cssPseudoMatches(pseudo: CssPseudoClass, element: SvgElement): Boo
         case OnlyOfType => cssOfTypeCount(element) == 1
         case NthOfType(a, b) => cssAnBMatches(a, b, cssOfTypeIndex(element))
         case Empty => cssElementIsEmpty(element)
-        case Not(inner) => !cssSimpleSelectorMatches(inner.kind, element)
+        case Hover => cssInteractionHover(interaction, element.attr("id"))
+        case Focus => cssInteractionFocus(interaction, element.attr("id"))
+        case Not(inner) => !cssSimpleSelectorMatches(inner.kind, element, interaction: interaction)
     }
 }
+
+internal func cssInteractionHover(interaction: ?SvgInteractionState, id: ?String): Bool {
+    match (interaction) {
+        case Some(state) => state.isHovered(id)
+        case None => false
+    }
+}
+
+internal func cssInteractionFocus(interaction: ?SvgInteractionState, id: ?String): Bool {
+    match (interaction) {
+        case Some(state) => state.isFocused(id)
+        case None => false
+    }
+}
+
 
 /** 复合选择器的特异性：id +1，类 / 属性 +1，类型 / 伪类 +1，`*` 不计。 */
 internal func cssSequenceSpecificity(simples: Array<CssSimpleSelectorKind>): CssSpecificity {
@@ -795,9 +824,13 @@ internal func cssSequenceSpecificity(simples: Array<CssSimpleSelectorKind>): Css
 }
 
 /** 复合选择器与单个元素匹配：逐个简单选择器求值。 */
-internal func cssSequenceMatches(simples: Array<CssSimpleSelectorKind>, element: SvgElement): Bool {
+internal func cssSequenceMatches(
+    simples: Array<CssSimpleSelectorKind>,
+    element: SvgElement,
+    interaction!: ?SvgInteractionState = None
+): Bool {
     for (simple in simples) {
-        if (!cssSimpleSelectorMatches(simple, element)) {
+        if (!cssSimpleSelectorMatches(simple, element, interaction: interaction)) {
             return false
         }
     }
@@ -805,7 +838,11 @@ internal func cssSequenceMatches(simples: Array<CssSimpleSelectorKind>, element:
 }
 
 /** 单个简单选择器匹配。伪类分支在 2.2 接入结构匹配。 */
-internal func cssSimpleSelectorMatches(kind: CssSimpleSelectorKind, element: SvgElement): Bool {
+internal func cssSimpleSelectorMatches(
+    kind: CssSimpleSelectorKind,
+    element: SvgElement,
+    interaction!: ?SvgInteractionState = None
+): Bool {
     match (kind) {
         case Universal => true
         case Type(name) => element.tag == name
@@ -815,7 +852,7 @@ internal func cssSimpleSelectorMatches(kind: CssSimpleSelectorKind, element: Svg
             case None => false
         }
         case Attribute(selector) => cssAttributeMatches(selector, element)
-        case PseudoClass(pseudo) => cssPseudoMatches(pseudo, element)
+        case PseudoClass(pseudo) => cssPseudoMatches(pseudo, element, interaction: interaction)
     }
 }
 

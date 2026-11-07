@@ -209,6 +209,10 @@ public struct SvgRenderOptions {
     public let antiAlias: SvgAntiAliasMode
     /** `switch` 的 `systemLanguage` 匹配列表；默认 `["en"]`。 */
     public let languages: Array<String>
+    /** `:hover` 静态求值的元素 id 列表；默认空集，永不匹配。 */
+    public let hoveredIds: Array<String>
+    /** `:focus` 静态求值的元素 id 列表；默认空集，永不匹配。 */
+    public let focusedIds: Array<String>
 
     public init(
         width!: Int64 = 0,
@@ -220,7 +224,9 @@ public struct SvgRenderOptions {
         devicePixelRatio!: Float64 = 1.0,
         images!: ?SvgImageResourceProvider = None,
         antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample,
-        languages!: Array<String> = ["en"]
+        languages!: Array<String> = ["en"],
+        hoveredIds!: Array<String> = Array<String>(),
+        focusedIds!: Array<String> = Array<String>()
     ) {
         if (width < 0 || height < 0) {
             throw invalidValue("渲染宽高不能为负，实际 ${width}×${height}")
@@ -244,6 +250,8 @@ public struct SvgRenderOptions {
         this.images = images
         this.antiAlias = antiAlias
         this.languages = languages
+        this.hoveredIds = hoveredIds
+        this.focusedIds = focusedIds
     }
 
     /** 校验输出像素总数；超限抛 `Limit`。 */

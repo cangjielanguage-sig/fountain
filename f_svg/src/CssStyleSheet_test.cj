@@ -84,7 +84,7 @@ public class CssStyleSheet_test {
     public func unsupportedSelectorsAreSkipped(): Unit {
         let warnings = ArrayList<String>()
         let sheet = CssStyleSheet.parse(
-            "rect:hover { fill: red }\n" +
+            "rect:active { fill: red }\n" +
             "rect[width] { fill: green }\n" +
             "g > circle { fill: blue }",
             warnings
@@ -93,7 +93,7 @@ public class CssStyleSheet_test {
         @Assert(sheet.rules[0].selectors[0].toString() == "rect[width]")
         @Assert(sheet.rules[1].selectors[0].toString() == "g > circle")
         @Assert(warnings.size == 1)
-        @Assert(warnings[0].contains("hover"))
+        @Assert(warnings[0].contains("active"))
     }
 
     /** 缺右花括号、缺分号、空块、多余分号。 */

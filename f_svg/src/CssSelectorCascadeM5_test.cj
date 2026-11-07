@@ -132,16 +132,16 @@ public class CssSelectorCascadeM5_test {
     public func unsupportedPseudoWarnsOnce(): Unit {
         let (document, tree, resolver) = m5ComputeStyles(
             "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>" +
-            "rect:hover { fill: red } rect[data-k] { fill: green }</style>" +
+            "rect:active { fill: red } rect[data-k] { fill: green }</style>" +
             "<g><rect id=\"r\" data-k=\"1\"/></g></svg>"
         )
         @Assert(m5StyleOf(tree, document.elementById("r")).fill().toString() == "#008000")
-        var hoverWarnings = 0
+        var activeWarnings = 0
         for (warning in resolver.warnings) {
-            if (warning.contains("hover")) {
-                hoverWarnings++
+            if (warning.contains("active")) {
+                activeWarnings++
             }
         }
-        @Assert(hoverWarnings == 1)
+        @Assert(activeWarnings == 1)
     }
 }
