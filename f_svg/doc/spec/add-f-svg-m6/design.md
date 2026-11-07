@@ -209,6 +209,22 @@ GSUB Type 5/6 解析为 `SvgGsubContextRule`（覆盖表、回溯 / 输入 / 前
 
 公开方法声明写在既有类体内（`SvgElement` / `SvgDocument` / `SvgTimeline` / `SvgPoint` / `SvgMatrix` / `SvgTransform`），避免扩展对私有状态的可见性问题；新文件只放内部实现与公开枚举 / 结构体。
 
+### D19 M6 快照语义
+
+9 张 `m6-*` 快照各自绑定一项能力，不以“字节稳定”代替语义覆盖：
+
+- `m6-interaction`：`hoveredIds` / `focusedIds` 经样式级联改变输出；
+- `m6-foreign-object`：注入 2×2 位图按 `foreignObject` 区域绘制；
+- `m6-initial-view`：`initialView="#detail"` 覆盖根视口；
+- `m6-rendering-hints`：`shape-rendering` 三档与 `text-rendering` 组合；
+- `m6-color-interpolation`：两条红蓝渐变分别声明 `sRGB` / `linearRGB`，中点颜色必须不同；
+- `m6-font-details`：`font-stretch` / `small-caps` / 装饰线可见；
+- `m6-animation-control`：固定 `sample(2.0)` 后渲染；
+- `m6-hit-queries`：渲染前真实调用 `SvgHitTest.elementsAt`，把命中 id 注入 `hoveredIds`，再由 `rect:hover` 改变像素；
+- `m6-svg2`：`miter-clip` / `arcs` 描边，以及带祖先 `scale(2)` 的 `non-scaling-size` 矩阵修正。
+
+`m6-color-interpolation`、`m6-hit-queries`、`m6-svg2` 在本轮功能修正后重新生成，原因记录在 `verification.md`；M1–M5 的 25 张快照保持逐字节不变。
+
 ## Risks / Trade-offs
 
 - **字节一致性被默认路径破坏** → 所有新行为用「空集合 / `None` / `auto` / 缺失属性」短路；M1–M5 全部快照加入逐字节回归；新增 `m6-*` 快照单独管理。
