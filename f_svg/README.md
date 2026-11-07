@@ -696,6 +696,19 @@ timeline.setCurrentTime(2.0)
 let frame = timeline.sample(timeline.currentTime())
 ```
 
+## M6：DOM API
+
+- **工厂方法**：`SvgPoint.create` / `SvgMatrix.create` / `SvgTransform.create`，与既有构造器等价。
+- **视图状态**：`SvgViewState`（`currentScale` / `currentTranslate`）可经
+  `SvgRenderOptions.viewState` 传入，矩阵插在根视口之后；缺省单位矩阵不改变输出。
+- **子节点 API**：`insertBefore(node, reference)` / `removeChild(node)` 维护 `children` 与
+  `parent`；`reference` 不存在抛 `InvalidValue`。
+- **变更监听**：`SvgDocument.addMutationListener` / `removeMutationListener`；属性、插入、
+  移除后同步通知，监听异常捕获为文档 warning，监听器上限 32。
+- **命中查询**：`getIntersectionList` / `getEnclosureList` / `checkIntersection` /
+  `checkEnclosure`，基于 `getBBox` 并由 `pointer-events: none` / `visibility: hidden` 筛选；
+  `reference` 限定查询子树，结果集合为新实例，文档只读。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

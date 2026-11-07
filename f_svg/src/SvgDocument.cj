@@ -29,9 +29,44 @@ public class SvgDocument <: ToString {
     public let warnings = ArrayList<String>()
     /** 解析该文档时使用的选项；供外部文档引用复制安全策略。 */
     public var parseOptions: SvgParseOptions = SvgParseOptions()
+    /** 文档级变更 hub。 */
+    internal let mutationHub = SvgMutationHub()
 
     public init(root: SvgRoot) {
         this.root = root
+        root.mutationHub = Some(this.mutationHub)
+        this.mutationHub.warnings = Some(this.warnings)
+    }
+
+    /** 注册变更监听器；上限 32，超限抛 `InvalidValue`。 */
+    public func addMutationListener(listener: SvgMutationListener): Unit {
+        this.mutationHub.add(listener)
+    }
+
+    public func removeMutationListener(listener: SvgMutationListener): Unit {
+        this.mutationHub.remove(listener)
+    }
+
+    public func getIntersectionList(
+        rect: SvgBounds,
+        reference!: ?SvgElement = None
+    ): ArrayList<SvgElement> {
+        svgDocumentHitQuery(this, rect, reference, false)
+    }
+
+    public func getEnclosureList(
+        rect: SvgBounds,
+        reference!: ?SvgElement = None
+    ): ArrayList<SvgElement> {
+        svgDocumentHitQuery(this, rect, reference, true)
+    }
+
+    public func checkIntersection(element: SvgElement, rect: SvgBounds): Bool {
+        svgDocumentHitQueryCheck(this, element, rect, false)
+    }
+
+    public func checkEnclosure(element: SvgElement, rect: SvgBounds): Bool {
+        svgDocumentHitQueryCheck(this, element, rect, true)
     }
 
     /** 深度优先，返回第一个匹配的 id。 */

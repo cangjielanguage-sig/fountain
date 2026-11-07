@@ -127,3 +127,16 @@
 
 - `getBBox` 按契约不做跨调用缓存，每次从根重算计算样式；1000 元素文档下耗时随之线性增长。
 - 以上数值为参考、非 CI 门禁。
+
+## M6 命中查询与交互（参考值，非门禁）
+
+- 环境：Linux x86_64，Cangjie SDK 1.3.0，`cjpm test`，`-O2`，单次运行、含噪声。
+- 场景：1000 个 `rect`（5×5）文档，`getIntersectionList` 查询 50×50 区域。
+- 基准测试：`SvgDomApiM6_test.cj` 的 `largeDocumentPerformance`（CI 上限 5 s，仅防退化）。
+
+| 操作 | 单次耗时 |
+|---|---|
+| `getIntersectionList`（1000 元素） | 约 60–120 ms |
+
+- 每次查询重算一次样式树；不做跨调用缓存，与 M5 `getBBox` 口径一致。
+- 命中测试 `SvgHitTest` 同样每次重算样式树；`maxElements` 在递归前累计并抛 `Limit`。

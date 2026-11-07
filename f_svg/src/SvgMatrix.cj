@@ -30,6 +30,10 @@ public struct SvgPoint <: Equatable<SvgPoint> & ToString {
         this.y = y
     }
 
+    public static func create(x: Float64, y: Float64): SvgPoint {
+        SvgPoint(x, y)
+    }
+
     public func toString(): String {
         formatSvgNumber(this.x) + "," + formatSvgNumber(this.y)
     }
@@ -62,6 +66,18 @@ public struct SvgMatrix <: Equatable<SvgMatrix> & ToString {
     }
 
     public static let identity = SvgMatrix(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+
+    /** 工厂方法；等价于 `SvgMatrix(a,b,c,d,e,f)`。 */
+    public static func create(
+        a: Float64,
+        b: Float64,
+        c: Float64,
+        d: Float64,
+        e: Float64,
+        f: Float64
+    ): SvgMatrix {
+        SvgMatrix(a, b, c, d, e, f)
+    }
 
     /** `this × that`：先应用 `that`，再应用 `this`。 */
     public func multiply(that: SvgMatrix): SvgMatrix {

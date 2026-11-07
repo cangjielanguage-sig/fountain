@@ -219,6 +219,8 @@ public struct SvgRenderOptions {
     public let foreignObjectRenderer: ?SvgForeignObjectRenderer
     /** 外部文档提供者；只对 `use` 的非片段 href 生效。 */
     public let externalDocuments: ?SvgExternalDocumentProvider
+    /** 视图缩放 / 平移；插在根视口矩阵之后。 */
+    public let viewState: ?SvgViewState
 
     public init(
         width!: Int64 = 0,
@@ -235,7 +237,8 @@ public struct SvgRenderOptions {
         focusedIds!: Array<String> = Array<String>(),
         initialView!: ?String = None,
         foreignObjectRenderer!: ?SvgForeignObjectRenderer = None,
-        externalDocuments!: ?SvgExternalDocumentProvider = None
+        externalDocuments!: ?SvgExternalDocumentProvider = None,
+        viewState!: ?SvgViewState = None
     ) {
         if (width < 0 || height < 0) {
             throw invalidValue("渲染宽高不能为负，实际 ${width}×${height}")
@@ -264,6 +267,7 @@ public struct SvgRenderOptions {
         this.initialView = initialView
         this.foreignObjectRenderer = foreignObjectRenderer
         this.externalDocuments = externalDocuments
+        this.viewState = viewState
     }
 
     /** 校验输出像素总数；超限抛 `Limit`。 */

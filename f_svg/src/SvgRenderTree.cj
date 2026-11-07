@@ -309,7 +309,12 @@ public class SvgRenderTreeBuilder {
                 }
             case None => ()
         }
+        let stateMatrix = match (options.viewState) {
+            case Some(value) => value.toMatrix()
+            case None => SvgMatrix.identity
+        }
         let matrix = SvgMatrix.scale(ratio, ratio)
+            .multiply(stateMatrix)
             .multiply(rootMatrix)
             .multiply(
                 elementTransformMatrix(

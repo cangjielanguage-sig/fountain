@@ -92,6 +92,14 @@ public struct SvgTransform <: Equatable<SvgTransform> & ToString {
 
     public static let identity = SvgTransform(Array<SvgTransformOp>())
 
+    public static func create(operations: Array<SvgTransformOp>): SvgTransform {
+        SvgTransform(operations)
+    }
+
+    public static func create(): SvgTransform {
+        SvgTransform.identity
+    }
+
     public static func parse(text: String): SvgTransform {
         let trimmed = text.trimAscii()
         if (trimmed.size == 0) {

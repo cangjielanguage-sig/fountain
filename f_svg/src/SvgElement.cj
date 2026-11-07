@@ -55,6 +55,9 @@ public open class SvgElement <: ToString {
     /** 任何属性写入都会递增；类型化缓存据此整体失效。 */
     internal var attributesVersion: Int64 = 0
 
+    /** 根元素上的变更 hub；非根元素为 `None`。 */
+    internal var mutationHub: ?SvgMutationHub = None
+
     private var transformCache: ?SvgValueCache<SvgTransform> = None
 
     /** 外部命名空间到前缀的稳定映射；同一 URI 复用，不同 URI 不冲突。 */
@@ -147,6 +150,7 @@ public open class SvgElement <: ToString {
 
     /** 裸名写入；命中同名属性时原位替换，否则追加。 */
     public func setAttr(name: String, value: String): SvgElement {
+        let old = this.attr(name)
         let index = this.bareAttributeIndex(name)
         if (index >= 0) {
             this.attributes[index] = SvgAttribute(this.attributes[index].name, value)
@@ -154,6 +158,16 @@ public open class SvgElement <: ToString {
             this.attributes.add(SvgAttribute(QName(name), value))
         }
         this.attributesVersion++
+        svgNotifyMutation(
+            this,
+            SvgMutationEvent(
+                SvgMutationKind.Attribute,
+                this,
+                attributeName: Some(name),
+                oldValue: old,
+                newValue: Some(value)
+            )
+        )
         this
     }
 
@@ -200,8 +214,19 @@ public open class SvgElement <: ToString {
         if (index < 0) {
             return false
         }
+        let old = this.attributes[index].value
         this.attributes.remove(at: index)
         this.attributesVersion++
+        svgNotifyMutation(
+            this,
+            SvgMutationEvent(
+                SvgMutationKind.Attribute,
+                this,
+                attributeName: Some(name),
+                oldValue: Some(old),
+                newValue: Option<String>.None
+            )
+        )
         true
     }
 
@@ -211,7 +236,75 @@ public open class SvgElement <: ToString {
             case ElementNode(element) => element.parent = this
             case _ => ()
         }
+        svgNotifyMutation(
+            this,
+            SvgMutationEvent(SvgMutationKind.ChildInserted, this, child: Some(node))
+        )
         this
+    }
+
+    /** 追加；等价于 `insertBefore(node, None)`。 */
+    public func insertBefore(node: SvgNode): SvgElement {
+        this.insertBefore(node, Option<SvgElement>.None)
+    }
+
+    /** 插到 `reference` 之前；`reference` 为 `None` 时追加。 */
+    public func insertBefore(node: SvgNode, reference: ?SvgElement): SvgElement {
+        match (reference) {
+            case Some(target) =>
+                for (index in 0..this.children.size) {
+                    match (this.children[index]) {
+                        case ElementNode(child) =>
+                            if (child == target) {
+                                this.children.add(node, at: index)
+                                match (node) {
+                                    case ElementNode(element) => element.parent = this
+                                    case _ => ()
+                                }
+                                svgNotifyMutation(
+                                    this,
+                                    SvgMutationEvent(
+                                        SvgMutationKind.ChildInserted,
+                                        this,
+                                        child: Some(node)
+                                    )
+                                )
+                                return this
+                            }
+                        case _ => ()
+                    }
+                }
+                throw invalidValue("insertBefore 的 reference 不是直接子元素")
+            case None => this.appendChild(node)
+        }
+    }
+
+    /** 移除直接子节点；不存在返回 `false`。 */
+    public func removeChild(node: SvgNode): Bool {
+        for (index in 0..this.children.size) {
+            let matches = match ((this.children[index], node)) {
+                case (ElementNode(left), ElementNode(right)) => left == right
+                case (TextNode(left), TextNode(right)) => left == right
+                case (CDataNode(left), CDataNode(right)) => left == right
+                case (CommentNode(left), CommentNode(right)) => left == right
+                case (PiNode(leftTarget, leftData), PiNode(rightTarget, rightData)) =>
+                    leftTarget == rightTarget && leftData == rightData
+                case _ => false
+            }
+            if (matches) {
+                this.children.remove(at: index)
+                match (node) {
+                    case ElementNode(element) => element.parent = Option<SvgElement>.None
+                    case _ => ()
+                }
+                svgNotifyMutation(
+                    this,
+                    SvgMutationEvent(SvgMutationKind.ChildRemoved, this, child: Some(node))
+                )
+                return true
+            }
+        }
+        false
     }
 
     public func appendElement(element: SvgElement): SvgElement {
