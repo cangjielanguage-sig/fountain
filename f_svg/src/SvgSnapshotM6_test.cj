@@ -41,6 +41,23 @@ internal func m6RenderScene(name: String): SvgBitmap {
     if (name == "m6-animation-control") {
         return SvgRenderer().render(SvgTimeline(document).sample(2.0))
     }
+    if (name == "m6-hit-queries") {
+        let styles = SvgStyleResolver().compute(document.root)
+        let viewport = SvgViewport(64.0, 64.0)
+        let points = [SvgPoint(18.0, 18.0), SvgPoint(42.0, 18.0), SvgPoint(46.0, 44.0)]
+        let ids = ArrayList<String>()
+        for (point in points) {
+            for (element in SvgHitTest().elementsAt(document.root, point, viewport, styles)) {
+                match (element.attr("id")) {
+                    case Some(id) => if (!ids.contains(id)) {
+                        ids.add(id)
+                    }
+                    case None => ()
+                }
+            }
+        }
+        return SvgRenderer(options: SvgRenderOptions(hoveredIds: ids.toArray())).render(document)
+    }
     SvgRenderer().render(document)
 }
 

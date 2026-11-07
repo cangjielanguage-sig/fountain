@@ -250,6 +250,17 @@ public class SvgHitTestM6_test {
         @Assert(warned)
     }
 
+    /** m6-hit-queries 快照由真实命中查询驱动 `:hover`。 */
+    @TestCase
+    public func snapshotDrivenByHitQuery(): Unit {
+        let document = m5LoadDocument("m6-hit-queries")
+        let plain = SvgRenderer().render(document)
+        let queried = m6RenderScene("m6-hit-queries")
+        @Assert(plain.pixels != queried.pixels)
+        @Assert(queried.pixel(18, 18).toString() == "#ffcc00")
+        @Assert(queried.pixel(42, 18).toString() == "#0066cc")
+    }
+
     /** 设备坐标：DPR 与根 viewBox 都参与换算。 */
     @TestCase
     public func deviceCoordinates(): Unit {

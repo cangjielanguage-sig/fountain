@@ -4,6 +4,8 @@
         stroke-linejoin="miter-clip" stroke-miterlimit="1.2"/>
   <path d="M36 50 L48 18 L60 50" fill="none" stroke="#0066cc" stroke-width="8"
         stroke-linejoin="arcs"/>
-  <rect x="4" y="4" width="16" height="8" fill="#339933"
-        vector-effect="non-scaling-size"/>
+  <g transform="translate(2,2) scale(2)">
+    <rect x="4" y="4" width="16" height="8" fill="#339933"
+          vector-effect="non-scaling-size"/>
+  </g>
 </svg>
