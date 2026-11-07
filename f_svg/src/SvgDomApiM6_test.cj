@@ -124,14 +124,34 @@ public class SvgDomApiM6_test {
         let child = SvgRect()
         root.appendElement(child)
         @Assert(recorder.events.size == 2)
-        @Assert(recorder.events[1].kind == SvgMutationKind.ChildInserted)
+        @Assert(recorder.events[1].kind == SvgMutationKind.ChildList)
         @Assert(root.removeChild(SvgNode.ElementNode(child)))
         @Assert(recorder.events.size == 3)
-        @Assert(recorder.events[2].kind == SvgMutationKind.ChildRemoved)
+        @Assert(recorder.events[2].kind == SvgMutationKind.ChildList)
 
         document.removeMutationListener(recorder)
         root.setAttr("data-y", "2")
         @Assert(recorder.events.size == 3)
+    }
+
+    /** 移除指定监听器：A、B 注册后移除 B，A 仍收到事件；移除未注册对象无副作用。 */
+    @TestCase
+    public func removeListenerByReference(): Unit {
+        let root = SvgRoot()
+        let document = SvgDocument(root)
+        let first = M6MutationRecorder()
+        let second = M6MutationRecorder()
+        document.addMutationListener(first)
+        document.addMutationListener(second)
+        document.removeMutationListener(second)
+        root.setAttr("data-x", "1")
+        @Assert(first.events.size == 1)
+        @Assert(second.events.size == 0)
+        let unregistered = M6MutationRecorder()
+        document.removeMutationListener(unregistered)
+        root.setAttr("data-y", "2")
+        @Assert(first.events.size == 2)
+        @Assert(second.events.size == 0)
     }
 
     /** 监听异常被隔离，不影响文档与后续监听。 */

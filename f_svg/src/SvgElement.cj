@@ -238,7 +238,7 @@ public open class SvgElement <: ToString {
         }
         svgNotifyMutation(
             this,
-            SvgMutationEvent(SvgMutationKind.ChildInserted, this, child: Some(node))
+            SvgMutationEvent(SvgMutationKind.ChildList, this, child: Some(node))
         )
         this
     }
@@ -264,7 +264,7 @@ public open class SvgElement <: ToString {
                                 svgNotifyMutation(
                                     this,
                                     SvgMutationEvent(
-                                        SvgMutationKind.ChildInserted,
+                                        SvgMutationKind.ChildList,
                                         this,
                                         child: Some(node)
                                     )
@@ -299,7 +299,7 @@ public open class SvgElement <: ToString {
                 }
                 svgNotifyMutation(
                     this,
-                    SvgMutationEvent(SvgMutationKind.ChildRemoved, this, child: Some(node))
+                    SvgMutationEvent(SvgMutationKind.ChildList, this, child: Some(node))
                 )
                 return true
             }

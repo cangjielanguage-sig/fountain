@@ -17,17 +17,15 @@ package fountain::f_svg
 
 import std.collection.*
 
-/** 变更类型。 */
+/** 变更类型：属性或子节点列表。 */
 public enum SvgMutationKind <: Equatable<SvgMutationKind> & ToString {
     | Attribute
-    | ChildInserted
-    | ChildRemoved
+    | ChildList
 
     public operator func ==(that: SvgMutationKind): Bool {
         match ((this, that)) {
             case (Attribute, Attribute) => true
-            case (ChildInserted, ChildInserted) => true
-            case (ChildRemoved, ChildRemoved) => true
+            case (ChildList, ChildList) => true
             case _ => false
         }
     }
@@ -35,8 +33,7 @@ public enum SvgMutationKind <: Equatable<SvgMutationKind> & ToString {
     public func toString(): String {
         match (this) {
             case Attribute => "Attribute"
-            case ChildInserted => "ChildInserted"
-            case ChildRemoved => "ChildRemoved"
+            case ChildList => "ChildList"
         }
     }
 }
@@ -68,8 +65,8 @@ public class SvgMutationEvent {
 }
 
 /** 同步变更监听器。异常被 hub 捕获并写入文档 warning。 */
-public interface SvgMutationListener {
-    func onMutation(event: SvgMutationEvent): Unit
+public open abstract class SvgMutationListener {
+    public func onMutation(event: SvgMutationEvent): Unit
 }
 
 internal let SVG_MUTATION_LISTENER_LIMIT: Int64 = 32
@@ -87,10 +84,11 @@ internal class SvgMutationHub {
     }
 
     func remove(listener: SvgMutationListener): Unit {
-        // 接口无引用相等；显式保留参数语义，移除最早注册的监听器。
-        let _ = listener
-        if (this.listeners.size > 0) {
-            this.listeners.remove(at: 0)
+        for (index in 0..this.listeners.size) {
+            if (refEq(this.listeners[index], listener)) {
+                this.listeners.remove(at: index)
+                return
+            }
         }
     }
 
