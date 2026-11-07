@@ -13,7 +13,7 @@
 | 构建 | `cjpm build success`；`f_svg` 自身 **0 warning** | 重编译日志中 0 条 warning 指向 `f_svg/src`（依赖模块既有 warning 不计） |
 | 既有快照 | M1–M5 **25/25** 逐字节一致 | 17 张 M1–M4 与 `doc/perf-baseline.md` 的 SHA-256 一致；8 张 M5 快照工作区无改动；`SvgSnapshotM6_test` 逐字节比对通过 |
 | M6 快照 | 9/9 新增且重复渲染逐字节一致 | `SvgSnapshotM6Scenes_test.scenesExact/scenesAreDeterministic` |
-| delta 规范规模 | **54 Requirement / 255 Scenario** | 10 个 `specs/*/spec.md` 标题计数 |
+| delta 规范规模 | **55 Requirement / 256 Scenario** | 10 个 `specs/*/spec.md` 标题计数 |
 | CRITICAL | **0** | C1、C2 修复；C3、C4 落地并有直接用例 |
 
 ## 1. Requirement / Scenario 覆盖矩阵
@@ -242,12 +242,12 @@
 | 5 | 渲染期无外部访问 | 动画不执行脚本 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
 | 6 | 渲染期无外部访问 | 外部文档不递归加载 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
 | 7 | 渲染期无外部访问 | foreignObject 不经库渲染 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 8 | M6 上限与降级 | 外部文档深度 | `SvgExternalDocumentM6_test.depthLimit/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 9 | M6 上限与降级 | 外部文档字节 | `SvgExternalDocumentM6_test.depthLimit/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 10 | M6 上限与降级 | 特性条目上限 | `SvgExternalDocumentM6_test.depthLimit/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 11 | M6 上限与降级 | 监听器上限 | `SvgExternalDocumentM6_test.depthLimit/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 12 | M6 上限与降级 | discard 嵌套 | `SvgExternalDocumentM6_test.depthLimit/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 13 | M6 上限与降级 | 命中测试规模 | `SvgExternalDocumentM6_test.depthLimit/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 8 | M6 上限与降级 | 外部文档深度 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 9 | M6 上限与降级 | 外部文档字节 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 10 | M6 上限与降级 | 特性条目上限 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 11 | M6 上限与降级 | 监听器上限 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 12 | M6 上限与降级 | discard 嵌套 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 13 | M6 上限与降级 | 命中测试规模 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
 
 ### svg-text
 
@@ -325,7 +325,7 @@
 | 17 | M6 矢量效果与连接枚举扩展 | 新连接值 | `SvgSvg2M6_test.vectorEffectValues/lineJoinValues` | ✅ |
 | 18 | M6 矢量效果与连接枚举扩展 | 既有连接值 | `SvgSvg2M6_test.vectorEffectValues/lineJoinValues` | ✅ |
 
-合计：**54 Requirement / 255 Scenario**，全部有可执行落点；无 `❌`。Requirement 级落点说明见上表，场景级断言由对应测试类/用例直接或间接覆盖。
+合计：**55 Requirement / 256 Scenario**（命中需求已拆为「命中测试」与「命中语义」），全部有可执行落点；无 `❌`。Requirement 级落点说明见上表，场景级断言由对应测试类/用例直接或间接覆盖。
 
 ## 2. CRITICAL 修复
 
@@ -342,7 +342,7 @@
 |---|---|---|
 | W1 直接用例 | **已落地** | `SvgFontDetailsM6_test` 新增 5.3 stretch 合成、5.4 small-caps、5.5 OS/2 sxHeight、5.16 组合/装饰/textLength 用例；`SvgGsubContextM6_test.featureGroupingRespectsStyle` 覆盖 5.8 特性分组。 |
 | W2 9 张 m6 快照 | **已落地** | `SvgSnapshotM6_test.cj` + `testdata/render/m6-*` 9 组 `.svg` / `.rgba`；`scenesExact` 与 `scenesAreDeterministic` 通过。 |
-| W3 覆盖矩阵 | **本文件** | 上表 54 Requirement / 255 Scenario 逐条映射。 |
+| W3 覆盖矩阵 | **本文件** | 上表 55 Requirement / 256 Scenario 逐条映射。 |
 | W4 README_en | **已落地** | `README_en.md` 新增 7 个 M6 章节，与中文 README 的边界、上限、API 说明一致。 |
 | W5 tasks 勾选 | **已落地** | `tasks.md` 按实际状态逐项勾选；1.1 分支改为 `feature/f_svg`，1.2 基线 997 已记录；9.5 因环境无 `openspec` CLI 保持未勾选，9.8 等待用户确认。 |
 
@@ -359,7 +359,8 @@
 - 基线：第一轮 `1137` 条用例；本轮结束 `1178` 条（新增 41 条）。
 - 代码规模：`f_svg/src` 288 个源文件，其中 163 个 `*_test.cj`。
 - 门禁：`cjpm test` **1178 / 1178 PASSED**；`cjpm build success`，`f_svg` 自身 **0 warning**（clean build 的 22 条 warning 全部来自 `f_base` / `f_xml`）。
-- 约束：未修改规格文件；未运行 `git worktree`；未改写 `.git`；M1–M5 公开 API 语义未改，25 张快照逐字节一致。
+- 约束：未运行 `git worktree`；未改写 `.git`；M1–M5 公开 API 语义未改，25 张快照逐字节一致。
+- 规格同步（主流程）：三处冲突已修正（vector-effect 固定顺序、visible 语义、外部文档不递归），`svg-security` 的「深度 4 抛 Limit」条目与场景已删除；delta 规模由 54/255 调整为 **55 Requirement / 256 Scenario**。
 
 ## 1. CRITICAL 修复结果
 
@@ -525,7 +526,7 @@
 | M6 值类型工厂方法 | ✅ | `SvgDomApiM6_test.factories` |
 | M6 矢量效果与连接枚举扩展 | ✅ | `SvgSvg2M6_test.vectorEffectValues/lineJoinValues` |
 
-**合计 54/54 Requirement ✅；255 条 Scenario 均有对应可执行断言。**
+**合计 55/55 Requirement ✅；256 条 Scenario 均有对应可执行断言。**
 
 ## 6. 结论
 

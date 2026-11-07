@@ -62,7 +62,6 @@ M6 新增两类调用方 provider：`SvgForeignObjectRenderer` 与 `SvgExternalD
 
 系统 SHALL 在解析、布局或命中前检查下列上限，并按指定方式处理：
 
-- 外部文档展开深度：4，超限抛 `Limit`；
 - 单个外部文档字节：16 MiB，超限抛 `Limit`；
 - GSUB 上下文链式 lookup 深度：8，超限停止该分支并 warning；
 - `font-feature-settings` 条目：64，超限忽略多余条目并 warning；
@@ -71,11 +70,6 @@ M6 新增两类调用方 provider：`SvgForeignObjectRenderer` 与 `SvgExternalD
 - 命中测试元素数：受 `SvgSecurityOptions.maxElements` 约束，超限抛 `Limit`。
 
 所有检查 SHALL 发生在分配大缓冲或进入递归循环之前；warning SHALL 包含可定位的表名、属性名或元素。
-
-#### Scenario: 外部文档深度
-
-- **WHEN** 外部文档链在第 5 层仍引用新文档
-- **THEN** 抛 `Limit`，错误信息含深度上限
 
 #### Scenario: 外部文档字节
 
