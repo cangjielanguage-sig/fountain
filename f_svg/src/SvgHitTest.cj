@@ -431,9 +431,6 @@ private func svgHitElementMatches(
         case _ => ()
     }
 
-    if (events == SvgPointerEvents.All) {
-        return svgHitBBoxContains(element, style, point, context)
-    }
     if (events == SvgPointerEvents.BoundingBox) {
         return !hidden && svgHitBBoxContains(element, style, point, context)
     }
@@ -481,7 +478,7 @@ private func svgHitRequiresVisible(events: SvgPointerEvents): Bool {
 
 private func svgHitWantsFill(events: SvgPointerEvents, painted: Bool): Bool {
     match (events) {
-        case Fill | VisibleFill => true
+        case Fill | VisibleFill | All => true
         case Painted | VisiblePainted | Auto => painted
         case Visible => true
         case Stroke | VisibleStroke => false
@@ -491,7 +488,7 @@ private func svgHitWantsFill(events: SvgPointerEvents, painted: Bool): Bool {
 
 private func svgHitWantsStroke(events: SvgPointerEvents, painted: Bool): Bool {
     match (events) {
-        case Stroke | VisibleStroke => true
+        case Stroke | VisibleStroke | All => true
         case Painted | VisiblePainted | Auto => painted
         case Visible => true
         case Fill | VisibleFill => false

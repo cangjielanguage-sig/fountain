@@ -100,6 +100,23 @@ public class SvgHitTestM6_test {
         @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 0)
     }
 
+    /** `pointer-events: all` 使用路径 / 描边几何，而不是包围盒。 */
+    @TestCase
+    public func allUsesGeometry(): Unit {
+        let triangle = SvgPolygon()
+        triangle.setAttr("points", "0,0 100,0 0,100")
+        triangle.setAttr("fill", "none")
+        triangle.setAttr("stroke", "none")
+        triangle.setAttr("pointer-events", "all")
+        let root = rootOf([triangle])
+        // 包围盒内、三角形外。
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(80.0, 80.0)).size == 0)
+        // 三角形内，且不要求 fill / stroke 非 none。
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(20.0, 20.0)).size == 1)
+        triangle.setAttr("visibility", "hidden")
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(20.0, 20.0)).size == 1)
+    }
+
     /** bounding-box 命中包围盒内但在图形外的点。 */
     @TestCase
     public func boundingBox(): Unit {
@@ -145,7 +162,7 @@ public class SvgHitTestM6_test {
         @Assert(SvgHitTest().hitTest(root, SvgPoint(5.0, 5.0)).size == 0)
     }
 
-    /** text 按字形包围盒 / 轮廓命中。 */
+    /** text 按字形轮廓命中，包围盒内的空白区域不命中。 */
     @TestCase
     public func textHit(): Unit {
         let text = SvgText()
@@ -153,9 +170,12 @@ public class SvgHitTestM6_test {
         text.setAttr("y", "30")
         text.setAttr("font-size", "20")
         text.setAttr("pointer-events", "all")
-        text.appendText("A")
+        text.appendText("T")
         let root = rootOf([text])
-        @Assert(SvgHitTest().hitTest(root, SvgPoint(12.0, 22.0)).size == 1)
+        // 字形竖线（基线 30，字形网格 4×6，字号 20）。
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(15.7, 20.0)).size == 1)
+        // 包围盒内但远离字形笔画。
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(12.0, 18.0)).size == 0)
         @Assert(SvgHitTest().hitTest(root, SvgPoint(500.0, 500.0)).size == 0)
     }
 
