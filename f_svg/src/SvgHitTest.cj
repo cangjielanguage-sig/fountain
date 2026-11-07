@@ -109,6 +109,7 @@ private class SvgHitContext {
     let fonts: ?SvgFontRegistry
     let origin: SvgPoint
     let maxElements: Int64
+    let warnings: ArrayList<String>
     var visited: Int64 = 0
 
     init(
@@ -118,7 +119,8 @@ private class SvgHitContext {
         viewportHeight: Float64,
         fonts: ?SvgFontRegistry,
         origin: SvgPoint,
-        maxElements: Int64
+        maxElements: Int64,
+        warnings: ArrayList<String>
     ) {
         this.styles = styles
         this.root = root
@@ -127,6 +129,7 @@ private class SvgHitContext {
         this.fonts = fonts
         this.origin = origin
         this.maxElements = maxElements
+        this.warnings = warnings
     }
 }
 
@@ -186,7 +189,8 @@ public class SvgHitTest {
             logicalWidth,
             logicalHeight,
             options.fonts,
-            maxElements
+            maxElements,
+            this.warnings
         ).toArray()
     }
 
@@ -226,7 +230,8 @@ public class SvgHitTest {
             viewport.width,
             viewport.height,
             fonts,
-            maxElements
+            maxElements,
+            this.warnings
         )
     }
 
@@ -264,7 +269,8 @@ private func svgHitCollect(
     viewportWidth: Float64,
     viewportHeight: Float64,
     fonts: ?SvgFontRegistry,
-    maxElements: Int64
+    maxElements: Int64,
+    warnings: ArrayList<String>
 ): ArrayList<SvgElement> {
     let context = SvgHitContext(
         styles,
@@ -273,7 +279,8 @@ private func svgHitCollect(
         viewportHeight,
         fonts,
         origin,
-        maxElements
+        maxElements,
+        warnings
     )
     let result = ArrayList<SvgElement>()
     match (styles.get(root)) {
@@ -512,7 +519,9 @@ private func svgHitText(
     let path = renderer.outline(text, style: style, root: Some(context.root), styles: Some(context.styles))
     let outline = match (path) {
         case Some(value) => value
-        case None => return svgHitBBoxContains(element, style, point, context)
+        case None =>
+            context.warnings.add("text 轮廓缺失，该元素不参与命中")
+            return false
     }
     let contours = flattenPathData(outline, SvgMatrix.identity, SVG_HIT_TOLERANCE)
     if (wantsFill && svgPointInContours(contours, point, style.fillRule())) {
@@ -527,7 +536,7 @@ private func svgHitText(
         )) {
         return true
     }
-    svgHitBBoxContains(element, style, point, context)
+    false
 }
 
 private func svgHitBBoxContains(

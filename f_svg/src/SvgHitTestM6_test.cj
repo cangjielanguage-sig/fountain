@@ -229,6 +229,27 @@ public class SvgHitTestM6_test {
         @Assert(SvgHitTest().hitTest(document, SvgPoint(5.0, 5.0), maxElements: 10).size == 3)
     }
 
+    /** 文本轮廓缺失时不回退包围盒，并产生 warning。 */
+    @TestCase
+    public func textWithoutOutlineWarns(): Unit {
+        let text = SvgText()
+        text.setAttr("x", "0")
+        text.setAttr("y", "30")
+        text.setAttr("font-size", "20")
+        text.setAttr("pointer-events", "fill")
+        text.appendText(" ")
+        let root = rootOf([text])
+        let hit = SvgHitTest()
+        @Assert(hit.hitTest(root, SvgPoint(1.0, 25.0)).size == 0)
+        var warned = false
+        for (warning in hit.warnings) {
+            if (warning.contains("轮廓")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
     /** 设备坐标：DPR 与根 viewBox 都参与换算。 */
     @TestCase
     public func deviceCoordinates(): Unit {
