@@ -116,7 +116,7 @@
 - [x] 9.2 用 `SvgSnapshotM6_test` 比对 25 张既有快照，确认逐字节一致
 - [x] 9.3 新增并复核 `m6-interaction`、`m6-foreign-object`、`m6-initial-view`、`m6-rendering-hints`、`m6-color-interpolation`、`m6-font-details`、`m6-animation-control`、`m6-hit-queries`、`m6-svg2` 快照，确认同输入重复渲染逐字节一致
 - [x] 9.4 运行 `cjpm build`，确认 `f_svg` 自身 0 warning
-- [ ] 9.5 运行 `openspec validate add-f-svg-m6 --strict`，确认无 warning / error（当前环境无 `openspec` CLI，未复跑）
+- [x] 9.5 运行 `openspec validate add-f-svg-m6 --strict`（通过，无 warning / error）
 - [x] 9.6 更新 `CHANGELOG` 的 M6 条目，列明新增属性、API、上限与兼容性边界；对照 `proposal.md` 确认无遗漏项
 - [x] 9.7 对照 `specs/` 逐条核对每个 Requirement 至少有一个可执行 Scenario，记录覆盖矩阵到 `verification.md`
 - [ ] 9.8 合并回上游并删除分支——属共享分支操作，等待用户确认
