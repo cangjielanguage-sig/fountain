@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.math.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -45,6 +46,64 @@ class M6TestFont <: SvgFont {
     public func glyphBounds(codePoint: Int64, fontSize: Float64): ?SvgBounds {
         Option<SvgBounds>.None
     }
+}
+
+/** 带固定轮廓的测试字体：小写 `a`/`b`/`c` 有大写字形，`c` 故意缺少 `C`。 */
+class M6CapsFont <: SvgFont {
+    private static let GLYPH = "M0 0 L10 0 L10 10 L0 10 Z"
+
+    private func supported(codePoint: Int64): Bool {
+        codePoint == 65 || codePoint == 66 || codePoint == 97 || codePoint == 98 || codePoint == 99
+    }
+
+    public func glyphPath(codePoint: Int64, fontSize: Float64): ?SvgPathData {
+        if (this.supported(codePoint)) {
+            return Some(SvgPathData.parse(M6CapsFont.GLYPH))
+        }
+        Option<SvgPathData>.None
+    }
+
+    public func advance(codePoint: Int64, fontSize: Float64): Float64 {
+        if (this.supported(codePoint)) {
+            5.0
+        } else {
+            0.0
+        }
+    }
+
+    public func ascent(fontSize: Float64): Float64 {
+        8.0
+    }
+
+    public func descent(fontSize: Float64): Float64 {
+        2.0
+    }
+
+    public func glyphBounds(codePoint: Int64, fontSize: Float64): ?SvgBounds {
+        Option<SvgBounds>.None
+    }
+}
+
+/** 88 字节的最小 OS/2 表，仅填 `sxHeight`（偏移 86）。 */
+private func m6Os2Table(sxHeight: Int64): Array<Byte> {
+    let writer = M4ByteWriter()
+    for (_ in 0..86) {
+        writer.u8(0)
+    }
+    writer.i16(sxHeight)
+    writer.toArray()
+}
+
+/** cmap format 12：`(startCode, endCode, startGlyph)` 三元组。 */
+private func m6Cmap12(groups: Array<(Int64, Int64, Int64)>): Array<Byte> {
+    let writer = M4ByteWriter()
+    writer.u16(0).u16(1).u16(3).u16(10).u32(12)
+    writer.u16(12).u16(0).u32(16 + 12 * Int64(groups.size)).u32(0)
+    writer.u32(Int64(groups.size))
+    for ((start, end, glyph) in groups) {
+        writer.u32(start).u32(end).u32(glyph)
+    }
+    writer.toArray()
 }
 
 private func m6TagName(index: Int64): String {
@@ -316,6 +375,194 @@ public class SvgFontDetailsM6_test {
             pathLengthRatio: 2.0
         )
         @Assert(percent[0].originX == 10.0)
+    }
+
+    private func textLayout(
+        svg: String,
+        registry: SvgFontRegistry
+    ): (SvgTextRenderer, SvgTextLayout) {
+        let document = SvgParser.parse(svg)
+        let tree = SvgStyleResolver().compute(document.root)
+        let element = document.elementsByTag("text")[0]
+        let text = match (element) {
+            case value: SvgTextElement => value
+            case _ => throw invalidValue("不是文本元素")
+        }
+        let style = tree.get(element) ?? throw invalidValue("缺少文本样式")
+        let renderer = SvgTextRenderer(registry: registry)
+        (renderer, renderer.layout(text, style: style, root: Some(document.root), styles: tree))
+    }
+
+    private func glyphWidth(layout: SvgTextLayout): Float64 {
+        let path = match (layout.glyphs[0].path) {
+            case Some(value) => value
+            case None => throw invalidValue("缺少字形轮廓")
+        }
+        match (pathDataBounds(path)) {
+            case Some(value) => value.width
+            case None => 0.0
+        }
+    }
+
+    /** 5.3：仅 100% 字体 + `font-stretch: 80%` 时字形与 advance 水平缩放 0.8。 */
+    @TestCase
+    public func stretchSynthesisScalesGlyphAndAdvance(): Unit {
+        let font = SvgTrueTypeFont.parse(m4BuildTtf())
+        let registry = SvgFontRegistry()
+        registry.register("M4", font)
+        let (_, normal) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"M4\" font-size=\"10\">A</text></svg>",
+            registry
+        )
+        let (_, stretched) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"M4\" font-size=\"10\" " +
+            "font-stretch=\"80%\">A</text></svg>",
+            registry
+        )
+        @Assert(abs(normal.advance - 6.0) < 1e-9)
+        @Assert(abs(stretched.advance - 4.8) < 1e-9)
+        @Assert(abs(this.glyphWidth(normal) - 1.0) < 1e-9)
+        @Assert(abs(this.glyphWidth(stretched) - 0.8) < 1e-9)
+    }
+
+    /** 5.4：small-caps 使用大写字形并等比缩放 0.8，advance 同步。 */
+    @TestCase
+    public func smallCapsUsesUppercaseGlyph(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Caps", M6CapsFont())
+        let (_, normal) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Caps\" font-size=\"10\">a</text></svg>",
+            registry
+        )
+        let (_, caps) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Caps\" font-size=\"10\" " +
+            "font-variant=\"small-caps\">a</text></svg>",
+            registry
+        )
+        @Assert(abs(normal.advance - 5.0) < 1e-9)
+        @Assert(abs(caps.advance - 4.0) < 1e-9)
+        @Assert(abs(this.glyphWidth(normal) - 10.0) < 1e-9)
+        @Assert(abs(this.glyphWidth(caps) - 8.0) < 1e-9)
+    }
+
+    /** 5.4：缺少大写字形时保留原字形并 warning。 */
+    @TestCase
+    public func smallCapsWarnsWhenUppercaseMissing(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Caps", M6CapsFont())
+        let (renderer, layout) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Caps\" font-size=\"10\" " +
+            "font-variant=\"small-caps\">c</text></svg>",
+            registry
+        )
+        @Assert(abs(layout.advance - 5.0) < 1e-9)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("small-caps")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
+    /** 5.5：OS/2 sxHeight 修正字号；缺表忽略并 warning，`none` 不改变输出。 */
+    @TestCase
+    public func sizeAdjustUsesXHeightRatio(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register(
+            "OS2",
+            SvgTrueTypeFont.parse(m5BuildLayoutTtf([500, 600, 700, 800], os2: m6Os2Table(500)))
+        )
+        let (_, normal) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"OS2\" font-size=\"10\">A</text></svg>",
+            registry
+        )
+        @Assert(abs(normal.advance - 6.0) < 1e-9)
+        let (_, adjusted) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"OS2\" font-size=\"10\" " +
+            "font-size-adjust=\"0.75\">A</text></svg>",
+            registry
+        )
+        @Assert(abs(adjusted.advance - 9.0) < 1e-9)
+        let (_, none) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"OS2\" font-size=\"10\" " +
+            "font-size-adjust=\"none\">A</text></svg>",
+            registry
+        )
+        @Assert(abs(none.advance - 6.0) < 1e-9)
+    }
+
+    /** 5.5：缺少 OS/2 时忽略 font-size-adjust 并 warning。 */
+    @TestCase
+    public func sizeAdjustWarnsWithoutOs2(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("NoOS2", SvgTrueTypeFont.parse(m5BuildLayoutTtf([500, 600, 700, 800])))
+        let (renderer, layout) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"NoOS2\" font-size=\"10\" " +
+            "font-size-adjust=\"0.75\">A</text></svg>",
+            registry
+        )
+        @Assert(abs(layout.advance - 6.0) < 1e-9)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("font-size-adjust")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
+    /** 5.16：stretch + small-caps + size-adjust 叠加，textLength 在合成 advance 上计算。 */
+    @TestCase
+    public func combinedSynthesisAndTextLength(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register(
+            "Combo",
+            SvgTrueTypeFont.parse(
+                m5BuildLayoutTtf(
+                    [500, 600, 700, 800],
+                    cmap: m6Cmap12([(65, 66, 1), (97, 98, 1)]),
+                    os2: m6Os2Table(500)
+                )
+            )
+        )
+        let (_, combined) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Combo\" font-size=\"10\" " +
+            "font-stretch=\"80%\" font-variant=\"small-caps\" font-size-adjust=\"0.75\">a</text></svg>",
+            registry
+        )
+        // 6.0 × 0.8（stretch）× 0.8（small-caps）× 1.5（size-adjust）。
+        @Assert(abs(combined.advance - 5.76) < 1e-9)
+        let (_, withLength) = textLayout(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Combo\" font-size=\"10\" " +
+            "font-stretch=\"80%\" font-variant=\"small-caps\" font-size-adjust=\"0.75\" " +
+            "textLength=\"20\" lengthAdjust=\"spacingAndGlyphs\">a</text></svg>",
+            registry
+        )
+        @Assert(abs(withLength.advance - 20.0) < 1e-9)
+        @Assert(abs(withLength.glyphs[0].advance - 20.0) < 1e-9)
+    }
+
+    /** 5.16：装饰线厚度按最终（tspan 覆盖后）字号计算。 */
+    @TestCase
+    public func decorationThicknessFollowsFinalFontSize(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("Caps", M6CapsFont())
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text id=\"t\" font-family=\"Caps\" font-size=\"14\" " +
+            "text-decoration=\"underline\"><tspan font-size=\"28\">a</tspan></text></svg>"
+        )
+        let tree = SvgStyleResolver().compute(document.root)
+        let element = document.elementsByTag("text")[0]
+        let text = match (element) {
+            case value: SvgTextElement => value
+            case _ => throw invalidValue("不是文本元素")
+        }
+        let style = tree.get(element) ?? throw invalidValue("缺少文本样式")
+        let renderer = SvgTextRenderer(registry: registry)
+        let runs = renderer.decorationRuns(text, style: style, root: Some(document.root), styles: tree)
+        @Assert(runs.size == 1)
+        @Assert(abs(runs[0].bounds.height - 2.0) < 1e-9)
     }
 }
 

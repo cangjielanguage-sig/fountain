@@ -1203,7 +1203,7 @@ private func scalePathX(path: SvgPathData, factor: Float64): SvgPathData {
     let commands = ArrayList<SvgPathCommand>()
     for (command in path.commands) {
         match (command.kind) {
-            case MoveTo | LineTo =>
+            case MoveTo | LineTo | SmoothQuadraticBezierTo =>
                 commands.add(
                     SvgPathCommand(
                         command.kind,
@@ -1211,7 +1211,35 @@ private func scalePathX(path: SvgPathData, factor: Float64): SvgPathData {
                         [command.values[0] * factor, command.values[1]]
                     )
                 )
-            case _ => commands.add(command)
+            case HorizontalLineTo =>
+                commands.add(
+                    SvgPathCommand(command.kind, command.relative, [command.values[0] * factor])
+                )
+            case VerticalLineTo | ClosePath => commands.add(command)
+            case CurveTo =>
+                commands.add(
+                    SvgPathCommand(
+                        command.kind,
+                        command.relative,
+                        [
+                            command.values[0] * factor, command.values[1],
+                            command.values[2] * factor, command.values[3],
+                            command.values[4] * factor, command.values[5]
+                        ]
+                    )
+                )
+            case SmoothCurveTo | QuadraticBezierTo =>
+                commands.add(
+                    SvgPathCommand(
+                        command.kind,
+                        command.relative,
+                        [
+                            command.values[0] * factor, command.values[1],
+                            command.values[2] * factor, command.values[3]
+                        ]
+                    )
+                )
+            case ArcTo => commands.add(command)
         }
     }
     SvgPathData(commands.toArray())

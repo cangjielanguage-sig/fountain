@@ -100,7 +100,9 @@ internal func m5BuildLayoutTtf(
     advances: Array<Int64>,
     kern!: ?Array<Byte> = None,
     gpos!: ?Array<Byte> = None,
-    gsub!: ?Array<Byte> = None
+    gsub!: ?Array<Byte> = None,
+    cmap!: ?Array<Byte> = None,
+    os2!: ?Array<Byte> = None
 ): Array<Byte> {
     let tables = HashMap<String, Array<Byte>>()
     let order = ArrayList<String>()
@@ -112,9 +114,12 @@ internal func m5BuildLayoutTtf(
     tables["maxp"] = m5TtfMaxp(advances.size)
     tables["hmtx"] = m5TtfHmtx(advances)
     tables["loca"] = m5TtfLoca(advances.size)
-    tables["cmap"] = m5TtfCmap()
+    tables["cmap"] = match (cmap) {
+        case Some(value) => value
+        case None => m5TtfCmap()
+    }
     tables["glyf"] = Array<Byte>()
-    let optional = [("kern", kern), ("GPOS", gpos), ("GSUB", gsub)]
+    let optional = [("kern", kern), ("GPOS", gpos), ("GSUB", gsub), ("OS/2", os2)]
     for ((tag, data) in optional) {
         match (data) {
             case Some(bytes) =>

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.math.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -387,6 +388,33 @@ public class SvgGsubContextM6_test {
         @Assert(off.glyphs[0] == 1)
         let on = table.shapeGlyphs([1, 2], m6AllFeatures(), warnings)
         @Assert(on.glyphs[0] == 2)
+    }
+
+    /** 5.8：样式层关闭 `liga` 后，特性分组整组跳过上下文替换。 */
+    @TestCase
+    public func featureGroupingRespectsStyle(): Unit {
+        let gsub = m6GsubTable(
+            "liga",
+            [
+                (1, [m6GsubSingleSubtable(3, 2)]),
+                (5, [m6GsubContextSubtable([[3], [4]], [(0, 0)])])
+            ],
+            featureIndices: [1]
+        )
+        let font = SvgTrueTypeFont.parse(m5BuildLayoutTtf([500, 500, 500, 500, 500, 900], gsub: gsub))
+        let registry = SvgFontRegistry()
+        registry.register("Ctx", font)
+        let on = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Ctx\" font-size=\"10\">fi</text></svg>",
+            registry
+        )
+        @Assert(on.advance > 10.0)
+        let off = m5LayoutOf(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Ctx\" font-size=\"10\" " +
+            "font-variant-ligatures=\"none\">fi</text></svg>",
+            registry
+        )
+        @Assert(abs(off.advance - 10.0) < 1e-9)
     }
 
     /** 渲染接线：上下文替换改变字形 advance。 */
