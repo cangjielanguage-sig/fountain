@@ -78,17 +78,12 @@ public enum SvgLineJoin <: Equatable<SvgLineJoin> & ToString {
         }
     }
 
+    /** 与 `attrName()` 一致的规范字符串。 */
     public func toString(): String {
-        match (this) {
-            case Miter => "Miter"
-            case Round => "Round"
-            case Bevel => "Bevel"
-            case MiterClip => "MiterClip"
-            case Arcs => "Arcs"
-        }
+        this.attrName()
     }
 
-    internal func attrName(): String {
+    public func attrName(): String {
         match (this) {
             case Miter => "miter"
             case Round => "round"

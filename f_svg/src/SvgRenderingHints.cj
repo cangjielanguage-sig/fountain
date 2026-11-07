@@ -41,7 +41,7 @@ public enum SvgShapeRendering <: Equatable<SvgShapeRendering> & ToString {
         }
     }
 
-    internal static func fromName(name: String): ?SvgShapeRendering {
+    public static func fromName(name: String): ?SvgShapeRendering {
         match (name.trimAscii().toAsciiLower()) {
             case "auto" => Some(Auto)
             case "optimizespeed" => Some(OptimizeSpeed)
@@ -78,7 +78,7 @@ public enum SvgTextRendering <: Equatable<SvgTextRendering> & ToString {
         }
     }
 
-    internal static func fromName(name: String): ?SvgTextRendering {
+    public static func fromName(name: String): ?SvgTextRendering {
         match (name.trimAscii().toAsciiLower()) {
             case "auto" => Some(Auto)
             case "optimizespeed" => Some(OptimizeSpeed)
@@ -112,7 +112,7 @@ public enum SvgColorRendering <: Equatable<SvgColorRendering> & ToString {
         }
     }
 
-    internal static func fromName(name: String): ?SvgColorRendering {
+    public static func fromName(name: String): ?SvgColorRendering {
         match (name.trimAscii().toAsciiLower()) {
             case "auto" => Some(Auto)
             case "optimizespeed" => Some(OptimizeSpeed)
@@ -154,7 +154,7 @@ public enum SvgColorInterpolation <: Equatable<SvgColorInterpolation> & ToString
         }
     }
 
-    internal static func fromName(name: String): ?SvgColorInterpolation {
+    public static func fromName(name: String): ?SvgColorInterpolation {
         match (name.trimAscii().toAsciiLower()) {
             case "auto" => Some(Auto)
             case "srgb" => Some(Srgb)

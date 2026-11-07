@@ -83,8 +83,8 @@ public class SvgSvg2M6_test {
         @Assert(SvgLineJoin.fromName("miter-clip") == Some(SvgLineJoin.MiterClip))
         @Assert(SvgLineJoin.fromName("arcs") == Some(SvgLineJoin.Arcs))
         @Assert(SvgLineJoin.fromName("unknown").isNone())
-        @Assert(SvgLineJoin.MiterClip.toString() == "MiterClip")
-        @Assert(SvgLineJoin.Arcs.toString() == "Arcs")
+        @Assert(SvgLineJoin.MiterClip.toString() == "miter-clip")
+        @Assert(SvgLineJoin.Arcs.toString() == "arcs")
         @Assert(SvgLineJoin.MiterClip.attrName() == "miter-clip")
         @Assert(SvgLineJoin.Arcs.attrName() == "arcs")
 

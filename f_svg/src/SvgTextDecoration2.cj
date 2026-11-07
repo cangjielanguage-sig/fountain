@@ -151,43 +151,6 @@ public class SvgTextDecorationSpec <: ToString {
         )
     }
 
-    /** 生成装饰线路径；`thickness` 为本规格的实际厚度。 */
-    public func outline(width!: Float64, thickness!: Float64): SvgPathData {
-        let commands = ArrayList<SvgPathCommand>()
-        let safeThickness = if (thickness > 0.0) { thickness } else { 1.0 }
-        if (this.lines.underline) {
-            let baseline = match (this.underlinePosition) {
-                case Above => -safeThickness * 2.0
-                case Under => safeThickness * 3.0
-                case Auto => safeThickness
-            }
-            appendDecorationLine(commands, width, baseline, safeThickness)
-        }
-        if (this.lines.overline) {
-            appendDecorationLine(commands, width, -12.0, safeThickness)
-        }
-        if (this.lines.lineThrough) {
-            appendDecorationLine(commands, width, -6.0, safeThickness)
-        }
-        SvgPathData(commands.toArray())
-    }
-
-    private func appendDecorationLine(
-        commands: ArrayList<SvgPathCommand>,
-        width: Float64,
-        y: Float64,
-        thickness: Float64
-    ): Unit {
-        appendSvgDecorationSegments(
-            commands,
-            SvgMatrix.identity,
-            width,
-            y,
-            thickness,
-            this.style
-        )
-    }
-
     public func toString(): String {
         "SvgTextDecorationSpec(${this.lines.toString()}, ${this.style.toString()})"
     }

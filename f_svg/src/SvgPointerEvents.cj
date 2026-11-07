@@ -67,7 +67,7 @@ public enum SvgPointerEvents <: Equatable<SvgPointerEvents> & ToString {
     }
 
     /** 按 CSS 关键字解析；未知值返回 `None`。 */
-    internal static func fromName(name: String): ?SvgPointerEvents {
+    public static func fromName(name: String): ?SvgPointerEvents {
         match (name.trimAscii().toAsciiLower()) {
             case "auto" => Some(Auto)
             case "none" => Some(None)

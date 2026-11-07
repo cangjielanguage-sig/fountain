@@ -287,34 +287,28 @@ public class SvgFontDetailsM6_test {
     /** 装饰线几何：double 两条线，dotted / dashed / wavy 生成更多片段。 */
     @TestCase
     public func decorationGeometry(): Unit {
-        let solid = SvgTextDecorationSpec(
-            lines: SvgTextDecoration(underline: true),
-            style: SvgTextDecorationStyle.Solid
+        let solid = this.decorationCommandCount(SvgTextDecorationStyle.Solid)
+        let double = this.decorationCommandCount(SvgTextDecorationStyle.Double)
+        let dotted = this.decorationCommandCount(SvgTextDecorationStyle.Dotted)
+        let dashed = this.decorationCommandCount(SvgTextDecorationStyle.Dashed)
+        let wavy = this.decorationCommandCount(SvgTextDecorationStyle.Wavy)
+        @Assert(solid < double)
+        @Assert(solid < dotted)
+        @Assert(solid < dashed)
+        @Assert(solid < wavy)
+    }
+
+    private func decorationCommandCount(style: SvgTextDecorationStyle): Int64 {
+        let commands = ArrayList<SvgPathCommand>()
+        appendSvgDecorationSegments(
+            commands,
+            SvgMatrix.identity,
+            100.0,
+            2.0,
+            2.0,
+            style
         )
-        let double = SvgTextDecorationSpec(
-            lines: SvgTextDecoration(underline: true),
-            style: SvgTextDecorationStyle.Double
-        )
-        let dotted = SvgTextDecorationSpec(
-            lines: SvgTextDecoration(underline: true),
-            style: SvgTextDecorationStyle.Dotted
-        )
-        let dashed = SvgTextDecorationSpec(
-            lines: SvgTextDecoration(underline: true),
-            style: SvgTextDecorationStyle.Dashed
-        )
-        let wavy = SvgTextDecorationSpec(
-            lines: SvgTextDecoration(underline: true),
-            style: SvgTextDecorationStyle.Wavy
-        )
-        @Assert(solid.outline(width: 100.0, thickness: 2.0).commands.size <
-            double.outline(width: 100.0, thickness: 2.0).commands.size)
-        @Assert(solid.outline(width: 100.0, thickness: 2.0).commands.size <
-            dotted.outline(width: 100.0, thickness: 2.0).commands.size)
-        @Assert(solid.outline(width: 100.0, thickness: 2.0).commands.size <
-            dashed.outline(width: 100.0, thickness: 2.0).commands.size)
-        @Assert(solid.outline(width: 100.0, thickness: 2.0).commands.size <
-            wavy.outline(width: 100.0, thickness: 2.0).commands.size)
+        commands.size
     }
 
     /** pathLength 比例与非法值。 */
