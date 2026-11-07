@@ -119,6 +119,22 @@ public class CssFontFaceRule <: ToString {
     }
 }
 
+/** 一条 `@color-profile` 声明；`src` 记录原文，不加载 ICC。 */
+public class CssColorProfileRule <: ToString {
+    public let name: String
+    /** `src` 声明原文；未声明时为 `None`。 */
+    public let src: ?String
+
+    init(name: String, src!: ?String = None) {
+        this.name = name
+        this.src = src
+    }
+
+    public func toString(): String {
+        "@color-profile ${this.name} { src: ${this.src ?? ""} }"
+    }
+}
+
 /**
  * CSS 样式表：规则按源顺序保存。
  *
@@ -128,10 +144,17 @@ public class CssStyleSheet <: ToString {
     public let rules: Array<CssRule>
     /** `@font-face` 别名，按源顺序。 */
     public let fontFaces: Array<CssFontFaceRule>
+    /** `@color-profile` 声明，按源顺序。 */
+    public let colorProfiles: Array<CssColorProfileRule>
 
-    private init(rules: Array<CssRule>, fontFaces!: Array<CssFontFaceRule> = Array<CssFontFaceRule>()) {
+    private init(
+        rules: Array<CssRule>,
+        fontFaces!: Array<CssFontFaceRule> = Array<CssFontFaceRule>(),
+        colorProfiles!: Array<CssColorProfileRule> = Array<CssColorProfileRule>()
+    ) {
         this.rules = rules
         this.fontFaces = fontFaces
+        this.colorProfiles = colorProfiles
     }
 
     public static func empty(): CssStyleSheet {
@@ -147,7 +170,11 @@ public class CssStyleSheet <: ToString {
         let tokens = CssLexer(text).tokenize()
         let state = CssSheetParseState(warnings)
         parseCssRuleBlock(tokens, 0, tokens.size, Option<CssMediaQuery>.None, state)
-        CssStyleSheet(state.rules.toArray(), fontFaces: state.fontFaces.toArray())
+        CssStyleSheet(
+            state.rules.toArray(),
+            fontFaces: state.fontFaces.toArray(),
+            colorProfiles: state.colorProfiles.toArray()
+        )
     }
 
     public func toString(): String {
@@ -163,6 +190,7 @@ public class CssStyleSheet <: ToString {
 private class CssSheetParseState {
     let rules = ArrayList<CssRule>()
     let fontFaces = ArrayList<CssFontFaceRule>()
+    let colorProfiles = ArrayList<CssColorProfileRule>()
     let warnings: ArrayList<String>
     var order: Int64 = 0
 
@@ -198,6 +226,10 @@ private func parseCssRuleBlock(
             }
             if (tokens[i].text.toAsciiLower() == "@font-face") {
                 i = parseCssFontFace(tokens, i, end, state)
+                continue
+            }
+            if (tokens[i].text.toAsciiLower() == "@color-profile") {
+                i = parseCssColorProfile(tokens, i, end, state)
                 continue
             }
             state.warnings.add("已跳过不支持的 at-rule「${tokens[i].text}」")
@@ -321,6 +353,44 @@ private func parseCssFontFace(
         case Some(name) =>
             state.fontFaces.add(CssFontFaceRule(name, weight, style, srcPresent, src: srcValue))
         case None => state.warnings.add("已跳过缺少 font-family 的 @font-face")
+    }
+    blockEnd + 1
+}
+
+/** 解析 `@color-profile <name> { ... }`；`start` 指向 at-keyword。 */
+private func parseCssColorProfile(
+    tokens: Array<CssToken>,
+    start: Int64,
+    end: Int64,
+    state: CssSheetParseState
+): Int64 {
+    var i = start + 1
+    while (i < end && tokens[i].kind != CssTokenKind.LeftBrace &&
+        tokens[i].kind != CssTokenKind.Semicolon) {
+        i++
+    }
+    if (i >= end || tokens[i].kind == CssTokenKind.Semicolon) {
+        state.warnings.add("已跳过缺少声明块的 @color-profile")
+        return if (i >= end) { end } else { i + 1 }
+    }
+    let name = trimAsciiQuotes(tokensToCssText(tokens, start + 1, i).trimAscii())
+    let blockEnd = findCssClosingBrace(tokens, i, end)
+    if (blockEnd < 0) {
+        state.warnings.add("已跳过缺少右花括号的 @color-profile")
+        return end
+    }
+    let parsed = parseCssDeclarations(tokens, i + 1, state.warnings)
+    var src: ?String = None
+    for (declaration in parsed.declarations) {
+        if (declaration.property == "src") {
+            src = Some(declaration.value.trimAscii())
+            state.warnings.add("已忽略 @color-profile 的 src（不做 ICC 变换）：${declaration.value}")
+        }
+    }
+    if (name.size == 0) {
+        state.warnings.add("已跳过缺少名称的 @color-profile")
+    } else {
+        state.colorProfiles.add(CssColorProfileRule(name, src: src))
     }
     blockEnd + 1
 }

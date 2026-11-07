@@ -79,6 +79,10 @@ public class SvgStyleResolver <: ToString {
     private var mediaHeight: Float64 = 150.0
     /** 本次求值的静态交互状态；空状态让 `:hover` / `:focus` 永不匹配。 */
     private var interaction: SvgInteractionState = SvgInteractionState.empty()
+    /** 本次求值可见的 `@color-profile` 名称。 */
+    private let declaredColorProfiles = HashMap<String, Bool>()
+    /** 非 sRGB profile 的 warning 去重。 */
+    private let warnedColorProfiles = HashMap<String, Bool>()
 
     public init(sheet!: CssStyleSheet = CssStyleSheet.empty()) {
         this.sheet = sheet
@@ -161,6 +165,10 @@ public class SvgStyleResolver <: ToString {
         }
         let rules = ArrayList<CssRule>()
         let faces = ArrayList<CssFontFaceRule>()
+        this.declaredColorProfiles.clear()
+        for (profile in this.sheet.colorProfiles) {
+            this.declaredColorProfiles[profile.name] = true
+        }
         for (rule in this.sheet.rules) {
             rules.add(CssRule(rule.selectors, rule.declarations, rule.order, media: rule.media))
         }
@@ -176,6 +184,9 @@ public class SvgStyleResolver <: ToString {
                     let parsed = this.parseStyleText(text)
                     for (face in parsed.fontFaces) {
                         faces.add(face)
+                    }
+                    for (profile in parsed.colorProfiles) {
+                        this.declaredColorProfiles[profile.name] = true
                     }
                     for (rule in parsed.rules) {
                         rules.add(
@@ -724,6 +735,27 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "cursor" => return Some(SvgCursor.parse(text, this.warnings).toString())
+            case "shape-rendering" =>
+                match (SvgShapeRendering.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "text-rendering" =>
+                match (SvgTextRendering.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "color-rendering" =>
+                match (SvgColorRendering.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "color-interpolation" =>
+                match (SvgColorInterpolation.fromName(textLower)) {
+                    case Some(value) => return Some(value.toString())
+                    case None => return None
+                }
+            case "color-profile" => return this.normalizeColorProfile(text)
             case "display" =>
                 if (textLower == "inline" || textLower == "block" || textLower == "none" || textLower == "inline-block") {
                     return Some(textLower)
@@ -804,6 +836,26 @@ public class SvgStyleResolver <: ToString {
             case Some(color) => Some(color.toString())
             case None => None
         }
+    }
+
+    /** `color-profile` 只接受 `auto` / `sRGB` / 已声明名称；其余回退 sRGB。 */
+    private func normalizeColorProfile(text: String): ?String {
+        let lower = text.trimAscii().toAsciiLower()
+        if (lower == "auto") {
+            return Some("auto")
+        }
+        if (lower == "srgb") {
+            return Some("sRGB")
+        }
+        let name = text.trimAscii()
+        if (this.declaredColorProfiles.get(name) ?? false) {
+            return Some(name)
+        }
+        if (!(this.warnedColorProfiles.get(name) ?? false)) {
+            this.warnedColorProfiles[name] = true
+            this.warnings.add("color-profile「${name}」未声明，已按 sRGB 处理")
+        }
+        Some("sRGB")
     }
 }
 

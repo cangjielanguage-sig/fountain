@@ -406,8 +406,10 @@ public class SvgTextRenderer {
             }
         }
 
-        // 先 GSUB 连字，再 kern / GPOS 字距。
-        applyFontLigatures(chars, resolvedFonts, advances, paths)
+        // 先 GSUB 连字，再 kern / GPOS 字距；optimizeSpeed 关闭两者。
+        if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
+            applyFontLigatures(chars, resolvedFonts, advances, paths)
+        }
         let shapedChars = ArrayList<SvgTextChar>()
         let shapedAdvances = ArrayList<Float64>()
         let shapedPaths = ArrayList<?SvgPathData>()
@@ -433,7 +435,9 @@ public class SvgTextRenderer {
         resolvedFonts = shapedFonts
         count = chars.size
 
-        applyFontKerning(chars, resolvedFonts, advances, style)
+        if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
+            applyFontKerning(chars, resolvedFonts, advances, style)
+        }
 
         if (shouldReorderBidi(style, chars)) {
             let arrangement = bidiArrangement(chars, style)

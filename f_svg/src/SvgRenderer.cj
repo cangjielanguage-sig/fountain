@@ -68,6 +68,8 @@ public class SvgRenderer {
     public let warnings = ArrayList<String>()
     private let sessionImages: ?SvgImageResource
     private let sessionGuard: SvgRenderGuard
+    /** 非 sRGB color-profile 的 warning 去重。 */
+    private let warnedColorProfiles = HashMap<String, Bool>()
 
     public init(options!: SvgRenderOptions = SvgRenderOptions()) {
         this.options = options
@@ -275,6 +277,7 @@ public class SvgRenderer {
             case Some(value) => value
             case None => return
         }
+        svgWarnColorProfile(style.colorProfile(), this.warnedColorProfiles, this.warnings)
         match (command.kind) {
             case FillPath =>
                 this.drawFill(bitmap, command, list, style, patterns)
@@ -442,6 +445,10 @@ public class SvgRenderer {
         if (opacity <= 0.0) {
             return
         }
+        let toleranceScale = svgShapeTolerance(style)
+        let aaOverride = svgShapeAntiAlias(style)
+        let colorInterpolation = style.colorInterpolation().toString()
+        let quantizeSteps = style.colorRendering().quantizeSteps()
         var strokeScale = 1.0
         if (isStroke && command.nonScalingStroke) {
             strokeScale = SvgVectorEffect.strokeScale(command.matrix)
@@ -484,7 +491,9 @@ public class SvgRenderer {
                                 miterLimit: style.strokeMiterLimit(),
                                 dashArray: effectiveDashArray,
                                 dashOffset: effectiveDashOffset,
-                                opacity: opacity
+                                opacity: opacity,
+                                colorInterpolation: colorInterpolation,
+                                quantizeSteps: quantizeSteps
                             )
                         } else {
                             raster.fillGradient(
@@ -495,7 +504,9 @@ public class SvgRenderer {
                                 root: Some(list.root),
                                 matrix: command.matrix,
                                 fillRule: style.fillRule(),
-                                opacity: opacity
+                                opacity: opacity,
+                                colorInterpolation: colorInterpolation,
+                                quantizeSteps: quantizeSteps
                             )
                         }
                         return
@@ -575,7 +586,9 @@ public class SvgRenderer {
                 miterLimit: style.strokeMiterLimit(),
                 dashArray: effectiveDashArray,
                 dashOffset: effectiveDashOffset,
-                opacity: opacity
+                opacity: opacity,
+                toleranceScale: toleranceScale,
+                antiAliasOverride: aaOverride
             )
         } else {
             raster.fill(
@@ -583,7 +596,9 @@ public class SvgRenderer {
                 matrix: command.matrix,
                 color: color,
                 fillRule: style.fillRule(),
-                opacity: opacity
+                opacity: opacity,
+                toleranceScale: toleranceScale,
+                antiAliasOverride: aaOverride
             )
         }
     }
@@ -1150,4 +1165,37 @@ private func clampImageIndex(value: Int64, size: Int64): Int64 {
         return size - 1
     }
     value
+}
+
+/** `shape-rendering` → 曲线扁平化容差倍率。 */
+private func svgShapeTolerance(style: SvgComputedStyle): Float64 {
+    match (style.shapeRendering()) {
+        case SvgShapeRendering.GeometricPrecision => 0.25
+        case _ => 1.0
+    }
+}
+
+/** `shape-rendering` → 抗锯齿覆盖；`None` 表示沿用全局设置。 */
+private func svgShapeAntiAlias(style: SvgComputedStyle): ?Bool {
+    match (style.shapeRendering()) {
+        case SvgShapeRendering.OptimizeSpeed | SvgShapeRendering.CrispEdges => Some(false)
+        case _ => Option<Bool>.None
+    }
+}
+
+/** 非 sRGB profile 按 sRGB 计算，并只 warning 一次。 */
+internal func svgWarnColorProfile(
+    profile: String,
+    warned: HashMap<String, Bool>,
+    warnings: ArrayList<String>
+): Unit {
+    let lower = profile.trimAscii().toAsciiLower()
+    if (lower == "auto" || lower == "srgb" || lower == "") {
+        return
+    }
+    if (warned.get(profile) ?? false) {
+        return
+    }
+    warned[profile] = true
+    warnings.add("color-profile「${profile}」不做 ICC 变换，已按 sRGB 渲染")
 }

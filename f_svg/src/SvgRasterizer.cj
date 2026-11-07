@@ -68,6 +68,10 @@ public class SvgRasterizer {
     private let bitmap: SvgBitmap
     private let samplesPerPixel: Int64
     private let antiAlias: SvgAntiAliasMode
+    /** 本次绘制的 AA 覆盖；`false` 强制 1× 采样。 */
+    private var aaDisabled: Bool = false
+    /** 曲线扁平化容差倍率；1.0 保持 M1–M5 输出。 */
+    private var toleranceScale: Float64 = 1.0
 
     public init(
         bitmap: SvgBitmap,
@@ -88,13 +92,28 @@ public class SvgRasterizer {
         matrix!: SvgMatrix = SvgMatrix.identity,
         color!: SvgColor,
         fillRule!: SvgFillRule = SvgFillRule.Nonzero,
-        opacity!: Float64 = 1.0
+        opacity!: Float64 = 1.0,
+        toleranceScale!: Float64 = 1.0,
+        antiAliasOverride!: ?Bool = None
     ): Unit {
         if (color.alpha <= 0.0 || opacity <= 0.0) {
             return
         }
-        let contours = flattenPathData(path, matrix, 0.25)
+        this.prepareHints(toleranceScale, antiAliasOverride)
+        let contours = flattenPathData(path, matrix, 0.25 * this.toleranceScale)
         this.fillContours(contours, color, fillRule, opacity)
+    }
+
+    private func prepareHints(toleranceScale: Float64, antiAliasOverride: ?Bool): Unit {
+        this.toleranceScale = if (toleranceScale > 0.0 && isFiniteSvgNumber(toleranceScale)) {
+            toleranceScale
+        } else {
+            1.0
+        }
+        this.aaDisabled = match (antiAliasOverride) {
+            case Some(value) => !value
+            case None => false
+        }
     }
 
 
@@ -109,11 +128,14 @@ public class SvgRasterizer {
         miterLimit!: Float64 = 4.0,
         dashArray!: Array<Float64> = Array<Float64>(),
         dashOffset!: Float64 = 0.0,
-        opacity!: Float64 = 1.0
+        opacity!: Float64 = 1.0,
+        toleranceScale!: Float64 = 1.0,
+        antiAliasOverride!: ?Bool = None
     ): Unit {
         if (strokeWidth <= 0.0 || color.alpha <= 0.0 || opacity <= 0.0) {
             return
         }
+        this.prepareHints(toleranceScale, antiAliasOverride)
         let scale = matrixScale(matrix)
         let userTolerance = if (scale > RASTER_EPSILON) { 0.25 / scale } else { 0.25 }
         let userContours = flattenPathData(path, SvgMatrix.identity, userTolerance)
@@ -172,14 +194,20 @@ public class SvgRasterizer {
         root!: ?SvgElement = None,
         matrix!: SvgMatrix = SvgMatrix.identity,
         fillRule!: SvgFillRule = SvgFillRule.Nonzero,
-        opacity!: Float64 = 1.0
+        opacity!: Float64 = 1.0,
+        colorInterpolation!: String = "auto",
+        quantizeSteps!: Int64 = 0
     ): Unit {
         if (opacity <= 0.0) {
             return
         }
         let contours = flattenPathData(path, matrix, 0.25)
         let inverse = matrix.invert() ?? SvgMatrix.identity
-        let sampler = SvgGradientSampler(root: root)
+        let sampler = SvgGradientSampler(
+            root: root,
+            colorInterpolation: colorInterpolation,
+            quantizeSteps: quantizeSteps
+        )
         this.fillContoursShader(
             contours,
             fillRule,
@@ -205,7 +233,9 @@ public class SvgRasterizer {
         miterLimit!: Float64 = 4.0,
         dashArray!: Array<Float64> = Array<Float64>(),
         dashOffset!: Float64 = 0.0,
-        opacity!: Float64 = 1.0
+        opacity!: Float64 = 1.0,
+        colorInterpolation!: String = "auto",
+        quantizeSteps!: Int64 = 0
     ): Unit {
         if (strokeWidth <= 0.0 || opacity <= 0.0) {
             return
@@ -231,7 +261,11 @@ public class SvgRasterizer {
             transformed.add(points.toArray())
         }
         let inverse = matrix.invert() ?? SvgMatrix.identity
-        let sampler = SvgGradientSampler(root: root)
+        let sampler = SvgGradientSampler(
+            root: root,
+            colorInterpolation: colorInterpolation,
+            quantizeSteps: quantizeSteps
+        )
         this.fillContoursShader(
             transformed.toArray(),
             SvgFillRule.Nonzero,
@@ -280,7 +314,7 @@ public class SvgRasterizer {
             return None
         }
         let coverage = Array<Int64>(this.bitmap.width * this.bitmap.height, repeat: 0)
-        let samples = this.samplesPerPixel
+        let samples = if (this.aaDisabled) { 1 } else { this.samplesPerPixel }
         for (row in firstRow..=lastRow) {
             for (subY in 0..samples) {
                 let y = Float64(row) + (Float64(subY) + 0.5) / Float64(samples)
@@ -353,6 +387,9 @@ public class SvgRasterizer {
     }
 
     private func coverageTotal(): Int64 {
+        if (this.aaDisabled) {
+            return 1
+        }
         if (this.antiAlias == SvgAntiAliasMode.Analytic) {
             return ANALYTIC_COVERAGE_SCALE
         }

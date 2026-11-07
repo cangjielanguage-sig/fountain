@@ -642,6 +642,22 @@ let options = SvgRenderOptions(
 
 安全边界：provider 由调用方实现，库内不联网、不读文件；外部引用放行前提与 M2 的安全选项一致。
 
+## M6：渲染提示与颜色
+
+- **`shape-rendering`**：`optimizeSpeed` 强制 1× 采样并关闭形状 AA；`crispEdges` 关闭 AA；
+  `geometricPrecision` 曲线容差 ×0.25；`auto` 保持 M5 输出。
+- **`text-rendering`**：`optimizeSpeed` 关闭连字与字距；`optimizeLegibility` 保持/启用；
+  `geometricPrecision` 提高精度；`auto` 按字体表能力。
+- **`color-rendering`**：`auto` 解析式插值；`optimizeSpeed` / `optimizeQuality` 分别把
+  渐变参数 `t` 量化到 128 / 512 级，端点颜色不漂移。
+- **`color-interpolation`**：`linearRGB` 时 stop 先转线性光、插值后转回 sRGB
+  （红蓝中点约 `#bc00bc`）；`auto` / `sRGB` 与 M5 逐字节一致。
+- **`@color-profile`**：解析名称与 `src`（不加载文件）；`color-profile` 只接受
+  `auto` / `sRGB` / 已声明名称，其他名称 warning 后按 sRGB 渲染，不做 ICC 变换。
+
+四个提示属性都可继承，缺省 `auto` 不改变既有输出。`optimizeSpeed` 等提示只影响
+本次绘制的采样与插值，不改变几何或布局。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

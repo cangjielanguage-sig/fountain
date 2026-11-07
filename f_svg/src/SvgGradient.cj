@@ -204,9 +204,17 @@ private class GradientStopData {
 public class SvgGradientSampler {
     public let warnings = ArrayList<String>()
     private let root: ?SvgElement
+    private let colorInterpolation: String
+    private let quantizeSteps: Int64
 
-    public init(root!: ?SvgElement = None) {
+    public init(
+        root!: ?SvgElement = None,
+        colorInterpolation!: String = "auto",
+        quantizeSteps!: Int64 = 0
+    ) {
         this.root = root
+        this.colorInterpolation = colorInterpolation.trimAscii().toAsciiLower()
+        this.quantizeSteps = if (quantizeSteps > 0) { quantizeSteps } else { 0 }
     }
 
     public func sample(
@@ -260,7 +268,25 @@ public class SvgGradientSampler {
         if (t.isNaN()) {
             return SvgColor(0, 0, 0, alpha: 0.0)
         }
-        sampleStops(stops, applyGradientSpread(t, spread))
+        var spreadT = applyGradientSpread(t, spread)
+        if (this.quantizeSteps > 0) {
+            spreadT = round(spreadT * Float64(this.quantizeSteps)) / Float64(this.quantizeSteps)
+        }
+        if (this.colorInterpolation == "linearrgb") {
+            if (spreadT <= stops[0].offset) {
+                return stops[0].color
+            }
+            if (spreadT >= stops[stops.size - 1].offset) {
+                return stops[stops.size - 1].color
+            }
+            let linearStops = ArrayList<GradientStopData>()
+            for (stop in stops) {
+                linearStops.add(GradientStopData(stop.offset, svgColorToLinear(stop.color)))
+            }
+            let mixed = sampleStops(linearStops.toArray(), spreadT)
+            return svgColorFromLinear(mixed)
+        }
+        sampleStops(stops, spreadT)
     }
 
     private func linearT(
@@ -559,4 +585,44 @@ private func sampleStops(stops: Array<GradientStopData>, t: Float64): SvgColor {
 private func interpolateSvgChannel(first: UInt8, second: UInt8, t: Float64): UInt8 {
     let value = Float64(first) + (Float64(second) - Float64(first)) * clampSvgUnit(t)
     UInt8(Int64(round(value)))
+}
+
+/** sRGB 8 位通道转线性光 8 位编码。 */
+private func svgChannelToLinear(value: UInt8): UInt8 {
+    let srgb = Float64(value) / 255.0
+    let linear = if (srgb <= 0.04045) {
+        srgb / 12.92
+    } else {
+        pow((srgb + 0.055) / 1.055, 2.4)
+    }
+    UInt8(Int64(round(clampSvgUnit(linear) * 255.0)))
+}
+
+/** 线性光 8 位编码转 sRGB 8 位通道。 */
+private func svgChannelFromLinear(value: UInt8): UInt8 {
+    let linear = Float64(value) / 255.0
+    let srgb = if (linear <= 0.0031308) {
+        linear * 12.92
+    } else {
+        1.055 * pow(linear, 1.0 / 2.4) - 0.055
+    }
+    UInt8(Int64(round(clampSvgUnit(srgb) * 255.0)))
+}
+
+private func svgColorToLinear(color: SvgColor): SvgColor {
+    SvgColor(
+        svgChannelToLinear(color.red),
+        svgChannelToLinear(color.green),
+        svgChannelToLinear(color.blue),
+        alpha: color.alpha
+    )
+}
+
+private func svgColorFromLinear(color: SvgColor): SvgColor {
+    SvgColor(
+        svgChannelFromLinear(color.red),
+        svgChannelFromLinear(color.green),
+        svgChannelFromLinear(color.blue),
+        alpha: color.alpha
+    )
 }

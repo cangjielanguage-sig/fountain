@@ -98,6 +98,11 @@ internal let SVG_PROPERTY_TABLE: Array<SvgPropertySpec> = [
     SvgPropertySpec("display", false, "inline"),
     SvgPropertySpec("pointer-events", true, "auto"),
     SvgPropertySpec("cursor", true, "auto"),
+    SvgPropertySpec("shape-rendering", true, "auto"),
+    SvgPropertySpec("text-rendering", true, "auto"),
+    SvgPropertySpec("color-rendering", true, "auto"),
+    SvgPropertySpec("color-interpolation", true, "auto"),
+    SvgPropertySpec("color-profile", false, "auto"),
     SvgPropertySpec("clip-path", false, "none"),
     SvgPropertySpec("mask", false, "none"),
     SvgPropertySpec("clip-rule", true, "nonzero"),
@@ -303,6 +308,28 @@ public class SvgComputedStyle <: ToString {
     /** 光标关键字；M6 不加载资源。 */
     public func cursor(): String {
         this.get("cursor") ?? "auto"
+    }
+
+    public func shapeRendering(): SvgShapeRendering {
+        SvgShapeRendering.fromName(this.get("shape-rendering") ?? "auto") ?? SvgShapeRendering.Auto
+    }
+
+    public func textRendering(): SvgTextRendering {
+        SvgTextRendering.fromName(this.get("text-rendering") ?? "auto") ?? SvgTextRendering.Auto
+    }
+
+    public func colorRendering(): SvgColorRendering {
+        SvgColorRendering.fromName(this.get("color-rendering") ?? "auto") ?? SvgColorRendering.Auto
+    }
+
+    public func colorInterpolation(): SvgColorInterpolation {
+        SvgColorInterpolation.fromName(this.get("color-interpolation") ?? "auto") ??
+            SvgColorInterpolation.Auto
+    }
+
+    /** `@color-profile` 名称；`auto` / `sRGB` / 已声明名称。 */
+    public func colorProfile(): String {
+        this.get("color-profile") ?? "auto"
     }
 
     public func display(): String {
