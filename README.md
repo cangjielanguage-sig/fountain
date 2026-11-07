@@ -66,11 +66,11 @@ fboot help # 显示fboot的其他功能
 
 下图是 fountain 各模块之间的依赖关系（箭头 `A → B` 表示 A 依赖 B；基础层为不依赖任何模块的模块，蓝框为被依赖次数最多的模块；只画「`cjpm.toml` 声明了、且源码里真的 import 了对方 API」的依赖，每个模块**调用次数前三**的依赖画彩色实线、其余依赖画灰色虚线；图中不含 `fdemo`、`fcoder`、`frpcdemo` 等示例应用）：
 
-![fountain 模块依赖关系](.assets/README/module-dependencies.svg)
+![fountain 模块依赖关系](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/module-dependencies.svg)
 
 下面这张矩阵图是同一份数据的另一种读法，适合按模块查「它依赖了谁 / 谁依赖了它」（行 = 依赖方，列 = 被依赖方，两轴按同一顺序排列，格子颜色 = 依赖方的颜色、深浅 = 该模块对该依赖的 API 调用次数；每行调用次数前三的依赖为彩色格，其余为浅灰格）：
 
-![fountain 模块依赖矩阵](.assets/README/module-dependency-matrix.svg)
+![fountain 模块依赖矩阵](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/module-dependency-matrix.svg)
 
 依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](docs/模块依赖图/README.md)。
 
