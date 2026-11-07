@@ -210,6 +210,25 @@ public class SvgHitTestM6_test {
         @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 1)
     }
 
+    /** 命中上限缺省读取文档安全选项，显式参数优先。 */
+    @TestCase
+    public func securityMaxElements(): Unit {
+        let root = rootOf([
+            rect("a", 0.0, 0.0, 10.0, 10.0), rect("b", 0.0, 0.0, 10.0, 10.0),
+            rect("c", 0.0, 0.0, 10.0, 10.0)
+        ])
+        let document = SvgDocument(root)
+        document.parseOptions = SvgParseOptions(security: SvgSecurityOptions(maxElements: 2))
+        var limited = false
+        try {
+            SvgHitTest().hitTest(document, SvgPoint(5.0, 5.0))
+        } catch (error: SvgException) {
+            limited = error.kind == SvgErrorKind.Limit
+        }
+        @Assert(limited)
+        @Assert(SvgHitTest().hitTest(document, SvgPoint(5.0, 5.0), maxElements: 10).size == 3)
+    }
+
     /** 设备坐标：DPR 与根 viewBox 都参与换算。 */
     @TestCase
     public func deviceCoordinates(): Unit {

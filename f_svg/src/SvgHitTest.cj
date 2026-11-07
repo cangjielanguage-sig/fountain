@@ -143,9 +143,14 @@ public class SvgHitTest {
         document: SvgDocument,
         point: SvgPoint,
         options!: SvgRenderOptions = SvgRenderOptions(),
-        maxElements!: Int64 = 1_000_000
+        maxElements!: Int64 = -1
     ): Array<SvgElement> {
-        this.hitTest(document.root, point, options: options, maxElements: maxElements)
+        let limit = if (maxElements > 0) {
+            maxElements
+        } else {
+            document.parseOptions.security.maxElements
+        }
+        this.hitTest(document.root, point, options: options, maxElements: limit)
     }
 
     public func hitTest(
