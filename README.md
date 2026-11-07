@@ -10,7 +10,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
                         \/          \/        \/
 ```
 
-![fountain](.assets/README/fountain.jpg)
+![fountain](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/fountain.jpg)
 
 # fountain
 
