@@ -174,6 +174,11 @@ public open class SvgElement <: ToString {
     /** 命名空间写入。`xlink` / `xml` 前缀固定，其余按 URI 稳定分配。 */
     public func setAttr(namespace: String, local: String, value: String): SvgElement {
         let index = this.namespacedAttributeIndex(namespace, local)
+        let old = if (index >= 0) {
+            Some(this.attributes[index].value)
+        } else {
+            Option<String>.None
+        }
         if (index >= 0) {
             this.attributes[index] = SvgAttribute(this.attributes[index].name, value)
         } else {
@@ -182,6 +187,16 @@ public open class SvgElement <: ToString {
             )
         }
         this.attributesVersion++
+        svgNotifyMutation(
+            this,
+            SvgMutationEvent(
+                SvgMutationKind.Attribute,
+                this,
+                attributeName: Some(local),
+                oldValue: old,
+                newValue: Some(value)
+            )
+        )
         this
     }
 
@@ -191,8 +206,19 @@ public open class SvgElement <: ToString {
         if (index < 0) {
             return false
         }
+        let old = this.attributes[index].value
         this.attributes.remove(at: index)
         this.attributesVersion++
+        svgNotifyMutation(
+            this,
+            SvgMutationEvent(
+                SvgMutationKind.Attribute,
+                this,
+                attributeName: Some(local),
+                oldValue: Some(old),
+                newValue: Option<String>.None
+            )
+        )
         true
     }
 

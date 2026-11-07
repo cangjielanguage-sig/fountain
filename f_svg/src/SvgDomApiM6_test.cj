@@ -154,6 +154,27 @@ public class SvgDomApiM6_test {
         @Assert(second.events.size == 0)
     }
 
+    /** 命名空间版 setAttr / removeAttr 同样触发变更通知。 */
+    @TestCase
+    public func namespacedAttributesNotify(): Unit {
+        let root = SvgRoot()
+        let document = SvgDocument(root)
+        let recorder = M6MutationRecorder()
+        document.addMutationListener(recorder)
+        let namespace = "http://www.w3.org/1999/xlink"
+        root.setAttr(namespace, "href", "#target")
+        @Assert(recorder.events.size == 1)
+        @Assert(recorder.events[0].kind == SvgMutationKind.Attribute)
+        @Assert(recorder.events[0].attributeName == Some("href"))
+        @Assert(recorder.events[0].newValue == Some("#target"))
+        root.removeAttr(namespace, "href")
+        @Assert(recorder.events.size == 2)
+        @Assert(recorder.events[1].kind == SvgMutationKind.Attribute)
+        @Assert(recorder.events[1].oldValue == Some("#target"))
+        @Assert(root.removeAttr(namespace, "href") == false)
+        @Assert(recorder.events.size == 2)
+    }
+
     /** 监听异常被隔离，不影响文档与后续监听。 */
     @TestCase
     public func listenerExceptionIsolated(): Unit {
