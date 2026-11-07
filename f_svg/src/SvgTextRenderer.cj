@@ -623,9 +623,14 @@ public class SvgTextRenderer {
             case Some(pathElement) =>
                 match (resolveTextPathData(pathElement, root)) {
                     case Some(pathData) =>
+                        let pathLengthRatio = SvgPathLength.ratio(
+                            pathElement,
+                            pathData.totalLength(),
+                            this.warnings
+                        )
                         let advanceArray = Array<Float64>(count, repeat: 0.0)
                         for (index in 0..count) {
-                            advanceArray[index] = advances[index] * scaleX
+                            advanceArray[index] = advances[index] * scaleX * pathLengthRatio
                         }
                         let pathLayout = SvgTextPathLayout()
                         let sideValue = SvgTextPathSide.fromNameOrWarn(
@@ -667,7 +672,8 @@ public class SvgTextRenderer {
                             spacing: spacingValue,
                             sideOffsets: sideOffsets,
                             dxOffsets: dxOffsets,
-                            letterSpacings: letterSpacings
+                            letterSpacings: letterSpacings,
+                            pathLengthRatio: pathLengthRatio
                         )
                         glyphScaleX = scaleX * pathLayout.stretchScale
                         pathScaleX = glyphScaleX
