@@ -137,6 +137,7 @@ private class SvgTextState {
     let shift: SvgBaselineShift
     let decoration: SvgTextDecoration
     let decorationSpec: SvgDecorationStyle
+    let stretch: Float64
     let direction: SvgDirection
     let unicodeBidi: SvgUnicodeBidi
 
@@ -152,6 +153,7 @@ private class SvgTextState {
         shift!: SvgBaselineShift = SvgBaselineShift.Baseline,
         decoration!: SvgTextDecoration = SvgTextDecoration.none,
         decorationSpec!: ?SvgDecorationStyle = None,
+        stretch!: Float64 = 100.0,
         direction!: SvgDirection = SvgDirection.Ltr,
         unicodeBidi!: SvgUnicodeBidi = SvgUnicodeBidi.Normal
     ) {
@@ -166,6 +168,7 @@ private class SvgTextState {
         this.shift = shift
         this.decoration = decoration
         this.decorationSpec = decorationSpec ?? SvgDecorationStyle(lines: decoration)
+        this.stretch = stretch
         this.direction = direction
         this.unicodeBidi = unicodeBidi
     }
@@ -186,6 +189,9 @@ private class SvgTextChar {
     let isRoot: Bool
     let decoration: SvgTextDecoration
     let decorationSpec: SvgDecorationStyle
+    let stretch: Float64
+    /** 实际命中的字体 stretch；用于判断是否需要合成缩放。 */
+    var matchedStretch: Float64 = 100.0
     let direction: SvgDirection
     let unicodeBidi: SvgUnicodeBidi
     var xOverride: ?Float64 = None
@@ -221,6 +227,7 @@ private class SvgTextChar {
         this.isRoot = isRoot
         this.decoration = state.decoration
         this.decorationSpec = state.decorationSpec
+        this.stretch = state.stretch
         this.direction = state.direction
         this.unicodeBidi = state.unicodeBidi
     }
@@ -239,6 +246,7 @@ private class SvgTextChar {
             shift: this.shift,
             decoration: this.decoration,
             decorationSpec: this.decorationSpec,
+            stretch: this.stretch,
             direction: this.direction,
             unicodeBidi: this.unicodeBidi
         )
@@ -257,6 +265,7 @@ private class SvgTextChar {
         copy.rotation = this.rotation
         copy.consumed = this.consumed
         copy.glyphId = this.glyphId
+        copy.matchedStretch = this.matchedStretch
         copy
     }
 }
@@ -350,6 +359,7 @@ public class SvgTextRenderer {
             shift: style.baselineShift(),
             decoration: rootDecoration.lines,
             decorationSpec: rootDecoration,
+            stretch: style.fontStretch().percentage(),
             direction: style.direction(),
             unicodeBidi: style.unicodeBidi()
         )
@@ -395,7 +405,14 @@ public class SvgTextRenderer {
         var missingGlyph = false
         for (index in 0..count) {
             let char = chars[index]
-            let font = this.registry.resolve(char.family, char.weight, char.style)
+            let resolved = this.registry.resolveDetailed(
+                char.family,
+                char.weight,
+                char.style,
+                stretch: char.stretch
+            )
+            let font = resolved.font
+            chars[index].matchedStretch = resolved.stretch
             resolvedFonts.add(font)
             match (font) {
                 case Some(value) =>
@@ -467,7 +484,7 @@ public class SvgTextRenderer {
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
             applyFontKerning(chars, resolvedFonts, advances, style)
         }
-        applyFontStretchSynthesis(advances, paths, style)
+        applyFontStretchSynthesis(chars, advances, paths)
         applySmallCaps(chars, resolvedFonts, advances, paths, style, this.warnings)
         applyFontSizeAdjust(chars, resolvedFonts, advances, paths, style, this.warnings)
 
@@ -1193,6 +1210,10 @@ private func collectSvgTextChars(
                             shift: nextShift,
                             decoration: nextDecoration,
                             decorationSpec: nextDecorationSpec,
+                            stretch: match (spanStyle) {
+                                case Some(value) => value.fontStretch().percentage()
+                                case None => state.stretch
+                            },
                             direction: nextDirection,
                             unicodeBidi: nextBidi
                         )
@@ -1873,18 +1894,21 @@ private func applyFontContextShaping(
     }
 }
 
-/** 百分比 font-stretch 且最终字体为 100% 时做水平合成缩放。 */
+/** 请求百分比与最终字体均满足条件时做水平合成缩放；精确匹配不再二次缩放。 */
 private func applyFontStretchSynthesis(
+    chars: ArrayList<SvgTextChar>,
     advances: ArrayList<Float64>,
-    paths: ArrayList<?SvgPathData>,
-    style: SvgComputedStyle
+    paths: ArrayList<?SvgPathData>
 ): Unit {
-    let percent = style.fontStretch().percentage()
-    if (percent == 100.0 || percent <= 0.0) {
-        return
-    }
-    let factor = percent / 100.0
-    for (index in 0..paths.size) {
+    for (index in 0..chars.size) {
+        let percent = chars[index].stretch
+        if (percent == 100.0 || percent <= 0.0) {
+            continue
+        }
+        if (chars[index].matchedStretch != 100.0) {
+            continue
+        }
+        let factor = percent / 100.0
         match (paths[index]) {
             case Some(path) => paths[index] = Some(scalePathX(path, factor))
             case None => ()

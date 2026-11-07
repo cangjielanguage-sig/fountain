@@ -31,6 +31,17 @@ public interface SvgFont {
     func glyphBounds(codePoint: Int64, fontSize: Float64): ?SvgBounds
 }
 
+/** 一次字体解析结果：命中的字体与实际使用的 stretch 百分比。 */
+internal class SvgFontMatch {
+    let font: ?SvgFont
+    let stretch: Float64
+
+    init(font: ?SvgFont, stretch: Float64) {
+        this.font = font
+        this.stretch = stretch
+    }
+}
+
 /** 字体注册表：按 family 列表回退，weight / style 未命中时回退 normal / normal。 */
 public class SvgFontRegistry {
     private let fonts = HashMap<String, SvgFont>()
@@ -131,17 +142,32 @@ public class SvgFontRegistry {
 
     /** 先精确百分比，再取已注册 stretch 中差值最小者，最后回退 100%。 */
     public func resolve(family: String, weight: String, style: String, stretch!: Float64): ?SvgFont {
+        this.resolveDetailed(family, weight, style, stretch: stretch).font
+    }
+
+    /** 解析并返回实际命中的 stretch 百分比；用于决定是否需要合成缩放。 */
+    internal func resolveDetailed(
+        family: String,
+        weight: String,
+        style: String,
+        stretch!: Float64
+    ): SvgFontMatch {
         let normalizedWeight = weight.trimAscii().toAsciiLower()
         let normalizedStyle = style.trimAscii().toAsciiLower()
         let target = if (stretch > 0.0 && isFiniteSvgNumber(stretch)) { stretch } else { 100.0 }
         for (name in splitSvgFontFamilies(family)) {
             match (this.aliases.get(name)) {
-                case Some(target) =>
+                case Some(targetName) =>
                     match (this.base) {
                         case Some(delegate) =>
-                            match (delegate.resolve(target, weight, style, stretch: 100.0)) {
-                                case Some(font) => return Some(font)
-                                case None => ()
+                            let aliasMatch = delegate.resolveDetailed(
+                                targetName,
+                                weight,
+                                style,
+                                stretch: 100.0
+                            )
+                            if (aliasMatch.font.isSome()) {
+                                return aliasMatch
                             }
                         case None => ()
                     }
@@ -150,31 +176,37 @@ public class SvgFontRegistry {
             match (this.stretchFonts.get(
                 SvgFontRegistry.stretchKey(name, normalizedWeight, normalizedStyle, target)
             )) {
-                case Some(font) => return Some(font)
+                case Some(font) => return SvgFontMatch(Some(font), target)
                 case None => ()
             }
             let groupKey = SvgFontRegistry.key(name, normalizedWeight, normalizedStyle)
             let nearest = SvgFontRegistry.nearestStretch(this.stretchValues.get(groupKey), target)
             if (nearest.isSome()) {
+                let nearestValue = nearest ?? 100.0
                 match (this.stretchFonts.get(
-                    SvgFontRegistry.stretchKey(name, normalizedWeight, normalizedStyle, nearest ?? 100.0)
+                    SvgFontRegistry.stretchKey(
+                        name,
+                        normalizedWeight,
+                        normalizedStyle,
+                        nearestValue
+                    )
                 )) {
-                    case Some(font) => return Some(font)
+                    case Some(font) => return SvgFontMatch(Some(font), nearestValue)
                     case None => ()
                 }
             }
             match (this.fonts.get(SvgFontRegistry.key(name, normalizedWeight, normalizedStyle))) {
-                case Some(font) => return Some(font)
+                case Some(font) => return SvgFontMatch(Some(font), 100.0)
                 case None => ()
             }
             match (this.fonts.get(SvgFontRegistry.key(name, "normal", "normal"))) {
-                case Some(font) => return Some(font)
+                case Some(font) => return SvgFontMatch(Some(font), 100.0)
                 case None => ()
             }
         }
         match (this.base) {
-            case Some(delegate) => delegate.resolve(family, weight, style, stretch: target)
-            case None => Option<SvgFont>.None
+            case Some(delegate) => delegate.resolveDetailed(family, weight, style, stretch: target)
+            case None => SvgFontMatch(Option<SvgFont>.None, target)
         }
     }
 
