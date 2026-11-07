@@ -212,8 +212,32 @@ public class SkillEvolutionJob {
                 ()
             }
         }
-        // 推进水位线：下一轮只看之后再新增的素材
-        if (now > 0) {
+        // 推进水位线：到「本轮真正处理过的最大 at」，而不是 now。
+        // 素材总量超过单轮取数上限（`load` 的 limit）时，多出来的部分 at 更大；
+        // 若把水位直接推到 now，它们下一轮就落在 since 之前，会被永久跳过。
+        var advanced = 0
+        for (item in freshSuccess) {
+            if (item.at > advanced) {
+                advanced = item.at
+            }
+        }
+        for (item in freshFailure) {
+            if (item.at > advanced) {
+                advanced = item.at
+            }
+        }
+        for (item in freshKnowledge) {
+            if (item.at > advanced) {
+                advanced = item.at
+            }
+        }
+        if (advanced > 0) {
+            // 只前进不后退：并发/乱序素材不会把水位拉回去
+            if (advanced > state.lastRunAt()) {
+                state.markRun(advanced)
+            }
+        } else if (now > 0) {
+            // 没有任何带时间戳的素材（例如只有知识文档）：沿用「按轮次推进」
             state.markRun(now)
         }
         report

@@ -158,6 +158,28 @@ class SkillEvolutionJob_test {
         }
     }
 
+    /** 水位线只推进到处理过的最大 at：超量素材留到下一轮，而不是被 now 永久跳过 */
+    @TestCase
+    func testWatermarkAdvancesToMaxProcessedAt(): Unit {
+        let fixture = EvolutionFixture()
+        SkillEvolutionJob.installSink(fixture.sink)
+        let state = InMemoryEvolutionStateStore()
+        try{
+            let items = ArrayList<ExperienceItem>()
+            items.add(ExperienceItem(1, '日报助手 三段式 经验 a', at: 10))
+            items.add(ExperienceItem(2, '日报助手 三段式 经验 b', at: 20))
+            items.add(ExperienceItem(3, '日报助手 三段式 经验 c', at: 30))
+
+            SkillEvolutionJob.run(skills(true), items, NONE, NONE,
+                fixture.chat, state, embedder: encoder(), now: 5000)
+
+            // 不是 5000：否则 at=30 之后、now 之前的素材会被下一轮的 since 过滤掉
+            @Expect(state.lastRunAt(), 30)
+        }finally{
+            SkillEvolutionJob.resetSink()
+        }
+    }
+
     /** 跑完推进水位线：下一轮据此只取新增素材 */
     @TestCase
     func testMarksRunWatermark(): Unit {
