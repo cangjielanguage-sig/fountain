@@ -65,7 +65,7 @@ public class SvgMutationEvent {
 }
 
 /** 同步变更监听器。异常被 hub 捕获并写入文档 warning。 */
-public open abstract class SvgMutationListener {
+public abstract class SvgMutationListener {
     public func onMutation(event: SvgMutationEvent): Unit
 }
 

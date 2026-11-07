@@ -344,11 +344,6 @@ public class SvgTrueTypeFont <: SvgFont {
         this.glyphIndex(codePoint) ?? 0
     }
 
-    /** 字体是否提供 `liga` 连字。 */
-    internal func hasLigatures(): Bool {
-        this.ligatureTable.isSome()
-    }
-
     /** 字体是否提供指定特性的 Type 4 连字表。 */
     internal func hasLigatureFeature(feature: String): Bool {
         match (this.ligatureTableFor(feature)) {

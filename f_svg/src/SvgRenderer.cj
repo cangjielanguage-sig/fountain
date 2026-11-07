@@ -1249,14 +1249,13 @@ private func svgGradientColorProfile(
     gradient: SvgGradient,
     styles: ?SvgComputedStyleTree
 ): String {
-    let declared = match (gradient.attr("color-profile")) {
+    match (gradient.attr("color-profile")) {
         case Some(value) =>
             let lower = value.trimAscii().toAsciiLower()
             if (lower.size > 0 && lower != "auto") {
                 return value.trimAscii()
             }
-            Option<String>.None
-        case None => Option<String>.None
+        case None => ()
     }
     let tree = match (styles) {
         case Some(value) => value
@@ -1269,10 +1268,7 @@ private func svgGradientColorProfile(
     if (style.sourceOf("color-profile") == CssStyleSource.Default) {
         "auto"
     } else {
-        match (declared) {
-            case Some(value) => value
-            case None => style.colorProfile()
-        }
+        style.colorProfile()
     }
 }
 
