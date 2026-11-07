@@ -271,6 +271,13 @@ private func svgHitCollect(
         maxElements
     )
     let result = ArrayList<SvgElement>()
+    match (styles.get(root)) {
+        case Some(rootStyle) =>
+            if (rootStyle.pointerEvents() == SvgPointerEvents.None) {
+                return result
+            }
+        case None => ()
+    }
     var index = root.children.size - 1
     while (index >= 0) {
         match (root.children[index]) {

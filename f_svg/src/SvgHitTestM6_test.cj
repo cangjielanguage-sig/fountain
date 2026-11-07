@@ -200,6 +200,16 @@ public class SvgHitTestM6_test {
         @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 1)
     }
 
+    /** 根元素自身 `pointer-events: none` 时整棵子树退出。 */
+    @TestCase
+    public func rootNonePrunes(): Unit {
+        let root = rootOf([rect("r", 0.0, 0.0, 100.0, 100.0)])
+        root.setAttr("pointer-events", "none")
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 0)
+        root.removeAttr("pointer-events")
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 1)
+    }
+
     /** 设备坐标：DPR 与根 viewBox 都参与换算。 */
     @TestCase
     public func deviceCoordinates(): Unit {
