@@ -260,8 +260,23 @@ public class SvgExternalDocumentM6_test {
         @Assert(warned)
     }
 
-    /**
-     * 外部文档内部的不安全引用一律按 `Remove` 处理：无论调用方使用
+    /** provider 返回 `None` 的负结果同样在单次渲染内缓存。 */
+    @TestCase
+    public func providerNoneCached(): Unit {
+        let provider = M6DocumentProvider(HashMap<String, Array<Byte>>())
+        let primary = SvgParser.parse(
+            svgOpen + "<use href=\"https://example.com/missing.svg#r\"/>" +
+            "<use href=\"https://example.com/missing.svg#r\"/></svg>",
+            options: allowedOptions()
+        )
+        let rendered = SvgRenderer(
+            options: SvgRenderOptions(width: 20, height: 20, externalDocuments: provider)
+        )
+        rendered.render(primary)
+        @Assert(provider.calls == 1)
+    }
+
+    /** 外部文档内部的不安全引用一律按 `Remove` 处理：无论调用方使用
      * `Reject` / `Remove` / `Keep`，provider 都只被调用一次且不抛异常。
      */
     @TestCase

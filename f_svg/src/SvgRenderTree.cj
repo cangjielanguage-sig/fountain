@@ -253,6 +253,8 @@ public class SvgRenderTreeBuilder {
     private var renderOptions: SvgRenderOptions = SvgRenderOptions()
     /** 单次构建的外部文档缓存；按 href 去重。 */
     private let externalDocuments = HashMap<String, SvgDocument>()
+    /** provider 返回 `None` 的 href；负结果同样在一次渲染内只询问一次。 */
+    private let missingExternalDocuments = HashMap<String, Bool>()
     /** 主文档解析选项；用于复制安全策略。 */
     private var mainParseOptions: SvgParseOptions = SvgParseOptions()
 
@@ -893,9 +895,14 @@ public class SvgRenderTreeBuilder {
         let document = match (this.externalDocuments.get(href)) {
             case Some(value) => value
             case None =>
+                if (this.missingExternalDocuments.get(href).isSome()) {
+                    this.warnings.add("外部文档「${href}」不可用")
+                    return Option<SvgExternalResolution>.None
+                }
                 let bytes = match (provider.resolveHref(href)) {
                     case Some(value) => value
                     case None =>
+                        this.missingExternalDocuments[href] = true
                         this.warnings.add("外部文档「${href}」不可用")
                         return Option<SvgExternalResolution>.None
                 }
