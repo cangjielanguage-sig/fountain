@@ -241,7 +241,7 @@ public class SvgExternalDocumentM6_test {
     @TestCase
     public func circularReferenceThroughTwoIds(): Unit {
         let documents = HashMap<String, Array<Byte>>()
-        documents["https://example.com/two.svg"] = (
+        documents["https://example.com/two.svg#a"] = (
             svgOpen + "<g id=\"a\"><use href=\"#b\"/></g>" +
             "<g id=\"b\"><use href=\"#a\"/></g></svg>"
         ).unsafeBytes()
