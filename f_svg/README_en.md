@@ -632,6 +632,169 @@ let box = rect.getBBox(options: SvgBBoxOptions(stroke: true))
 let hits = root.querySelectorAll("rect:not(.skip) + circle")
 ```
 
+## M6: static interaction (no script)
+
+M6 `:hover` / `:focus` only evaluate static state; the library does not attach an event
+loop or execute scripts.
+
+- **`pointer-events`**: `auto` / `none` / `visiblePainted` / `visibleFill` /
+  `visibleStroke` / `visible` / `painted` / `fill` / `stroke` / `all` / `bounding-box`.
+  It only enters computed style and does not change painting. `none` removes the element
+  and its subtree from hit testing.
+- **`cursor`**: validates the CSS keyword whitelist and stores it in computed style;
+  `url(...)` and unknown values fall back to `auto` with a warning and no cursor resource
+  is loaded.
+- **`:hover` / `:focus`**: evaluated through `SvgRenderOptions.hoveredIds` /
+  `focusedIds`; they never match when the lists are absent, so documents that do not use
+  interaction features are byte-identical to M5. `:focus` matches only the first
+  resolvable element in `focusedIds`.
+- **`SvgHitTest`**: `hitTest(root, point, options:)` takes device coordinates, applies the
+  inverse DPR and root `viewBox` transform, and returns a hit chain with the topmost
+  painter first. Fills use the flattened outline and `fill-rule`; strokes use the
+  centreline distance and caps. `image` uses its rectangle, `text` uses glyph outlines,
+  and containers participate only for `all` / `bounding-box`. Exceeding `maxElements`
+  throws `Limit`.
+
+```cangjie
+let options = SvgRenderOptions(hoveredIds: ["button"], focusedIds: ["search"])
+let bitmap = SvgRenderer(options: options).render(document)
+let hits = SvgHitTest().hitTest(document, SvgPoint(120.0, 80.0), options: options)
+```
+
+Security boundary: `pointer-events` / `cursor` do not trigger links, events or resource
+loading; external cursor URLs follow the existing security policy and are removed during
+parsing by default.
+
+## M6: embedding and documents
+
+- **`foreignObject`**: only the injection interface `SvgForeignObjectRenderer` is
+  provided; the library does not parse XHTML. Pass it through
+  `SvgRenderOptions.foreignObjectRenderer`. When it is absent, returns `None`, or the
+  element lacks a valid width/height, the area is transparent and a warning is emitted.
+  The returned bitmap is scaled into `x/y/width/height`.
+- **External document references**: `SvgExternalDocumentProvider.resolveHref(href)` is
+  called only for non-fragment `use` hrefs and at most once per href per render. The main
+  document must allow external references during parsing
+  (`SvgSecurityOptions(allowExternalReferences: true)`, and the href must use http/https
+  or a protocol-relative address). External document depth is capped at 4 and each
+  document at 16 MiB; exceeding either throws `Limit`. Cycles warn and stop; external
+  documents do not recursively load further external references.
+- **`initialView`**: `SvgRenderOptions.initialView` accepts `#id` or `id`. When it
+  resolves to a `view` with a `viewBox`, that `viewBox` / `preserveAspectRatio` overrides
+  the initial viewport without changing the output size; a miss or a missing `viewBox`
+  warns and falls back to the root viewport. `viewTarget` does not participate.
+- **Root attributes**: `SvgDocument.baseProfile()` / `version()` / `zoomAndPan()`;
+  `zoomAndPan` stores the value only and does not affect rendering.
+
+```cangjie
+let options = SvgRenderOptions(
+    initialView: "#detail",
+    foreignObjectRenderer: myRenderer,
+    externalDocuments: myProvider
+)
+```
+
+Security boundary: the provider is implemented by the caller; the library never performs
+network or file access. External reference permission follows the M2 security options.
+
+## M6: rendering hints and color
+
+- **`shape-rendering`**: `optimizeSpeed` forces 1× sampling and disables shape AA;
+  `crispEdges` disables AA; `geometricPrecision` uses a 0.25× curve tolerance; `auto`
+  keeps M5 output.
+- **`text-rendering`**: `optimizeSpeed` disables ligatures and kerning;
+  `optimizeLegibility` keeps/enables them; `geometricPrecision` raises precision; `auto`
+  follows the font tables.
+- **`color-rendering`**: `auto` uses analytic interpolation; `optimizeSpeed` /
+  `optimizeQuality` quantize the gradient parameter `t` to 128 / 512 levels while
+  endpoint colors stay fixed.
+- **`color-interpolation`**: with `linearRGB`, stops are converted to linear light,
+  interpolated, then converted back to sRGB (the red/blue midpoint is about `#bc00bc`);
+  `auto` / `sRGB` are byte-identical to M5.
+- **`@color-profile`**: parses the name and `src` without loading files; `color-profile`
+  accepts only `auto` / `sRGB` / a declared name. Other names warn and render as sRGB,
+  with no ICC transform.
+
+All four hint properties are inherited; the default `auto` leaves existing output
+unchanged. Hints only affect sampling and interpolation for this render, not geometry or
+layout.
+
+## M6: font and text details
+
+- **`font-stretch`**: nine keywords and percentages;
+  `SvgFontRegistry.register(..., stretch:)` / `resolve(..., stretch:)` try an exact match,
+  then the nearest percentage, then fall back to 100%. A percentage combined with a 100%
+  font applies proportional horizontal synthesis.
+- **`font-variant: small-caps`**: lowercase ASCII uses uppercase glyphs scaled uniformly
+  to 0.8, with advances updated; a missing uppercase glyph keeps the original glyph and
+  warns.
+- **`font-size-adjust`**: corrects glyphs and advances by `OS/2.sxHeight / unitsPerEm`;
+  a missing table is ignored with a warning.
+- **`font-feature-settings` / `font-variant-ligatures`**: parses 4-character tag switches
+  (`0` / `1` / `on` / `off`) with a 64-entry limit. `font-feature-settings` overrides
+  `font-variant-ligatures`, and `font-kerning` overrides `kern` last. The default set is
+  equivalent to M5 (`liga` / `clig` on, `dlig` / `hlig` off).
+- **`text-decoration` longhands**: `-line` / `-style` / `-color` / `-thickness` and
+  `text-underline-position`; the shorthand expands into longhands. `double` draws two
+  parallel lines, `dotted` / `dashed` split by thickness, and `wavy` builds a sine
+  polyline with thickness as amplitude.
+- **`pathLength`**: the declared length calibrates `stroke-dasharray` /
+  `stroke-dashoffset` and absolute `textPath` `startOffset`; percentages still use the
+  actual arc length, and invalid values are ignored with a warning.
+
+## M6: animation control
+
+- **Time source**: `currentTime()` / `setCurrentTime(t)` (negative values clamp to 0,
+  NaN / Inf throw `InvalidValue`), `pause()` / `unpause()`. `sample(time)` keeps its
+  explicit-sampling semantics.
+- **Triggers**: `begin(id)` takes effect only for `begin="indefinite"` or event-based
+  begins; `end(id)` finishes immediately; `fireEvent(id, name)` splits time items on `;`,
+  compares event names case-insensitively, and supports `click` / `mouseover` /
+  `mouseout` / `accessKey(...)` / `wallclock(...)`. No UI event loop is attached.
+- **`attributeType`**: `CSS` writes / replaces the same declaration in inline style while
+  preserving other declarations; `XML` (default) writes the attribute. `!important` still
+  outranks inline style.
+- **`min` / `max`**: clamp the active duration; `min > max` warns and ignores both.
+- **`discard`**: removes the target from the sampled snapshot after `begin + dur`; only
+  the outermost element is handled and the original document is unchanged.
+
+```cangjie
+let timeline = SvgTimeline(document)
+timeline.begin("in")
+timeline.setCurrentTime(2.0)
+let frame = timeline.sample(timeline.currentTime())
+```
+
+## M6: DOM API
+
+- **Factory methods**: `SvgPoint.create` / `SvgMatrix.create` / `SvgTransform.create`,
+  equivalent to the existing constructors.
+- **View state**: `SvgViewState` (`currentScale` / `currentTranslate`) can be passed
+  through `SvgRenderOptions.viewState`; its matrix is inserted after the root viewport.
+  The default identity leaves output unchanged.
+- **Child APIs**: `insertBefore(node, reference)` / `removeChild(node)` maintain
+  `children` and `parent`; a missing `reference` throws `InvalidValue`.
+- **Mutation listeners**: `SvgDocument.addMutationListener` /
+  `removeMutationListener`; attribute, insertion and removal changes notify
+  synchronously, listener exceptions are captured as document warnings, and the listener
+  limit is 32.
+- **Hit queries**: `getIntersectionList` / `getEnclosureList` / `checkIntersection` /
+  `checkEnclosure`, based on `getBBox` and filtered by `pointer-events: none` /
+  `visibility: hidden`; `reference` limits the queried subtree, result sets are new
+  instances, and the document stays read-only.
+
+## M6: SVG 2 wrap-up
+
+- **`vector-effect` extension**: adds `non-scaling-size` / `non-rotation` /
+  `fixed-position`, applied to the accumulated matrix in the order
+  `non-scaling-size → non-rotation → fixed-position`; `non-scaling-stroke` keeps the
+  existing stroke scaling.
+- **`stroke-linejoin` extension**: adds `miter-clip` / `arcs`; `miter-clip` clips when
+  `stroke-miterlimit` is exceeded, and `arcs` joins with an arc of `stroke-width / 2`.
+- **`width` / `height: auto`**: the root derives size from the content bounding box and
+  the `viewBox` ratio; only explicit `auto` takes effect, and missing attributes keep the
+  M5 viewport derivation. When size cannot be determined, it warns and falls back.
+
 ## Non-goals for M3
 
 - JPEG / WebP / GIF decoding, the `feImage` primitive;
