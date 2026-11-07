@@ -179,6 +179,25 @@ public class SvgDecorationM6_test {
         @Assert(bounds.height > runs[0].thickness)
     }
 
+    /** wavy 按 thickness 描边，而不是开放折线填充出的双叶带。 */
+    @TestCase
+    public func wavyStrokeWidth(): Unit {
+        // 基线 30、auto 偏移 2、厚度 4：波谷中心 y = 36，描边覆盖 34..38；
+        // 填充带止于波谷 36，第 37 行只可能来自描边。
+        let bitmap = bitmapOf(
+            '<text x="0" y="30" font-family="Hershey" font-size="20" fill="red" ' +
+            'text-decoration-line="underline" text-decoration-style="wavy" ' +
+            'text-decoration-thickness="4">T</text>'
+        )
+        var belowWave = false
+        for (x in 0..7) {
+            if (inkAt(bitmap, x, 37)) {
+                belowWave = true
+            }
+        }
+        @Assert(belowWave)
+    }
+
     /** `under` 再下移 descent；`above` 位于基线上方。 */
     @TestCase
     public func underlinePositionModes(): Unit {

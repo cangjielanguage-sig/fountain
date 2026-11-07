@@ -318,13 +318,42 @@ public class SvgRenderer {
                     styles: list.styles
                 )
                 var explicitColor = false
+                var hasFillRun = false
                 for (run in decorationRuns) {
                     if (run.color.isSome()) {
                         explicitColor = true
                     }
+                    if (!run.wavy) {
+                        hasFillRun = true
+                    }
+                }
+                // wavy 是开放折线，按 thickness 描边；填充会被隐式闭合为双叶带。
+                for (run in decorationRuns) {
+                    if (!run.wavy) {
+                        continue
+                    }
+                    let paint = match (run.color) {
+                        case Some(value) => SvgPaint.of(value)
+                        case None => style.fill()
+                    }
+                    let wavyCommand = SvgDisplayCommand(
+                        SvgDisplayCommandKind.StrokePath,
+                        command.tag,
+                        command.matrix,
+                        path: Some(run.path),
+                        style: Some(style),
+                        bounds: Some(run.bounds),
+                        opacity: command.opacity,
+                        paintOverride: Some(paint),
+                        strokeWidthOverride: Some(run.thickness)
+                    )
+                    this.drawStroke(bitmap, wavyCommand, list, style, patterns)
                 }
                 if (style.fill().kind == SvgPaintKind.Reference || explicitColor) {
                     for (run in decorationRuns) {
+                        if (run.wavy) {
+                            continue
+                        }
                         let paint = match (run.color) {
                             case Some(value) => Some(SvgPaint.of(value))
                             case None => Option<SvgPaint>.None
@@ -341,9 +370,12 @@ public class SvgRenderer {
                         )
                         this.drawFill(bitmap, decorationCommand, list, style, patterns)
                     }
-                } else if (decorationRuns.size > 0) {
+                } else if (hasFillRun) {
                     let merged = ArrayList<SvgPathCommand>()
                     for (run in decorationRuns) {
+                        if (run.wavy) {
+                            continue
+                        }
                         for (item in run.path.commands) {
                             merged.add(item)
                         }
@@ -472,9 +504,18 @@ public class SvgRenderer {
                 strokeScale = 1.0
             }
         }
-        let effectiveStrokeWidth = style.strokeWidth().value * strokeScale
-        var effectiveDashArray = scaleStrokeDash(strokeDashValues(style), strokeScale)
-        var effectiveDashOffset = style.strokeDashOffset().value * strokeScale
+        let effectiveStrokeWidth = (command.strokeWidthOverride ?? style.strokeWidth().value) *
+            strokeScale
+        var effectiveDashArray = if (command.strokeWidthOverride.isSome()) {
+            Array<Float64>()
+        } else {
+            scaleStrokeDash(strokeDashValues(style), strokeScale)
+        }
+        var effectiveDashOffset = if (command.strokeWidthOverride.isSome()) {
+            0.0
+        } else {
+            style.strokeDashOffset().value * strokeScale
+        }
         let declaredPathLength = style.pathLengthValue()
         if (declaredPathLength > 0.0) {
             let actualLength = path.totalLength()

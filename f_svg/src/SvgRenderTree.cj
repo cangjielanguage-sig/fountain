@@ -90,6 +90,8 @@ public class SvgDisplayCommand {
     public let bitmap: ?SvgBitmap
     /** 文本轮廓扁平化容差倍率；`None` 时沿用 `shape-rendering`。 */
     internal let textTolerance: ?Float64
+    /** 覆盖样式的描边宽度；装饰线等内部路径使用，`None` 时取计算样式。 */
+    internal let strokeWidthOverride: ?Float64
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -114,7 +116,8 @@ public class SvgDisplayCommand {
         isolated!: Bool = false,
         paintOverride!: ?SvgPaint = None,
         bitmap!: ?SvgBitmap = None,
-        textTolerance!: ?Float64 = None
+        textTolerance!: ?Float64 = None,
+        strokeWidthOverride!: ?Float64 = None
     ) {
         this.kind = kind
         this.tag = tag
@@ -142,6 +145,7 @@ public class SvgDisplayCommand {
         this.paintOverride = paintOverride
         this.bitmap = bitmap
         this.textTolerance = textTolerance
+        this.strokeWidthOverride = strokeWidthOverride
     }
 }
 

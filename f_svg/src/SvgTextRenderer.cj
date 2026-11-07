@@ -71,12 +71,21 @@ internal class SvgDecorationRun {
     /** 显式 `text-decoration-color`；`None` 沿用文本填充。 */
     let color: ?SvgColor
     let thickness: Float64
+    /** `wavy` 为开放折线，必须按描边绘制而不是填充。 */
+    let wavy: Bool
 
-    init(path: SvgPathData, bounds: SvgBounds, color!: ?SvgColor = None, thickness!: Float64 = 0.0) {
+    init(
+        path: SvgPathData,
+        bounds: SvgBounds,
+        color!: ?SvgColor = None,
+        thickness!: Float64 = 0.0,
+        wavy!: Bool = false
+    ) {
         this.path = path
         this.bounds = bounds
         this.color = color
         this.thickness = thickness
+        this.wavy = wavy
     }
 }
 
@@ -873,7 +882,15 @@ public class SvgTextRenderer {
             }
             let path = SvgPathData(commands.toArray())
             let bounds = pathDataBounds(path) ?? SvgBounds(glyph.x, glyph.y, glyph.advance, thickness)
-            runs.add(SvgDecorationRun(path, bounds, color: spec.color, thickness: thickness))
+            runs.add(
+                SvgDecorationRun(
+                    path,
+                    bounds,
+                    color: spec.color,
+                    thickness: thickness,
+                    wavy: spec.style == SvgTextDecorationStyle.Wavy
+                )
+            )
         }
         runs
     }
