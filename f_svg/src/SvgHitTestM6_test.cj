@@ -186,6 +186,20 @@ public class SvgHitTestM6_test {
         @Assert(legacy[0] == hits[0])
     }
 
+    /** 默认 `auto` 等价 `visiblePainted`；隐藏元素不参与，bounding-box 亦不越过 visibility。 */
+    @TestCase
+    public func autoEqualsVisiblePainted(): Unit {
+        let shape = rect("r", 0.0, 0.0, 100.0, 100.0)
+        shape.setAttr("fill", "red")
+        shape.setAttr("visibility", "hidden")
+        let root = rootOf([shape])
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 0)
+        shape.setAttr("pointer-events", "bounding-box")
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 0)
+        shape.setAttr("pointer-events", "all")
+        @Assert(SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0)).size == 1)
+    }
+
     /** 设备坐标：DPR 与根 viewBox 都参与换算。 */
     @TestCase
     public func deviceCoordinates(): Unit {

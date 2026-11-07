@@ -379,8 +379,11 @@ private func svgHitElementMatches(
 
     match (element) {
         case image: SvgImage =>
-            if (events == SvgPointerEvents.All || events == SvgPointerEvents.BoundingBox) {
+            if (events == SvgPointerEvents.All) {
                 return svgHitImageContains(image, style, point)
+            }
+            if (events == SvgPointerEvents.BoundingBox) {
+                return !hidden && svgHitImageContains(image, style, point)
             }
             if (hidden && svgHitRequiresVisible(events)) {
                 return false
@@ -391,20 +394,29 @@ private func svgHitElementMatches(
 
     match (element) {
         case container: SvgContainer =>
-            if (events == SvgPointerEvents.All || events == SvgPointerEvents.BoundingBox) {
+            if (events == SvgPointerEvents.All) {
                 return svgHitBBoxContains(element, style, point, context)
+            }
+            if (events == SvgPointerEvents.BoundingBox) {
+                return !hidden && svgHitBBoxContains(element, style, point, context)
             }
             return false
         case svg: SvgRoot =>
-            if (events == SvgPointerEvents.All || events == SvgPointerEvents.BoundingBox) {
+            if (events == SvgPointerEvents.All) {
                 return svgHitBBoxContains(element, style, point, context)
+            }
+            if (events == SvgPointerEvents.BoundingBox) {
+                return !hidden && svgHitBBoxContains(element, style, point, context)
             }
             return false
         case _ => ()
     }
 
-    if (events == SvgPointerEvents.All || events == SvgPointerEvents.BoundingBox) {
+    if (events == SvgPointerEvents.All) {
         return svgHitBBoxContains(element, style, point, context)
+    }
+    if (events == SvgPointerEvents.BoundingBox) {
+        return !hidden && svgHitBBoxContains(element, style, point, context)
     }
     if (hidden && svgHitRequiresVisible(events)) {
         return false
@@ -443,7 +455,7 @@ private func svgHitElementMatches(
 
 private func svgHitRequiresVisible(events: SvgPointerEvents): Bool {
     match (events) {
-        case VisiblePainted | VisibleFill | VisibleStroke | Visible => true
+        case VisiblePainted | VisibleFill | VisibleStroke | Visible | Auto => true
         case _ => false
     }
 }
