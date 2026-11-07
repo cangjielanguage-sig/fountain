@@ -72,7 +72,7 @@ fboot help # 显示fboot的其他功能
 
 ![fountain 模块依赖矩阵](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/module-dependency-matrix.svg)
 
-依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](docs/模块依赖图/README.md)。
+依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](https://gitcode.com/Cangjie-TPC/fountain/blob/master/docs/%E6%A8%A1%E5%9D%97%E4%BE%9D%E8%B5%96%E5%9B%BE/README.md)。
 
 ## `fountain-developer`
 
