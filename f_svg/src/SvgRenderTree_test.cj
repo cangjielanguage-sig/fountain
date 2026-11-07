@@ -35,6 +35,23 @@ internal func fillCommands(list: SvgDisplayList): ArrayList<SvgDisplayCommand> {
     result
 }
 
+/** 构造长度为 `depth` 的 use 链：`#c0 → #c1 → …`，末端为矩形。 */
+internal func svgUseChain(depth: Int64): SvgDocument {
+    let body = StringBuilder()
+    body.append("<defs>")
+    for (index in 0..depth) {
+        body.append('<g id="c${index}">')
+        if (index + 1 < depth) {
+            body.append('<use href="#c${index + 1}"/>')
+        } else {
+            body.append('<rect width="4" height="4"/>')
+        }
+        body.append("</g>")
+    }
+    body.append("</defs><use href=\"#c0\"/>")
+    svgDoc(body.toString())
+}
+
 @Test
 public class SvgRenderTree_test {
     /** display:none 跳过、文档顺序保持、渲染不修改文档。 */
@@ -116,6 +133,53 @@ public class SvgRenderTree_test {
             SvgRenderTreeBuilder().build(svgDoc(deepSvg.toString()))
         })
         @Assert(deepSvgError.kind == SvgErrorKind.Limit)
+    }
+
+    /** 普通容器嵌套不计入 use 链深度：60 层 g + 单次 use 必须正常展开。 */
+    @TestCase
+    public func containerNestingDoesNotConsumeUseDepth(): Unit {
+        let body = StringBuilder()
+        body.append('<defs><rect id="r" width="10" height="10"/></defs>')
+        for (_ in 0..60) {
+            body.append("<g>")
+        }
+        body.append('<use href="#r"/>')
+        for (_ in 0..60) {
+            body.append("</g>")
+        }
+        let builder = SvgRenderTreeBuilder()
+        let list = builder.build(svgDoc(body.toString()))
+        @Assert(fillCommands(list).size == 1)
+        @Assert(builder.warnings.size == 0)
+    }
+
+    /** use 链在 64 层内可用，第 65 层抛 Limit。 */
+    @TestCase
+    public func useChainDepthBoundary(): Unit {
+        @Assert(fillCommands(SvgRenderTreeBuilder().build(svgUseChain(64))).size == 1)
+        let error = expectSvgException({=>
+            SvgRenderTreeBuilder().build(svgUseChain(65))
+        })
+        @Assert(error.kind == SvgErrorKind.Limit)
+    }
+
+    /** 非深度导致的循环：warning 后停止，不再递归到深度上限。 */
+    @TestCase
+    public func useCycleWarnsInsteadOfFailing(): Unit {
+        let document = svgDoc(
+            '<defs><g id="a"><use href="#b"/></g><g id="b"><use href="#a"/></g></defs>' +
+            '<use href="#a"/>'
+        )
+        let builder = SvgRenderTreeBuilder()
+        let list = builder.build(document)
+        @Assert(fillCommands(list).size == 0)
+        var cyclic = false
+        for (warning in builder.warnings) {
+            if (warning.contains("循环")) {
+                cyclic = true
+            }
+        }
+        @Assert(cyclic)
     }
 
     /** 嵌套 svg：视口缩放、x/y 偏移与裁剪区域。 */

@@ -195,6 +195,8 @@ private class SvgRenderTreeContext {
     let contextStroke: ?SvgPaint
     /** 外部文档嵌套深度；主文档为 0。 */
     let externalDepth: Int64
+    /** 当前 use 链深度；只在 `expandUse` 内递增，与普通容器嵌套无关。 */
+    let useDepth: Int64
 
     init(
         matrix: SvgMatrix,
@@ -209,7 +211,8 @@ private class SvgRenderTreeContext {
         clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>(),
         contextFill!: ?SvgPaint = None,
         contextStroke!: ?SvgPaint = None,
-        externalDepth!: Int64 = 0
+        externalDepth!: Int64 = 0,
+        useDepth!: Int64 = 0
     ) {
         this.matrix = matrix
         this.width = width
@@ -224,6 +227,7 @@ private class SvgRenderTreeContext {
         this.contextFill = contextFill
         this.contextStroke = contextStroke
         this.externalDepth = externalDepth
+        this.useDepth = useDepth
     }
 }
 
@@ -731,7 +735,8 @@ public class SvgRenderTreeBuilder {
             context.fonts,
             clipQuads: context.clipQuads,
             contextFill: context.contextFill,
-            contextStroke: context.contextStroke
+            contextStroke: context.contextStroke,
+            useDepth: context.useDepth
         )
         let childCommands = ArrayList<SvgDisplayCommand>()
         if (container.kind == SvgContainerKind.Switch) {
@@ -834,7 +839,8 @@ public class SvgRenderTreeBuilder {
             context.fonts,
             clipQuads: childQuads,
             contextFill: context.contextFill,
-            contextStroke: context.contextStroke
+            contextStroke: context.contextStroke,
+            useDepth: context.useDepth
         )
         this.walkChildren(svg, childContext, commands)
     }
@@ -918,22 +924,24 @@ public class SvgRenderTreeBuilder {
             return
         }
         let external = !hrefText.startsWith("#")
-        var targetId = if (external) { "" } else { stripSvgHash(hrefText) }
+        let targetId = if (external) { "" } else { stripSvgHash(hrefText) }
         if (!external && targetId.size == 0) {
             this.warnings.add("use 缺少 href")
             return
         }
-        if (context.depth >= 64) {
-            if (arrayContainsSvgString(context.useStack, hrefText)) {
-                this.warnings.add("use 循环引用在深度 64 终止")
-                return
-            }
-            throw SvgException("use 引用深度超过 64", kind: SvgErrorKind.Limit)
+        let stackKey = if (external) { "ext:" + hrefText } else { targetId }
+        // 循环优先于深度：命中 useStack 即 warning 停止，正常文档不会累积到上限。
+        if (arrayContainsSvgString(context.useStack, stackKey)) {
+            this.warnings.add("use 循环引用「${stackKey}」已停止")
+            return
+        }
+        if (context.useDepth >= SVG_USE_MAX_DEPTH) {
+            throw SvgException("use 引用深度超过 ${SVG_USE_MAX_DEPTH}", kind: SvgErrorKind.Limit)
         }
         var workingStyles = context.styles
         var workingRoot = context.root
         var workingDepth = context.externalDepth
-        var stackKey = targetId
+        var resolvedStackKey = stackKey
         var target: SvgElement
         if (external) {
             match (this.resolveExternalUse(hrefText, context)) {
@@ -942,7 +950,6 @@ public class SvgRenderTreeBuilder {
                     workingStyles = value.styles
                     workingRoot = value.root
                     workingDepth = value.depth
-                    stackKey = "ext:" + hrefText
                 case None => return
             }
         } else {
@@ -1027,7 +1034,7 @@ public class SvgRenderTreeBuilder {
         for (id in context.useStack) {
             nextStack.add(id)
         }
-        nextStack.add(stackKey)
+        nextStack.add(resolvedStackKey)
         let childContext = SvgRenderTreeContext(
             matrix,
             context.width,
@@ -1035,13 +1042,14 @@ public class SvgRenderTreeBuilder {
             clipRect,
             workingStyles,
             workingRoot,
-            context.depth + 1,
+            context.depth,
             nextStack.toArray(),
             context.fonts,
             clipQuads: childQuads,
             contextFill: useContextFrame(workingStyles, target, true),
             contextStroke: useContextFrame(workingStyles, target, false),
-            externalDepth: workingDepth
+            externalDepth: workingDepth,
+            useDepth: context.useDepth + 1
         )
         if (target.tag == "symbol") {
             this.walkChildren(target, childContext, commands)

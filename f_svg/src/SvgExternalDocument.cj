@@ -28,3 +28,6 @@ internal let SVG_EXTERNAL_MAX_DEPTH: Int64 = 4
 internal func svgExternalDepthAllows(depth: Int64): Bool {
     depth >= 0 && depth < SVG_EXTERNAL_MAX_DEPTH
 }
+
+/** 单条 use 链允许的最大展开层数；与普通容器 / 嵌套 svg 深度无关。 */
+internal let SVG_USE_MAX_DEPTH: Int64 = 64

@@ -237,6 +237,34 @@ public class SvgExternalDocumentM6_test {
         @Assert(warned)
     }
 
+    /** 外部文档内部 A→B→A 循环同样只 warning 并停止。 */
+    @TestCase
+    public func circularReferenceThroughTwoIds(): Unit {
+        let documents = HashMap<String, Array<Byte>>()
+        documents["https://example.com/two.svg"] = (
+            svgOpen + "<g id=\"a\"><use href=\"#b\"/></g>" +
+            "<g id=\"b\"><use href=\"#a\"/></g></svg>"
+        ).unsafeBytes()
+        let provider = M6DocumentProvider(documents)
+        let primary = SvgParser.parse(
+            svgOpen + "<use href=\"https://example.com/two.svg#a\"/></svg>",
+            options: allowedOptions()
+        )
+        let rendered = SvgRenderer(
+            options: SvgRenderOptions(width: 20, height: 20, externalDocuments: provider)
+        )
+        let bitmap = rendered.render(primary)
+        @Assert(provider.calls == 1)
+        @Assert(bitmap.pixel(10, 10).alpha == 0.0)
+        var warned = false
+        for (warning in rendered.warnings) {
+            if (warning.contains("循环")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
     /** 外部文档自身不再加载外部引用。 */
     @TestCase
     public func externalDocumentCannotChain(): Unit {
