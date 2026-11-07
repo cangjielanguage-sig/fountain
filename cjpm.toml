@@ -19,6 +19,7 @@
   "fountain::f_jwt" = {path = "./f_jwt"}
   "fountain::f_http" = {path = "./f_http"}
   "fountain::f_httpclient" = {path = "./f_httpclient"}
+  "fountain::f_hydra" = {path = "./f_hydra"}
   "fountain::f_log" = {path = "./f_log"}
   "fountain::f_macros" = {path = "./f_macros"}
   "fountain::f_mockdb" = {path = "./f_mockdb"}

@@ -12,33 +12,33 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.memory
 
 public struct Memory {
     private static let faithful: FaithfulMemory
     private static let timer: Timer
 
-    static init(){
+    static init() {
         let makingMemory = LLMConfig.getMakingMemory()
-        if(makingMemory){
+        if (makingMemory) {
             faithful = FaithfulMemoryImpl()
-            timer = Timer.after(nextSummarisingTime()){
+            timer = Timer.after(nextSummarisingTime()) {
                 faithful.summarise(Memory.summarise)
                 nextSummarisingTime()
             }
             atExit(timer.cancel)
-        }else{
+        } else {
             faithful = DummyMemory()
             timer = ZERO_TIMER
         }
     }
 
-    private static func nextSummarisingTime(){
+    private static func nextSummarisingTime() {
         DateTime.tomorrow - DateTime.now()
     }
     private static func extractor(): ?(MemoryExtractor, MemorySummaryFinder) {
-        match(LLMConfig.getSummarisingActionKind()){
+        match (LLMConfig.getSummarisingActionKind()) {
             case 'experience' => (lookup<ExperienceExtractor>(), lookup<ExperienceFinder>())
             case 'individuality' => (lookup<IndividualityExtractor>(), lookup<IndividualityFinder>())
             case '' => None<(MemoryExtractor, MemorySummaryFinder)>
@@ -46,15 +46,15 @@ public struct Memory {
         }
     }
     private static func summarise(session: String, messages: ArrayList<ChatMessage>): Bool {
-        let (extractor, finder) = if(let Some(x) <- Memory.extractor()){
+        let (extractor, finder) = if (let Some(x) <- Memory.extractor()) {
             x
-        }else{
+        } else {
             return false
         }
         let prompts = extractor.systemPrompts
         let system = SystemMessage(prompts)
         let content = StringGenerator()
-        for(m in messages){
+        for (m in messages) {
             content.append(generateContent(m))
             content.append('---')
         }
@@ -67,53 +67,84 @@ ${content}
         summarising.add(system)
         summarising.add(user)
         let params = LLMParams(model: LLMConfig.getSummarisingModel(), messages: summarising)
-        let respmsg = LLMContextMediator.instance.access(SummarisingAgentId, session, LLM_TYPE_TEXT, params).messages[0].content
-        if(let Some(start) <- respmsg.indexOf('```') && 
-           let Some(end) <- respmsg.lastIndexOf('```', start + 3) &&
-           let sub <- respmsg[start + 3 .. end].trimAscii()){
-            let jsonstr = if(sub.startsWith('json')){
-                sub[4 .. ]
-            }else{
+        let respmsg = LLM.chatByName(LLMConfig.getSummarisingLlmName(), params).messages[0].content
+        if (let Some(start) <- respmsg.indexOf('```') && let Some(end) <- respmsg.lastIndexOf('```', start + 3) && let sub <- respmsg[start +
+                3..end].trimAscii()) {
+            let jsonstr = if (sub.startsWith('json')) {
+                sub[4..]
+            } else {
                 sub
             }
             let jsonobj = JsonValue.fromStr(jsonstr).asObject()
             extractor.extract(jsonobj, finder.overwrite)
+            // 5.1：摘要同时落一条向量记忆，供检索召回
+            remember(session, jsonstr)
         }
         true
     }
-    
+
     private static func generateContent(message: ChatMessage): String {
-        match(message){
-                case x: ToolCallMessage => 
-                    let content = StringGenerator('''
+        match (message) {
+            case x: ToolCallMessage =>
+                let content = StringGenerator('''
   - role: ${x.role}
   - content: ${x.content}
 ''')
-                    for(call in x.tool_calls){
-                        content.append('''
+                for (call in x.tool_calls) {
+                    content.append(
+                        '''
     - id: ${call.id}
     - type: ${call.`type`}
-    - function: ${call.function.name}(${call.function.arguments})
+    - function: ${call.function.name}(${call
+                            .function
+                            .arguments})
 ''')
-                    }
-                    content.toString()
-                case x: ToolMessage => '''
+                }
+                content.toString()
+            case x: ToolMessage => '''
   - role: ${x.role}
   - tool_call_id: ${x.tool_call_id}
   - content: ${x.content}
 '''
-                case x => '''
+            case x => '''
   - role: ${x.role}
   - content: ${x.content}
 '''
         }
     }
+    /**
+     * 5.1：把会话摘要写成一条向量记忆（kind=session）。
+     *
+     * 流水仍在 `FaithfulMemory`（它适合按时间回放）；这里只把「提炼后的摘要」
+     * 交给 `Stores.content().memory`，让检索侧能召回。
+     */
+    public static func remember(session: String, summary: String, namespace!: String = 'loom', kind!: String = 'session'): Unit {
+        try {
+            // 首次使用时接线（幂等）：加载实现包、注册内容族、校验配置
+            StoreWiring.wire()
+            // 与 loom 同源：优先走装配安装的存储网关，保证命名空间与检索侧一致
+            let userId = LLMConfig.getMemoryUserId()
+            let payload = '{\"userId\":${userId},\"namespace\":${JsonString(namespace)},'
+                + '\"title\":${JsonString(session)},\"content\":${JsonString(summary)},'
+                + '\"kind\":${JsonString(kind)}}'
+            try {
+                let _ = LoomHostApi.callStore('memory', 'add', payload)
+            } catch (error: LoomException) {
+                // 未装配（脚本/单测）：回落到适配器，保持可用
+                MemoryStoreAdapter().add(MemoryWrite(userId, namespace, session, summary, kind))
+            }
+        } catch (e: Exception) {
+            // 摘要写入失败不影响会话主流程，但必须留下日志，避免静默丢失
+            LoggerFactory.getLogger<Memory>().warn('memory summary not stored: ${e.message}')
+        }
+    }
+
     protected static func add(session: String, role: Role, content: String): Unit {
         faithful.add(session, role, content)
     }
     protected static func add(session: String, all!: ArrayList<ChatMessage>): Unit {
-        spawn{
-            for(m in all){
+        spawn {
+            for (m in all) {
                 add(session, m.role, generateContent(m))
             }
         }

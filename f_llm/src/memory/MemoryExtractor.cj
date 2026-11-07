@@ -35,13 +35,13 @@ public abstract class MemoryExtractor {
         }
     }
     protected func extractString(jsonobj: JsonObject, key: String): String {
-        jsonobj.get(key)?.asString().getValue() ?? ''
+        jsonobj.get(key)?.asString().value ?? ''
     }
     protected func extractArray(jsonobj: JsonObject, key: String): String {
         jsonobj.get(key)?.asArray()
                 .getItems()
                 .iterator()
-                .map{x => x.asString().getValue()}
+                .map{x: JsonValue => x.asString().value}
                 .intersperse('\n  - ')
                 .fold(StringGenerator()){g, s => g.append(s)}
                 .toString() ?? ''

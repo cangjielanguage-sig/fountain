@@ -27,6 +27,9 @@ import fountain::f_data.macros.*
 import fountain::f_http.*
 import fountain::f_http.exception.MediaTypeException
 
+import fountain::f_httpclient.sse.*
+public import fountain::f_httpclient.sse.*
+
 public interface ExtendHttpResponse {
     func readToEnd(): Array<Byte>
     func reader(): StringReader<InputStream>
@@ -39,15 +42,30 @@ public interface ExtendHttpResponse {
     }
     func readJson(): JsonValue
     func readJson(charset: Charset): JsonValue
+    /** 把响应体当作 SSE（text/event-stream）读取；抽象函数不支持默认值，参数必须显式传 */
+    func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader
 }
 
 extend HttpResponse <: ExtendHttpResponse {
     public func readToEnd(): Array<Byte> {
         let input = this.body
         if(let Some(size) <- this.bodySize){
+            // 一次 read 不保证读满：已知长度也要循环，否则尾部是 0 字节（JSON 解析会报
+            // “Unescaped control character"，看起来像上游发了非法 JSON）
             let buf = Array<Byte>(size, repeat: 0)
-            input.read(buf)
-            buf
+            var offset = 0
+            while(offset < size){
+                let read = input.read(buf[offset ..])
+                if(read <= 0){
+                    break
+                }
+                offset += read
+            }
+            if(offset == size){
+                buf
+            }else{
+                buf[0 .. offset]
+            }
         }else{
             let bytes = ArrayList<Byte>()
             let buf = Array<Byte>(1024, repeat: 0)
@@ -59,6 +77,15 @@ extend HttpResponse <: ExtendHttpResponse {
     }
     public func reader(): StringReader<InputStream> {
         StringReader<InputStream>(this.body)
+    }
+
+    /**
+     * 把响应体当作 SSE（text/event-stream）读取。
+     *
+     * 只做语法解析：不解释 `[DONE]`、不解析 JSON、不自动重连；业务语义交给调用方。
+     */
+    public func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader {
+        SseReader(this.body, maxLineBytes: maxLineBytes, idleTimeout: idleTimeout)
     }
     public func reader(charset: Charset): TextReader {
         TextReader(this.body, charset: charset)

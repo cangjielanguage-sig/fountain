@@ -22,17 +22,31 @@
   "fountain::f_aspect" = {path = "../f_aspect"}
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_bean" = {path = "../f_bean"}
+  "fountain::f_concurrent" = {path = "../f_concurrent"}
+  "fountain::f_mcp" = {path = "../f_mcp"}
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_egraph" = {path = "../f_egraph"}
+  "fountain::f_email" = {path = "../f_email"}
+  "fountain::f_jit" = {path = "../f_jit"}
   "fountain::f_httpclient" = {path = "../f_httpclient"}
+  "fountain::f_hydra" = {path = "../f_hydra"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_orm" = {path = "../f_orm"}
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_store" = {path = "../f_store"}
+  "fountain::f_ticktock" = {path = "../f_ticktock"}
   "fountain::f_time" = {path = "../f_time"}
   "fountain::f_util" = {path = "../f_util"}
+  "postgres_driver" = {version = "0.1.0", output-type = "dynamic"}
+  "mysql_driver" = {version = "0.1.0", output-type = "dynamic"}
+
+[test-dependencies]
+  # 只用于真库集成测试（连不上库时用例自行打印 SKIP 跳过）；不影响下游依赖
+  # 需要同时 export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH（驱动的 bin-dependencies 用它）
+  "postgres_driver" = {version = "0.1.0", output-type = "dynamic"}
+  "mysql_driver" = {version = "0.1.0", output-type = "dynamic"}
 
 [target]
 [target.x86_64-unknown-linux-gnu]
