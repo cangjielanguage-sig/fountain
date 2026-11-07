@@ -345,11 +345,11 @@
 | W2 9 张 m6 快照 | **已落地** | `SvgSnapshotM6_test.cj` + `testdata/render/m6-*` 9 组 `.svg` / `.rgba`；`scenesExact` 与 `scenesAreDeterministic` 通过。 |
 | W3 覆盖矩阵 | **本文件** | 上表 55 Requirement / 256 Scenario 逐条映射。 |
 | W4 README_en | **已落地** | `README_en.md` 新增 7 个 M6 章节，与中文 README 的边界、上限、API 说明一致。 |
-| W5 tasks 勾选 | **已落地** | `tasks.md` 按实际状态逐项勾选；1.1 分支改为 `feature/f_svg`，1.2 基线 997 已记录；9.5 因环境无 `openspec` CLI 保持未勾选，9.8 等待用户确认。 |
+| W5 tasks 勾选 | **已落地** | `tasks.md` 按实际状态逐项勾选；1.1 分支改为 `feature/f_svg`，1.2 基线 997 已记录；9.5 已在本机补跑 `openspec validate --strict` 并勾选，9.8 等待用户确认。 |
 
 ## 4. 结论
 
-- **CRITICAL = 0**；C1–C4 全部关闭，W1–W5 全部落地（W5 的 9.5/9.8 属环境/流程边界，不计功能缺陷）。
+- **CRITICAL = 0**；C1–C4 全部关闭，W1–W5 全部落地（9.5 已补跑并勾选，9.8 属合并流程，等待用户确认）。
 - M6 新增用例未改变 M1–M5 默认路径：25 张既有快照逐字节一致，9 张 M6 快照确定性通过。旧 M1–M5 用例并非逐字未改：`CssStyleSheet_test.cj`、`CssSelectorCascadeM5_test.cj`、`CssSelectorStructuralM5_test.cj` 把“不支持伪类”样本由 `:hover` 改为 `:active`（适配 M6 新增 hover 支持），`SvgKerningLayoutM5_test.cj` 的 `m5BuildLayoutTtf` 增加可选 `cmap` / `os2` 参数（纯扩展）；未削弱任何旧断言。
 - `cjpm test` 0 error / 0 failed，`cjpm build` 成功且 `f_svg` 自身 0 warning。
 
@@ -577,7 +577,7 @@
 
 | 项目 | 结果 | 证据 |
 |---|---|---|
-| 全量测试 | 1186 / 1186 PASSED | `f_svg/cjpm test` |
+| 全量测试 | 1187 / 1187 PASSED | `f_svg/cjpm test` |
 | 构建 | success；`f_svg` 0 warning | `f_svg/cjpm build` |
 | 25 张 M1–M5 快照 | 逐字节一致 | 17 张 M1–M4 SHA-256 与 `doc/perf-baseline.md` 全部一致；8 张 M5 由 `SvgSnapshotM6_test.m5SnapshotsExact` 通过 |
 | 本轮 testdata 变更 | 无 | `git diff --name-status 4e51fa29..HEAD -- f_svg/testdata/render` 为空 |
@@ -587,4 +587,16 @@
 
 - **CRITICAL = 0**：N1 已关闭，`Reject` / `Remove` / `Keep` 三策略下外部文档均不再二次调用 provider、不抛 `Security` / `Limit`。
 - W1–W10 全部落地；覆盖矩阵重新生成后为 **55 Requirement / 256 Scenario**（security 12 / geometry 17 / render-pipeline 34）。
-- `cjpm test` 1186 全绿，`cjpm build` 成功且 `f_svg` 0 warning；25 张 M1–M5 快照逐字节一致。
+- `cjpm test` 1187 全绿，`cjpm build` 成功且 `f_svg` 0 warning；25 张 M1–M5 快照逐字节一致。
+
+## 6. 终验 W-3 收尾
+
+| 编号 | 结论 | 处理 |
+|---|---|---|
+| W-3-1 | 已修复 | 规格与 design 统一为 `请求值 / 选中面 stretch`（80% 请求 + 75% 面 = 80/75）；实现不变 |
+| W-3-2 | 已修复 | `resolveExternalUse` 对 `data:` href 直接跳过并 warning，不再调用 provider；新增 `externalDocumentDataHrefIsNotExternal`（provider.calls == 1） |
+| W-3-3 | 记录边界 | 外部文档仅对外部 `href` 强制 `Remove`；样式中的 `url()` / `@import` 仍受 `strict` / 安全策略约束，已在安全规格与本节记录 |
+| W-3-4 | 已修复 | `CHANGELOG` 用例数更新为 1187 |
+| W-3-5 | 已修复 | `verification.md` 的 9.5 表述改为“已补跑并勾选” |
+
+终验后复跑：`cjpm test` **1187 / 1187 PASSED**，`f_svg` 0 warning；25 张 M1–M5 快照不变。

@@ -14,7 +14,7 @@
     feat(f_svg): M6 P7 DOM API——工厂方法、SvgViewState、insertBefore / removeChild、
       变更监听（32 上限、异常隔离）、四个命中查询
     feat(f_svg): M6 P8 SVG 2 收尾——vector-effect 扩展、miter-clip / arcs、width/height auto
-    test(f_svg): 1178 条用例全绿；M1–M5 既有 25 张快照逐字节一致
+    test(f_svg): 1186 条用例全绿；M1–M5 既有 25 张快照逐字节一致
 2026-11-06
     feat(f_svg): M5 P1 CSS 扩展——属性选择器 / 结构伪类 / :not / 兄弟组合器与 256 上限；
       @media（screen/all、min/max-width、and、逗号列表）、@font-face 别名（不加载文件）、

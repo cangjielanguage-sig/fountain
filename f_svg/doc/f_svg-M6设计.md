@@ -207,7 +207,7 @@ public interface SvgExternalDocumentProvider {
 
 ### 5.1 `font-stretch` / `font-variant` / `font-size-adjust`
 
-- `font-stretch`：9 个关键字 + 百分比，匹配字体族时作为筛选条件；无匹配时按 100% 使用并可选合成水平缩放（仅当 `font-stretch` 为百分比时）；
+- `font-stretch`：9 个关键字 + 百分比，匹配字体族时作为筛选条件；无精确匹配时按最接近面使用，并按 `请求值 / 选中面 stretch` 合成水平缩放（仅百分比）；
 - `font-variant: small-caps`：小写字母使用大写字形并缩放到 `0.8 × fontSize`；`normal` 不做处理；
 - `font-size-adjust`：`adjustedSize = fontSize × (adjust / xHeightRatio)`，`xHeightRatio` 来自 TTF `OS/2.sxHeight / unitsPerEm`；缺失时忽略并 warning。
 

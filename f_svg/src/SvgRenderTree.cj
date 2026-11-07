@@ -881,6 +881,11 @@ public class SvgRenderTreeBuilder {
                 kind: SvgErrorKind.Limit
             )
         }
+        let lowerHref = href.trimAscii().toAsciiLower()
+        if (lowerHref.size >= 5 && lowerHref[0..5] == "data:") {
+            this.warnings.add("data: 不是外部文档引用，已跳过")
+            return Option<SvgExternalResolution>.None
+        }
         let marker = "ext:" + href
         if (arrayContainsSvgString(context.useStack, marker)) {
             this.warnings.add("外部文档循环引用「${href}」已停止")

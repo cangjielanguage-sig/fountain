@@ -218,7 +218,7 @@
 
 ### Requirement: M6 字体匹配与合成
 
-`font-stretch` SHALL 作为字体匹配条件：注册表按 family、weight、style、stretch 选取最接近的字体；无匹配时按 100% 使用。声明为百分比且无精确匹配时 SHALL 对字形应用水平缩放 `百分比 / 100`。
+`font-stretch` SHALL 作为字体匹配条件：注册表按 family、weight、style、stretch 选取最接近的字体；无匹配时按 100% 使用。声明为百分比且无精确匹配时 SHALL 对字形应用水平缩放 `请求值 / 选中面 stretch`（如请求 80%、选中 75% 时为 80/75）。
 
 `font-variant: small-caps` SHALL 把小写字母映射为大写字形并缩放到 `0.8 × fontSize`；`normal` SHALL 不做处理。
 

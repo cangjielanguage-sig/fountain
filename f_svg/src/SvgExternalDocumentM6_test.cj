@@ -315,6 +315,32 @@ public class SvgExternalDocumentM6_test {
         }
     }
 
+    /** 外部文档内的 data: href 不是外部文档引用，不再次调用 provider。 */
+    @TestCase
+    public func externalDocumentDataHrefIsNotExternal(): Unit {
+        let documents = HashMap<String, Array<Byte>>()
+        documents["https://example.com/data-one.svg"] = (
+            svgOpen + "<use href=\"data:image/png;base64,AAAA\"/></svg>"
+        ).unsafeBytes()
+        let provider = M6DocumentProvider(documents)
+        let primary = SvgParser.parse(
+            svgOpen + "<use href=\"https://example.com/data-one.svg\"/></svg>",
+            options: allowedOptions()
+        )
+        let rendered = SvgRenderer(
+            options: SvgRenderOptions(width: 20, height: 20, externalDocuments: provider)
+        )
+        rendered.render(primary)
+        @Assert(provider.calls == 1)
+        var warned = false
+        for (warning in rendered.warnings) {
+            if (warning.contains("data:")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
     /** 外部文档自身不再加载外部引用。 */
     @TestCase
     public func externalDocumentCannotChain(): Unit {
