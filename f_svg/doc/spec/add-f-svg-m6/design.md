@@ -82,11 +82,17 @@
 
 `SvgExternalDocumentProvider.resolveHref(href)` 只在 `use` 的 href 非 `#` 片段时调用。构建器维护：
 
-- `HashMap<String, SvgDocument>` 按 href 缓存；
+- `HashMap<String, SvgDocument>` 按 href 缓存成功解析结果；
+- `HashMap<String, Bool>` 缓存 provider 返回 `None` 的负结果，同一 href 单次渲染只询问一次；
 - `HashMap<String, Bool>` 记录本次渲染的 provider 调用链，命中即 warning 并停止；
-- 深度计数器随嵌套 `use` 递增，超过 4 抛 `Limit`；字节数组长度超过 16 MiB 抛 `Limit`。
+- 单文档字节数组长度超过 16 MiB 抛 `Limit`。`SVG_EXTERNAL_MAX_DEPTH` 与
+  `svgExternalDepthAllows` 仅作异常路径的防御性检查保留，外部文档不递归加载，正常渲染不触达。
 
-外部文档用 `SvgParser.parse(bytes, SvgParseOptions(security: 主文档 security 的副本, strict: 主文档 strict))` 解析，并把 `allowExternalReferences` 强制为 `false`，避免二次外部加载。目标元素用 `document.elementById(fragment)` 或根。
+外部文档用 `SvgParser.parse(bytes, SvgParseOptions(security: 主文档 security 的副本, strict: 主文档 strict))` 解析；其中 `allowExternalReferences` 与 `unsafePolicy` 强制为
+`false` / `Remove`，因此外部文档内部的不安全内容（含外部 `href`）一律移除并 warning，
+不随调用方的 `Reject` / `Keep` 改变，也不会二次触发 provider。除这两项外，`allowScript`、
+`allowEventAttributes`、`allowDataImages`、`maxElements`、`maxDepth`、`maxDecompressedBytes`
+与 `strict` 均沿用主文档。目标元素用 `document.elementById(fragment)` 或根。
 
 重要边界：解析期 `SvgBuilder` 会按 `allowExternalReferences` 移除外部 `href`；因此外部 `use` 只有在主文档解析时显式放行外部引用后才可用。这一点写入 README 与任务备注。
 

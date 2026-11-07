@@ -622,10 +622,11 @@ let hits = SvgHitTest().hitTest(document, SvgPoint(120.0, 80.0), options: option
   通过 `SvgRenderOptions.foreignObjectRenderer` 传入；未提供、返回 `None` 或缺少有效宽高时
   按透明占位并 warning。返回位图按 `x/y/width/height` 缩放绘制。
 - **外部文档引用**：`SvgExternalDocumentProvider.resolveHref(href)` 只为 `use` 的非片段 href
-  调用；同一 href 单次渲染只调用一次。主文档必须在解析时放行外部引用
-  （`SvgSecurityOptions(allowExternalReferences: true)`，且 href 属于 http/https 或协议相对地址）。
-  外部文档深度上限 4、单文档 16 MiB，超限抛 `Limit`；循环引用 warning 后停止；
-  外部文档自身不再加载外部引用。
+  调用；同一 href 单次渲染只调用一次，provider 返回 `None` 的负结果同样缓存。主文档必须在解析时
+  放行外部引用（`SvgSecurityOptions(allowExternalReferences: true)`，且 href 属于 http/https
+  或协议相对地址）。外部文档内部的不安全内容（含外部 `href`）一律按 `Remove` 处理并 warning，
+  不随调用方的 `Reject` / `Keep` 改变，也不会再次调用 provider；单文档 16 MiB，超限抛 `Limit`。
+  循环引用 warning 后停止。深度常量仅作异常路径防御，正常渲染不触达。
 - **`initialView`**：`SvgRenderOptions.initialView` 接受 `#id` 或 `id`；命中 `view` 且含
   `viewBox` 时用其 `viewBox` / `preserveAspectRatio` 覆盖初始视口，输出尺寸不变；
   未命中或缺少 `viewBox` 时 warning 并回退根视口。`viewTarget` 不参与渲染。

@@ -673,12 +673,15 @@ parsing by default.
   element lacks a valid width/height, the area is transparent and a warning is emitted.
   The returned bitmap is scaled into `x/y/width/height`.
 - **External document references**: `SvgExternalDocumentProvider.resolveHref(href)` is
-  called only for non-fragment `use` hrefs and at most once per href per render. The main
-  document must allow external references during parsing
+  called only for non-fragment `use` hrefs and at most once per href per render; a `None`
+  result is cached as well. The main document must allow external references during parsing
   (`SvgSecurityOptions(allowExternalReferences: true)`, and the href must use http/https
-  or a protocol-relative address). External document depth is capped at 4 and each
-  document at 16 MiB; exceeding either throws `Limit`. Cycles warn and stop; external
-  documents do not recursively load further external references.
+  or a protocol-relative address). Unsafe content inside an external document (including
+  external `href`) is always removed with a warning using the `Remove` policy, regardless
+  of the caller's `Reject` / `Keep`, and never calls the provider again. Each document is
+  capped at 16 MiB; exceeding it throws `Limit`. Cycles warn and stop. The depth constant
+  remains only as defensive handling for abnormal paths and is not reached in normal
+  rendering.
 - **`initialView`**: `SvgRenderOptions.initialView` accepts `#id` or `id`. When it
   resolves to a `view` with a `viewBox`, that `viewBox` / `preserveAspectRatio` overrides
   the initial viewport without changing the output size; a miss or a missing `viewBox`
