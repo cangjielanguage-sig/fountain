@@ -213,6 +213,12 @@ public struct SvgRenderOptions {
     public let hoveredIds: Array<String>
     /** `:focus` 静态求值的元素 id 列表；默认空集，永不匹配。 */
     public let focusedIds: Array<String>
+    /** 初始 `view` 片段；接受 `#id` 或 `id`。 */
+    public let initialView: ?String
+    /** `foreignObject` 注入渲染器；`None` 时透明占位并 warning。 */
+    public let foreignObjectRenderer: ?SvgForeignObjectRenderer
+    /** 外部文档提供者；只对 `use` 的非片段 href 生效。 */
+    public let externalDocuments: ?SvgExternalDocumentProvider
 
     public init(
         width!: Int64 = 0,
@@ -226,7 +232,10 @@ public struct SvgRenderOptions {
         antiAlias!: SvgAntiAliasMode = SvgAntiAliasMode.Supersample,
         languages!: Array<String> = ["en"],
         hoveredIds!: Array<String> = Array<String>(),
-        focusedIds!: Array<String> = Array<String>()
+        focusedIds!: Array<String> = Array<String>(),
+        initialView!: ?String = None,
+        foreignObjectRenderer!: ?SvgForeignObjectRenderer = None,
+        externalDocuments!: ?SvgExternalDocumentProvider = None
     ) {
         if (width < 0 || height < 0) {
             throw invalidValue("渲染宽高不能为负，实际 ${width}×${height}")
@@ -252,6 +261,9 @@ public struct SvgRenderOptions {
         this.languages = languages
         this.hoveredIds = hoveredIds
         this.focusedIds = focusedIds
+        this.initialView = initialView
+        this.foreignObjectRenderer = foreignObjectRenderer
+        this.externalDocuments = externalDocuments
     }
 
     /** 校验输出像素总数；超限抛 `Limit`。 */

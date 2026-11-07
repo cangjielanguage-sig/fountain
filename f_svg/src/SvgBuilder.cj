@@ -59,6 +59,7 @@ internal func buildSvgDocument(xml: XmlDocument, options: SvgParseOptions): SvgD
     buildSvgChildren(root, rootXml, SvgNamespaces.SVG, "/svg[1]", 1, context)
 
     let document = SvgDocument(root)
+    document.parseOptions = options
     document.declaration = xml.declaration
     document.doctype = xml.doctype
     for (node in xml.prolog) {

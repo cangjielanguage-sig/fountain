@@ -616,6 +616,32 @@ let hits = SvgHitTest().hitTest(document, SvgPoint(120.0, 80.0), options: option
 安全边界：`pointer-events` / `cursor` 不会触发链接、事件或资源加载；
 外部光标 URL 与原有安全策略一致，默认在解析期移除。
 
+## M6：嵌入与文档
+
+- **`foreignObject`**：只提供注入接口 `SvgForeignObjectRenderer`，库不解析 XHTML。
+  通过 `SvgRenderOptions.foreignObjectRenderer` 传入；未提供、返回 `None` 或缺少有效宽高时
+  按透明占位并 warning。返回位图按 `x/y/width/height` 缩放绘制。
+- **外部文档引用**：`SvgExternalDocumentProvider.resolveHref(href)` 只为 `use` 的非片段 href
+  调用；同一 href 单次渲染只调用一次。主文档必须在解析时放行外部引用
+  （`SvgSecurityOptions(allowExternalReferences: true)`，且 href 属于 http/https 或协议相对地址）。
+  外部文档深度上限 4、单文档 16 MiB，超限抛 `Limit`；循环引用 warning 后停止；
+  外部文档自身不再加载外部引用。
+- **`initialView`**：`SvgRenderOptions.initialView` 接受 `#id` 或 `id`；命中 `view` 且含
+  `viewBox` 时用其 `viewBox` / `preserveAspectRatio` 覆盖初始视口，输出尺寸不变；
+  未命中或缺少 `viewBox` 时 warning 并回退根视口。`viewTarget` 不参与渲染。
+- **根属性**：`SvgDocument.baseProfile()` / `version()` / `zoomAndPan()`；
+  `zoomAndPan` 只存值，不影响渲染。
+
+```cangjie
+let options = SvgRenderOptions(
+    initialView: "#detail",
+    foreignObjectRenderer: myRenderer,
+    externalDocuments: myProvider
+)
+```
+
+安全边界：provider 由调用方实现，库内不联网、不读文件；外部引用放行前提与 M2 的安全选项一致。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

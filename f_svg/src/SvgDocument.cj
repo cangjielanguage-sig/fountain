@@ -27,6 +27,8 @@ public class SvgDocument <: ToString {
     public let epilog = ArrayList<SvgNode>()
     /** 宽松模式下的降级与安全移除记录，只增。 */
     public let warnings = ArrayList<String>()
+    /** 解析该文档时使用的选项；供外部文档引用复制安全策略。 */
+    public var parseOptions: SvgParseOptions = SvgParseOptions()
 
     public init(root: SvgRoot) {
         this.root = root
@@ -35,6 +37,33 @@ public class SvgDocument <: ToString {
     /** 深度优先，返回第一个匹配的 id。 */
     public func elementById(id: String): ?SvgElement {
         findSvgElementById(this.root, id)
+    }
+
+    /** 根元素的 `baseProfile`；缺省 `None`。 */
+    public func baseProfile(): ?String {
+        this.root.attr("baseProfile")
+    }
+
+    /** 根元素的 `version`；缺省 `None`。 */
+    public func version(): ?String {
+        this.root.attr("version")
+    }
+
+    /** 根元素的 `zoomAndPan`；非法值 warning 后回退 `Disable`。 */
+    public func zoomAndPan(): SvgZoomAndPan {
+        match (this.root.attr("zoomAndPan")) {
+            case Some(text) =>
+                match (SvgZoomAndPan.fromName(text)) {
+                    case Some(value) => value
+                    case None =>
+                        let warning = "根元素 zoomAndPan 的值「${text}」不合法，已回退 disable"
+                        if (!this.warnings.contains(warning)) {
+                            this.warnings.add(warning)
+                        }
+                        SvgZoomAndPan.Disable
+                }
+            case None => SvgZoomAndPan.Disable
+        }
     }
 
     /** 全部后代元素（不区分命名空间），不含根元素自身。 */

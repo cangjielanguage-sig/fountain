@@ -86,6 +86,8 @@ public class SvgDisplayCommand {
     public let isolated: Bool
     /** 构建期已解析的画笔（`context-fill` / `context-stroke`）；`None` 时按样式解析。 */
     public let paintOverride: ?SvgPaint
+    /** `foreignObject` 注入的位图；非注入 image 指令为 `None`。 */
+    public let bitmap: ?SvgBitmap
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -108,7 +110,8 @@ public class SvgDisplayCommand {
         clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>(),
         blendMode!: SvgMixBlendMode = SvgMixBlendMode.Normal,
         isolated!: Bool = false,
-        paintOverride!: ?SvgPaint = None
+        paintOverride!: ?SvgPaint = None,
+        bitmap!: ?SvgBitmap = None
     ) {
         this.kind = kind
         this.tag = tag
@@ -134,6 +137,7 @@ public class SvgDisplayCommand {
         this.blendMode = blendMode
         this.isolated = isolated
         this.paintOverride = paintOverride
+        this.bitmap = bitmap
     }
 }
 
@@ -189,6 +193,8 @@ private class SvgRenderTreeContext {
     /** 最近的 `use` 实例帧：被引用元素的计算 fill / stroke。 */
     let contextFill: ?SvgPaint
     let contextStroke: ?SvgPaint
+    /** 外部文档嵌套深度；主文档为 0。 */
+    let externalDepth: Int64
 
     init(
         matrix: SvgMatrix,
@@ -202,7 +208,8 @@ private class SvgRenderTreeContext {
         fonts: ?SvgFontRegistry,
         clipQuads!: Array<Array<SvgPoint>> = Array<Array<SvgPoint>>(),
         contextFill!: ?SvgPaint = None,
-        contextStroke!: ?SvgPaint = None
+        contextStroke!: ?SvgPaint = None,
+        externalDepth!: Int64 = 0
     ) {
         this.matrix = matrix
         this.width = width
@@ -216,6 +223,7 @@ private class SvgRenderTreeContext {
         this.clipQuads = clipQuads
         this.contextFill = contextFill
         this.contextStroke = contextStroke
+        this.externalDepth = externalDepth
     }
 }
 
@@ -229,6 +237,12 @@ public class SvgRenderTreeBuilder {
     internal var languages: Array<String> = ["en"]
     /** 单次渲染的文本布局缓存；随显示列表交给光栅化阶段。 */
     private let textLayouts = SvgTextLayoutCache()
+    /** 本次构建的渲染选项；供 foreignObject / 外部文档读取。 */
+    private var renderOptions: SvgRenderOptions = SvgRenderOptions()
+    /** 单次构建的外部文档缓存；按 href 去重。 */
+    private let externalDocuments = HashMap<String, SvgDocument>()
+    /** 主文档解析选项；用于复制安全策略。 */
+    private var mainParseOptions: SvgParseOptions = SvgParseOptions()
 
     internal func attachGuard(value: SvgRenderGuard): Unit {
         this.guard = Some(value)
@@ -248,6 +262,8 @@ public class SvgRenderTreeBuilder {
     public func build(document: SvgDocument, options!: SvgRenderOptions = SvgRenderOptions()): SvgDisplayList {
         this.ensureGuard()
         this.languages = options.languages
+        this.renderOptions = options
+        this.mainParseOptions = document.parseOptions
         let root = document.root
         let viewport = SvgViewport.from(root, 300.0, 150.0)
         let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
@@ -270,8 +286,31 @@ public class SvgRenderTreeBuilder {
         let outputWidth = maxInt64(1, ceilSvgPixel(logicalWidth * ratio))
         let outputHeight = maxInt64(1, ceilSvgPixel(logicalHeight * ratio))
         let rootBounds = SvgBounds(0.0, 0.0, logicalWidth, logicalHeight)
+        var rootMatrix = viewport.transform(root)
+        match (options.initialView) {
+            case Some(value) =>
+                let id = if (value.trimAscii().startsWith("#")) {
+                    value.trimAscii()[1..]
+                } else {
+                    value.trimAscii()
+                }
+                match (document.view(id)) {
+                    case Some(view) =>
+                        match (view.viewBox) {
+                            case Some(_) =>
+                                rootMatrix = SvgViewport.forView(view, logicalWidth, logicalHeight)
+                            case None =>
+                                this.warnings.add(
+                                    "initialView「${value}」命中的 view 缺少 viewBox，已回退根视口"
+                                )
+                        }
+                    case None =>
+                        this.warnings.add("initialView「${value}」未命中 view，已回退根视口")
+                }
+            case None => ()
+        }
         let matrix = SvgMatrix.scale(ratio, ratio)
-            .multiply(viewport.transform(root))
+            .multiply(rootMatrix)
             .multiply(
                 elementTransformMatrix(
                     root,
@@ -371,6 +410,7 @@ public class SvgRenderTreeBuilder {
         }
         this.ensureGuard()
         this.languages = options.languages
+        this.renderOptions = options
         let resolver = SvgStyleResolver()
         let styles = resolver.compute(
             element,
@@ -450,6 +490,10 @@ public class SvgRenderTreeBuilder {
                 this.expandUse(use, context, commands)
                 return
             case container: SvgContainer =>
+                if (container.kind == SvgContainerKind.ForeignObject) {
+                    this.addForeignObject(container, context, commands, style)
+                    return
+                }
                 this.walkContainer(container, context, commands, style)
                 return
             case image: SvgImage =>
@@ -549,13 +593,69 @@ public class SvgRenderTreeBuilder {
                 return
             case _ => ()
         }
+        if (element.tag == "discard") {
+            if (element.attr("begin").isNone()) {
+                this.warnings.add("discard 元素缺少 begin，已忽略")
+            }
+            return
+        }
         if (element.tag == "foreignObject" || element.tag == "mathml") {
             this.warnings.add("已跳过不支持的元素「${element.tag}」")
         }
     }
 
-    private func walkContainer(
-        container: SvgContainer,
+    /** `foreignObject`：构建期调用注入渲染器，返回位图复用 Image 指令。 */    private func addForeignObject(
+        element: SvgElement,
+        context: SvgRenderTreeContext,
+        commands: ArrayList<SvgDisplayCommand>,
+        style: SvgComputedStyle
+    ): Unit {
+        let x = svgStyledLengthOrZero(style, "x")
+        let y = svgStyledLengthOrZero(style, "y")
+        let width = svgStyledLengthOrZero(style, "width")
+        let height = svgStyledLengthOrZero(style, "height")
+        if (width <= 0.0 || height <= 0.0) {
+            this.warnings.add("foreignObject 缺少有效宽高，已跳过")
+            return
+        }
+        let renderer = match (this.renderOptions.foreignObjectRenderer) {
+            case Some(value) => value
+            case None =>
+                this.warnings.add("foreignObject 未提供注入渲染器，已按透明占位处理")
+                return
+        }
+        let bitmap = match (renderer.render(element, width, height, this.renderOptions)) {
+            case Some(value) => value
+            case None =>
+                this.warnings.add("foreignObject 渲染器返回 None，已按透明占位处理")
+                return
+        }
+        let box = SvgBounds(x, y, width, height)
+        let matrix = context.matrix.multiply(
+            elementTransformMatrix(
+                element,
+                style: style,
+                bounds: box,
+                viewportWidth: context.width,
+                viewportHeight: context.height
+            )
+        )
+        commands.add(
+            SvgDisplayCommand(
+                SvgDisplayCommandKind.Image,
+                element.tag,
+                matrix,
+                style: Some(style),
+                bounds: Some(box),
+                opacity: style.opacity(),
+                clipRect: context.clipRect,
+                clipQuads: context.clipQuads,
+                bitmap: Some(bitmap)
+            )
+        )
+    }
+
+    private func walkContainer(        container: SvgContainer,
         context: SvgRenderTreeContext,
         commands: ArrayList<SvgDisplayCommand>,
         style: SvgComputedStyle
@@ -715,32 +815,119 @@ public class SvgRenderTreeBuilder {
         this.walkChildren(svg, childContext, commands)
     }
 
+    /** 解析 `use` 的外部 href；缓存按 href 去重，深度与字节上限前置。 */
+    private func resolveExternalUse(href: String, context: SvgRenderTreeContext): ?SvgExternalResolution {
+        if (!svgExternalDepthAllows(context.externalDepth)) {
+            throw SvgException(
+                "外部文档引用深度超过 ${SVG_EXTERNAL_MAX_DEPTH}",
+                kind: SvgErrorKind.Limit
+            )
+        }
+        let marker = "ext:" + href
+        if (arrayContainsSvgString(context.useStack, marker)) {
+            this.warnings.add("外部文档循环引用「${href}」已停止")
+            return Option<SvgExternalResolution>.None
+        }
+        let provider = match (this.renderOptions.externalDocuments) {
+            case Some(value) => value
+            case None =>
+                this.warnings.add("未提供外部文档 provider，已跳过「${href}」")
+                return Option<SvgExternalResolution>.None
+        }
+        let document = match (this.externalDocuments.get(href)) {
+            case Some(value) => value
+            case None =>
+                let bytes = match (provider.resolveHref(href)) {
+                    case Some(value) => value
+                    case None =>
+                        this.warnings.add("外部文档「${href}」不可用")
+                        return Option<SvgExternalResolution>.None
+                }
+                if (Int64(bytes.size) > SVG_EXTERNAL_MAX_BYTES) {
+                    throw SvgException(
+                        "外部文档「${href}」超过 ${SVG_EXTERNAL_MAX_BYTES} 字节上限",
+                        kind: SvgErrorKind.Limit
+                    )
+                }
+                let parsed = SvgParser.parse(
+                    bytes,
+                    options: svgExternalParseOptions(this.mainParseOptions)
+                )
+                this.externalDocuments[href] = parsed
+                parsed
+        }
+        let fragment = svgHrefFragment(href)
+        let target = if (fragment.size == 0) {
+            document.root
+        } else {
+            match (document.elementById(fragment)) {
+                case Some(value) => value
+                case None =>
+                    this.warnings.add("外部文档「${href}」中不存在片段「${fragment}」")
+                    return Option<SvgExternalResolution>.None
+            }
+        }
+        let resolver = SvgStyleResolver()
+        let styles = resolver.compute(
+            document.root,
+            mediaWidth: context.width,
+            mediaHeight: context.height
+        )
+        for (warning in resolver.warnings) {
+            this.warnings.add(warning)
+        }
+        SvgExternalResolution(target, styles, document.root, context.externalDepth + 1)
+    }
+
     private func expandUse(
         use: SvgUse,
         context: SvgRenderTreeContext,
         commands: ArrayList<SvgDisplayCommand>
     ): Unit {
         let href = readSvgHref(use)
-        let targetId = match (href) {
-            case Some(value) => stripSvgHash(value)
+        let hrefText = match (href) {
+            case Some(value) => value.trimAscii()
             case None => ""
         }
-        if (targetId.size == 0) {
+        if (hrefText.size == 0) {
+            this.warnings.add("use 缺少 href")
+            return
+        }
+        let external = !hrefText.startsWith("#")
+        var targetId = if (external) { "" } else { stripSvgHash(hrefText) }
+        if (!external && targetId.size == 0) {
             this.warnings.add("use 缺少 href")
             return
         }
         if (context.depth >= 64) {
-            if (arrayContainsSvgString(context.useStack, targetId)) {
+            if (arrayContainsSvgString(context.useStack, hrefText)) {
                 this.warnings.add("use 循环引用在深度 64 终止")
                 return
             }
             throw SvgException("use 引用深度超过 64", kind: SvgErrorKind.Limit)
         }
-        let target = match (findSvgElementById(Some(context.root), targetId)) {
-            case Some(value) => value
-            case None =>
-                this.warnings.add("use 引用目标「${targetId}」不存在")
-                return
+        var workingStyles = context.styles
+        var workingRoot = context.root
+        var workingDepth = context.externalDepth
+        var stackKey = targetId
+        var target: SvgElement
+        if (external) {
+            match (this.resolveExternalUse(hrefText, context)) {
+                case Some(value) =>
+                    target = value.element
+                    workingStyles = value.styles
+                    workingRoot = value.root
+                    workingDepth = value.depth
+                    stackKey = "ext:" + hrefText
+                case None => return
+            }
+        } else {
+            target = match (findSvgElementById(Some(context.root), targetId)) {
+                case Some(value) => value
+                case None =>
+                    this.warnings.add("use 引用目标「${targetId}」不存在")
+                    return
+            }
         }
         let x = lengthOrZero(use.x)
         let y = lengthOrZero(use.y)
@@ -772,7 +959,7 @@ public class SvgRenderTreeBuilder {
                             matrix = matrix.multiply(aspect.toMatrix(box, width, height))
                         case None => ()
                     }
-                    let overflowVisible = match (context.styles.get(container)) {
+                    let overflowVisible = match (workingStyles.get(container)) {
                         case Some(style) => !style.overflowMode().clips()
                         case None => false
                     }
@@ -792,13 +979,13 @@ public class SvgRenderTreeBuilder {
                 }
             case _ => ()
         }
-        let targetStyle = context.styles.get(target)
+        let targetStyle = workingStyles.get(target)
         let targetBounds = match (svgBBoxOf(target, SvgBBoxRequest(
             SvgBBoxOptions(),
-            context.styles,
+            workingStyles,
             viewportWidth: context.width,
             viewportHeight: context.height,
-            useStack: [targetId]
+            useStack: [stackKey]
         ))) {
             case Some(value) => Some(value)
             case None => Option<SvgBounds>.None
@@ -816,20 +1003,21 @@ public class SvgRenderTreeBuilder {
         for (id in context.useStack) {
             nextStack.add(id)
         }
-        nextStack.add(targetId)
+        nextStack.add(stackKey)
         let childContext = SvgRenderTreeContext(
             matrix,
             context.width,
             context.height,
             clipRect,
-            context.styles,
-            context.root,
+            workingStyles,
+            workingRoot,
             context.depth + 1,
             nextStack.toArray(),
             context.fonts,
             clipQuads: childQuads,
-            contextFill: useContextFrame(context.styles, target, true),
-            contextStroke: useContextFrame(context.styles, target, false)
+            contextFill: useContextFrame(workingStyles, target, true),
+            contextStroke: useContextFrame(workingStyles, target, false),
+            externalDepth: workingDepth
         )
         if (target.tag == "symbol") {
             this.walkChildren(target, childContext, commands)
@@ -1562,3 +1750,53 @@ private func deriveRenderFonts(
     SvgFontRegistry.derived(base, faces.toArray(), warnings: warnings)
 }
 
+
+/** 计算样式中的长度值；缺失或非长度返回 0。 */
+private func svgStyledLengthOrZero(style: SvgComputedStyle, name: String): Float64 {
+    match (style.get(name)) {
+        case Some(text) => lengthOrZero(SvgLength.tryParse(text))
+        case None => 0.0
+    }
+}
+
+/** 外部 `use` 的解析结果：目标元素、其样式树、文档根与嵌套深度。 */
+private class SvgExternalResolution {
+    let element: SvgElement
+    let styles: SvgComputedStyleTree
+    let root: SvgElement
+    let depth: Int64
+
+    init(element: SvgElement, styles: SvgComputedStyleTree, root: SvgElement, depth: Int64) {
+        this.element = element
+        this.styles = styles
+        this.root = root
+        this.depth = depth
+    }
+}
+
+/** 外部文档的 href 片段；无 `#` 返回空串。 */
+private func svgHrefFragment(href: String): String {
+    let bytes = href.unsafeBytes()
+    for (index in 0..bytes.size) {
+        if (bytes[index] == b'#') {
+            return href[index + 1..]
+        }
+    }
+    ""
+}
+
+/** 复制主文档安全策略，并强制关闭外部引用，避免二次加载。 */
+private func svgExternalParseOptions(base: SvgParseOptions): SvgParseOptions {
+    let source = base.security
+    let security = SvgSecurityOptions(
+        unsafePolicy: source.unsafePolicy,
+        allowScript: source.allowScript,
+        allowEventAttributes: source.allowEventAttributes,
+        allowExternalReferences: false,
+        allowDataImages: source.allowDataImages,
+        maxElements: source.maxElements,
+        maxDepth: source.maxDepth,
+        maxDecompressedBytes: source.maxDecompressedBytes
+    )
+    SvgParseOptions(strict: base.strict, security: security, xml: base.xml)
+}

@@ -353,9 +353,12 @@ public class SvgRenderer {
                     case None => return
                 }
                 var loaded: ?SvgBitmap = None
-                match (command.href) {
-                    case Some(href) => loaded = images.load(href)
-                    case None => ()
+                match (command.bitmap) {
+                    case Some(value) => loaded = Some(value)
+                    case None => match (command.href) {
+                        case Some(href) => loaded = images.load(href)
+                        case None => ()
+                    }
                 }
                 match (loaded) {
                     case Some(source) =>

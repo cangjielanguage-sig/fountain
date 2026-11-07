@@ -65,7 +65,7 @@ public class SvgTag {
             case "fePointLight" => Some(SvgFePointLight())
             case "feSpotLight" => Some(SvgFeSpotLight())
             case "view" => Some(SvgView())
-            case "style" | "title" | "desc" | "metadata" => Some(SvgElement(tag))
+            case "style" | "title" | "desc" | "metadata" | "discard" => Some(SvgElement(tag))
             case "g" | "defs" | "symbol" | "clipPath" | "mask" | "switch" | "a" |
                 "foreignObject" =>
                 match (SvgContainerKind.fromTag(tag)) {
@@ -81,7 +81,7 @@ public class SvgTag {
             case "svg" | "rect" | "circle" | "ellipse" | "line" | "polyline" | "polygon" | "path" |
                 "text" | "tspan" | "textPath" | "linearGradient" | "radialGradient" | "stop" | "use" |
                 "image" | "g" | "defs" | "symbol" | "clipPath" | "mask" |
-                "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" |
+                "switch" | "a" | "foreignObject" | "style" | "title" | "desc" | "metadata" | "discard" |
                 "filter" | "pattern" | "marker" | "feGaussianBlur" | "feDropShadow" | "feOffset" | "feFlood" |
                 "feBlend" | "feComposite" | "feMerge" | "feMergeNode" | "feColorMatrix" |
                 "feTile" | "feComponentTransfer" | "feFuncR" | "feFuncG" | "feFuncB" |
