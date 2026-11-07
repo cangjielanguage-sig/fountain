@@ -48,12 +48,21 @@ class M6CurveFont <: SvgFont {
 @Test
 public class SvgTextToleranceM6_test {
     private func renderWith(hint: String): SvgBitmap {
+        renderWith(hint, shape: "")
+    }
+
+    private func renderWith(hint: String, shape!: String): SvgBitmap {
         let registry = SvgFontRegistry()
         registry.register("Curve", M6CurveFont())
+        let shapeAttr = if (shape.size == 0) {
+            ""
+        } else {
+            " shape-rendering=\"" + shape + "\""
+        }
         let document = SvgParser.parse(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"120\" height=\"120\">" +
             "<text x=\"5\" y=\"10\" font-family=\"Curve\" font-size=\"100\" fill=\"red\" " +
-            "text-rendering=\"" + hint + "\">A</text></svg>"
+            "text-rendering=\"" + hint + "\"" + shapeAttr + ">A</text></svg>"
         )
         SvgRenderer(
             options: SvgRenderOptions(width: 120, height: 120, samplesPerPixel: 1, fonts: registry)
@@ -91,6 +100,14 @@ public class SvgTextToleranceM6_test {
         @Assert(auto.pixels != speed.pixels)
         @Assert(auto.pixels != precision.pixels)
         @Assert(speed.pixels != precision.pixels)
+    }
+
+    /** 文本容差只由 `text-rendering` 决定，不受 `shape-rendering` 二次缩放。 */
+    @TestCase
+    public func textToleranceIndependentOfShapeRendering(): Unit {
+        let plain = renderWith("optimizeSpeed")
+        let withShape = renderWith("optimizeSpeed", shape: "geometricPrecision")
+        @Assert(plain.pixels == withShape.pixels)
     }
 
     /** optimizeSpeed 关闭 Type 4 连字。 */

@@ -454,8 +454,9 @@ public class SvgRenderer {
         if (opacity <= 0.0) {
             return
         }
+        // 文本指令的容差由 `text-rendering` 唯一确定；非文本才使用 `shape-rendering`。
         let toleranceScale = match (command.textTolerance) {
-            case Some(value) => value * svgShapeTolerance(style)
+            case Some(value) => value
             case None => svgShapeTolerance(style)
         }
         let aaOverride = svgShapeAntiAlias(style)
