@@ -289,7 +289,13 @@ public class SvgRenderTreeBuilder {
         let widthAuto = root.attr("width")?.trimAscii().toAsciiLower() == "auto"
         let heightAuto = root.attr("height")?.trimAscii().toAsciiLower() == "auto"
         if ((widthAuto || heightAuto) && options.width <= 0 && options.height <= 0) {
-            let size = SvgAutoSize.rootSize(root, styles, 300.0, 150.0)
+            let size = SvgAutoSize.rootSize(
+                root,
+                styles,
+                300.0,
+                150.0,
+                warnings: Some(this.warnings)
+            )
             viewport = SvgViewport(size.width, size.height)
             styles = resolver.compute(
                 root,
