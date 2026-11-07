@@ -87,7 +87,8 @@ internal class SvgMutationHub {
     }
 
     func remove(listener: SvgMutationListener): Unit {
-        // 接口无引用相等；移除最早注册的监听器，满足单监听器解绑场景。
+        // 接口无引用相等；显式保留参数语义，移除最早注册的监听器。
+        let _ = listener
         if (this.listeners.size > 0) {
             this.listeners.remove(at: 0)
         }

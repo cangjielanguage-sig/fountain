@@ -136,7 +136,7 @@ private class SvgGsubApplyState {
             return
         }
         this.glyphs[position] = glyph
-        for (offset in 1..count) {
+        for (_ in 1..count) {
             this.removed.add(this.origins[position + 1])
             this.glyphs.remove(at: position + 1)
             this.origins.remove(at: position + 1)

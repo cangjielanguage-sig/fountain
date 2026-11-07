@@ -162,11 +162,4 @@ public enum SvgColorInterpolation <: Equatable<SvgColorInterpolation> & ToString
             case _ => Option<SvgColorInterpolation>.None
         }
     }
-
-    internal func isLinear(): Bool {
-        match (this) {
-            case LinearRgb => true
-            case _ => false
-        }
-    }
 }

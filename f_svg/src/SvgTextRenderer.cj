@@ -446,7 +446,7 @@ public class SvgTextRenderer {
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
             applyFontKerning(chars, resolvedFonts, advances, style)
         }
-        applyFontStretchSynthesis(chars, advances, paths, style)
+        applyFontStretchSynthesis(advances, paths, style)
         applySmallCaps(chars, resolvedFonts, advances, paths, style, this.warnings)
         applyFontSizeAdjust(chars, resolvedFonts, advances, paths, style, this.warnings)
 
@@ -1753,7 +1753,6 @@ private func applyFontContextShaping(
 
 /** 百分比 font-stretch 且最终字体为 100% 时做水平合成缩放。 */
 private func applyFontStretchSynthesis(
-    chars: ArrayList<SvgTextChar>,
     advances: ArrayList<Float64>,
     paths: ArrayList<?SvgPathData>,
     style: SvgComputedStyle
