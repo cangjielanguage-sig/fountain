@@ -198,8 +198,9 @@ public class SvgHitTest {
      * 规格命中 API：设备坐标 + 显式视口与样式树。
      *
      * `point` 先按 `devicePixelRatio` 转为逻辑坐标，再乘视口矩阵的逆；返回绘制序从上到下。
+     * 以静态方法提供，符合规格的 `SvgHitTest.elementsAt(...)` 调用形态。
      */
-    public func elementsAt(
+    public static func elementsAt(
         root: SvgElement,
         point: SvgPoint,
         viewport: SvgViewport,
@@ -231,12 +232,12 @@ public class SvgHitTest {
             viewport.height,
             fonts,
             maxElements,
-            this.warnings
+            ArrayList<String>()
         )
     }
 
     /** 规格命中 API：返回 `elementsAt` 的首项，未命中为 `None`。 */
-    public func elementAt(
+    public static func elementAt(
         root: SvgElement,
         point: SvgPoint,
         viewport: SvgViewport,
@@ -245,7 +246,7 @@ public class SvgHitTest {
         maxElements!: Int64 = 1_000_000,
         fonts!: ?SvgFontRegistry = None
     ): ?SvgElement {
-        let hits = this.elementsAt(
+        let hits = SvgHitTest.elementsAt(
             root,
             point,
             viewport,

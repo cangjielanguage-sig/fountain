@@ -189,21 +189,41 @@ public class SvgHitTestM6_test {
         let root = rootOf([lower, upper])
         let viewport = SvgViewport(100.0, 100.0)
         let styles = SvgStyleResolver().compute(root)
-        let hits = SvgHitTest().elementsAt(root, SvgPoint(50.0, 50.0), viewport, styles)
+        let hits = SvgHitTest.elementsAt(root, SvgPoint(50.0, 50.0), viewport, styles)
         @Assert(hits.size == 2)
         @Assert(hits[0] == upper)
         @Assert(hits[1] == lower)
-        let first = SvgHitTest().elementAt(root, SvgPoint(50.0, 50.0), viewport, styles)
+        let first = SvgHitTest.elementAt(root, SvgPoint(50.0, 50.0), viewport, styles)
         match (first) {
             case Some(value) => @Assert(value == upper)
             case None => @Fail("elementAt 应返回最上层元素")
         }
-        let empty = SvgHitTest().elementsAt(root, SvgPoint(500.0, 500.0), viewport, styles)
+        let empty = SvgHitTest.elementsAt(root, SvgPoint(500.0, 500.0), viewport, styles)
         @Assert(empty.size == 0)
-        @Assert(SvgHitTest().elementAt(root, SvgPoint(500.0, 500.0), viewport, styles).isNone())
+        @Assert(SvgHitTest.elementAt(root, SvgPoint(500.0, 500.0), viewport, styles).isNone())
         let legacy = SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0))
         @Assert(legacy.size == hits.size)
         @Assert(legacy[0] == hits[0])
+    }
+
+    /** 规格写法 `SvgHitTest.elementsAt(...)` 可直接静态调用。 */
+    @TestCase
+    public func elementsAtStaticApi(): Unit {
+        let shape = rect("r", 0.0, 0.0, 100.0, 100.0)
+        shape.setAttr("fill", "red")
+        let root = rootOf([shape])
+        let viewport = SvgViewport(100.0, 100.0)
+        let styles = SvgStyleResolver().compute(root)
+        let hits = SvgHitTest.elementsAt(root, SvgPoint(50.0, 50.0), viewport, styles)
+        @Assert(hits.size == 1)
+        @Assert(hits[0] == shape)
+        match (SvgHitTest.elementAt(root, SvgPoint(50.0, 50.0), viewport, styles)) {
+            case Some(value) => @Assert(value == shape)
+            case None => @Fail("静态 elementAt 应返回元素")
+        }
+        @Assert(
+            SvgHitTest.elementsAt(root, SvgPoint(500.0, 500.0), viewport, styles).size == 0
+        )
     }
 
     /** 默认 `auto` 等价 `visiblePainted`；隐藏元素不参与，bounding-box 亦不越过 visibility。 */

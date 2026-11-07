@@ -47,7 +47,7 @@ internal func m6RenderScene(name: String): SvgBitmap {
         let points = [SvgPoint(18.0, 18.0), SvgPoint(42.0, 18.0), SvgPoint(46.0, 44.0)]
         let ids = ArrayList<String>()
         for (point in points) {
-            for (element in SvgHitTest().elementsAt(document.root, point, viewport, styles)) {
+            for (element in SvgHitTest.elementsAt(document.root, point, viewport, styles)) {
                 match (element.attr("id")) {
                     case Some(id) => if (!ids.contains(id)) {
                         ids.add(id)
