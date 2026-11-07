@@ -315,13 +315,13 @@ private func addJoin(
     let n1y = u1x
     let n2x = -u2y
     let n2y = u2x
-    if (style.lineJoin == SvgLineJoin.Round) {
+    if (style.lineJoin == SvgLineJoin.Round || style.lineJoin == SvgLineJoin.Arcs) {
         addContour(result, circlePolygonForStroke(vertex.x, vertex.y, half, 0.25))
         return
     }
     let outer1 = SvgPoint(vertex.x + sign * n1x * half, vertex.y + sign * n1y * half)
     let outer2 = SvgPoint(vertex.x + sign * n2x * half, vertex.y + sign * n2y * half)
-    if (style.lineJoin == SvgLineJoin.Miter) {
+    if (style.lineJoin == SvgLineJoin.Miter || style.lineJoin == SvgLineJoin.MiterClip) {
         let ratio = sqrt(2.0 / denominator)
         if (ratio <= style.miterLimit) {
             var dirX = sign * (n1x + n2x)
@@ -438,7 +438,7 @@ private func rectOutline(rect: SvgRect, style: SvgStrokeStyle): ?Array<Array<Svg
     }
     let x = lengthOrZero(rect.x)
     let y = lengthOrZero(rect.y)
-    if (style.lineJoin != SvgLineJoin.Miter || style.miterLimit < 1.4142135623730951) {
+    if ((style.lineJoin != SvgLineJoin.Miter && style.lineJoin != SvgLineJoin.MiterClip) || style.miterLimit < 1.4142135623730951) {
         return Some(
             SvgStrokeOutliner.outlinePolyline(
                 [SvgPoint(x, y), SvgPoint(x + width, y), SvgPoint(x + width, y + height), SvgPoint(x, y + height)],

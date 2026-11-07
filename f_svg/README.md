@@ -709,6 +709,16 @@ let frame = timeline.sample(timeline.currentTime())
   `checkEnclosure`，基于 `getBBox` 并由 `pointer-events: none` / `visibility: hidden` 筛选；
   `reference` 限定查询子树，结果集合为新实例，文档只读。
 
+## M6：SVG 2 收尾
+
+- **`vector-effect` 扩展**：新增 `non-scaling-size` / `non-rotation` / `fixed-position`，
+  按 `non-scaling-size → non-rotation → fixed-position` 顺序修正累积矩阵；
+  `non-scaling-stroke` 仍走既有描边缩放。
+- **`stroke-linejoin` 扩展**：新增 `miter-clip` / `arcs`；`miter-clip` 在超过
+  `stroke-miterlimit` 时截断，`arcs` 以 `stroke-width / 2` 圆弧连接。
+- **`width` / `height: auto`**：根元素按内容包围盒与 `viewBox` 比例推导；
+  仅显式 `auto` 生效，缺失属性保持 M5 的视口推导。无法确定时回退并 warning。
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；

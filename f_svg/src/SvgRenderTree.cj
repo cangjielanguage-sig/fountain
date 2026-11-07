@@ -265,17 +265,36 @@ public class SvgRenderTreeBuilder {
         this.renderOptions = options
         this.mainParseOptions = document.parseOptions
         let root = document.root
-        let viewport = SvgViewport.from(root, 300.0, 150.0)
+        var viewport = SvgViewport.from(root, 300.0, 150.0)
+        let resolver = SvgStyleResolver()
+        let interaction = SvgInteractionState(
+            hoveredIds: options.hoveredIds,
+            focusedIds: options.focusedIds,
+            root: Some(root)
+        )
+        var styles = resolver.compute(
+            root,
+            interaction: interaction,
+            mediaWidth: viewport.width,
+            mediaHeight: viewport.height
+        )
+        let widthAuto = root.attr("width")?.trimAscii().toAsciiLower() == "auto"
+        let heightAuto = root.attr("height")?.trimAscii().toAsciiLower() == "auto"
+        if ((widthAuto || heightAuto) && options.width <= 0 && options.height <= 0) {
+            let size = SvgAutoSize.rootSize(root, styles, 300.0, 150.0)
+            viewport = SvgViewport(size.width, size.height)
+            styles = resolver.compute(
+                root,
+                interaction: interaction,
+                mediaWidth: size.width,
+                mediaHeight: size.height
+            )
+        }
         let logicalWidth = if (options.width > 0) { Float64(options.width) } else { viewport.width }
         let logicalHeight = if (options.height > 0) { Float64(options.height) } else { viewport.height }
-        let resolver = SvgStyleResolver()
-        let styles = resolver.compute(
+        styles = resolver.compute(
             root,
-            interaction: SvgInteractionState(
-                hoveredIds: options.hoveredIds,
-                focusedIds: options.focusedIds,
-                root: Some(root)
-            ),
+            interaction: interaction,
             mediaWidth: logicalWidth,
             mediaHeight: logicalHeight
         )
@@ -1045,15 +1064,14 @@ public class SvgRenderTreeBuilder {
             case None => return
         }
         let bounds = SvgGeometry.bounds(shape, style: style)
-        let matrix = context.matrix.multiply(
-            elementTransformMatrix(
-                shape,
-                style: style,
-                bounds: bounds,
-                viewportWidth: context.width,
-                viewportHeight: context.height
-            )
+        let localMatrix = elementTransformMatrix(
+            shape,
+            style: style,
+            bounds: bounds,
+            viewportWidth: context.width,
+            viewportHeight: context.height
         )
+        let matrix = svgApplyM6VectorEffects(context.matrix.multiply(localMatrix), style, localMatrix)
         let clipPath = this.resolveUrlRef(style.get("clip-path"), context)
         let maskElement = this.resolveUrlRef(style.get("mask"), context)
         let filterElement = this.resolveUrlRef(style.get("filter"), context)
@@ -1804,4 +1822,16 @@ private func svgExternalParseOptions(base: SvgParseOptions): SvgParseOptions {
         maxDecompressedBytes: source.maxDecompressedBytes
     )
     SvgParseOptions(strict: base.strict, security: security, xml: base.xml)
+}
+
+/** 新增 vector-effect 值对累积矩阵的修正；旧值与 none 原样返回。 */
+private func svgApplyM6VectorEffects(
+    matrix: SvgMatrix,
+    style: SvgComputedStyle,
+    local: SvgMatrix
+): SvgMatrix {
+    match (style.vectorEffect().toString()) {
+        case "none" | "non-scaling-stroke" => matrix
+        case _ => SvgVectorEffect2.apply(matrix, [style.vectorEffect()], local: local)
+    }
 }

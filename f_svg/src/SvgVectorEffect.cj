@@ -40,6 +40,21 @@ public class SvgVectorEffect <: Equatable<SvgVectorEffect> & ToString {
             SvgVectorEffect(1)
         }
     }
+    public static prop NonScalingSize: SvgVectorEffect {
+        get() {
+            SvgVectorEffect(2)
+        }
+    }
+    public static prop NonRotation: SvgVectorEffect {
+        get() {
+            SvgVectorEffect(3)
+        }
+    }
+    public static prop FixedPosition: SvgVectorEffect {
+        get() {
+            SvgVectorEffect(4)
+        }
+    }
 
     public operator func ==(that: SvgVectorEffect): Bool {
         this.ordinal == that.ordinal
@@ -48,7 +63,11 @@ public class SvgVectorEffect <: Equatable<SvgVectorEffect> & ToString {
     public func toString(): String {
         match (this.ordinal) {
             case 0 => "none"
-            case _ => "non-scaling-stroke"
+            case 1 => "non-scaling-stroke"
+            case 2 => "non-scaling-size"
+            case 3 => "non-rotation"
+            case 4 => "fixed-position"
+            case _ => "none"
         }
     }
 
@@ -71,7 +90,10 @@ public class SvgVectorEffect <: Equatable<SvgVectorEffect> & ToString {
     internal static func fromName(name: String): ?SvgVectorEffect {        match (name.trimAscii().toAsciiLower()) {
             case "none" => Some(SvgVectorEffect.NoEffect)
             case "non-scaling-stroke" => Some(SvgVectorEffect.NonScalingStroke)
-            case _ => None
+            case "non-scaling-size" => Some(SvgVectorEffect.NonScalingSize)
+            case "non-rotation" => Some(SvgVectorEffect.NonRotation)
+            case "fixed-position" => Some(SvgVectorEffect.FixedPosition)
+            case _ => Option<SvgVectorEffect>.None
         }
     }
 

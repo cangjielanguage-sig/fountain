@@ -64,12 +64,16 @@ public enum SvgLineJoin <: Equatable<SvgLineJoin> & ToString {
     | Miter
     | Round
     | Bevel
+    | MiterClip
+    | Arcs
 
     public operator func ==(that: SvgLineJoin): Bool {
         match ((this, that)) {
             case (Miter, Miter) => true
             case (Round, Round) => true
             case (Bevel, Bevel) => true
+            case (MiterClip, MiterClip) => true
+            case (Arcs, Arcs) => true
             case _ => false
         }
     }
@@ -79,6 +83,8 @@ public enum SvgLineJoin <: Equatable<SvgLineJoin> & ToString {
             case Miter => "Miter"
             case Round => "Round"
             case Bevel => "Bevel"
+            case MiterClip => "MiterClip"
+            case Arcs => "Arcs"
         }
     }
 
@@ -87,6 +93,8 @@ public enum SvgLineJoin <: Equatable<SvgLineJoin> & ToString {
             case Miter => "miter"
             case Round => "round"
             case Bevel => "bevel"
+            case MiterClip => "miter-clip"
+            case Arcs => "arcs"
         }
     }
 
@@ -95,6 +103,8 @@ public enum SvgLineJoin <: Equatable<SvgLineJoin> & ToString {
             case "miter" => Some(Miter)
             case "round" => Some(Round)
             case "bevel" => Some(Bevel)
+            case "miter-clip" => Some(MiterClip)
+            case "arcs" => Some(Arcs)
             case _ => None
         }
     }
