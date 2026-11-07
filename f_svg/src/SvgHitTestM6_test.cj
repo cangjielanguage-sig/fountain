@@ -159,6 +159,33 @@ public class SvgHitTestM6_test {
         @Assert(SvgHitTest().hitTest(root, SvgPoint(500.0, 500.0)).size == 0)
     }
 
+    /** 规格四参 API：返回 ArrayList，elementAt 取首项，空文档为 None。 */
+    @TestCase
+    public func elementsAtSpecApi(): Unit {
+        let lower = rect("lower", 0.0, 0.0, 100.0, 100.0)
+        lower.setAttr("fill", "red")
+        let upper = rect("upper", 0.0, 0.0, 100.0, 100.0)
+        upper.setAttr("fill", "blue")
+        let root = rootOf([lower, upper])
+        let viewport = SvgViewport(100.0, 100.0)
+        let styles = SvgStyleResolver().compute(root)
+        let hits = SvgHitTest().elementsAt(root, SvgPoint(50.0, 50.0), viewport, styles)
+        @Assert(hits.size == 2)
+        @Assert(hits[0] == upper)
+        @Assert(hits[1] == lower)
+        let first = SvgHitTest().elementAt(root, SvgPoint(50.0, 50.0), viewport, styles)
+        match (first) {
+            case Some(value) => @Assert(value == upper)
+            case None => @Fail("elementAt 应返回最上层元素")
+        }
+        let empty = SvgHitTest().elementsAt(root, SvgPoint(500.0, 500.0), viewport, styles)
+        @Assert(empty.size == 0)
+        @Assert(SvgHitTest().elementAt(root, SvgPoint(500.0, 500.0), viewport, styles).isNone())
+        let legacy = SvgHitTest().hitTest(root, SvgPoint(50.0, 50.0))
+        @Assert(legacy.size == hits.size)
+        @Assert(legacy[0] == hits[0])
+    }
+
     /** 设备坐标：DPR 与根 viewBox 都参与换算。 */
     @TestCase
     public func deviceCoordinates(): Unit {

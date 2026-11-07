@@ -174,26 +174,112 @@ public class SvgHitTest {
             this.warnings.add(warning)
         }
         let origin = svgHitOrigin(root, point, options, logicalWidth, logicalHeight)
-        let context = SvgHitContext(
-            styles,
+        svgHitCollect(
             root,
+            origin,
+            styles,
             logicalWidth,
             logicalHeight,
             options.fonts,
+            maxElements
+        ).toArray()
+    }
+
+    /**
+     * 规格命中 API：设备坐标 + 显式视口与样式树。
+     *
+     * `point` 先按 `devicePixelRatio` 转为逻辑坐标，再乘视口矩阵的逆；返回绘制序从上到下。
+     */
+    public func elementsAt(
+        root: SvgElement,
+        point: SvgPoint,
+        viewport: SvgViewport,
+        styles: SvgComputedStyleTree,
+        devicePixelRatio!: Float64 = 1.0,
+        maxElements!: Int64 = 1_000_000,
+        fonts!: ?SvgFontRegistry = None
+    ): ArrayList<SvgElement> {
+        if (maxElements <= 0) {
+            throw invalidValue("maxElements 必须为正")
+        }
+        if (!isFiniteSvgNumber(devicePixelRatio) || devicePixelRatio <= 0.0) {
+            throw invalidValue("devicePixelRatio 必须为正的有限数")
+        }
+        let logical = SvgPoint(point.x / devicePixelRatio, point.y / devicePixelRatio)
+        let matrix = match (root) {
+            case svg: SvgRoot => viewport.transform(svg)
+            case _ => SvgMatrix.identity
+        }
+        let origin = match (matrix.invert()) {
+            case Some(inverse) => inverse.apply(logical)
+            case None => logical
+        }
+        svgHitCollect(
+            root,
             origin,
+            styles,
+            viewport.width,
+            viewport.height,
+            fonts,
             maxElements
         )
-        let result = ArrayList<SvgElement>()
-        var index = root.children.size - 1
-        while (index >= 0) {
-            match (root.children[index]) {
-                case ElementNode(child) => svgHitWalk(child, context, result)
-                case _ => ()
-            }
-            index--
-        }
-        result.toArray()
     }
+
+    /** 规格命中 API：返回 `elementsAt` 的首项，未命中为 `None`。 */
+    public func elementAt(
+        root: SvgElement,
+        point: SvgPoint,
+        viewport: SvgViewport,
+        styles: SvgComputedStyleTree,
+        devicePixelRatio!: Float64 = 1.0,
+        maxElements!: Int64 = 1_000_000,
+        fonts!: ?SvgFontRegistry = None
+    ): ?SvgElement {
+        let hits = this.elementsAt(
+            root,
+            point,
+            viewport,
+            styles,
+            devicePixelRatio: devicePixelRatio,
+            maxElements: maxElements,
+            fonts: fonts
+        )
+        if (hits.size == 0) {
+            return Option<SvgElement>.None
+        }
+        Some(hits[0])
+    }
+}
+
+/** 命中核心：后绘制者优先，遍历子节点后判定自身。 */
+private func svgHitCollect(
+    root: SvgElement,
+    origin: SvgPoint,
+    styles: SvgComputedStyleTree,
+    viewportWidth: Float64,
+    viewportHeight: Float64,
+    fonts: ?SvgFontRegistry,
+    maxElements: Int64
+): ArrayList<SvgElement> {
+    let context = SvgHitContext(
+        styles,
+        root,
+        viewportWidth,
+        viewportHeight,
+        fonts,
+        origin,
+        maxElements
+    )
+    let result = ArrayList<SvgElement>()
+    var index = root.children.size - 1
+    while (index >= 0) {
+        match (root.children[index]) {
+            case ElementNode(child) => svgHitWalk(child, context, result)
+            case _ => ()
+        }
+        index--
+    }
+    result
 }
 
 /** 逻辑尺寸：显式 width/height 优先，否则取根视口。 */
