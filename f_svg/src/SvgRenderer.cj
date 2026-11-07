@@ -309,15 +309,25 @@ public class SvgRenderer {
                 this.drawFill(bitmap, textCommand, list, style, patterns)
                 this.drawStroke(bitmap, textCommand, list, style, patterns)
                 // 纯色装饰线合并为一条路径，避免逐字形填充在接缝处二次混色；
-                // 渐变 / 图案按字形切分，使 objectBoundingBox 以每个字形包围盒为基准。
-                if (style.fill().kind == SvgPaintKind.Reference) {
-                    let decorationRuns = textRenderer.decorationRuns(
-                        text,
-                        style: style,
-                        root: Some(list.root),
-                        styles: list.styles
-                    )
+                // 渐变 / 图案 / 显式 decoration-color 按字形切分。
+                let decorationRuns = textRenderer.decorationRuns(
+                    text,
+                    style: style,
+                    root: Some(list.root),
+                    styles: list.styles
+                )
+                var explicitColor = false
+                for (run in decorationRuns) {
+                    if (run.color.isSome()) {
+                        explicitColor = true
+                    }
+                }
+                if (style.fill().kind == SvgPaintKind.Reference || explicitColor) {
                     for (run in decorationRuns) {
+                        let paint = match (run.color) {
+                            case Some(value) => Some(SvgPaint.of(value))
+                            case None => Option<SvgPaint>.None
+                        }
                         let decorationCommand = SvgDisplayCommand(
                             SvgDisplayCommandKind.FillPath,
                             command.tag,
@@ -325,30 +335,28 @@ public class SvgRenderer {
                             path: Some(run.path),
                             style: Some(style),
                             bounds: Some(run.bounds),
-                            opacity: command.opacity
+                            opacity: command.opacity,
+                            paintOverride: paint
                         )
                         this.drawFill(bitmap, decorationCommand, list, style, patterns)
                     }
-                } else {
-                    match (textRenderer.decorationOutline(
-                        text,
-                        style: style,
-                        root: Some(list.root),
-                        styles: list.styles
-                    )) {
-                        case Some(decoration) =>
-                            let decorationCommand = SvgDisplayCommand(
-                                SvgDisplayCommandKind.FillPath,
-                                command.tag,
-                                command.matrix,
-                                path: Some(decoration),
-                                style: Some(style),
-                                bounds: command.bounds,
-                                opacity: command.opacity
-                            )
-                            this.drawFill(bitmap, decorationCommand, list, style, patterns)
-                        case None => ()
+                } else if (decorationRuns.size > 0) {
+                    let merged = ArrayList<SvgPathCommand>()
+                    for (run in decorationRuns) {
+                        for (item in run.path.commands) {
+                            merged.add(item)
+                        }
                     }
+                    let decorationCommand = SvgDisplayCommand(
+                        SvgDisplayCommandKind.FillPath,
+                        command.tag,
+                        command.matrix,
+                        path: Some(SvgPathData(merged.toArray())),
+                        style: Some(style),
+                        bounds: command.bounds,
+                        opacity: command.opacity
+                    )
+                    this.drawFill(bitmap, decorationCommand, list, style, patterns)
                 }
             case Image =>
                 let box = match (command.bounds) {

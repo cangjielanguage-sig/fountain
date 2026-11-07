@@ -30,8 +30,12 @@ public class SvgTextGlyph {
     public let angle: Float64
     /** 字形 ascent，用于装饰线定位。 */
     public let ascent: Float64
+    /** 字形 descent，用于 `text-underline-position: under`。 */
+    public let descent: Float64
     /** 该字形生效的装饰线（祖先传播后的结果）。 */
     public let decoration: SvgTextDecoration
+    /** 装饰线完整规格（线型 / 颜色 / 厚度 / 下划线位置）。 */
+    internal let decorationSpec: SvgDecorationStyle
 
     internal init(
         codePoint: Int64,
@@ -42,7 +46,9 @@ public class SvgTextGlyph {
         path: ?SvgPathData,
         angle!: Float64 = 0.0,
         ascent!: Float64 = 0.0,
-        decoration!: SvgTextDecoration = SvgTextDecoration.none
+        descent!: Float64 = 0.0,
+        decoration!: SvgTextDecoration = SvgTextDecoration.none,
+        decorationSpec!: ?SvgDecorationStyle = None
     ) {
         this.codePoint = codePoint
         this.x = x
@@ -52,7 +58,9 @@ public class SvgTextGlyph {
         this.path = path
         this.angle = angle
         this.ascent = ascent
+        this.descent = descent
         this.decoration = decoration
+        this.decorationSpec = decorationSpec ?? SvgDecorationStyle(lines: decoration)
     }
 }
 
@@ -60,10 +68,15 @@ public class SvgTextGlyph {
 internal class SvgDecorationRun {
     let path: SvgPathData
     let bounds: SvgBounds
+    /** 显式 `text-decoration-color`；`None` 沿用文本填充。 */
+    let color: ?SvgColor
+    let thickness: Float64
 
-    init(path: SvgPathData, bounds: SvgBounds) {
+    init(path: SvgPathData, bounds: SvgBounds, color!: ?SvgColor = None, thickness!: Float64 = 0.0) {
         this.path = path
         this.bounds = bounds
+        this.color = color
+        this.thickness = thickness
     }
 }
 
@@ -123,6 +136,7 @@ private class SvgTextState {
     let alignment: SvgAlignmentBaseline
     let shift: SvgBaselineShift
     let decoration: SvgTextDecoration
+    let decorationSpec: SvgDecorationStyle
     let direction: SvgDirection
     let unicodeBidi: SvgUnicodeBidi
 
@@ -137,6 +151,7 @@ private class SvgTextState {
         alignment!: SvgAlignmentBaseline = SvgAlignmentBaseline.Auto,
         shift!: SvgBaselineShift = SvgBaselineShift.Baseline,
         decoration!: SvgTextDecoration = SvgTextDecoration.none,
+        decorationSpec!: ?SvgDecorationStyle = None,
         direction!: SvgDirection = SvgDirection.Ltr,
         unicodeBidi!: SvgUnicodeBidi = SvgUnicodeBidi.Normal
     ) {
@@ -150,6 +165,7 @@ private class SvgTextState {
         this.alignment = alignment
         this.shift = shift
         this.decoration = decoration
+        this.decorationSpec = decorationSpec ?? SvgDecorationStyle(lines: decoration)
         this.direction = direction
         this.unicodeBidi = unicodeBidi
     }
@@ -169,6 +185,7 @@ private class SvgTextChar {
     let parentDominant: SvgDominantBaseline
     let isRoot: Bool
     let decoration: SvgTextDecoration
+    let decorationSpec: SvgDecorationStyle
     let direction: SvgDirection
     let unicodeBidi: SvgUnicodeBidi
     var xOverride: ?Float64 = None
@@ -203,6 +220,7 @@ private class SvgTextChar {
         this.parentDominant = parentDominant
         this.isRoot = isRoot
         this.decoration = state.decoration
+        this.decorationSpec = state.decorationSpec
         this.direction = state.direction
         this.unicodeBidi = state.unicodeBidi
     }
@@ -220,6 +238,7 @@ private class SvgTextChar {
             alignment: this.alignment,
             shift: this.shift,
             decoration: this.decoration,
+            decorationSpec: this.decorationSpec,
             direction: this.direction,
             unicodeBidi: this.unicodeBidi
         )
@@ -318,6 +337,7 @@ public class SvgTextRenderer {
         root!: ?SvgElement = None,
         styles!: ?SvgComputedStyleTree = None
     ): SvgTextLayout {
+        let rootDecoration = resolveSvgDecorationStyle(text, style, styles)
         let rootState = SvgTextState(
             style.fontSize().value,
             style.fontFamily(),
@@ -328,7 +348,8 @@ public class SvgTextRenderer {
             dominant: style.dominantBaseline(),
             alignment: SvgAlignmentBaseline.Auto,
             shift: style.baselineShift(),
-            decoration: effectiveTextDecoration(text, style, styles),
+            decoration: rootDecoration.lines,
+            decorationSpec: rootDecoration,
             direction: style.direction(),
             unicodeBidi: style.unicodeBidi()
         )
@@ -710,7 +731,12 @@ public class SvgTextRenderer {
                     path,
                     angle: angle,
                     ascent: ascentValues[index],
-                    decoration: char.decoration
+                    descent: match (resolvedFonts[index]) {
+                        case Some(font) => charFontDescent(font, char)
+                        case None => char.fontSize * 0.2
+                    },
+                    decoration: char.decoration,
+                    decorationSpec: char.decorationSpec
                 )
             )
             match (path) {
@@ -785,32 +811,37 @@ public class SvgTextRenderer {
             let commands = ArrayList<SvgPathCommand>()
             let matrix = SvgMatrix.translate(glyph.x, glyph.y)
                 .multiply(SvgMatrix.rotate(glyph.angle))
-            let thickness = SvgTextDecorationGeometry.thickness(glyph.fontSize)
+            let spec = glyph.decorationSpec
+            let thickness = svgDecorationThicknessPx(spec.thickness, glyph.fontSize)
+            let underlineOffset = svgDecorationUnderlineOffset(spec.underlinePosition, glyph, thickness)
             if (glyph.decoration.underline) {
-                appendDecorationRect(
+                appendSvgDecorationSegments(
                     commands,
                     matrix,
                     glyph.advance,
-                    SvgTextDecorationGeometry.underlineOffset(glyph.fontSize),
-                    thickness
+                    underlineOffset,
+                    thickness,
+                    spec.style
                 )
             }
             if (glyph.decoration.overline) {
-                appendDecorationRect(
+                appendSvgDecorationSegments(
                     commands,
                     matrix,
                     glyph.advance,
                     SvgTextDecorationGeometry.overlineOffset(glyph.ascent),
-                    thickness
+                    thickness,
+                    spec.style
                 )
             }
             if (glyph.decoration.lineThrough) {
-                appendDecorationRect(
+                appendSvgDecorationSegments(
                     commands,
                     matrix,
                     glyph.advance,
                     SvgTextDecorationGeometry.lineThroughOffset(glyph.ascent),
-                    thickness
+                    thickness,
+                    spec.style
                 )
             }
             if (commands.size == 0) {
@@ -818,7 +849,7 @@ public class SvgTextRenderer {
             }
             let path = SvgPathData(commands.toArray())
             let bounds = pathDataBounds(path) ?? SvgBounds(glyph.x, glyph.y, glyph.advance, thickness)
-            runs.add(SvgDecorationRun(path, bounds))
+            runs.add(SvgDecorationRun(path, bounds, color: spec.color, thickness: thickness))
         }
         runs
     }
@@ -870,61 +901,113 @@ public class SvgTextRenderer {
     }
 }
 
-private func appendDecorationRect(
-    commands: ArrayList<SvgPathCommand>,
-    matrix: SvgMatrix,
-    width: Float64,
-    offsetY: Float64,
-    thickness: Float64
-): Unit {
-    let p0 = matrix.apply(SvgPoint(0.0, offsetY))
-    let p1 = matrix.apply(SvgPoint(width, offsetY))
-    let p2 = matrix.apply(SvgPoint(width, offsetY + thickness))
-    let p3 = matrix.apply(SvgPoint(0.0, offsetY + thickness))
-    commands.add(SvgPathCommand(SvgPathCommandKind.MoveTo, false, [p0.x, p0.y]))
-    commands.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [p1.x, p1.y]))
-    commands.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [p2.x, p2.y]))
-    commands.add(SvgPathCommand(SvgPathCommandKind.LineTo, false, [p3.x, p3.y]))
-    commands.add(SvgPathCommand(SvgPathCommandKind.ClosePath, false, Array<Float64>()))
+/** `text-decoration-thickness` → 用户单位厚度；`auto` 用字体度量。 */
+private func svgDecorationThicknessPx(thickness: ?SvgLength, fontSize: Float64): Float64 {
+    let value = match (thickness) {
+        case Some(length) =>
+            match (length.unit) {
+                case Percent => length.value / 100.0 * fontSize
+                case Em => length.value * fontSize
+                case Ex => length.value * fontSize / 2.0
+                case In => length.value * 96.0
+                case Cm => length.value * 96.0 / 2.54
+                case Mm => length.value * 96.0 / 25.4
+                case Pt => length.value * 96.0 / 72.0
+                case Pc => length.value * 96.0 / 6.0
+                case _ => length.value
+            }
+        case None => SvgTextDecorationGeometry.thickness(fontSize)
+    }
+    if (isFiniteSvgNumber(value) && value > 0.0) {
+        value
+    } else {
+        SvgTextDecorationGeometry.thickness(fontSize)
+    }
 }
 
-/** 装饰线传播：最近声明祖先生效，显式 `none` 关闭。 */
-private func effectiveTextDecoration(
-    text: SvgTextElement,
-    style: SvgComputedStyle,
-    styles: ?SvgComputedStyleTree
-): SvgTextDecoration {
-    if (style.sourceOf("text-decoration") != CssStyleSource.Default) {
-        return SvgTextDecoration.tryParse(style.get("text-decoration") ?? "none") ??
-            SvgTextDecoration.none
+/** 下划线位置：`auto` 基线下 0.10em；`under` 再下移 descent；`above` 基线上方。 */
+private func svgDecorationUnderlineOffset(
+    position: SvgTextUnderlinePosition,
+    glyph: SvgTextGlyph,
+    thickness: Float64
+): Float64 {
+    let auto = SvgTextDecorationGeometry.underlineOffset(glyph.fontSize)
+    match (position) {
+        case Auto => auto
+        case Under => auto + (if (glyph.descent > 0.0) { glyph.descent } else { 0.0 })
+        case Above => -thickness
     }
-    var current = text.parent
-    while (true) {
-        match (current) {
-            case Some(element) =>
-                let declared: ?String = match (styles) {
-                    case Some(tree) =>
-                        match (tree.get(element)) {
-                            case Some(parentStyle) =>
-                                if (parentStyle.sourceOf("text-decoration") != CssStyleSource.Default) {
-                                    Some(parentStyle.get("text-decoration") ?? "none")
-                                } else {
-                                    None
-                                }
-                            case None => None
-                        }
-                    case None => element.attr("text-decoration")
-                }
-                match (declared) {
-                    case Some(value) =>
-                        return SvgTextDecoration.tryParse(value) ?? SvgTextDecoration.none
-                    case None => ()
-                }
-                current = element.parent
-            case None => break
+}
+
+/** 子元素是否显式声明任一装饰属性（简写视为全部）。 */
+private func svgDecorationStyleDeclared(style: SvgComputedStyle): Bool {
+    if (style.sourceOf("text-decoration") != CssStyleSource.Default) {
+        return true
+    }
+    for (name in [
+        "text-decoration-line", "text-decoration-style", "text-decoration-color",
+        "text-decoration-thickness", "text-underline-position"
+    ]) {
+        if (style.sourceOf(name) != CssStyleSource.Default) {
+            return true
         }
     }
-    SvgTextDecoration.none
+    false
+}
+
+/** 无样式树时，从 tspan 属性解析装饰规格；缺省沿用父状态。 */
+private func svgDecorationSpecFromAttributes(
+    span: SvgTextElement,
+    parent: SvgDecorationStyle
+): SvgDecorationStyle {
+    var lines = parent.lines
+    var decoStyle = parent.style
+    var color = parent.color
+    var thickness = parent.thickness
+    var underlinePosition = parent.underlinePosition
+    let shorthand = span.attr("text-decoration")
+    match (span.attr("text-decoration-line")) {
+        case Some(text) =>
+            lines = parseSvgDecorationLines(text) ?? SvgTextDecoration.none
+        case None =>
+            match (shorthand) {
+                case Some(text) =>
+                    lines = parseSvgDecorationLines(text) ?? SvgTextDecoration.none
+                case None => ()
+            }
+    }
+    match (span.attr("text-decoration-style")) {
+        case Some(text) => decoStyle = SvgTextDecorationStyle.fromName(text) ?? decoStyle
+        case None => ()
+    }
+    match (span.attr("text-decoration-color")) {
+        case Some(text) =>
+            match (SvgColor.tryParse(text)) {
+                case Some(value) => color = Some(value)
+                case None => ()
+            }
+        case None => ()
+    }
+    match (span.attr("text-decoration-thickness")) {
+        case Some(text) =>
+            match (SvgLength.tryParse(text)) {
+                case Some(value) => thickness = Some(value)
+                case None => ()
+            }
+        case None => ()
+    }
+    match (span.attr("text-underline-position")) {
+        case Some(text) =>
+            underlinePosition = SvgTextUnderlinePosition.fromName(text) ?? underlinePosition
+        case None => ()
+    }
+    SvgDecorationStyle(
+        lines: lines,
+        style: decoStyle,
+        color: color,
+        thickness: thickness,
+        underlinePosition: underlinePosition
+    )
 }
 
 private func charFontAscent(font: SvgFont, char: SvgTextChar): Float64 {
@@ -1029,20 +1112,52 @@ private func collectSvgTextChars(
                                     case None => state.shift
                                 }
                         }
-                        let nextDecoration = match (spanStyle) {
+                        let nextDecorationSpec = match (spanStyle) {
                             case Some(value) =>
-                                if (value.sourceOf("text-decoration") != CssStyleSource.Default) {
-                                    value.textDecoration()
+                                if (svgDecorationStyleDeclared(value)) {
+                                    resolveSvgDecorationStyle(span, value, styles)
                                 } else {
-                                    state.decoration
+                                    state.decorationSpec
                                 }
                             case None =>
-                                match (span.attr("text-decoration")) {
-                                    case Some(text) =>
-                                        SvgTextDecoration.tryParse(text) ?? state.decoration
-                                    case None => state.decoration
+                                match (span.attr("text-decoration-line")) {
+                                    case Some(_) => svgDecorationSpecFromAttributes(span, state.decorationSpec)
+                                    case None =>
+                                        match (span.attr("text-decoration")) {
+                                            case Some(_) =>
+                                                svgDecorationSpecFromAttributes(span, state.decorationSpec)
+                                            case None =>
+                                                match (span.attr("text-decoration-style")) {
+                                                    case Some(_) =>
+                                                        svgDecorationSpecFromAttributes(
+                                                            span,
+                                                            state.decorationSpec
+                                                        )
+                                                    case None =>
+                                                        match (span.attr("text-decoration-color")) {
+                                                            case Some(_) =>
+                                                                svgDecorationSpecFromAttributes(
+                                                                    span,
+                                                                    state.decorationSpec
+                                                                )
+                                                            case None =>
+                                                                match (span.attr(
+                                                                    "text-decoration-thickness"
+                                                                )) {
+                                                                    case Some(_) =>
+                                                                        svgDecorationSpecFromAttributes(
+                                                                            span,
+                                                                            state.decorationSpec
+                                                                        )
+                                                                    case None =>
+                                                                        state.decorationSpec
+                                                                }
+                                                        }
+                                                }
+                                        }
                                 }
                         }
+                        let nextDecoration = nextDecorationSpec.lines
                         let nextDirection = match (spanStyle) {
                             case Some(value) => value.direction()
                             case None =>
@@ -1071,6 +1186,7 @@ private func collectSvgTextChars(
                             alignment: nextAlignment,
                             shift: nextShift,
                             decoration: nextDecoration,
+                            decorationSpec: nextDecorationSpec,
                             direction: nextDirection,
                             unicodeBidi: nextBidi
                         )

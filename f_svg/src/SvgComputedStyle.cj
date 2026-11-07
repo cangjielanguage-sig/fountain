@@ -455,6 +455,16 @@ public class SvgComputedStyle <: ToString {
     }
 
     public func textDecorationStyle(): SvgTextDecorationStyle {
+        if (this.sourceOf("text-decoration-style") != CssStyleSource.Default) {
+            match (this.get("text-decoration-style")) {
+                case Some(text) =>
+                    match (SvgTextDecorationStyle.fromName(text)) {
+                        case Some(value) => return value
+                        case None => ()
+                    }
+                case None => ()
+            }
+        }
         let shorthand = (this.get("text-decoration") ?? "").toAsciiLower()
         for (name in ["dotted", "dashed", "double", "wavy"]) {
             if (shorthand.contains(name)) {
@@ -466,23 +476,30 @@ public class SvgComputedStyle <: ToString {
     }
 
     public func textDecorationColor(): ?SvgColor {
-        match (this.get("text-decoration-color")) {
-            case Some(text) =>
-                if (text.trimAscii().toAsciiLower() == "currentcolor") {
-                    return Some(this.color())
-                }
-                SvgColor.tryParse(text)
-            case None => Option<SvgColor>.None
+        if (this.sourceOf("text-decoration-color") != CssStyleSource.Default) {
+            return parseSvgDecorationColor(this.get("text-decoration-color"), this.color())
         }
+        if (this.sourceOf("text-decoration") != CssStyleSource.Default) {
+            match (svgDecorationShorthandColor(this.get("text-decoration") ?? "", this.color())) {
+                case Some(value) => return Some(value)
+                case None => ()
+            }
+        }
+        Option<SvgColor>.None
     }
 
     public func textDecorationThickness(): ?SvgLength {
+        if (this.sourceOf("text-decoration-thickness") != CssStyleSource.Default) {
+            return parseSvgDecorationThickness(this.get("text-decoration-thickness"))
+        }
+        if (this.sourceOf("text-decoration") != CssStyleSource.Default) {
+            match (svgDecorationShorthandThickness(this.get("text-decoration") ?? "")) {
+                case Some(value) => return Some(value)
+                case None => ()
+            }
+        }
         match (this.get("text-decoration-thickness")) {
-            case Some(text) =>
-                if (text.trimAscii().toAsciiLower() == "auto") {
-                    return Option<SvgLength>.None
-                }
-                SvgLength.tryParse(text)
+            case Some(text) => parseSvgDecorationThickness(Some(text))
             case None => Option<SvgLength>.None
         }
     }
@@ -613,4 +630,63 @@ internal func parseSvgDecorationLines(text: String): ?SvgTextDecoration {
         return Option<SvgTextDecoration>.None
     }
     Some(SvgTextDecoration(underline: underline, overline: overline, lineThrough: lineThrough))
+}
+
+/** 解析 `text-decoration-color` 值；`currentColor` 解析为当前 `color`。 */
+private func parseSvgDecorationColor(text: ?String, currentColor: SvgColor): ?SvgColor {
+    match (text) {
+        case Some(value) =>
+            let lower = value.trimAscii().toAsciiLower()
+            if (lower.size == 0 || lower == "auto") {
+                return Option<SvgColor>.None
+            }
+            if (lower == "currentcolor") {
+                return Some(currentColor)
+            }
+            SvgColor.tryParse(value)
+        case None => Option<SvgColor>.None
+    }
+}
+
+/** 解析 `text-decoration-thickness`；`auto` / 非法值返回 `None`。 */
+private func parseSvgDecorationThickness(text: ?String): ?SvgLength {
+    match (text) {
+        case Some(value) =>
+            let lower = value.trimAscii().toAsciiLower()
+            if (lower.size == 0 || lower == "auto" || lower == "from-font") {
+                return Option<SvgLength>.None
+            }
+            SvgLength.tryParse(value)
+        case None => Option<SvgLength>.None
+    }
+}
+
+/** 从 `text-decoration` 简写中提取颜色 token。 */
+private func svgDecorationShorthandColor(text: String, currentColor: SvgColor): ?SvgColor {
+    for (word in splitCssWhitespaceWords(text.trimAscii().toAsciiLower())) {
+        if (word == "currentcolor") {
+            return Some(currentColor)
+        }
+        match (SvgColor.tryParse(word)) {
+            case Some(value) => return Some(value)
+            case None => ()
+        }
+    }
+    Option<SvgColor>.None
+}
+
+/** 从 `text-decoration` 简写中提取厚度 token。 */
+private func svgDecorationShorthandThickness(text: String): ?SvgLength {
+    for (word in splitCssWhitespaceWords(text.trimAscii().toAsciiLower())) {
+        match (word) {
+            case "none" | "underline" | "overline" | "line-through" | "solid" | "double" |
+                "dotted" | "dashed" | "wavy" | "auto" | "from-font" => continue
+            case _ => ()
+        }
+        match (SvgLength.tryParse(word)) {
+            case Some(value) => return Some(value)
+            case None => ()
+        }
+    }
+    Option<SvgLength>.None
 }
