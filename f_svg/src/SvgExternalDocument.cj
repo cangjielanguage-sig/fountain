@@ -22,9 +22,17 @@ public interface SvgExternalDocumentProvider {
 
 /** 外部文档安全上限。 */
 internal let SVG_EXTERNAL_MAX_BYTES: Int64 = 16 * 1024 * 1024
+
+/**
+ * 外部文档展开深度的防御上限。
+ *
+ * 规格语义为“外部文档不递归加载”：provider 返回的文档以
+ * `allowExternalReferences: false` 解析，第二层外部引用被移除并 warning。
+ * 该常量仅保留为异常路径的防御性检查，不参与正常渲染流程。
+ */
 internal let SVG_EXTERNAL_MAX_DEPTH: Int64 = 4
 
-/** 外部文档嵌套深度是否仍可用；达到 4 层后拒绝。 */
+/** 外部文档嵌套深度是否仍可用；正常流程下不会触发。 */
 internal func svgExternalDepthAllows(depth: Int64): Bool {
     depth >= 0 && depth < SVG_EXTERNAL_MAX_DEPTH
 }

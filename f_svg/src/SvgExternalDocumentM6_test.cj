@@ -153,14 +153,9 @@ public class SvgExternalDocumentM6_test {
         @Assert(warned)
     }
 
-    /** 外部文档嵌套深度上限：0..3 可用，4 拒绝；5 层链在第二层停止。 */
+    /** 外部文档不递归加载：第二层外部引用被跳过并 warning，不抛 Limit。 */
     @TestCase
-    public func depthLimit(): Unit {
-        @Assert(svgExternalDepthAllows(0))
-        @Assert(svgExternalDepthAllows(3))
-        @Assert(!svgExternalDepthAllows(4))
-        @Assert(!svgExternalDepthAllows(5))
-
+    public func noRecursion(): Unit {
         let documents = HashMap<String, Array<Byte>>()
         for (index in 1..6) {
             let next = index + 1
@@ -183,7 +178,7 @@ public class SvgExternalDocumentM6_test {
         @Assert(provider.calls == 1)
         var warned = false
         for (warning in rendered.warnings) {
-            if (warning.contains("href")) {
+            if (warning.contains("不递归") || warning.contains("外部引用")) {
                 warned = true
             }
         }

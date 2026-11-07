@@ -894,6 +894,11 @@ public class SvgRenderTreeBuilder {
                     options: svgExternalParseOptions(this.mainParseOptions)
                 )
                 this.externalDocuments[href] = parsed
+                for (warning in parsed.warnings) {
+                    if (warning.contains("外部引用")) {
+                        this.warnings.add("外部文档「${href}」不递归加载：${warning}")
+                    }
+                }
                 parsed
         }
         let fragment = svgHrefFragment(href)
