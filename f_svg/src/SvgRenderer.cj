@@ -497,6 +497,16 @@ public class SvgRenderer {
                 match (gradient) {
                     case Some(found) =>
                         let box = command.bounds ?? SvgBounds.empty()
+                        let gradientInterpolation = svgGradientColorInterpolation(
+                            found,
+                            list.styles,
+                            colorInterpolation
+                        )
+                        svgWarnColorProfile(
+                            svgGradientColorProfile(found, list.styles),
+                            this.warnedColorProfiles,
+                            this.warnings
+                        )
                         let raster = SvgRasterizer(bitmap, samplesPerPixel: this.options.samplesPerPixel, antiAlias: this.options.antiAlias)
                         if (isStroke) {
                             raster.strokeGradient(
@@ -513,7 +523,7 @@ public class SvgRenderer {
                                 dashArray: effectiveDashArray,
                                 dashOffset: effectiveDashOffset,
                                 opacity: opacity,
-                                colorInterpolation: colorInterpolation,
+                                colorInterpolation: gradientInterpolation,
                                 quantizeSteps: quantizeSteps
                             )
                         } else {
@@ -526,7 +536,7 @@ public class SvgRenderer {
                                 matrix: command.matrix,
                                 fillRule: style.fillRule(),
                                 opacity: opacity,
-                                colorInterpolation: colorInterpolation,
+                                colorInterpolation: gradientInterpolation,
                                 quantizeSteps: quantizeSteps
                             )
                         }
@@ -1211,6 +1221,58 @@ private func svgShapeAntiAlias(style: SvgComputedStyle): ?Bool {
     match (style.shapeRendering()) {
         case SvgShapeRendering.OptimizeSpeed | SvgShapeRendering.CrispEdges => Some(false)
         case _ => Option<Bool>.None
+    }
+}
+
+/** 渐变元素的生效颜色插值：自身计算值优先，`auto` 时回退使用元素。 */
+private func svgGradientColorInterpolation(
+    gradient: SvgGradient,
+    styles: ?SvgComputedStyleTree,
+    fallback: String
+): String {
+    let tree = match (styles) {
+        case Some(value) => value
+        case None => return fallback
+    }
+    let style = match (tree.get(gradient)) {
+        case Some(value) => value
+        case None => return fallback
+    }
+    match (style.colorInterpolation()) {
+        case SvgColorInterpolation.Auto => fallback
+        case value => value.toString()
+    }
+}
+
+/** 渐变元素自身声明的 `color-profile`；未声明为 `auto`。 */
+private func svgGradientColorProfile(
+    gradient: SvgGradient,
+    styles: ?SvgComputedStyleTree
+): String {
+    let declared = match (gradient.attr("color-profile")) {
+        case Some(value) =>
+            let lower = value.trimAscii().toAsciiLower()
+            if (lower.size > 0 && lower != "auto") {
+                return value.trimAscii()
+            }
+            Option<String>.None
+        case None => Option<String>.None
+    }
+    let tree = match (styles) {
+        case Some(value) => value
+        case None => return "auto"
+    }
+    let style = match (tree.get(gradient)) {
+        case Some(value) => value
+        case None => return "auto"
+    }
+    if (style.sourceOf("color-profile") == CssStyleSource.Default) {
+        "auto"
+    } else {
+        match (declared) {
+            case Some(value) => value
+            case None => style.colorProfile()
+        }
     }
 }
 
