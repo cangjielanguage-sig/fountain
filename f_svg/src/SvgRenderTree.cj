@@ -1845,11 +1845,17 @@ private func svgHrefFragment(href: String): String {
     ""
 }
 
-/** 复制主文档安全策略，并强制关闭外部引用，避免二次加载。 */
+/**
+ * 外部文档的解析选项。
+ *
+ * 外部文档内部的不安全内容（含外部 `href`）一律按 `Remove` 处理并记 warning，
+ * 不随调用方的 `Reject` / `Keep` 改变；其余安全上限与 `strict` 沿用主文档。
+ * 同时强制关闭外部引用，确保不会因外部文档中的引用再次调用 provider。
+ */
 private func svgExternalParseOptions(base: SvgParseOptions): SvgParseOptions {
     let source = base.security
     let security = SvgSecurityOptions(
-        unsafePolicy: source.unsafePolicy,
+        unsafePolicy: SvgUnsafePolicy.Remove,
         allowScript: source.allowScript,
         allowEventAttributes: source.allowEventAttributes,
         allowExternalReferences: false,
