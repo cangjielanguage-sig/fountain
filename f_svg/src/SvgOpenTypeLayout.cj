@@ -572,10 +572,14 @@ internal class SvgGsubLigatures {
         best
     }
 
-    static func parse(reader: SvgTtfTableReader, warnings: ArrayList<String>): ?SvgGsubLigatures {
+    static func parse(
+        reader: SvgTtfTableReader,
+        warnings: ArrayList<String>,
+        featureTag!: String = "liga"
+    ): ?SvgGsubLigatures {
         try {
             let lookupListOffset = reader.u16(8)
-            let refs = match (cssLayoutLookupRefs(reader, "liga", "GSUB", warnings)) {
+            let refs = match (cssLayoutLookupRefs(reader, featureTag, "GSUB", warnings)) {
                 case Some(value) => value
                 case None => return Option<SvgGsubLigatures>.None
             }

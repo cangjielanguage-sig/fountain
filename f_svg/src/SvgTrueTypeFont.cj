@@ -107,6 +107,8 @@ public class SvgTrueTypeFont <: SvgFont {
     private let kernPairs: ?SvgKernPairs
     private let gposPairs: ?SvgGposPairs
     private let ligatureTable: ?SvgGsubLigatures
+    /** 历史连字 `hlig` 表；缺失时为 `None`。 */
+    private let hligTable: ?SvgGsubLigatures
     /** M6 上下文替换表；无 Type 5 / 6 子表时为 `None`。 */
     private let gsubContext: ?SvgGsubContextTable
     /** `OS/2.sxHeight`；缺表或非法时为 `None`。 */
@@ -129,6 +131,7 @@ public class SvgTrueTypeFont <: SvgFont {
         kernPairs: ?SvgKernPairs,
         gposPairs: ?SvgGposPairs,
         ligatureTable: ?SvgGsubLigatures,
+        hligTable: ?SvgGsubLigatures,
         gsubContext: ?SvgGsubContextTable,
         xHeightValue: ?Int64
     ) {
@@ -148,6 +151,7 @@ public class SvgTrueTypeFont <: SvgFont {
         this.kernPairs = kernPairs
         this.gposPairs = gposPairs
         this.ligatureTable = ligatureTable
+        this.hligTable = hligTable
         this.gsubContext = gsubContext
         this.xHeightValue = xHeightValue
     }
@@ -265,6 +269,15 @@ public class SvgTrueTypeFont <: SvgFont {
             case Some(table) => SvgGsubLigatures.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
             case None => Option<SvgGsubLigatures>.None
         }
+        let hligatures = match (directory.table("GSUB")) {
+            case Some(table) =>
+                SvgGsubLigatures.parse(
+                    SvgTtfTableReader(bytes, table),
+                    ArrayList<String>(),
+                    featureTag: "hlig"
+                )
+            case None => Option<SvgGsubLigatures>.None
+        }
         let gsubContext = match (directory.table("GSUB")) {
             case Some(table) => SvgGsubContextTable.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
             case None => Option<SvgGsubContextTable>.None
@@ -294,6 +307,7 @@ public class SvgTrueTypeFont <: SvgFont {
             kern,
             gpos,
             ligatures,
+            hligatures,
             gsubContext,
             xHeight
         )
@@ -335,6 +349,21 @@ public class SvgTrueTypeFont <: SvgFont {
         this.ligatureTable.isSome()
     }
 
+    /** 字体是否提供指定特性的 Type 4 连字表。 */
+    internal func hasLigatureFeature(feature: String): Bool {
+        match (this.ligatureTableFor(feature)) {
+            case Some(_) => true
+            case None => false
+        }
+    }
+
+    private func ligatureTableFor(feature: String): ?SvgGsubLigatures {
+        match (feature) {
+            case "hlig" => this.hligTable
+            case _ => this.ligatureTable
+        }
+    }
+
     /** 字体是否提供 M6 上下文替换（Type 5 / 6）。 */
     internal func hasContextSubstitutions(): Bool {
         this.gsubContext.isSome()
@@ -362,8 +391,12 @@ public class SvgTrueTypeFont <: SvgFont {
     }
 
     /** 从 `start` 起匹配最长连字，返回 `(连字字形 id, 消费字符数)`。 */
-    internal func ligatureAt(codePoints: Array<Int64>, start: Int64): ?(Int64, Int64) {
-        let table = match (this.ligatureTable) {
+    internal func ligatureAt(
+        codePoints: Array<Int64>,
+        start: Int64,
+        feature!: String = "liga"
+    ): ?(Int64, Int64) {
+        let table = match (this.ligatureTableFor(feature)) {
             case Some(value) => value
             case None => return Option<(Int64, Int64)>.None
         }

@@ -446,7 +446,7 @@ public class SvgTextRenderer {
 
         // 先 GSUB 连字，再 kern / GPOS 字距；optimizeSpeed 关闭两者。
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
-            applyFontLigatures(chars, resolvedFonts, advances, paths)
+            applyFontLigatures(chars, resolvedFonts, advances, paths, style.fontFeatures())
             applyFontContextShaping(
                 chars,
                 resolvedFonts,
@@ -1737,6 +1737,9 @@ private func applyFontKerning(
     if (style.fontKerning() == SvgFontKerning.None) {
         return
     }
+    if (!style.fontFeatures().enabled("kern")) {
+        return
+    }
     if (chars.size < 2) {
         return
     }
@@ -1765,14 +1768,20 @@ private func applyFontKerning(
     }
 }
 
-/** 应用 GSUB `liga`：用连字字形替换簇内字形。 */
+/** 应用 GSUB Type 4 连字，按 `liga` / `hlig` 特性开关选择连字表。 */
 private func applyFontLigatures(
     chars: ArrayList<SvgTextChar>,
     fonts: ArrayList<Option<SvgFont>>,
     advances: ArrayList<Float64>,
-    paths: ArrayList<?SvgPathData>
+    paths: ArrayList<?SvgPathData>,
+    features: SvgFontFeatures
 ): Unit {
     if (chars.size < 2) {
+        return
+    }
+    let ligaEnabled = features.enabled("liga")
+    let hligEnabled = features.enabled("hlig")
+    if (!ligaEnabled && !hligEnabled) {
         return
     }
     var index: Int64 = 0
@@ -1785,10 +1794,17 @@ private func applyFontLigatures(
         }
         match (font) {
             case truetype: SvgTrueTypeFont =>
-                if (!truetype.hasLigatures() || truetype.hasContextSubstitutions()) {
+                if (truetype.hasContextSubstitutions()) {
                     index++
                     continue
                 }
+                let useHlig = hligEnabled && truetype.hasLigatureFeature("hlig")
+                let useLiga = !useHlig && ligaEnabled && truetype.hasLigatureFeature("liga")
+                if (!useHlig && !useLiga) {
+                    index++
+                    continue
+                }
+                let feature = if (useHlig) { "hlig" } else { "liga" }
                 let remaining = ArrayList<Int64>()
                 var runEnd = index + 1
                 while (runEnd < chars.size) {
@@ -1804,7 +1820,7 @@ private func applyFontLigatures(
                 for (position in index..runEnd) {
                     remaining.add(chars[position].codePoint)
                 }
-                match (truetype.ligatureAt(remaining.toArray(), 0)) {
+                match (truetype.ligatureAt(remaining.toArray(), 0, feature: feature)) {
                     case Some(found) =>
                         let glyph = found[0]
                         let consumed = found[1]
