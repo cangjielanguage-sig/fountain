@@ -132,3 +132,11 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 
 `FEmailTransport` 用 `f_email` 的默认 SSL 直连，没有 starttls 入口。装配时 `tls` 只接受空串或 `ssl`，其它取值（含 `starttls`）会被跳过并记录错误——不做静默忽略。
 
+## 11. 保留的「零代码引用」符号
+
+下列 public 符号在仓库内没有调用方，但**有意保留**，删除属破坏性变更：
+
+- `Stores.DEFAULT_CONTENT` / `DEFAULT_META` / `META_KEY`：外部宿主按这些常量显式注册实现时使用；
+- `MemoryIndexRebuilder` / `KnowledgeIndexRebuilder`：运维手动重建索引的入口（见 §5），生产代码不自动调用；
+- `PlanDto`：模型输出 JSON 的 DTO 载体，由 `DataObject` 反射填充，代码里不直接引用字段。
+
