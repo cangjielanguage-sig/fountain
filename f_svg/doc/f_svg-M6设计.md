@@ -19,7 +19,7 @@
 | 编号 | 特性 | 说明 |
 |---|---|---|
 | M6-P2-1 | `foreignObject` 注入渲染 | `SvgForeignObjectRenderer` 接口；默认不渲染并记 warning，不实现 XHTML |
-| M6-P2-2 | 外部文档引用 | `SvgExternalDocumentProvider` 供 `use` 指向外部 SVG；深度 ≤ 4，字节上限 16 MiB |
+| M6-P2-2 | 外部文档引用 | `SvgExternalDocumentProvider` 供 `use` 指向外部 SVG；外部文档不递归加载外部引用，字节上限 16 MiB |
 | M6-P2-3 | `view` 片段导航 | `SvgRenderOptions.initialView`：按 `viewBox` + `preserveAspectRatio` 改变初始视口 |
 | M6-P2-4 | `baseProfile` / `version` / `zoomAndPan` | 解析并暴露查询；`zoomAndPan` 只存值，不影响渲染 |
 
@@ -151,8 +151,8 @@ public interface SvgExternalDocumentProvider {
 ```
 
 - 仅 `use` 的外部 `href` 走该接口；解析为文档后按 `use` 规则实例化；
-- 深度上限 4，单文档字节上限 16 MiB，超限 `Limit`；
-- 循环引用 warning 并停止；
+- 外部文档内部的外部引用不再次触发 provider（第二层跳过并 warning）；
+- 单文档字节上限 16 MiB，超限 `Limit`；循环引用 warning 并停止；
 - 不联网、不读文件，provider 由调用方实现。
 
 ### 3.3 `view` 片段导航
@@ -334,7 +334,6 @@ public class SvgDocument {
 
 | 项 | 默认上限 | 超限 |
 |---|---|---|
-| 外部文档深度 | 4 | `Limit` |
 | 外部文档字节 | 16 MiB | `Limit` |
 | GSUB 链式深度 | 8 | 停止 + warning |
 | `font-feature-settings` 条目 | 64 | 忽略多余 + warning |

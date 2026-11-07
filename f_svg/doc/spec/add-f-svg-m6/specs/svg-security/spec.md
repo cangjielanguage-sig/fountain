@@ -17,7 +17,7 @@ CSS 与画笔中的 `url(...)` SHALL 只接受 `#id` 片段；外部形式 SHALL
 
 `SvgImageResourceProvider` 的安全责任由调用方承担；`f_svg` SHALL 在文档中声明该边界。
 
-M6 新增两类调用方 provider：`SvgForeignObjectRenderer` 与 `SvgExternalDocumentProvider`。两者 SHALL 只在调用方显式注入时使用；库内 SHALL NOT 自行解析 XHTML、访问网络或读取文件。外部文档 SHALL 使用与主文档相同的 `SvgParseOptions.security` 解析，且 SHALL NOT 因外部文档中的引用再次触发外部加载。
+M6 新增两类调用方 provider：`SvgForeignObjectRenderer` 与 `SvgExternalDocumentProvider`。两者 SHALL 只在调用方显式注入时使用；库内 SHALL NOT 自行解析 XHTML、访问网络或读取文件。外部文档 SHALL 使用与主文档相同的安全上限解析；其内部的不安全内容（含外部 `href`）SHALL 一律按 `Remove` 处理并 warning，不随调用方的 `Reject` / `Keep` 改变，且 SHALL NOT 因外部文档中的引用再次触发外部加载。
 
 `begin="click"` 等事件型动画 SHALL 保留为待触发项，但渲染 SHALL NOT 等待或分发 UI 事件；只有调用方显式 `fireEvent` 才触发。
 
