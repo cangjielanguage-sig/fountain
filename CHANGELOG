@@ -1,3 +1,20 @@
+2026-11-07
+    feat(f_svg): M6 P1 静态交互——pointer-events 11 值、cursor 关键字白名单、
+      :hover / :focus 静态求值、SvgHitTest 设备坐标命中与 maxElements 上限
+    feat(f_svg): M6 P2 文档与嵌入——baseProfile / version / zoomAndPan、
+      foreignObject 注入接口、外部文档 provider（深度/字节上限、循环停止）、
+      initialView 视口覆盖、discard 元素模型
+    feat(f_svg): M6 P3 渲染提示与颜色——shape/text/color-rendering、
+      color-interpolation linearRGB、@color-profile（sRGB 回退）
+    feat(f_svg): M6 P4 字体与文本细节——font-stretch 匹配与合成、small-caps、
+      font-size-adjust（OS/2 sxHeight）、font-feature-settings / variant-ligatures、
+      装饰长属性、pathLength 校准
+    feat(f_svg): M6 P6 动画控制——currentTime / pause / unpause、begin / end / fireEvent、
+      attributeType CSS 内联样式、min / max、discard 快照移除
+    feat(f_svg): M6 P7 DOM API——工厂方法、SvgViewState、insertBefore / removeChild、
+      变更监听（32 上限、异常隔离）、四个命中查询
+    feat(f_svg): M6 P8 SVG 2 收尾——vector-effect 扩展、miter-clip / arcs、width/height auto
+    test(f_svg): 1104 条用例全绿；M1–M5 既有 25 张快照逐字节一致
 2026-11-06
     feat(f_svg): M5 P1 CSS 扩展——属性选择器 / 结构伪类 / :not / 兄弟组合器与 256 上限；
       @media（screen/all、min/max-width、and、逗号列表）、@font-face 别名（不加载文件）、
