@@ -239,7 +239,11 @@ LoomRunner.runCompiled
        ├─ clear()            关闭记录（提炼阶段的模型请求不会被记进来）
        ├─ unbind()
        └─ LoomMemoryExtractor.extract(plan.name, turns, host, policy, outcome: 'success' | 'failed')
-```
+       ```
+
+       单次执行最多保留 `LoomContextLog.MAX_TURNS`（200）轮，超出丢最旧的——长流程下快照不会无限增长，
+       提炼只需要「开头几步 + 最后几步」的代表性上下文。
+
 
 提炼结果写两条记忆，都走 `memory.add`：
 
@@ -503,7 +507,7 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 - 流程级没有走 JIT：`CodeGen.flowSource` 只作预览/落库原文；
 - 所有步骤都由 f_jit 编译：`jit` 编译整段语句，`tool`/`mcp` 编译成 `loomCallTool(...)`，`llm` 编译成 `loomCallLlm(...)`；模板替换（`{step.output}`）与事件包装留在原生侧；
 - `http` 步骤**尚未实现**，`validate()` 会直接拒绝，不会被当成 `llm` 静默执行；
-- 模板 `{stepId.output}` 由 `LoomHostApi` 的跨步骤输出表替换，未命中的占位符原样保留；
+- 模板 `{stepId.output}` 由 `LoomHostApi` 的跨步骤输出表替换，**渲染是单遍扫描、锁外执行**：锁内只拷贝已产出步骤的快照，替换在锁外一次扫完（不再对每个步骤全串 `replace`）。未命中的占位符原样保留；
 - 每次执行用 `loom/{name}#{seq}` 作为流程 tag，执行完 `flow.remove()` 释放派发器——否则重复执行同一计划会撞上 `StartExecutor has already been registered`。
 
 ## 存储

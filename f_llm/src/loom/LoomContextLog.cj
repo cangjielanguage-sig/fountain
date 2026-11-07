@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 import std.collection.*
@@ -52,35 +52,53 @@ public class LoomContextLog {
     private static var turns = ArrayList<LlmTurn>()
     private static var active = false
 
+    /**
+     * 单次执行最多留多少轮。
+     *
+     * 提炼只需要「开头几步 + 最后几步」的代表性上下文；长流程（几十步 × 每步多轮）不设上限时，
+     * 快照会一直涨到执行结束，既占内存又让提炼提示词无谓变长。
+     */
+    public static let MAX_TURNS: Int64 = 200
+
     private init() {
     }
 
     public static func begin(): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             turns = ArrayList<LlmTurn>()
             active = true
         }
     }
 
-    /** 未激活时直接丢弃，避免把流程外的调用混进来 */
+    /** 未激活时直接丢弃，避免把流程外的调用混进来；超过上限丢最旧的 */
     public static func record(turn: LlmTurn): Unit {
-        synchronized(mutex){
-            if(active){
-                turns.add(turn)
+        synchronized(mutex) {
+            if (!active) {
+                return
             }
+            if (Int64(turns.size) >= MAX_TURNS) {
+                // 保留最近 MAX-1 条，再追加本条：长流程下快照不会无限增长
+                let kept = ArrayList<LlmTurn>()
+                let start = turns.size - (MAX_TURNS - 1)
+                for (index in start..turns.size) {
+                    kept.add(turns[index])
+                }
+                turns = kept
+            }
+            turns.add(turn)
         }
     }
 
     public static func snapshot(): ArrayList<LlmTurn> {
         let box = TurnsBox()
-        synchronized(mutex){
+        synchronized(mutex) {
             box.value = turns.clone()
         }
         box.value
     }
 
     public static func clear(): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             turns = ArrayList<LlmTurn>()
             active = false
         }
@@ -88,7 +106,7 @@ public class LoomContextLog {
 
     public static func isActive(): Bool {
         let box = BoolValue()
-        synchronized(mutex){
+        synchronized(mutex) {
             box.value = active
         }
         box.value

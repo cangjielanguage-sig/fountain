@@ -37,6 +37,11 @@ class GatewayBox {
     public var value: ?(String, String, String) -> String = None
 }
 
+/** 渲染用的快照：锁内拷贝、锁外替换 */
+class ValuesBox {
+    public var value: HashMap<String, String> = HashMap<String, String>()
+}
+
 public class LoomHostApi {
     private static let mutex = Mutex()
     private static var current: ?LoomHost = None
@@ -71,18 +76,72 @@ public class LoomHostApi {
             case Some(event) => textOf(event.data)
             case None => ''
         }
-        let box = TextBox()
+        // 只在锁内拷贝快照，替换放到锁外：渲染是纯字符串工作，不该占着全局锁
+        let box = ValuesBox()
         synchronized(mutex) {
-            var text = template
+            let copy = HashMap<String, String>()
             for ((name, value) in values) {
-                text = text.replace('{${name}.output}', value)
+                copy[name] = value
             }
-            if (!fromEvent.isEmpty()) {
-                text = text.replace('{start.output}', fromEvent)
-            }
-            box.value = text
+            box.value = copy
         }
-        box.value
+        let snapshot = box.value
+        // 单遍扫描：原来每个已产出步骤都要全串 replace 一次，步数一多就是 O(步数 × 模板长度)
+        let out = StringBuilder()
+        var index = 0
+        let size = template.size
+        while (index < size) {
+            // 找下一个 '{'
+            var open = index
+            while (open < size && template[open] != 123u8) {
+                open++
+            }
+            if (open >= size) {
+                out.append(template[index..])
+                break
+            }
+            if (open > index) {
+                out.append(template[index..open])
+            }
+            // 找配对的 '}'
+            var close = open + 1
+            while (close < size && template[close] != 125u8) {
+                close++
+            }
+            if (close >= size) {
+                out.append(template[open..])
+                break
+            }
+            let token = template[open + 1..close]
+            var handled = false
+            if (token == 'start.output') {
+                // 与原 replace 一致：事件没有数据时保持占位符原样
+                if (!fromEvent.isEmpty()) {
+                    out.append(fromEvent)
+                    handled = true
+                }
+            } else if (token.size > 7 && token[token.size - 7..] == '.output') {
+                let name = token[..token.size - 7]
+                // 名字里不能再有花括号/引号，否则说明这个 `{` 只是 JSON 之类的外层括号
+                if (!name.contains('{') && !name.contains('}') && !name.contains('"')) {
+                    match (snapshot.get(name)) {
+                        // 命中就替换（值可能是空串，与原 replace 行为一致）
+                        case Some(value) =>
+                            out.append(value)
+                            handled = true
+                        case None => ()
+                    }
+                }
+            }
+            if (handled) {
+                index = close + 1
+            } else {
+                // 不是占位符：只吐这个 `{`，让后面的 `{` 还有机会被识别（JSON 里再嵌模板）
+                out.append(template[open..open + 1])
+                index = open + 1
+            }
+        }
+        out.toString()
     }
 
     public static func callTool(name: String, argsJson: String): String {
