@@ -274,7 +274,14 @@ public class LoomStoreGateway {
 
         if (name == 'prompt') {
             if (action == 'get') {
-                match (meta.prompts.get(strOf(args, 'name'), intOf(args, 'version'))) {
+                let version = intOf(args, 'version')
+                // version<=0 = 「没指定版本」：与 persona 的读取路径一致，取最新
+                let found = if (version <= 0) {
+                    meta.prompts.latest(strOf(args, 'name'))
+                } else {
+                    meta.prompts.get(strOf(args, 'name'), version)
+                }
+                match (found) {
                     case Some(entry) => return promptJson(entry)
                     case None => return ''
                 }
@@ -302,7 +309,12 @@ public class LoomStoreGateway {
                 return version.toString()
             }
             if (action == 'remove') {
-                return meta.prompts.remove(strOf(args, 'name'), intOf(args, 'version')).toString()
+                let version = intOf(args, 'version')
+                if (version <= 0) {
+                    // 删「最新」太危险、删「全部」更危险：明确要求调用方给版本
+                    throw LoomException('loom store gateway: prompt.remove requires version')
+                }
+                return meta.prompts.remove(strOf(args, 'name'), version).toString()
             }
         }
 

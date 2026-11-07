@@ -428,6 +428,8 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 解析结果通过 `LoomHostApi.setPersona` 挂到本次执行上；执行结束 `clearPersona()` 复位。
 
+**归属用户**取自 `LoomCharacterScope`（`LoomWiring.wire(characterUserId:)` 安装），未安装才回落 `LoomMemoryPolicy.userId` —— 人格是提示词诉求，不再被记忆开关与默认 `userId=0` 绑架。
+
 ## 技能注入
 
 技能有两种加载方式：
@@ -560,7 +562,7 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 | `experience` | 同 `memory` | 同上，`kind` 缺省 `experience` | 同上 |
 | `prompt` | `latest` / `get` | `{"name"}` / `{"name","version"}` | `{name,version,content}`，未命中 `''` |
 | `prompt` | `put` | `{"name","content","version"?}` | 版本号（缺省自动 +1） |
-| `prompt` | `remove` | `{"name","version"}` | `true/false` |
+| `prompt` | `remove` | `{"name":"x","version":2}` | `true/false`；**必须给版本**（`version<=0` 抛错） |
 | `character` | `get` | `{"userId":1}` | `{userId,characterKey,prompts}`，未命中 `''` |
 | `character` | `set` / `reset` | `{"userId","characterKey","prompts"}` / `{"userId"}` | `ok` |
 | `evolution` | `list` / `by_skill` | `{"offset","limit"}` / `{"skill","limit"}` | `[{id,skill,action,detail,at}]` |

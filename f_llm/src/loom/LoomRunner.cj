@@ -154,7 +154,11 @@ public class LoomRunner {
 
         // 计划指定的「人格/提示词」：先按提示词名查库，查不到就当字面文本；
         // persona 为空时回落到该用户 character 里记录的 key
-        let userId = LoomMemoryPolicy.effective().userId
+        // 人格归属独立于记忆策略：装了就用人格作用域，没装才回落策略里的 userId
+        let userId = match (LoomCharacterScope.current()) {
+            case Some(value) => value
+            case None => LoomMemoryPolicy.effective().userId
+        }
         let character = characterOf(userId)
         var personaKey = plan.persona
         if (personaKey.trimAscii().isEmpty()) {
@@ -195,12 +199,16 @@ public class LoomRunner {
         for (title in skills) {
             selected.add(title)
         }
-        if (selected.isEmpty() && policy.autoSkills) {
+        var skillBlock = resolveSkills(selected)
+        // 显式标题全部没命中（写错名/库里改名）时回落自动检索：
+        // 判据是「解析结果为空」，而不是「入参为空」——否则等于一个技能都不注入
+        if (skillBlock.isEmpty() && policy.autoSkills) {
+            let hints = ArrayList<String>()
             for (hit in SkillCatalog.search(taskText, topK: policy.skillTopK, minScore: policy.skillMinScore)) {
-                selected.add(hit.title)
+                hints.add(hit.title)
             }
+            skillBlock = resolveSkills(hints)
         }
-        let skillBlock = resolveSkills(selected)
         if (!skillBlock.isEmpty()) {
             LoomHostApi.setSkills(skillBlock)
         }

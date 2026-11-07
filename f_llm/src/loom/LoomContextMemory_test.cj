@@ -309,7 +309,30 @@ class LoomContextMemory_test {
             LoomContextLog.clear()
         }
     }
+
+    /** 提炼只记步骤 system：人格与技能不进记忆 */
+    @TestCase
+    func testPersonaIsNotWrittenIntoMemory(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 7, namespace: 'np'))
+        try {
+            let host = ScriptedHost('')
+            let styled = plan()
+            styled.persona = '严格'
+            LoomRunner().run(styled, host, start())
+            let records = gateway.call('memory', 'list',
+                '{"userId":7,"namespace":"np","offset":0,"limit":10}')
+            @Expect(records.contains('严格'), false)
+        } finally {
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
 }
+
+
 
 /** 工具调用直接抛错的宿主：验证失败流程也会写经验 */
 class ThrowingToolHost <: LoomHost {

@@ -12,12 +12,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 import std.collection.*
 import std.sync.*
-
 import fountain::f_egraph.base.*
 
 /**
@@ -48,14 +47,14 @@ public class LoomHostApi {
     }
 
     public static func bind(host: LoomHost): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             current = Some(host)
             values = HashMap<String, String>()
         }
     }
 
     public static func unbind(): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             current = None
             values = HashMap<String, String>()
         }
@@ -68,17 +67,17 @@ public class LoomHostApi {
      */
     public static func render(template: String, e: Event): String {
         // 事件本身的数据：定时任务/外部触发时由 `StartEvent.data` 携带
-        let fromEvent = match(e as DataEvent){
+        let fromEvent = match (e as DataEvent) {
             case Some(event) => textOf(event.data)
             case None => ''
         }
         let box = TextBox()
-        synchronized(mutex){
+        synchronized(mutex) {
             var text = template
-            for((name, value) in values){
+            for ((name, value) in values) {
                 text = text.replace('{${name}.output}', value)
             }
-            if(!fromEvent.isEmpty()){
+            if (!fromEvent.isEmpty()) {
                 text = text.replace('{start.output}', fromEvent)
             }
             box.value = text
@@ -87,7 +86,7 @@ public class LoomHostApi {
     }
 
     public static func callTool(name: String, argsJson: String): String {
-        match(current){
+        match (current) {
             case Some(host) => host.callTool(name, argsJson)
             case None => throw LoomException('loom host is not bound, cannot call tool: ${name}')
         }
@@ -97,13 +96,13 @@ public class LoomHostApi {
     private static var storeGateway: ?(String, String, String) -> String = None
 
     public static func installStore(gateway: (String, String, String) -> String): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             storeGateway = Some(gateway)
         }
     }
 
     public static func resetStore(): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             storeGateway = None
         }
     }
@@ -111,10 +110,10 @@ public class LoomHostApi {
     /** `kind` ∈ memory|knowledge|skill|experience，`op` 由网关解释，`payload` 为 JSON */
     public static func callStore(kind: String, op: String, payload: String): String {
         let box = GatewayBox()
-        synchronized(mutex){
+        synchronized(mutex) {
             box.value = storeGateway
         }
-        match(box.value){
+        match (box.value) {
             case Some(fn) => fn(kind, op, payload)
             case None => throw LoomException('loom store gateway is not installed: ${kind}.${op}')
         }
@@ -125,17 +124,26 @@ public class LoomHostApi {
         let persona = currentPersonaText()
         let skills = currentSkillsText()
         var prefix = persona
-        if(!skills.isEmpty()){
-            prefix = if(prefix.isEmpty()){ '可用技能：\n${skills}' }
-                     else{ '${prefix}\n\n可用技能：\n${skills}' }
+        if (!skills.isEmpty()) {
+            prefix = if (prefix.isEmpty()) {
+                '可用技能：\n${skills}'
+            } else {
+                '${prefix}\n\n可用技能：\n${skills}'
+            }
         }
-        let fullSystem = if(prefix.isEmpty()){ system }else if(system.isEmpty()){ prefix }
-                         else{ '${prefix}\n${system}' }
-        match(current){
+        let fullSystem = if (prefix.isEmpty()) {
+            system
+        } else if (system.isEmpty()) {
+            prefix
+        } else {
+            '${prefix}\n${system}'
+        }
+        match (current) {
             case Some(host) =>
                 let output = host.callLlm(model, fullSystem, input)
                 // 临时上下文：流程执行期记下每一次交互，结束时统一提炼记忆/经验
-                LoomContextLog.record(LlmTurn(model, fullSystem, input, output))
+                // 记步骤自身的 system：人格与技能是执行期注入，不当成对话事实写进记忆
+                LoomContextLog.record(LlmTurn(model, system, input, output))
                 output
             case None => throw LoomException('loom host is not bound, cannot call llm: ${model}')
         }
@@ -145,20 +153,20 @@ public class LoomHostApi {
     private static var personaText: String = ''
 
     public static func setPersona(text: String): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             personaText = text
         }
     }
 
     public static func clearPersona(): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             personaText = ''
         }
     }
 
     public static func currentPersonaText(): String {
         let box = TextBox()
-        synchronized(mutex){
+        synchronized(mutex) {
             box.value = personaText
         }
         box.value
@@ -168,20 +176,20 @@ public class LoomHostApi {
     private static var skillText: String = ''
 
     public static func setSkills(text: String): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             skillText = text
         }
     }
 
     public static func clearSkills(): Unit {
-        synchronized(mutex){
+        synchronized(mutex) {
             skillText = ''
         }
     }
 
     public static func currentSkillsText(): String {
         let box = TextBox()
-        synchronized(mutex){
+        synchronized(mutex) {
             box.value = skillText
         }
         box.value
@@ -193,7 +201,7 @@ public class LoomHostApi {
      * 同时把输出记进 `values`，供后续步骤的 `{id.output}` 模板取值。
      */
     public static func taskEvent(e: Event, name: String, data: Any): Event {
-        synchronized(mutex){
+        synchronized(mutex) {
             values[name] = textOf(data)
         }
         TaskEvent(category: e.category, tag: e.tag, name: name, data: data)
@@ -202,20 +210,19 @@ public class LoomHostApi {
     /** 供测试/诊断：某步骤当前记录的输出 */
     public static func valueOf(name: String): String {
         let box = TextBox()
-        synchronized(mutex){
+        synchronized(mutex) {
             box.value = values.get(name) ?? ''
         }
         box.value
     }
 
     private static func textOf(data: Any): String {
-        match(data as String){
+        match (data as String) {
             case Some(text) => text
-            case None =>
-                match(data as Int64){
-                    case Some(number) => number.toString()
-                    case None => ''
-                }
+            case None => match (data as Int64) {
+                case Some(number) => number.toString()
+                case None => ''
+            }
         }
     }
 }

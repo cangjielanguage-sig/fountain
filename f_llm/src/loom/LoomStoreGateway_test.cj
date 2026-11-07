@@ -360,4 +360,30 @@ class LoomStoreGateway_test {
             LoomHostApi.resetStore()
         }
     }
+
+    /** prompt.get 不传版本时取最新，而不是空串 */
+    @TestCase
+    func testPromptGetWithoutVersionReturnsLatest(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('prompt', 'put', '{"name":"reviewer","content":"v1","version":1}')
+        let _ = gateway.call('prompt', 'put', '{"name":"reviewer","content":"v2","version":2}')
+
+        let got = gateway.call('prompt', 'get', '{"name":"reviewer","version":0}')
+        @Expect(got.contains('v2'), true)
+    }
+
+    /** prompt.remove 不传版本必须报错，不能静默返回 false */
+    @TestCase
+    func testPromptRemoveWithoutVersionThrows(): Unit {
+        let gateway = gateway()
+        let _ = gateway.call('prompt', 'put', '{"name":"reviewer","content":"v1","version":1}')
+
+        var message = ''
+        try {
+            let _ = gateway.call('prompt', 'remove', '{"name":"reviewer","version":0}')
+        } catch (e: LoomException) {
+            message = e.message
+        }
+        @Expect(message.contains('version'), true)
+    }
 }

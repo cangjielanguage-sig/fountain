@@ -316,4 +316,48 @@ class LoomPersona_test {
         @Expect(gateway.call('skill', 'load', '{"title":"日报助手"}').contains('正文内容'), true)
         @Expect(gateway.call('skill', 'load', '{"title":"不存在"}'), '')
     }
+
+    /** 人格归属走 LoomCharacterScope，不再依赖记忆策略的 userId */
+    @TestCase
+    func testCharacterScopeDrivesPersona(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.characters.set(Character(9, 'rigorous', ''))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        // 记忆策略 userId=0（默认），人格作用域指向 9
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        LoomCharacterScope.install(9)
+        try {
+            let host = PersonaHost()
+            LoomRunner().run(plan(''), host, start())
+            @Expect(host.lastSystem.contains(PredefinedCharacters.bodyOf('rigorous')), true)
+        } finally {
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomCharacterScope.reset()
+            LoomHostApi.clearPersona()
+        }
+    }
+
+    /** 显式技能全部未命中时回落自动检索，而不是一个都不注入 */
+    @TestCase
+    func testUnknownExplicitSkillFallsBackToCatalog(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.skills.upsert(Skill(1, '日报助手', '先列三段式，再给数据', '{}', version: 1))
+        SkillCatalog.install({ => meta.skills })
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(enabled: false))
+        try {
+            let host = PersonaHost()
+            // 任务文本来自起始事件的 data：自动检索才有东西可匹配
+            let task = StartEvent(category: 'loom', tag: 'persona-flow', name: 'start', data: '帮我写一份日报')
+            LoomRunner().run(plan(''), host, task, skills: ['写错的技能名'])
+            @Expect(host.lastSystem.contains('先列三段式，再给数据'), true)
+        } finally {
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomHostApi.clearSkills()
+        }
+    }
 }

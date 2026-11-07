@@ -159,4 +159,22 @@ class LoomWiringSupervisor_test {
             LoomServices.reset()
         }
     }
+
+    /** wire 把 characterUserId 装进人格作用域 */
+    @TestCase
+    func testWireInstallsCharacterScope(): Unit {
+        Supervisor.reset()
+        LoomServices.reset()
+        LoomCharacterScope.reset()
+        Config.set<String>([('llm_metaStore', 'memory')])
+        try {
+            let _ = LoomWiring.wire({ _, _, _ => '{}' }, store: MemoryLoomStore(), characterUserId: 9)
+            @Expect(LoomCharacterScope.current().getOrThrow(), 9)
+        } finally {
+            Config.remove('llm_metaStore')
+            LoomCharacterScope.reset()
+            Supervisor.reset()
+            LoomServices.reset()
+        }
+    }
 }

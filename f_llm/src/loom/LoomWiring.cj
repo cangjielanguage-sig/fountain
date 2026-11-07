@@ -77,7 +77,11 @@ public class LoomWiring {
         skillEmbedder!: ?(String) -> Array<Float64> = None, evolutionCron!: String = '', evolutionUserId!: Int64 = 0,
         evolutionNamespace!: String = 'loom', evolutionModel!: String = '', evolutionNameCandidates!: Bool = true,
         evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy(), gateway!: ?LoomStoreGateway = None,
-        host!: ?LoomHost = None): LoomService {
+        host!: ?LoomHost = None, characterUserId!: Int64 = 0): LoomService {
+        // 人格归属：独立于记忆策略，配了才装
+        if (characterUserId > 0) {
+            LoomCharacterScope.install(characterUserId)
+        }
         let settings = StoreSettings.load()
         // 与 MetaStore 共用 llm_metaStore：f_store（默认）/ memory / postgres / mysql
         let chosen = match (store) {
