@@ -1991,10 +1991,10 @@ private func applyFontSizeAdjust(
             case Some(value) => value
             case None =>
                 warnings.add("font-size-adjust 缺少 OS/2 x-height，已忽略")
-                return
+                continue
         }
         if (xHeight <= 0.0) {
-            return
+            continue
         }
         let factor = adjust / xHeight
         if (factor == 1.0) {

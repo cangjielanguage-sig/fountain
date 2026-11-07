@@ -512,6 +512,39 @@ public class SvgFontDetailsM6_test {
         @Assert(warned)
     }
 
+    /** 逐字体处理 font-size-adjust：首个字体缺 OS/2 不影响后续字体。 */
+    @TestCase
+    public func sizeAdjustContinuesAfterMissingOs2(): Unit {
+        let registry = SvgFontRegistry()
+        registry.register("NoOS2", SvgTrueTypeFont.parse(m5BuildLayoutTtf([500, 600, 700, 800])))
+        registry.register(
+            "OS2",
+            SvgTrueTypeFont.parse(m5BuildLayoutTtf([500, 600, 700, 800], os2: m6Os2Table(500)))
+        )
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-size=\"10\" " +
+            "font-size-adjust=\"0.75\"><tspan font-family=\"NoOS2\">A</tspan>" +
+            "<tspan font-family=\"OS2\">A</tspan></text></svg>"
+        )
+        let tree = SvgStyleResolver().compute(document.root)
+        let element = document.elementsByTag("text")[0]
+        let text = match (element) {
+            case value: SvgTextElement => value
+            case _ => throw invalidValue("不是文本元素")
+        }
+        let style = tree.get(element) ?? throw invalidValue("缺少文本样式")
+        let renderer = SvgTextRenderer(registry: registry)
+        let layout = renderer.layout(text, style: style, root: Some(document.root), styles: tree)
+        @Assert(abs(layout.advance - 15.0) < 1e-9)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("font-size-adjust")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
     /** 5.16：stretch + small-caps + size-adjust 叠加，textLength 在合成 advance 上计算。 */
     @TestCase
     public func combinedSynthesisAndTextLength(): Unit {
