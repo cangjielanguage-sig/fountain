@@ -1875,7 +1875,12 @@ private func svgExternalParseOptions(base: SvgParseOptions): SvgParseOptions {
         maxDepth: source.maxDepth,
         maxDecompressedBytes: source.maxDecompressedBytes
     )
-    SvgParseOptions(strict: base.strict, security: security, xml: base.xml)
+    SvgParseOptions(
+        strict: base.strict,
+        security: security,
+        xml: base.xml,
+        externalDocumentMode: true
+    )
 }
 
 /** 新增 vector-effect 值对累积矩阵的修正；旧值与 none 原样返回。 */

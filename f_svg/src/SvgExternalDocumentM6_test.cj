@@ -277,7 +277,7 @@ public class SvgExternalDocumentM6_test {
     }
 
     /** 外部文档内部的不安全引用一律按 `Remove` 处理：无论调用方使用
-     * `Reject` / `Remove` / `Keep`，provider 都只被调用一次且不抛异常。
+     * `Reject` / `Remove` / `Keep`（且 `strict=true`），provider 都只被调用一次且不抛异常。
      */
     @TestCase
     public func externalDocumentForcesRemovePolicy(): Unit {
@@ -293,6 +293,7 @@ public class SvgExternalDocumentM6_test {
             let primary = SvgParser.parse(
                 svgOpen + "<use href=\"https://example.com/policy-one.svg\"/></svg>",
                 options: SvgParseOptions(
+                    strict: true,
                     security: SvgSecurityOptions(
                         unsafePolicy: policy,
                         allowExternalReferences: true

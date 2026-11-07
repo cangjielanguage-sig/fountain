@@ -456,7 +456,7 @@ private func handleHrefValue(value: String, path: String, context: SvgBuildConte
     if (allowed) {
         return false
     }
-    if (context.options.strict) {
+    if (context.options.strict && !context.options.externalDocumentMode) {
         throw SvgException("不允许外部引用「${trimmed}」", 0, 0, kind: SvgErrorKind.Security, elementPath: Some(path))
     }
     applyUnsafePolicy("外部引用 ${trimmed}", path, context)

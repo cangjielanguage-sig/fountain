@@ -92,7 +92,9 @@
 `false` / `Remove`，因此外部文档内部的不安全内容（含外部 `href`）一律移除并 warning，
 不随调用方的 `Reject` / `Keep` 改变，也不会二次触发 provider。除这两项外，`allowScript`、
 `allowEventAttributes`、`allowDataImages`、`maxElements`、`maxDepth`、`maxDecompressedBytes`
-与 `strict` 均沿用主文档。目标元素用 `document.elementById(fragment)` 或根。
+与 `strict` 均沿用主文档；外部 `href` 通过 `SvgParseOptions.externalDocumentMode`
+绕过 `strict` 的抛错分支，仍按 `Remove` 处理，其余受限内容不受影响。目标元素用
+`document.elementById(fragment)` 或根。
 
 重要边界：解析期 `SvgBuilder` 会按 `allowExternalReferences` 移除外部 `href`；因此外部 `use` 只有在主文档解析时显式放行外部引用后才可用。这一点写入 README 与任务备注。
 

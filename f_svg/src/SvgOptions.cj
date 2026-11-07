@@ -86,6 +86,8 @@ public struct SvgParseOptions {
     public let security: SvgSecurityOptions
     /** 原样透传给 `f_xml`。 */
     public let xml: XmlParserOptions
+    /** 内部标记：正在解析 provider 返回的外部文档。 */
+    internal let externalDocumentMode: Bool
 
     public init(
         strict!: Bool = false,
@@ -95,5 +97,19 @@ public struct SvgParseOptions {
         this.strict = strict
         this.security = security
         this.xml = xml
+        this.externalDocumentMode = false
+    }
+
+    /** 外部文档专用：保留 `strict` 供其他检查使用，但外部 `href` 一律按 `Remove`。 */
+    internal init(
+        strict!: Bool,
+        security!: SvgSecurityOptions,
+        xml!: XmlParserOptions,
+        externalDocumentMode!: Bool
+    ) {
+        this.strict = strict
+        this.security = security
+        this.xml = xml
+        this.externalDocumentMode = externalDocumentMode
     }
 }

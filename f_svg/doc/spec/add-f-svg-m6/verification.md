@@ -549,7 +549,7 @@
 
 | 编号 | 结论 | 实现落点 | 直接用例 |
 |---|---|---|---|
-| N1 外部文档不递归 | ✅ | `SvgRenderTree.svgExternalParseOptions` 对外部文档强制 `unsafePolicy=Remove`、`allowExternalReferences=false`；`allowScript` / `allowEventAttributes` / `allowDataImages` / `maxElements` / `maxDepth` / `maxDecompressedBytes` 与 `strict` 沿用主文档 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy`（`Reject` / `Remove` / `Keep` 三策略，断言 provider 只调用一次、无异常、warning 存在） |
+| N1 外部文档不递归 | ✅ | `SvgRenderTree.svgExternalParseOptions` 对外部文档强制 `unsafePolicy=Remove`、`allowExternalReferences=false`；`SvgParseOptions.externalDocumentMode` 使外部 `href` 绕过 `strict` 抛错分支，其余 `strict` 检查与安全上限沿用主文档 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy`（`strict=true` 下 `Reject` / `Remove` / `Keep` 三策略，断言 provider 只调用一次、无异常、warning 存在） |
 
 ## 2. WARNING 落地
 
@@ -571,7 +571,7 @@
 - **W6 兼容入口**：仓颉禁止同名静态与实例方法混载（编译器报 `overloaded functions 'elementsAt' cannot mix static and non-static`），因此静态化后不再保留实例形态。`elementsAt` / `elementAt` 属 M6 新增 API，`M1–M5` 公开 API 与 `hitTest` 未受影响。
 - **W7 负结果缓存**：命中负结果缓存后仍逐次产生“不可用”warning，但不再调用 provider。
 - **外部文档深度**：`SVG_EXTERNAL_MAX_DEPTH` 与 `svgExternalDepthAllows` 仅作为异常路径的防御性检查保留；外部文档不递归加载，正常渲染不触达。
-- **`strict` 边界**：按修复计划保留主文档 `strict`；外部文档中除外部 `href` 外的其他不安全内容仍受 `strict` 约束。
+- **`strict` 边界**：`strict` 仍随外部文档解析选项保留；仅外部 `href` 通过内部 `externalDocumentMode` 绕过 `strict` 的抛错分支并按 `Remove` 处理，其他受限内容（脚本、事件属性、未知结构）仍受 `strict` 约束。
 
 ## 4. 回归与快照
 
