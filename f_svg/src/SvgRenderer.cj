@@ -304,7 +304,8 @@ public class SvgRenderer {
                     path: Some(outline),
                     style: Some(style),
                     bounds: command.bounds,
-                    opacity: command.opacity
+                    opacity: command.opacity,
+                    textTolerance: Some(svgTextTolerance(style))
                 )
                 this.drawFill(bitmap, textCommand, list, style, patterns)
                 this.drawStroke(bitmap, textCommand, list, style, patterns)
@@ -453,7 +454,10 @@ public class SvgRenderer {
         if (opacity <= 0.0) {
             return
         }
-        let toleranceScale = svgShapeTolerance(style)
+        let toleranceScale = match (command.textTolerance) {
+            case Some(value) => value * svgShapeTolerance(style)
+            case None => svgShapeTolerance(style)
+        }
         let aaOverride = svgShapeAntiAlias(style)
         let colorInterpolation = style.colorInterpolation().toString()
         let quantizeSteps = style.colorRendering().quantizeSteps()
@@ -1189,6 +1193,16 @@ private func svgShapeTolerance(style: SvgComputedStyle): Float64 {
     match (style.shapeRendering()) {
         case SvgShapeRendering.GeometricPrecision => 0.25
         case _ => 1.0
+    }
+}
+
+/** `text-rendering` → 文本轮廓扁平化容差倍率。 */
+internal func svgTextTolerance(style: SvgComputedStyle): Float64 {
+    match (style.textRendering()) {
+        case SvgTextRendering.OptimizeSpeed => 2.0
+        case SvgTextRendering.OptimizeLegibility => 0.5
+        case SvgTextRendering.GeometricPrecision => 0.25
+        case SvgTextRendering.Auto => 1.0
     }
 }
 

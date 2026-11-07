@@ -88,6 +88,8 @@ public class SvgDisplayCommand {
     public let paintOverride: ?SvgPaint
     /** `foreignObject` 注入的位图；非注入 image 指令为 `None`。 */
     public let bitmap: ?SvgBitmap
+    /** 文本轮廓扁平化容差倍率；`None` 时沿用 `shape-rendering`。 */
+    internal let textTolerance: ?Float64
 
     internal init(
         kind: SvgDisplayCommandKind,
@@ -111,7 +113,8 @@ public class SvgDisplayCommand {
         blendMode!: SvgMixBlendMode = SvgMixBlendMode.Normal,
         isolated!: Bool = false,
         paintOverride!: ?SvgPaint = None,
-        bitmap!: ?SvgBitmap = None
+        bitmap!: ?SvgBitmap = None,
+        textTolerance!: ?Float64 = None
     ) {
         this.kind = kind
         this.tag = tag
@@ -138,6 +141,7 @@ public class SvgDisplayCommand {
         this.isolated = isolated
         this.paintOverride = paintOverride
         this.bitmap = bitmap
+        this.textTolerance = textTolerance
     }
 }
 
