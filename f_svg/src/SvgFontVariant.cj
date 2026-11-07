@@ -175,6 +175,14 @@ public class SvgFontFeatures <: ToString {
 
     /** 由计算样式合并：variant-ligatures 先，font-feature-settings 覆盖，font-kerning 最后覆盖 kern。 */
     internal static func fromStyle(style: SvgComputedStyle): SvgFontFeatures {
+        fromStyle(style, ArrayList<String>())
+    }
+
+    /** 合并并收集样式层解析 warning。 */
+    internal static func fromStyle(
+        style: SvgComputedStyle,
+        warnings: ArrayList<String>
+    ): SvgFontFeatures {
         let result = SvgFontFeatures()
         match (style.fontVariantLigatures()) {
             case "none" =>
@@ -190,7 +198,6 @@ public class SvgFontFeatures <: ToString {
         }
         let explicitText = (style.get("font-feature-settings") ?? "").trimAscii()
         if (explicitText.size > 0 && explicitText.toAsciiLower() != "normal") {
-            let warnings = ArrayList<String>()
             let explicit = SvgFontFeatures.parse(explicitText, warnings)
             for ((tag, value) in explicit.switches) {
                 result.set(tag, value)

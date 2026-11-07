@@ -131,6 +131,31 @@ public class SvgForeignObjectM6_test {
         @Assert(warned)
     }
 
+    /** 声明区域超过 maxPixels 时在调用 renderer 前抛 Limit。 */
+    @TestCase
+    public func pixelBudgetCheckedBeforeRenderer(): Unit {
+        let renderer = M6ForeignSolidRenderer(bitmap: Some(solid(1, 1, SvgColor(255, 0, 0))))
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">" +
+            "<foreignObject x=\"0\" y=\"0\" width=\"2000\" height=\"2000\"/></svg>"
+        )
+        var limited = false
+        try {
+            SvgRenderer(
+                options: SvgRenderOptions(
+                    width: 20,
+                    height: 20,
+                    maxPixels: 100,
+                    foreignObjectRenderer: renderer
+                )
+            ).render(document)
+        } catch (error: SvgException) {
+            limited = error.kind == SvgErrorKind.Limit
+        }
+        @Assert(limited)
+        @Assert(renderer.calls == 0)
+    }
+
     /** 不遍历 XHTML 子节点。 */
     @TestCase
     public func xhtmlChildrenNotTraversed(): Unit {

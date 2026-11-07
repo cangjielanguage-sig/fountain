@@ -471,7 +471,12 @@ public class SvgComputedStyle <: ToString {
     }
 
     public func fontFeatures(): SvgFontFeatures {
-        SvgFontFeatures.fromStyle(this)
+        SvgFontFeatures.fromStyle(this, ArrayList<String>())
+    }
+
+    /** 合并字体特性并把解析 warning 追加到调用方列表。 */
+    public func fontFeatures(warnings: ArrayList<String>): SvgFontFeatures {
+        SvgFontFeatures.fromStyle(this, warnings)
     }
 
     public func textDecorationStyle(): SvgTextDecorationStyle {

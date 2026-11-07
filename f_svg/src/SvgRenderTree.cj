@@ -656,6 +656,12 @@ public class SvgRenderTreeBuilder {
             this.warnings.add("foreignObject 缺少有效宽高，已跳过")
             return
         }
+        if (width > Float64(this.renderOptions.maxPixels) / height) {
+            throw SvgException(
+                "foreignObject 像素数超过 maxPixels 上限 ${this.renderOptions.maxPixels}",
+                kind: SvgErrorKind.Limit
+            )
+        }
         let renderer = match (this.renderOptions.foreignObjectRenderer) {
             case Some(value) => value
             case None =>
@@ -667,6 +673,12 @@ public class SvgRenderTreeBuilder {
             case None =>
                 this.warnings.add("foreignObject 渲染器返回 None，已按透明占位处理")
                 return
+        }
+        if (bitmap.width > this.renderOptions.maxPixels / bitmap.height) {
+            throw SvgException(
+                "foreignObject 位图像素数超过 maxPixels 上限 ${this.renderOptions.maxPixels}",
+                kind: SvgErrorKind.Limit
+            )
         }
         let box = SvgBounds(x, y, width, height)
         let matrix = context.matrix.multiply(

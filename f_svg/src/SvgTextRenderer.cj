@@ -445,14 +445,15 @@ public class SvgTextRenderer {
         }
 
         // 先 GSUB 连字，再 kern / GPOS 字距；optimizeSpeed 关闭两者。
+        let fontFeatures = style.fontFeatures(this.warnings)
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
-            applyFontLigatures(chars, resolvedFonts, advances, paths, style.fontFeatures())
+            applyFontLigatures(chars, resolvedFonts, advances, paths, fontFeatures)
             applyFontContextShaping(
                 chars,
                 resolvedFonts,
                 advances,
                 paths,
-                style,
+                fontFeatures,
                 this.warnings
             )
         }
@@ -482,7 +483,7 @@ public class SvgTextRenderer {
         count = chars.size
 
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
-            applyFontKerning(chars, resolvedFonts, advances, style)
+            applyFontKerning(chars, resolvedFonts, advances, style, fontFeatures)
         }
         applyFontStretchSynthesis(chars, advances, paths)
         applySmallCaps(chars, resolvedFonts, advances, paths, style, this.warnings)
@@ -1732,12 +1733,13 @@ private func applyFontKerning(
     chars: ArrayList<SvgTextChar>,
     fonts: ArrayList<Option<SvgFont>>,
     advances: ArrayList<Float64>,
-    style: SvgComputedStyle
+    style: SvgComputedStyle,
+    features: SvgFontFeatures
 ): Unit {
     if (style.fontKerning() == SvgFontKerning.None) {
         return
     }
-    if (!style.fontFeatures().enabled("kern")) {
+    if (!features.enabled("kern")) {
         return
     }
     if (chars.size < 2) {
@@ -1855,11 +1857,10 @@ private func applyFontContextShaping(
     fonts: ArrayList<Option<SvgFont>>,
     advances: ArrayList<Float64>,
     paths: ArrayList<?SvgPathData>,
-    style: SvgComputedStyle,
+    features: SvgFontFeatures,
     warnings: ArrayList<String>
 ): Unit {
     var index: Int64 = 0
-    let features = style.fontFeatures()
     while (index < chars.size) {
         let font = match (fonts[index]) {
             case Some(value) => value

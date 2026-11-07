@@ -512,6 +512,28 @@ public class SvgFontDetailsM6_test {
         @Assert(warned)
     }
 
+    /** 样式层 font-feature-settings 的 warning 进入渲染器。 */
+    @TestCase
+    public func featureWarningSurfacesInRenderer(): Unit {
+        let entries = ArrayList<String>()
+        for (index in 0..70) {
+            entries.add("&quot;" + m6TagName(index) + "&quot; 1")
+        }
+        let document = SvgParser.parse(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text font-family=\"Hershey\" " +
+            "font-feature-settings=\"" + joinTestStrings(entries, ", ") + "\">A</text></svg>"
+        )
+        let renderer = SvgRenderer(options: SvgRenderOptions(samplesPerPixel: 1))
+        renderer.render(document)
+        var warned = false
+        for (warning in renderer.warnings) {
+            if (warning.contains("font-feature-settings")) {
+                warned = true
+            }
+        }
+        @Assert(warned)
+    }
+
     /** 逐字体处理 font-size-adjust：首个字体缺 OS/2 不影响后续字体。 */
     @TestCase
     public func sizeAdjustContinuesAfterMissingOs2(): Unit {
