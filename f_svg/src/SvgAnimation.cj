@@ -116,7 +116,18 @@ internal func parseSvgTimeReference(text: String): ?SvgTimeReference {
 
 /** 事件型 begin（click 等）在 M2 不支持。 */
 internal func isSvgEventTime(text: String): Bool {
-    let trimmed = text.trimAscii().toAsciiLower()
-    trimmed == "click" || trimmed == "mousedown" || trimmed == "mouseup" ||
-    trimmed == "mouseover" || trimmed == "focus" || trimmed == "load" || trimmed == "begin"
+    for (item in splitSvgSemicolon(text)) {
+        let lower = item.trimAscii().toAsciiLower()
+        let name = match (lower.indexOf("(")) {
+            case Some(position) => lower[0..position]
+            case None => lower
+        }
+        match (name) {
+            case "click" | "mousedown" | "mouseup" | "mouseover" | "mouseout" | "focus" |
+                "blur" | "load" | "begin" | "end" | "accesskey" | "wallclock" | "repeat" =>
+                return true
+            case _ => ()
+        }
+    }
+    false
 }

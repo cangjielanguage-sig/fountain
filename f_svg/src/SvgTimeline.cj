@@ -23,6 +23,8 @@ private let SVG_ANIMATION_TAGS: Array<String> = ["animate", "animateTransform", 
 
 private class SvgAnimationSpec {
     let element: SvgElement
+    /** 动画元素自身的 id；用于触发 / 结束注册。 */
+    let animationId: ?String
     let kind: SvgAnimationKind
     let target: ?SvgElement
     let targetId: ?String
@@ -44,6 +46,11 @@ private class SvgAnimationSpec {
     let rotate: String
     let keyPoints: Array<Float64>
     let pathData: ?SvgPathData
+    /** `attributeType`：`XML` 写属性，`CSS` 写内联样式。 */
+    let attributeType: String
+    /** `min` / `max` 活动时长钳制（秒）；`min > max` 时忽略两者。 */
+    let minValue: Float64
+    let maxValue: Float64
     var begin: Float64 = 0.0
     var end: Float64 = 0.0
 
@@ -67,9 +74,13 @@ private class SvgAnimationSpec {
         transformType: String,
         rotate: String,
         keyPoints: Array<Float64>,
-        pathData: ?SvgPathData
+        pathData: ?SvgPathData,
+        attributeType: String,
+        minValue: Float64,
+        maxValue: Float64
     ) {
         this.element = element
+        this.animationId = element.attr("id")
         this.kind = kind
         this.target = target
         this.targetId = match (target) {
@@ -97,6 +108,9 @@ private class SvgAnimationSpec {
         this.rotate = rotate
         this.keyPoints = keyPoints
         this.pathData = pathData
+        this.attributeType = attributeType
+        this.minValue = minValue
+        this.maxValue = maxValue
     }
 
     func totalDuration(): Float64 {
@@ -138,12 +152,19 @@ public class SvgTimeline {
     private let clock: SvgClock
     private let specs: Array<SvgAnimationSpec>
     private let specById = HashMap<String, SvgAnimationSpec>()
+    private var explicitTime: ?Float64 = None
+    private var pausedAt: ?Float64 = None
+    private var timeOffset: Float64 = 0.0
+    private let triggeredBegin = HashMap<String, Float64>()
+    private let endedAt = HashMap<String, Float64>()
+    private let discards = ArrayList<SvgElement>()
 
     public init(document: SvgDocument, clock!: SvgClock = SvgManualClock()) {
         this.document = document
         this.clock = clock
         let collected = ArrayList<SvgAnimationSpec>()
         collectAnimationSpecs(document.root, collected, this.warnings)
+        collectSvgDiscardElements(document.root, this.discards)
         let array = collected.toArray()
         for (spec in array) {
             match (spec.element.attr("id")) {
@@ -192,13 +213,78 @@ public class SvgTimeline {
                 case Some(value) => value
                 case None => continue
             }
-            let state = animationStateAt(spec, time)
+            let state = animationStateAt(spec, time, this.effectiveBegin(spec), this.effectiveEnd(spec))
             if (!state.active) {
                 continue
             }
             this.applyAnimation(target, spec, state)
         }
+        this.applyDiscards(snapshot, time)
         snapshot
+    }
+
+    /** `discard`：到达 begin + dur 后从快照移除目标；只处理最外层。 */
+    private func applyDiscards(snapshot: SvgDocument, time: Float64): Unit {
+        for (element in this.discards) {
+            if (svgDiscardNestingDepth(element) > 1) {
+                continue
+            }
+            let begin = match (element.attr("id")) {
+                case Some(id) => match (this.triggeredBegin.get(id)) {
+                    case Some(value) => value
+                    case None => parseSvgTimeValue(element.attr("begin") ?? "0") ?? 0.0
+                }
+                case None => parseSvgTimeValue(element.attr("begin") ?? "0") ?? 0.0
+            }
+            let dur = match (parseSvgTimeValue(element.attr("dur") ?? "0")) {
+                case Some(value) => value
+                case None => 0.0
+            }
+            if (time < begin + dur) {
+                continue
+            }
+            let target = match (readSvgHref(element)) {
+                case Some(href) =>
+                    let id = stripSvgHash(href)
+                    snapshot.elementById(id)
+                case None => element.parent
+            }
+            match (target) {
+                case Some(element) =>
+                    match (element.parent) {
+                        case Some(parent) =>
+                            parent.children.removeIf({node => match (node) {
+                                case ElementNode(child) => child == element
+                                case _ => false
+                            }})
+                            element.parent = Option<SvgElement>.None
+                        case None => ()
+                    }
+                case None => ()
+            }
+        }
+    }
+
+    private func effectiveBegin(spec: SvgAnimationSpec): Float64 {
+        match (spec.animationId) {
+            case Some(id) =>
+                match (this.triggeredBegin.get(id)) {
+                    case Some(value) => value
+                    case None => spec.begin
+                }
+            case None => spec.begin
+        }
+    }
+
+    private func effectiveEnd(spec: SvgAnimationSpec): Float64 {
+        match (spec.animationId) {
+            case Some(id) =>
+                match (this.endedAt.get(id)) {
+                    case Some(value) => value
+                    case None => spec.end
+                }
+            case None => spec.end
+        }
     }
 
     /** `id` 命中优先，否则按结构路径兜底。 */
@@ -218,7 +304,79 @@ public class SvgTimeline {
     }
 
     public func sampleCurrent(): SvgDocument {
-        this.sample(this.clock.now())
+        this.sample(this.currentTime())
+    }
+
+    /** 显式设置时间源；负值钳制到 0，NaN / Inf 抛 `InvalidValue`。 */
+    public func setCurrentTime(time: Float64): Unit {
+        if (time.isNaN() || time.isInf()) {
+            throw invalidValue("currentTime 必须是有限数")
+        }
+        this.explicitTime = Some(if (time < 0.0) { 0.0 } else { time })
+    }
+
+    public func currentTime(): Float64 {
+        match (this.explicitTime) {
+            case Some(value) => return value
+            case None => ()
+        }
+        match (this.pausedAt) {
+            case Some(value) => return value
+            case None => ()
+        }
+        this.clock.now() + this.timeOffset
+    }
+
+    public func pause(): Unit {
+        this.pausedAt = Some(this.currentTime())
+    }
+
+    public func unpause(): Unit {
+        match (this.pausedAt) {
+            case Some(value) =>
+                this.timeOffset = value - this.clock.now()
+                this.pausedAt = Option<Float64>.None
+            case None => ()
+        }
+    }
+
+    /** `begin="indefinite"` 或事件型 begin 的显式触发。 */
+    public func begin(animationId: String): Unit {
+        match (this.specById.get(animationId)) {
+            case Some(spec) =>
+                if (animationBeginIsTriggerable(spec.beginRaw)) {
+                    this.triggeredBegin[animationId] = this.currentTime()
+                }
+            case None => this.warnings.add("begin 未找到动画「${animationId}」")
+        }
+    }
+
+    public func end(animationId: String): Unit {
+        if (this.specById.get(animationId).isNone()) {
+            this.warnings.add("end 未找到动画「${animationId}」")
+            return
+        }
+        this.endedAt[animationId] = this.currentTime()
+    }
+
+    /** 按 `;` 拆分 begin/end 时间项，事件名大小写不敏感。 */
+    public func fireEvent(animationId: String, event: String): Unit {
+        let spec = match (this.specById.get(animationId)) {
+            case Some(value) => value
+            case None =>
+                this.warnings.add("fireEvent 未找到动画「${animationId}」")
+                return
+        }
+        let target = event.trimAscii().toAsciiLower()
+        if (target.size == 0) {
+            return
+        }
+        if (svgAnimationTimeListContainsEvent(spec.beginRaw, target)) {
+            this.triggeredBegin[animationId] = this.currentTime()
+        }
+        if (svgAnimationTimeListContainsEvent(spec.endRaw, target)) {
+            this.endedAt[animationId] = this.currentTime()
+        }
     }
 
     private func applyAnimation(
@@ -237,9 +395,9 @@ public class SvgTimeline {
                 let combined = SvgTransform(
                     [SvgTransformOp.Matrix(baseTransform.toMatrix().multiply(animated.toMatrix()))]
                 )
-                target.setAttr("transform", combined.toString())
+                svgAnimationWriteValue(target, "transform", combined.toString(), spec.attributeType)
             } else {
-                target.setAttr("transform", animated.toString())
+                svgAnimationWriteValue(target, "transform", animated.toString(), spec.attributeType)
             }
             return
         }
@@ -254,11 +412,13 @@ public class SvgTimeline {
                     match (target.transform) {
                         case Some(base) =>
                             let combined = base.toMatrix().multiply(motionTransform.toMatrix())
-                            target.setAttr(
+                            svgAnimationWriteValue(
+                                target,
                                 "transform",
-                                SvgTransform([SvgTransformOp.Matrix(combined)]).toString()
+                                SvgTransform([SvgTransformOp.Matrix(combined)]).toString(),
+                                spec.attributeType
                             )
-                        case None => target.setAttr("transform", motionTransform.toString())
+                        case None => svgAnimationWriteValue(target, "transform", motionTransform.toString(), spec.attributeType)
                     }
                 case None => ()
             }
@@ -277,7 +437,7 @@ public class SvgTimeline {
         if (spec.additive) {
             value = addAnimationNumberLists(value, base) ?? value
         }
-        target.setAttr(spec.attributeName, value)
+        svgAnimationWriteValue(target, spec.attributeName, value, spec.attributeType)
     }
 }
 
@@ -343,6 +503,14 @@ private func buildAnimationSpec(
             return None
         }
     }
+    var minValue = parseSvgTimeValue(element.attr("min") ?? "0") ?? 0.0
+    var maxValue = parseSvgTimeValue(element.attr("max") ?? "indefinite") ?? Float64.Inf
+    if (!isInfSvg(maxValue) && minValue > maxValue) {
+        warnings.add("动画 min 大于 max，已忽略两者")
+        minValue = 0.0
+        maxValue = Float64.Inf
+    }
+    let attributeType = (element.attr("attributeType") ?? "XML").trimAscii().toAsciiUpper()
     Some(
         SvgAnimationSpec(
             element,
@@ -364,7 +532,10 @@ private func buildAnimationSpec(
             transformType,
             element.attr("rotate") ?? "0",
             parseKeyPoints(element.attr("keyPoints"), warnings),
-            pathData
+            pathData,
+            attributeType,
+            minValue,
+            maxValue
         )
     )
 }
@@ -376,7 +547,7 @@ private func parseAnimationValues(raw: ?String): Array<String> {
     }
 }
 
-private func splitSvgSemicolon(text: String): Array<String> {
+internal func splitSvgSemicolon(text: String): Array<String> {
     let result = ArrayList<String>()
     let bytes = text.unsafeBytes()
     var start = 0
@@ -558,8 +729,8 @@ private func resolveAnimationTime(
                     return result
                 case None =>
                     if (isSvgEventTime(text)) {
-                        warnings.add("事件型动画时间「${text}」在 M2 忽略")
-                        return 0.0
+                        warnings.add("事件型动画时间「${text}」等待显式触发")
+                        return Float64.Inf
                     }
                     match (parseSvgTimeValue(text)) {
                         case Some(value) => value
@@ -575,17 +746,28 @@ private func isInfSvg(value: Float64): Bool {
     value.isInf() && value > 0.0
 }
 
-private func animationStateAt(spec: SvgAnimationSpec, time: Float64): SvgAnimationState {
-    if (isInfSvg(spec.begin) || time < spec.begin) {
+private func animationStateAt(
+    spec: SvgAnimationSpec,
+    time: Float64,
+    begin: Float64,
+    end: Float64
+): SvgAnimationState {
+    if (isInfSvg(begin) || time < begin) {
         return SvgAnimationState(false, 0.0, 0)
     }
     let total = spec.totalDuration()
-    let computedEnd = if (isInfSvg(total)) { Float64.Inf } else { spec.begin + total }
-    let activeEnd = if (spec.end < computedEnd) { spec.end } else { computedEnd }
+    var computedEnd = if (isInfSvg(total)) { Float64.Inf } else { begin + total }
+    if (spec.minValue > 0.0 && !isInfSvg(computedEnd) && computedEnd < begin + spec.minValue) {
+        computedEnd = begin + spec.minValue
+    }
+    if (!isInfSvg(spec.maxValue) && !isInfSvg(computedEnd) && computedEnd > begin + spec.maxValue) {
+        computedEnd = begin + spec.maxValue
+    }
+    let activeEnd = if (end < computedEnd) { end } else { computedEnd }
     if (!isInfSvg(activeEnd) && time >= activeEnd) {
         if (spec.freeze) {
             let iteration = if (spec.dur > 0.0 && !isInfSvg(spec.dur)) {
-                Int64(maxFloat(0.0, ceil((activeEnd - spec.begin) / spec.dur) - 1.0))
+                Int64(maxFloat(0.0, ceil((activeEnd - begin) / spec.dur) - 1.0))
             } else {
                 0
             }
@@ -593,7 +775,7 @@ private func animationStateAt(spec: SvgAnimationSpec, time: Float64): SvgAnimati
         }
         return SvgAnimationState(false, 0.0, 0)
     }
-    let local = time - spec.begin
+    let local = time - begin
     if (spec.dur <= 0.0 || isInfSvg(spec.dur)) {
         return SvgAnimationState(true, 0.0, 0)
     }
@@ -1102,5 +1284,74 @@ private func cloneSvgNode(node: SvgNode): SvgNode {
         case CDataNode(text) => SvgNode.CDataNode(text)
         case CommentNode(text) => SvgNode.CommentNode(text)
         case PiNode(target, data) => SvgNode.PiNode(target, data)
+    }
+}
+
+
+private func animationBeginIsTriggerable(raw: ?String): Bool {
+    match (raw) {
+        case Some(text) =>
+            let lower = text.trimAscii().toAsciiLower()
+            lower.contains("indefinite") || isSvgEventTime(lower)
+        case None => false
+    }
+}
+
+private func svgAnimationTimeListContainsEvent(raw: ?String, event: String): Bool {
+    match (raw) {
+        case Some(text) =>
+            for (item in splitSvgSemicolon(text)) {
+                let lower = item.trimAscii().toAsciiLower()
+                if (lower == event || lower.startsWith(event + "(")) {
+                    return true
+                }
+            }
+            false
+        case None => false
+    }
+}
+
+/** `attributeType` 分派：`CSS` 写内联样式，其余写属性。 */
+private func svgAnimationWriteValue(
+    target: SvgElement,
+    name: String,
+    value: String,
+    attributeType: String
+): Unit {
+    if (attributeType == "CSS") {
+        svgSetInlineStyleProperty(target, name, value)
+    } else {
+        target.setAttr(name, value)
+    }
+}
+
+/** `discard` 祖先链深度；根为 1。 */
+private func svgDiscardNestingDepth(element: SvgElement): Int64 {
+    var depth: Int64 = 0
+    var current: ?SvgElement = Some(element)
+    while (true) {
+        match (current) {
+            case Some(node) =>
+                if (node.tag == "discard") {
+                    depth++
+                }
+                current = node.parent
+            case None => break
+        }
+    }
+    depth
+}
+
+/** 收集 `discard` 元素；它不进入动画 spec。 */
+private func collectSvgDiscardElements(element: SvgElement, out: ArrayList<SvgElement>): Unit {
+    for (node in element.children) {
+        match (node) {
+            case ElementNode(child) =>
+                if (child.tag == "discard") {
+                    out.add(child)
+                }
+                collectSvgDiscardElements(child, out)
+            case _ => ()
+        }
     }
 }

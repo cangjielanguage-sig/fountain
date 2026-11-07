@@ -609,3 +609,40 @@ internal func escapeSvgAttribute(text: String): String {
     }
     out.toString()
 }
+
+/** 写入 / 替换内联样式中的单个声明，保留其他声明。 */
+public func svgSetInlineStyleProperty(element: SvgElement, name: String, value: String): Unit {
+    let target = name.trimAscii().toAsciiLower()
+    let kept = ArrayList<String>()
+    match (element.style) {
+        case Some(text) =>
+            for (declaration in text.split(";")) {
+                let trimmed = declaration.trimAscii()
+                if (trimmed.size == 0) {
+                    continue
+                }
+                let colon = findSvgStyleColon(trimmed)
+                if (colon < 0) {
+                    kept.add(trimmed)
+                    continue
+                }
+                let property = trimmed[0..colon].trimAscii().toAsciiLower()
+                if (property != target) {
+                    kept.add(trimmed)
+                }
+            }
+        case None => ()
+    }
+    kept.add(target + ": " + value)
+    element.style = joinCssStrings(kept, "; ")
+}
+
+private func findSvgStyleColon(text: String): Int64 {
+    let bytes = text.unsafeBytes()
+    for (index in 0..bytes.size) {
+        if (bytes[index] == b':') {
+            return index
+        }
+    }
+    -1
+}

@@ -676,6 +676,26 @@ let options = SvgRenderOptions(
 - **`pathLength`**：声明长度用于校准 `stroke-dasharray` / `stroke-dashoffset` 与
   `textPath` 的绝对 `startOffset`；百分比仍按实际弧长，非法值忽略并 warning。
 
+## M6：动画控制
+
+- **时间源**：`currentTime()` / `setCurrentTime(t)`（负值钳制 0，NaN / Inf 抛 `InvalidValue`）、
+  `pause()` / `unpause()`。`sample(time)` 语义不变，仍是显式时间采样。
+- **触发**：`begin(id)` 只对 `begin="indefinite"` 或事件型 begin 生效；`end(id)` 立即结束；
+  `fireEvent(id, name)` 按 `;` 拆分时间项，事件名大小写不敏感，支持 `click` / `mouseover` /
+  `mouseout` / `accessKey(...)` / `wallclock(...)`，不接 UI 事件循环。
+- **`attributeType`**：`CSS` 写入 / 替换内联样式中的同名声明并保留其他声明；
+  `XML`（默认）写属性。`!important` 仍高于内联样式。
+- **`min` / `max`**：钳制活动时长；`min > max` warning 后忽略两者。
+- **`discard`**：到达 `begin + dur` 后从采样快照移除目标；只处理最外层，
+  原文档不变。
+
+```cangjie
+let timeline = SvgTimeline(document)
+timeline.begin("in")
+timeline.setCurrentTime(2.0)
+let frame = timeline.sample(timeline.currentTime())
+```
+
 ## M3 不做什么
 
 - JPEG / WebP / GIF 解码、`feImage` 外部图像原语；
