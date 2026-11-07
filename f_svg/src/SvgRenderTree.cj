@@ -1175,7 +1175,9 @@ public class SvgRenderTreeBuilder {
                     clipRect: if (filtered) { Option<SvgBounds>.None } else { context.clipRect },
                     filter: Option<SvgElement>.None,
                     clip: if (filtered) { Option<SvgClipRect>.None } else { clip },
-                    nonScalingStroke: style.vectorEffect() == SvgVectorEffect.NonScalingStroke,
+                    nonScalingStroke: style.vectorEffects().contains(
+                        SvgVectorEffect.NonScalingStroke
+                    ),
                     clipQuads: context.clipQuads,
                     paintOverride: Some(stroke)
                 )
@@ -1842,8 +1844,16 @@ private func svgApplyM6VectorEffects(
     style: SvgComputedStyle,
     local: SvgMatrix
 ): SvgMatrix {
-    match (style.vectorEffect().toString()) {
-        case "none" | "non-scaling-stroke" => matrix
-        case _ => SvgVectorEffect2.apply(matrix, [style.vectorEffect()], local: local)
+    let effects = style.vectorEffects()
+    var applies = false
+    for (effect in effects) {
+        match (effect.toString()) {
+            case "none" | "non-scaling-stroke" => ()
+            case _ => applies = true
+        }
     }
+    if (!applies) {
+        return matrix
+    }
+    SvgVectorEffect2.apply(matrix, effects, local: local)
 }

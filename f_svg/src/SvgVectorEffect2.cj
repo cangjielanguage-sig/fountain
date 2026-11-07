@@ -30,18 +30,27 @@ public class SvgVectorEffect2 {
         local!: SvgMatrix = SvgMatrix.identity
     ): SvgMatrix {
         var result = matrix
+        var nonScalingSize = false
+        var nonRotation = false
+        var fixedPosition = false
         for (effect in effects) {
             match (effect.toString()) {
-                case "non-scaling-stroke" => ()
-                case "non-scaling-size" =>
-                    let (rotation, tx, ty) = decompose(result)
-                    result = SvgMatrix.translate(tx, ty).multiply(SvgMatrix.rotate(rotation))
-                case "non-rotation" =>
-                    let (_, tx, ty, sx, sy) = decomposeScale(result)
-                    result = SvgMatrix.translate(tx, ty).multiply(SvgMatrix.scale(sx, sy))
-                case "fixed-position" => result = local
+                case "non-scaling-size" => nonScalingSize = true
+                case "non-rotation" => nonRotation = true
+                case "fixed-position" => fixedPosition = true
                 case _ => ()
             }
+        }
+        if (nonScalingSize) {
+            let (rotation, tx, ty) = decompose(result)
+            result = SvgMatrix.translate(tx, ty).multiply(SvgMatrix.rotate(rotation))
+        }
+        if (nonRotation) {
+            let (_, tx, ty, sx, sy) = decomposeScale(result)
+            result = SvgMatrix.translate(tx, ty).multiply(SvgMatrix.scale(sx, sy))
+        }
+        if (fixedPosition) {
+            result = local
         }
         result
     }

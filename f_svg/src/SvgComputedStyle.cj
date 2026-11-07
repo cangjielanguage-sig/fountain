@@ -376,7 +376,27 @@ public class SvgComputedStyle <: ToString {
     }
 
     public func vectorEffect(): SvgVectorEffect {
-        SvgVectorEffect.fromName(this.get("vector-effect") ?? "none") ?? SvgVectorEffect.NoEffect
+        let effects = this.vectorEffects()
+        if (effects.size == 0) {
+            return SvgVectorEffect.NoEffect
+        }
+        effects[0]
+    }
+
+    /** 空格分隔的多个 `vector-effect`；缺失或全非法时返回 `[none]`。 */
+    public func vectorEffects(): Array<SvgVectorEffect> {
+        let text = (this.get("vector-effect") ?? "none").trimAscii().toAsciiLower()
+        let result = ArrayList<SvgVectorEffect>()
+        for (word in splitCssWhitespaceWords(text)) {
+            match (SvgVectorEffect.fromName(word)) {
+                case Some(value) => result.add(value)
+                case None => ()
+            }
+        }
+        if (result.size == 0) {
+            result.add(SvgVectorEffect.NoEffect)
+        }
+        result.toArray()
     }
 
     public func dominantBaseline(): SvgDominantBaseline {

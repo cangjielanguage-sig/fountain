@@ -664,10 +664,21 @@ public class SvgStyleResolver <: ToString {
                     case None => return None
                 }
             case "vector-effect" =>
-                match (SvgVectorEffect.fromName(textLower)) {
-                    case Some(value) => return Some(value.toString())
-                    case None => return None
+                let words = splitCssWhitespaceWords(textLower)
+                let valid = ArrayList<String>()
+                for (word in words) {
+                    match (SvgVectorEffect.fromName(word)) {
+                        case Some(value) => valid.add(value.toString())
+                        case None =>
+                            this.warnings.add(
+                                "元素「${elementPath}」属性「vector-effect」的值「${word}」不合法，已忽略"
+                            )
+                    }
                 }
+                if (valid.size == 0) {
+                    return None
+                }
+                return Some(svgJoinWords(valid))
             case "dominant-baseline" =>
                 match (SvgDominantBaseline.fromName(textLower)) {
                     case Some(value) => return Some(value.toString())
@@ -1045,4 +1056,16 @@ private func normalizeSvgTextDecorationShorthand(text: String): ?String {
         case Some(value) => Some(value.toString())
         case None => Option<String>.None
     }
+}
+
+/** 以空格连接已规范化的多值。 */
+private func svgJoinWords(words: ArrayList<String>): String {
+    let out = StringBuilder()
+    for (index in 0..words.size) {
+        if (index > 0) {
+            out.append(" ")
+        }
+        out.append(words[index])
+    }
+    out.toString()
 }
