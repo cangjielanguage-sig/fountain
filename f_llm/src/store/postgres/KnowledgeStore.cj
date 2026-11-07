@@ -12,13 +12,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.store.postgres
 
 import std.collection.*
-
 import fountain::f_orm.*
-
 import fountain::f_llm.dao.postgres.*
 import fountain::f_llm.store.*
 
@@ -31,9 +29,6 @@ import fountain::f_llm.store.*
  * 最终 `score = cosine + 0.1 * min(命中次数, 5)`——语义为主，精确词命中做加成。
  */
 public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
-    private static let LEXICAL_WEIGHT = 0.1f64
-    private static let LEXICAL_CAP = 5.0f64
-
     private let embedder: ?Embedder
     private let pageSize: Int64
     private let maxCandidates: Int64
@@ -47,7 +42,7 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
 
     /** 无语义、可调分页参数（用于验证翻页行为） */
     public init(pageSize!: Int64, maxCandidates!: Int64 = 1000) {
-        if(pageSize <= 0 || maxCandidates < pageSize){
+        if (pageSize <= 0 || maxCandidates < pageSize) {
             throw IllegalArgumentException(
                 'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
         }
@@ -61,7 +56,7 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
      * @param maxCandidates 词面召回的总候选上限
      */
     public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 1000) {
-        if(pageSize <= 0 || maxCandidates < pageSize){
+        if (pageSize <= 0 || maxCandidates < pageSize) {
             throw IllegalArgumentException(
                 'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
         }
@@ -75,16 +70,15 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
         store.docUpsert(doc.docId, doc.title, doc.content)
         store.chunkDelete(doc.docId)
         var seq: Int64 = 0
-        for(chunk in KnowledgeChunker.split(doc.content)){
+        for (chunk in KnowledgeChunker.split(doc.content)) {
             store.chunkInsert(doc.docId, seq, chunk, vectorOf(chunk))
             seq++
         }
     }
 
     public func get(docId: String): ?KnowledgeDoc {
-        match(dao<PostgresKnowledgeDAO>('postgres').docGet(docId)){
-            case Some(row) =>
-                Some(KnowledgeDoc(docId, textOf(row.get('title')), textOf(row.get('content'))))
+        match (dao<PostgresKnowledgeDAO>('postgres').docGet(docId)) {
+            case Some(row) => Some(KnowledgeDoc(docId, textOf(row.get('title')), textOf(row.get('content'))))
             case None => None
         }
     }
@@ -100,18 +94,18 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
         let merged = HashMap<String, ChunkScore>()
 
         // 1. dense 召回（语义）
-        match(embedder){
+        match (embedder) {
             case Some(model) =>
-                if(!query.text.isEmpty()){
+                if (!query.text.isEmpty()) {
                     let literal = VectorMath.literal(model.embed(query.text))
-                    for(row in dao<PostgresKnowledgeDAO>('postgres').chunkSearchDense(literal, denseK(query))){
+                    for (row in dao<PostgresKnowledgeDAO>('postgres').chunkSearchDense(literal, denseK(query))) {
                         let docId = textOf(row.get('doc_id'))
-                        if(!PostgresKnowledgeStore.wanted(query, docId)){
+                        if (!PostgresKnowledgeStore.wanted(query, docId)) {
                             continue
                         }
                         let key = PostgresKnowledgeStore.scoreKey(docId, chunkIntOf(row.get('seq')))
                         let score = merged.get(key) ?? ChunkScore(docId, chunkIntOf(row.get('seq')),
-                                                                  textOf(row.get('content')))
+                            textOf(row.get('content')))
                         score.dense = PostgresKnowledgeStore.maxOf(score.dense, chunkFloatOf(row.get('score')))
                         merged[key] = score
                     }
@@ -120,23 +114,23 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
         }
 
         // 2. lexical 召回（精确词）：分页取，避免 200 条硬截断
-        if(!terms.isEmpty()){
+        if (!terms.isEmpty()) {
             let pattern = '%' + terms[0] + '%'
             var offset: Int64 = 0
             var collected: Int64 = 0
-            while(collected < maxCandidates){
+            while (collected < maxCandidates) {
                 let page = dao<PostgresKnowledgeDAO>('postgres').chunkSearch(pattern, pageSize, offset)
-                if(page.isEmpty()){
+                if (page.isEmpty()) {
                     break
                 }
-                for(row in page){
+                for (row in page) {
                     let docId = textOf(row.get('doc_id'))
-                    if(!PostgresKnowledgeStore.wanted(query, docId)){
+                    if (!PostgresKnowledgeStore.wanted(query, docId)) {
                         continue
                     }
                     let content = textOf(row.get('content'))
                     let occurrences = KnowledgeSearch.score(content, terms)
-                    if(occurrences <= 0.0f64){
+                    if (occurrences <= 0.0f64) {
                         continue
                     }
                     let key = PostgresKnowledgeStore.scoreKey(docId, chunkIntOf(row.get('seq')))
@@ -145,7 +139,7 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
                     merged[key] = score
                 }
                 collected += page.size
-                if(page.size < pageSize){
+                if (page.size < pageSize) {
                     break
                 }
                 offset += pageSize
@@ -153,18 +147,19 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
         }
 
         let hits = ArrayList<KnowledgeHit>()
-        for((_, score) in merged){
-            hits.add(KnowledgeHit(score.docId, score.seq, score.content,
-                                  score.dense + PostgresKnowledgeStore.LEXICAL_WEIGHT * PostgresKnowledgeStore.minOf(score.lexical, PostgresKnowledgeStore.LEXICAL_CAP)))
+        for ((_, score) in merged) {
+            hits.add(
+                KnowledgeHit(score.docId, score.seq, score.content,
+                    RetrievalScoring.fuseKnowledge(score.dense, score.lexical)))
         }
         KnowledgeSearch.rank(hits, query.limit)
     }
 
     public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
         let result = ArrayList<String>()
-        for(row in dao<PostgresKnowledgeDAO>('postgres').docIds(offset, limit)){
+        for (row in dao<PostgresKnowledgeDAO>('postgres').docIds(offset, limit)) {
             let docId = textOf(row.get('doc_id'))
-            if(!docId.isEmpty()){
+            if (!docId.isEmpty()) {
                 result.add(docId)
             }
         }
@@ -173,24 +168,36 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
 
     /** ANN 的 k 随请求 limit 放大，但不超过 maxCandidates 且不小于一页 */
     private func denseK(query: KnowledgeQuery): Int64 {
-        let wanted = if(query.limit > 0){ query.limit * 20 }else{ pageSize }
-        let bounded = if(wanted > maxCandidates){ maxCandidates }else{ wanted }
-        if(bounded < pageSize){ pageSize }else{ bounded }
+        let wanted = if (query.limit > 0) {
+            query.limit * 20
+        } else {
+            pageSize
+        }
+        let bounded = if (wanted > maxCandidates) {
+            maxCandidates
+        } else {
+            wanted
+        }
+        if (bounded < pageSize) {
+            pageSize
+        } else {
+            bounded
+        }
     }
 
     private func vectorOf(chunk: String): String {
-        match(embedder){
+        match (embedder) {
             case Some(model) => VectorMath.literal(model.embed(chunk))
             case None => ''
         }
     }
 
     private static func wanted(query: KnowledgeQuery, docId: String): Bool {
-        if(query.docIds.isEmpty()){
+        if (query.docIds.isEmpty()) {
             return true
         }
-        for(item in query.docIds){
-            if(item == docId){
+        for (item in query.docIds) {
+            if (item == docId) {
                 return true
             }
         }
@@ -202,11 +209,19 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
     }
 
     private static func maxOf(a: Float64, b: Float64): Float64 {
-        if(a > b){ a }else{ b }
+        if (a > b) {
+            a
+        } else {
+            b
+        }
     }
 
     private static func minOf(a: Float64, b: Float64): Float64 {
-        if(a < b){ a }else{ b }
+        if (a < b) {
+            a
+        } else {
+            b
+        }
     }
 }
 
@@ -226,37 +241,34 @@ class ChunkScore {
 }
 
 private func textOf(value: ?Any): String {
-    match(value){
-        case Some(raw) =>
-            match(raw){
-                case text: String => text
-                case _ => ''
-            }
+    match (value) {
+        case Some(raw) => match (raw) {
+            case text: String => text
+            case _ => ''
+        }
         case None => ''
     }
 }
 
 private func chunkIntOf(value: ?Any): Int64 {
-    match(value){
-        case Some(raw) =>
-            match(raw){
-                case number: Int64 => number
-                case number: Int32 => Int64(number)
-                case _ => 0
-            }
+    match (value) {
+        case Some(raw) => match (raw) {
+            case number: Int64 => number
+            case number: Int32 => Int64(number)
+            case _ => 0
+        }
         case None => 0
     }
 }
 
 private func chunkFloatOf(value: ?Any): Float64 {
-    match(value){
-        case Some(raw) =>
-            match(raw){
-                case number: Float64 => number
-                case number: Float32 => Float64(number)
-                case number: Int64 => Float64(number)
-                case _ => 0.0f64
-            }
+    match (value) {
+        case Some(raw) => match (raw) {
+            case number: Float64 => number
+            case number: Float32 => Float64(number)
+            case number: Int64 => Float64(number)
+            case _ => 0.0f64
+        }
         case None => 0.0f64
     }
 }

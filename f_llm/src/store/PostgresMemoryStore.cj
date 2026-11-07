@@ -12,12 +12,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.store
 
 import std.collection.*
 import std.time.DateTime
-
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 
@@ -27,7 +26,7 @@ import fountain::f_bean.macros.*
  */
 @Bean
 @BeanMeta[condition: ConfCond.Value('llm_memoryStore', StringCond.Exactly('mysql'))
-                    | ConfCond.Value('llm_memoryStore', StringCond.Exactly('postgres'))]
+    | ConfCond.Value('llm_memoryStore', StringCond.Exactly('postgres'))]
 public class SqlMemoryStore <: MemoryStore {
     private let repo: MemoryRepository
     private let embedder: Embedder
@@ -51,23 +50,22 @@ public class SqlMemoryStore <: MemoryStore {
         let id = repo.upsert(write, titleVector, contentVector)
         // 稀疏倒排：标题与正文的 token 合并，同一 token 取较大权重
         let tokens = HashMap<Int64, Float64>()
-        for((token, weight) in embedder.tokenize(write.title)){
+        for ((token, weight) in embedder.tokenize(write.title)) {
             tokens[token] = weight
         }
-        for((token, weight) in embedder.tokenize(write.content)){
+        for ((token, weight) in embedder.tokenize(write.content)) {
             let existing = tokens.get(token) ?? 0.0f64
-            if(weight > existing){
+            if (weight > existing) {
                 tokens[token] = weight
             }
         }
         repo.upsertSparse(id, write.userId, write.namespace, tokens)
         // 多头向量：重排用，失败不影响主流程（colbert 是可选能力）
-        try{
+        try {
             repo.upsertColbert(id, embedder.embedColbert(write.title), embedder.embedColbert(write.content))
-        }catch(_: Exception){
+        } catch (_: Exception) {
         }
-        MemoryRecord(id, write.userId, write.namespace, write.title, write.content,
-                     write.kind, DateTime.now())
+        MemoryRecord(id, write.userId, write.namespace, write.title, write.content, write.kind, DateTime.now())
     }
 
     public func get(userId: Int64, id: Int64): ?MemoryRecord {
@@ -82,8 +80,7 @@ public class SqlMemoryStore <: MemoryStore {
         repo.list(userId, namespace, offset, limit)
     }
 
-    public func listByKind(userId: Int64, namespace: String, kind: String,
-                           offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+    public func listByKind(userId: Int64, namespace: String, kind: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
         repo.listByKind(userId, namespace, kind, offset, limit)
     }
 
@@ -106,27 +103,26 @@ public class SqlMemoryStore <: MemoryStore {
         collect(sparse, ids, records)
 
         let scored = ArrayList<MemoryHit>()
-        for(id in ids){
+        for (id in ids) {
             let record = records.get(id).getOrThrow()
             // 隔离是硬约束：即便仓库多返回了行，也不能越过用户 / 命名空间 / kind 过滤
-            if(!permitted(record, query)){
+            if (!permitted(record, query)) {
                 continue
             }
             let denseScore = denseScores.get(id) ?? 0.0f64
             let sparseScore = sparseScores.get(id) ?? 0.0f64
-            let fused = 0.7f64 * denseScore + 0.3f64 * sparseScore
+            let fused = RetrievalScoring.fuseMemory(denseScore, sparseScore)
             scored.add(MemoryHit(record, fused * MemoryKinds.weightOf(record.kind), degraded: degraded))
         }
 
         // colbert 重排：只改顺序，不改候选集，也不改 hit.score
         let rerankScores = HashMap<Int64, Float64>()
-        if(query.rerank){
+        if (query.rerank) {
             let queryVectors = embedder.embedColbert(query.text)
-            for(hit in scored){
-                match(repo.colbert(hit.record.id)){
-                    case Some(vectors) =>
-                        rerankScores[hit.record.id] = 0.4f64 * maxSim(queryVectors, vectors.title) +
-                                                      0.6f64 * maxSim(queryVectors, vectors.content)
+            for (hit in scored) {
+                match (repo.colbert(hit.record.id)) {
+                    case Some(vectors) => rerankScores[hit.record.id] = RetrievalScoring.rerank(
+                        maxSim(queryVectors, vectors.title), maxSim(queryVectors, vectors.content))
                     case None => rerankScores[hit.record.id] = 0.0f64
                 }
             }
@@ -134,31 +130,31 @@ public class SqlMemoryStore <: MemoryStore {
 
         // 选择排序取前 topK（不依赖 ArrayList 的插入/交换 API）
         let used = ArrayList<Bool>()
-        for(_ in scored){
+        for (_ in scored) {
             used.add(false)
         }
         let results = ArrayList<MemoryHit>()
         var picked = 0
-        while(picked < query.topK && picked < scored.size){
+        while (picked < query.topK && picked < scored.size) {
             var best = -1
-            for(index in 0..scored.size){
-                if(used[index]){
+            for (index in 0..scored.size) {
+                if (used[index]) {
                     continue
                 }
                 var better = false
-                if(best < 0){
+                if (best < 0) {
                     better = true
-                }else if(query.rerank){
+                } else if (query.rerank) {
                     better = rerankScores.get(scored[index].record.id).getOrThrow() >
-                             rerankScores.get(scored[best].record.id).getOrThrow()
-                }else{
+                        rerankScores.get(scored[best].record.id).getOrThrow()
+                } else {
                     better = scored[index].score > scored[best].score
                 }
-                if(better){
+                if (better) {
                     best = index
                 }
             }
-            if(best < 0){
+            if (best < 0) {
                 break
             }
             used[best] = true
@@ -169,21 +165,21 @@ public class SqlMemoryStore <: MemoryStore {
     }
 
     private static func permitted(record: MemoryRecord, query: MemoryQuery): Bool {
-        if(record.userId != query.userId){
+        if (record.userId != query.userId) {
             return false
         }
-        if(query.namespaces.size > 0 && !containsName(query.namespaces, record.namespace)){
+        if (query.namespaces.size > 0 && !containsName(query.namespaces, record.namespace)) {
             return false
         }
-        if(query.kinds.size > 0 && !containsName(query.kinds, record.kind)){
+        if (query.kinds.size > 0 && !containsName(query.kinds, record.kind)) {
             return false
         }
         true
     }
 
     private static func containsName(values: Array<String>, target: String): Bool {
-        for(value in values){
-            if(value == target){
+        for (value in values) {
+            if (value == target) {
                 return true
             }
         }
@@ -192,15 +188,15 @@ public class SqlMemoryStore <: MemoryStore {
 
     /** colbert max-sim：每个 query token 取与文档 token 的最大点积，再对 query 取平均 */
     private static func maxSim(query: Array<Array<Float64>>, doc: Array<Array<Float64>>): Float64 {
-        if(query.size == 0 || doc.size == 0){
+        if (query.size == 0 || doc.size == 0) {
             return 0.0f64
         }
         var total = 0.0f64
-        for(queryToken in query){
+        for (queryToken in query) {
             var best = 0.0f64
-            for(docToken in doc){
+            for (docToken in doc) {
                 let score = dot(queryToken, docToken)
-                if(score > best){
+                if (score > best) {
                     best = score
                 }
             }
@@ -210,19 +206,22 @@ public class SqlMemoryStore <: MemoryStore {
     }
 
     private static func dot(left: Array<Float64>, right: Array<Float64>): Float64 {
-        let size = if(left.size < right.size){ left.size } else { right.size }
+        let size = if (left.size < right.size) {
+            left.size
+        } else {
+            right.size
+        }
         var sum = 0.0f64
-        for(index in 0..size){
+        for (index in 0..size) {
             sum += left[index] * right[index]
         }
         sum
     }
 
-    private static func collect(hits: ArrayList<MemoryHit>, ids: ArrayList<Int64>,
-                                records: HashMap<Int64, MemoryRecord>): Unit {
-        for(hit in hits){
+    private static func collect(hits: ArrayList<MemoryHit>, ids: ArrayList<Int64>, records: HashMap<Int64, MemoryRecord>): Unit {
+        for (hit in hits) {
             let id = hit.record.id
-            if(!records.contains(id)){
+            if (!records.contains(id)) {
                 records[id] = hit.record
                 ids.add(id)
             }
@@ -232,24 +231,24 @@ public class SqlMemoryStore <: MemoryStore {
     /** min-max 归一化；单条候选或全部同分时统一按 1.0 处理，避免除零 */
     private static func normalize(hits: ArrayList<MemoryHit>): HashMap<Int64, Float64> {
         let scores = HashMap<Int64, Float64>()
-        if(hits.isEmpty()){
+        if (hits.isEmpty()) {
             return scores
         }
         var min = hits[0].score
         var max = min
-        for(hit in hits){
-            if(hit.score < min){
+        for (hit in hits) {
+            if (hit.score < min) {
                 min = hit.score
             }
-            if(hit.score > max){
+            if (hit.score > max) {
                 max = hit.score
             }
         }
         let range = max - min
-        for(hit in hits){
-            if(range <= 0.0f64){
+        for (hit in hits) {
+            if (range <= 0.0f64) {
                 scores[hit.record.id] = 1.0f64
-            }else{
+            } else {
                 scores[hit.record.id] = (hit.score - min) / range
             }
         }

@@ -333,3 +333,5 @@ plan.persona 非空？
  ├─ SkillCatalog 检索 → 技能注入
  └─ 检索记忆 / 知识 → 拼进 input
 ```
+
+检索混合打分的**唯一来源**是 `RetrievalScoring`：记忆 `0.7*dense+0.3*sparse`、colbert 重排 `0.4*标题+0.6*正文`、知识 `dense+0.1*min(词面命中,5)`。内存 / PostgreSQL / MySQL 三个后端共用这一份，改权重只改一处。

@@ -12,12 +12,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.store
 
 import std.collection.*
 import std.time.DateTime
-
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 
@@ -30,17 +29,19 @@ public class InMemoryContentStore <: ContentStore {
     private let memoryStore = InMemoryMemoryStore()
 
     public prop memory: MemoryStore {
-        get() { memoryStore }
+        get() {
+            memoryStore
+        }
     }
     private var cachedKnowledge: ?KnowledgeStore = None
 
     /** 有 `Embedder` bean 时启用语义检索，否则退化为词面 */
     public prop knowledge: KnowledgeStore {
         get() {
-            match(cachedKnowledge){
+            match (cachedKnowledge) {
                 case Some(store) => store
                 case None =>
-                    let store = match(lookupOption<Embedder>()){
+                    let store = match (lookupOption<Embedder>()) {
                         case Some(model) => InMemoryKnowledgeStore(model)
                         case None => InMemoryKnowledgeStore()
                     }
@@ -58,16 +59,24 @@ public class InMemoryMetaStore <: MetaStore {
     private let confStore = InMemoryLLMConfStore()
 
     public prop characters: CharacterStore {
-        get() { characterStore }
+        get() {
+            characterStore
+        }
     }
     public prop skills: SkillStore {
-        get() { skillStore }
+        get() {
+            skillStore
+        }
     }
     public prop prompts: PromptStore {
-        get() { promptStore }
+        get() {
+            promptStore
+        }
     }
     public prop confs: LLMConfStore {
-        get() { confStore }
+        get() {
+            confStore
+        }
     }
 }
 
@@ -79,26 +88,31 @@ public class InMemoryMemoryStore <: MemoryStore {
 
     public func add(write: MemoryWrite): MemoryRecord {
         seq++
-        let record = MemoryRecord(seq, write.userId, write.namespace, write.title,
-                                  write.content, write.kind, DateTime.now())
+        let record = MemoryRecord(seq, write.userId, write.namespace, write.title, write.content, write.kind,
+            DateTime.now())
         records[record.id] = record
         record
     }
 
     public func get(userId: Int64, id: Int64): ?MemoryRecord {
-        match(records.get(id)){
-            case Some(record) => if(record.userId == userId) { Some(record) } else { None }
+        match (records.get(id)) {
+            case Some(record) =>
+                if (record.userId == userId) {
+                    Some(record)
+                } else {
+                    None
+                }
             case None => None
         }
     }
 
     public func remove(userId: Int64, id: Int64): Bool {
-        match(records.get(id)){
+        match (records.get(id)) {
             case Some(record) =>
-                if(record.userId == userId){
+                if (record.userId == userId) {
                     records.remove(id)
                     true
-                }else{
+                } else {
                     false
                 }
             case None => false
@@ -107,8 +121,8 @@ public class InMemoryMemoryStore <: MemoryStore {
 
     public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
         let matched = ArrayList<MemoryRecord>()
-        for((_, record) in records){
-            if(record.userId == userId && record.namespace == namespace){
+        for ((_, record) in records) {
+            if (record.userId == userId && record.namespace == namespace) {
                 matched.add(record)
             }
         }
@@ -116,11 +130,10 @@ public class InMemoryMemoryStore <: MemoryStore {
     }
 
     /** 先过滤再分页：内存实现可以做到精确 */
-    public func listByKind(userId: Int64, namespace: String, kind: String,
-                           offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+    public func listByKind(userId: Int64, namespace: String, kind: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
         let matched = ArrayList<MemoryRecord>()
-        for((_, record) in records){
-            if(record.userId == userId && record.namespace == namespace && record.kind == kind){
+        for ((_, record) in records) {
+            if (record.userId == userId && record.namespace == namespace && record.kind == kind) {
                 matched.add(record)
             }
         }
@@ -129,25 +142,26 @@ public class InMemoryMemoryStore <: MemoryStore {
 
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
         let hits = ArrayList<MemoryHit>()
-        for((_, record) in records){
-            if(record.userId != query.userId){
+        for ((_, record) in records) {
+            if (record.userId != query.userId) {
                 continue
             }
-            if(query.namespaces.size > 0 && !containsText(query.namespaces, record.namespace)){
+            if (query.namespaces.size > 0 && !containsText(query.namespaces, record.namespace)) {
                 continue
             }
-            if(query.kinds.size > 0 && !containsText(query.kinds, record.kind)){
+            if (query.kinds.size > 0 && !containsText(query.kinds, record.kind)) {
                 continue
             }
-            let matched = query.text.isEmpty() || record.title.contains(query.text) ||
-                          record.content.contains(query.text)
-            if(matched){
+            let matched = query.text.isEmpty() || record.title.contains(query.text) || record
+                .content
+                .contains(query.text)
+            if (matched) {
                 hits.add(MemoryHit(record, 1.0f64))
             }
         }
         let limited = ArrayList<MemoryHit>()
         var index = 0
-        while(index < hits.size && index < query.topK){
+        while (index < hits.size && index < query.topK) {
             limited.add(hits[index])
             index++
         }
@@ -157,7 +171,7 @@ public class InMemoryMemoryStore <: MemoryStore {
     private func slice(source: ArrayList<MemoryRecord>, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
         let result = ArrayList<MemoryRecord>()
         var index = offset
-        while(index < source.size && index < offset + limit){
+        while (index < source.size && index < offset + limit) {
             result.add(source[index])
             index++
         }
@@ -184,9 +198,9 @@ public class InMemoryKnowledgeStore <: KnowledgeStore {
         docs[doc.docId] = doc
         let list = ArrayList<KnowledgeChunk>()
         var seq: Int64 = 0
-        for(content in KnowledgeChunker.split(doc.content)){
+        for (content in KnowledgeChunker.split(doc.content)) {
             list.add(KnowledgeChunk(doc.docId, seq, content))
-            match(embedder){
+            match (embedder) {
                 case Some(model) => vectors[chunkKey(doc.docId, seq)] = model.embed(content)
                 case None => ()
             }
@@ -201,7 +215,7 @@ public class InMemoryKnowledgeStore <: KnowledgeStore {
 
     public func remove(docId: String): Bool {
         chunks.remove(docId)
-        match(docs.get(docId)){
+        match (docs.get(docId)) {
             case Some(_) =>
                 docs.remove(docId)
                 true
@@ -211,41 +225,40 @@ public class InMemoryKnowledgeStore <: KnowledgeStore {
 
     public func search(query: KnowledgeQuery): ArrayList<KnowledgeHit> {
         let terms = KnowledgeSearch.terms(query.text)
-        let queryVector = match(embedder){
+        let queryVector = match (embedder) {
             case Some(model) => Some(model.embed(query.text))
             case None => None<Array<Float64>>
         }
-        if(terms.isEmpty() && queryVector.isNone()){
+        if (terms.isEmpty() && queryVector.isNone()) {
             return ArrayList<KnowledgeHit>()
         }
         let hits = ArrayList<KnowledgeHit>()
-        for((docId, list) in chunks){
-            if(query.docIds.size > 0){
+        for ((docId, list) in chunks) {
+            if (query.docIds.size > 0) {
                 var wanted = false
-                for(item in query.docIds){
-                    if(item == docId){
+                for (item in query.docIds) {
+                    if (item == docId) {
                         wanted = true
                         break
                     }
                 }
-                if(!wanted){
+                if (!wanted) {
                     continue
                 }
             }
-            for(chunk in list){
+            for (chunk in list) {
                 let lexical = KnowledgeSearch.score(chunk.content, terms)
-                let dense = match(queryVector){
-                    case Some(target) => match(vectors.get(chunkKey(docId, chunk.seq))){
+                let dense = match (queryVector) {
+                    case Some(target) => match (vectors.get(chunkKey(docId, chunk.seq))) {
                         case Some(source) => VectorMath.cosine(target, source)
                         case None => 0.0f64
                     }
                     case None => 0.0f64
                 }
-                if(lexical <= 0.0f64 && dense <= 0.0f64){
+                if (lexical <= 0.0f64 && dense <= 0.0f64) {
                     continue
                 }
-                let boosted = if(lexical > 5.0f64){ 5.0f64 }else{ lexical }
-                hits.add(KnowledgeHit(docId, chunk.seq, chunk.content, dense + 0.1f64 * boosted))
+                hits.add(KnowledgeHit(docId, chunk.seq, chunk.content, RetrievalScoring.fuseKnowledge(dense, lexical)))
             }
         }
         KnowledgeSearch.rank(hits, query.limit)
@@ -253,14 +266,14 @@ public class InMemoryKnowledgeStore <: KnowledgeStore {
 
     public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
         let ids = ArrayList<String>()
-        for((docId, _) in docs){
+        for ((docId, _) in docs) {
             ids.add(docId)
         }
         // HashMap 无序，排序后再分页，保证重复调用结果稳定
-        for(index in 1..ids.size){
+        for (index in 1..ids.size) {
             let current = ids[index]
             var position = index - 1
-            while(position >= 0 && ids[position] > current){
+            while (position >= 0 && ids[position] > current) {
                 ids[position + 1] = ids[position]
                 position--
             }
@@ -268,7 +281,7 @@ public class InMemoryKnowledgeStore <: KnowledgeStore {
         }
         let result = ArrayList<String>()
         var index = offset
-        while(index < ids.size && result.size < limit){
+        while (index < ids.size && result.size < limit) {
             result.add(ids[index])
             index++
         }
@@ -309,14 +322,14 @@ class InMemorySkillStore <: SkillStore {
 
     public func list(): ArrayList<Skill> {
         let result = ArrayList<Skill>()
-        for((_, skill) in skills){
+        for ((_, skill) in skills) {
             result.add(skill)
         }
         result
     }
 
     public func remove(id: Int64): Bool {
-        match(skills.get(id)){
+        match (skills.get(id)) {
             case Some(_) =>
                 skills.remove(id)
                 true
@@ -329,7 +342,7 @@ class InMemoryPromptStore <: PromptStore {
     private let versions = HashMap<String, HashMap<Int64, PromptEntry>>()
 
     public func put(entry: PromptEntry): Unit {
-        match(versions.get(entry.name)){
+        match (versions.get(entry.name)) {
             case Some(bucket) => bucket[entry.version] = entry
             case None =>
                 let bucket = HashMap<Int64, PromptEntry>()
@@ -339,24 +352,24 @@ class InMemoryPromptStore <: PromptStore {
     }
 
     public func get(name: String, version: Int64): ?PromptEntry {
-        match(versions.get(name)){
+        match (versions.get(name)) {
             case Some(bucket) => bucket.get(version)
             case None => None
         }
     }
 
     public func latest(name: String): ?PromptEntry {
-        match(versions.get(name)){
+        match (versions.get(name)) {
             case Some(bucket) =>
                 var latestVersion: Int64 = -1
-                for((version, _) in bucket){
-                    if(version > latestVersion){
+                for ((version, _) in bucket) {
+                    if (version > latestVersion) {
                         latestVersion = version
                     }
                 }
-                if(latestVersion < 0){
+                if (latestVersion < 0) {
                     None
-                }else{
+                } else {
                     bucket.get(latestVersion)
                 }
             case None => None
@@ -364,14 +377,13 @@ class InMemoryPromptStore <: PromptStore {
     }
 
     public func remove(name: String, version: Int64): Bool {
-        match(versions.get(name)){
-            case Some(bucket) =>
-                match(bucket.get(version)){
-                    case Some(_) =>
-                        bucket.remove(version)
-                        true
-                    case None => false
-                }
+        match (versions.get(name)) {
+            case Some(bucket) => match (bucket.get(version)) {
+                case Some(_) =>
+                    bucket.remove(version)
+                    true
+                case None => false
+            }
             case None => false
         }
     }
@@ -382,8 +394,8 @@ class InMemoryLLMConfStore <: LLMConfStore {
 
     public func names(): ArrayList<String> {
         let names = ArrayList<String>()
-        for(view in views){
-            if(view.enabled && view.weight > 0 && !contains(names, view.llmName)){
+        for (view in views) {
+            if (view.enabled && view.weight > 0 && !contains(names, view.llmName)) {
                 names.add(view.llmName)
             }
         }
@@ -392,8 +404,8 @@ class InMemoryLLMConfStore <: LLMConfStore {
 
     public func candidates(llmName: String): ArrayList<LLMConfView> {
         let result = ArrayList<LLMConfView>()
-        for(view in views){
-            if(view.enabled && view.weight > 0 && view.llmName == llmName){
+        for (view in views) {
+            if (view.enabled && view.weight > 0 && view.llmName == llmName) {
                 result.add(view)
             }
         }
@@ -406,8 +418,8 @@ class InMemoryLLMConfStore <: LLMConfStore {
     }
 
     private static func contains(values: ArrayList<String>, target: String): Bool {
-        for(value in values){
-            if(value == target){
+        for (value in values) {
+            if (value == target) {
                 return true
             }
         }
@@ -416,8 +428,8 @@ class InMemoryLLMConfStore <: LLMConfStore {
 }
 
 func containsText(values: Array<String>, target: String): Bool {
-    for(value in values){
-        if(value == target){
+    for (value in values) {
+        if (value == target) {
             return true
         }
     }
