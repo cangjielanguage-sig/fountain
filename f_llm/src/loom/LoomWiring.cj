@@ -75,7 +75,7 @@ public class LoomWiring {
     public static func wire(chat: (String, String, String) -> String, plannerModel!: String = '',
         store!: ?LoomStore = None, memoryPolicy!: ?LoomMemoryPolicy = None,
         skillEmbedder!: ?(String) -> Array<Float64> = None, evolutionCron!: String = '', evolutionUserId!: Int64 = 0,
-        evolutionNamespace!: String = 'loom', evolutionModel!: String = '', evolutionNameCandidates!: Bool = true,
+        evolutionNamespace!: String = '', evolutionModel!: String = '', evolutionNameCandidates!: Bool = true,
         evolutionPolicy!: SkillEvolutionPolicy = SkillEvolutionPolicy(), gateway!: ?LoomStoreGateway = None,
         host!: ?LoomHost = None, characterUserId!: Int64 = 0): LoomService {
         // 人格归属：独立于记忆策略，配了才装
@@ -131,8 +131,10 @@ public class LoomWiring {
         // 每日租约：跟着向量存储走（SQL 建单行表 / hydra 全 0 向量 / 本地 f_store）
         let _ = EvolutionLeases.bootstrap()
         // 技能演进统一由 SkillEvolutionJob 执行：配了 cron 就注册成周期任务
-        registerEvolution(chat, evolutionCron, evolutionUserId, evolutionNamespace, evolutionModel,
-            evolutionNameCandidates, evolutionPolicy, skillEmbedder, gatewayHolder, gateway)
+        // 演进读写同一份归属：调用方没显式给时跟随记忆策略，避免「写 7/work、读 0/loom」的断链
+        let (ownerId, ownerNs) = evolutionOwner(memoryPolicy, evolutionUserId, evolutionNamespace)
+        registerEvolution(chat, evolutionCron, ownerId, ownerNs, evolutionModel, evolutionNameCandidates,
+            evolutionPolicy, skillEmbedder, gatewayHolder, gateway)
         service
     }
 
@@ -147,6 +149,26 @@ public class LoomWiring {
 
     public static func lastReload(): ?ReloadResult {
         reload
+    }
+
+    /** 演进侧的归属：显式值优先，否则跟随记忆策略（写端与读端同源） */
+    public static func evolutionOwner(policy: ?LoomMemoryPolicy, userId: Int64, namespace: String): (Int64, String) {
+        let effective = match (policy) {
+            case Some(value) => value
+            case None => LoomMemoryPolicy.effective()
+        }
+        let ownerId = if (userId > 0) {
+            userId
+        } else {
+            effective.userId
+        }
+        let trimmed = namespace.trimAscii()
+        let ownerNs = if (!trimmed.isEmpty()) {
+            trimmed
+        } else {
+            effective.namespace
+        }
+        (ownerId, ownerNs)
     }
 
     private static func installSupervisor(service: LoomService, registry: LoomRegistry,

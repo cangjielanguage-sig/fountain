@@ -12,14 +12,12 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_llm.loom
 
 import std.collection.*
 import std.sync.*
-
 import fountain::f_data.*
-
 import fountain::f_llm.store.*
 
 /** 一轮演进需要的素材：成功经验、失败经验、知识摘要 */
@@ -29,7 +27,7 @@ public class EvolutionInput {
     public let knowledge: ArrayList<ExperienceItem>
 
     public init(successes: ArrayList<ExperienceItem>, failures: ArrayList<ExperienceItem>,
-                knowledge!: ArrayList<ExperienceItem> = ArrayList<ExperienceItem>()) {
+        knowledge!: ArrayList<ExperienceItem> = ArrayList<ExperienceItem>()) {
         this.successes = successes
         this.failures = failures
         this.knowledge = knowledge
@@ -46,9 +44,8 @@ public class SkillEvolutionReport {
     /** 本次进入归组的素材条数（水位线之后的新增） */
     public let materials: Int64
 
-    public init(evolved: ArrayList<String>, rejected: ArrayList<String>,
-                skipped: ArrayList<String>, created: ArrayList<String>,
-                candidateClusters: Int64, materials!: Int64 = 0) {
+    public init(evolved: ArrayList<String>, rejected: ArrayList<String>, skipped: ArrayList<String>,
+        created: ArrayList<String>, candidateClusters: Int64, materials!: Int64 = 0) {
         this.evolved = evolved
         this.rejected = rejected
         this.skipped = skipped
@@ -79,19 +76,11 @@ public class SkillEvolutionJob {
      * @param state 每技能冷却期状态 + 整轮水位线
      * @param since 水位线：只处理 `at > since` 的素材；0 表示全量
      */
-    public static func run(skills: ArrayList<Skill>,
-                           successes: ArrayList<ExperienceItem>,
-                           failures: ArrayList<ExperienceItem>,
-                           knowledge: ArrayList<ExperienceItem>,
-                           chat: (String, String) -> String,
-                           state: EvolutionStateStore,
-                           policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
-                           embedder!: ?(String) -> Array<Float64> = None,
-                           matcherThreshold!: Float64 = 0.75,
-                           nameCandidates!: Bool = false,
-                           ledger!: ?EvolutionStore = None,
-                           since!: Int64 = 0,
-                           now!: Int64 = 0): SkillEvolutionReport {
+    public static func run(skills: ArrayList<Skill>, successes: ArrayList<ExperienceItem>,
+        failures: ArrayList<ExperienceItem>, knowledge: ArrayList<ExperienceItem>, chat: (String, String) -> String,
+        state: EvolutionStateStore, policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
+        embedder!: ?(String) -> Array<Float64> = None, matcherThreshold!: Float64 = 0.75, nameCandidates!: Bool = false,
+        ledger!: ?EvolutionStore = None, since!: Int64 = 0, now!: Int64 = 0): SkillEvolutionReport {
         let evolved = ArrayList<String>()
         let rejected = ArrayList<String>()
         let skipped = ArrayList<String>()
@@ -103,59 +92,56 @@ public class SkillEvolutionJob {
         // 只对本轮候选做成员判定——查询规模与历史累积量无关，不存在「读不到更早记录」的截断
         let candidates = fresh(knowledge, since)
         let docIds = ArrayList<String>()
-        for(item in candidates){
-            if(!item.source.isEmpty()){
+        for (item in candidates) {
+            if (!item.source.isEmpty()) {
                 docIds.add(item.source)
             }
         }
         let consumed = state.processedAmong(docIds.toArray())
         let freshKnowledge = ArrayList<ExperienceItem>()
-        for(item in candidates){
-            if(item.source.isEmpty() || !consumed.contains(item.source)){
+        for (item in candidates) {
+            if (item.source.isEmpty() || !consumed.contains(item.source)) {
                 freshKnowledge.add(item)
             }
         }
 
         // 素材池 = 成功经验 + 知识：知识不参与成功率，但可以成为演进依据与新技能来源
         let materials = ArrayList<ExperienceItem>()
-        for(item in freshSuccess){
+        for (item in freshSuccess) {
             materials.add(item)
         }
-        for(item in freshKnowledge){
+        for (item in freshKnowledge) {
             materials.add(item)
         }
 
-        let matched = SkillMatcher.assign(materials, skills, embedder: embedder,
-                                          threshold: matcherThreshold)
+        let matched = SkillMatcher.assign(materials, skills, embedder: embedder, threshold: matcherThreshold)
         let owner = HashMap<String, ArrayList<ExperienceItem>>()
-        for(item in matched.assignments){
+        for (item in matched.assignments) {
             owner[item.skillTitle] = item.experiences
         }
 
         // 失败经验同样按技能归属后计数：成功率要按「这个技能的历史表现」算，
         // 不能拿全局成败冒充——不同技能的难度差很多
-        let failed = SkillMatcher.assign(freshFailure, skills, embedder: embedder,
-                                         threshold: matcherThreshold)
+        let failed = SkillMatcher.assign(freshFailure, skills, embedder: embedder, threshold: matcherThreshold)
         let failureCounts = HashMap<String, Int64>()
-        for(item in failed.assignments){
+        for (item in failed.assignments) {
             failureCounts[item.skillTitle] = Int64(item.experiences.size)
         }
 
-        for(skill in skills){
+        for (skill in skills) {
             let items = owner.get(skill.title) ?? ArrayList<ExperienceItem>()
             let failureCount = failureCounts.get(skill.title) ?? 0
             let previous = state.get(skill.title)
-            let lastAt = match(previous){
+            let lastAt = match (previous) {
                 case Some(record) => record.lastEvolvedAt
                 case None => 0
             }
-            let lastPassed = match(previous){
+            let lastPassed = match (previous) {
                 case Some(record) => record.lastGatePassed
                 case None => true
             }
-            let decision = policy.decide(Int64(items.size), failureCount,
-                lastAt, lastPassed, now)
-            if(!decision.shouldEvolve){
+            let decision = policy.decide(Int64(items.size), failureCount, lastAt, lastPassed, now)
+            if (!decision.shouldEvolve) {
                 skipped.add('${skill.title}: ${decision.reason}')
                 continue
             }
@@ -163,12 +149,12 @@ public class SkillEvolutionJob {
             let usage = usageOf(items)
             let prompt = '现有技能正文：\n${skill.details}\n\n近期使用情况：\n${usage}\n\n'
                 + '把使用情况里可复用的经验合并进正文，输出新的正文，不要输出解释。'
-            let newDetails = try{
+            let newDetails = try {
                 chat('', prompt)
-            }catch(error: Exception){
+            } catch (error: Exception) {
                 ''
             }
-            if(newDetails.trimAscii().isEmpty()){
+            if (newDetails.trimAscii().isEmpty()) {
                 rejected.add('${skill.title}: evolution returned empty content')
                 state.save(EvolutionSkillState(skill.title, now, false))
                 continue
@@ -176,7 +162,7 @@ public class SkillEvolutionJob {
 
             let samples = SkillSamples.of(skill)
             let gate = SkillGate.evaluate(chat, skill.details, newDetails, samples)
-            if(!gate.passed){
+            if (!gate.passed) {
                 rejected.add('${skill.title}: ${gate.reason}')
                 state.save(EvolutionSkillState(skill.title, now, false))
                 continue
@@ -188,48 +174,46 @@ public class SkillEvolutionJob {
 
         // 新技能候选：只有显式开启 nameCandidates 才让模型起名并落库
         let created = ArrayList<String>()
-        if(nameCandidates && !matched.candidates.isEmpty()){
+        if (nameCandidates && !matched.candidates.isEmpty()) {
             var nextId: Int64 = 1
-            for(skill in skills){
-                if(skill.id >= nextId){
+            for (skill in skills) {
+                if (skill.id >= nextId) {
                     nextId = skill.id + 1
                 }
             }
-            for(candidate in matched.candidates){
-                match(SkillNamer.propose(chat, candidate.experiences)){
+            for (candidate in matched.candidates) {
+                match (SkillNamer.propose(chat, candidate.experiences)) {
                     case Some(draft) =>
                         // 把样例写进 functions，下一轮它才有 A/B 基线可用
-                        emit(Skill(nextId, draft.title, draft.details,
-                                   samplesJson(draft.samples), version: 1))
+                        emit(Skill(nextId, draft.title, draft.details, samplesJson(draft.samples), version: 1))
                         created.add('${draft.title} (id=${nextId})')
                         nextId++
-                    case None =>
-                        rejected.add('candidate cluster: model did not return a valid name')
+                    case None => rejected.add('candidate cluster: model did not return a valid name')
                 }
             }
         }
 
         // 标记本轮消费过的知识：下一轮它们不再进入素材池
         let usedKnowledge = ArrayList<String>()
-        for(item in freshKnowledge){
-            if(!item.source.isEmpty()){
+        for (item in freshKnowledge) {
+            if (!item.source.isEmpty()) {
                 usedKnowledge.add(item.source)
             }
         }
         state.markKnowledge(usedKnowledge.toArray())
 
-        let report = SkillEvolutionReport(evolved, rejected, skipped, created,
-            Int64(matched.candidates.size), materials: Int64(materials.size))
+        let report = SkillEvolutionReport(evolved, rejected, skipped, created, Int64(matched.candidates.size),
+            materials: Int64(materials.size))
         // 报告留档：传了报告表才写，写失败不影响本轮结果
-        if(let Some(target) <- ledger){
-            try{
+        if (let Some(target) <- ledger) {
+            try {
                 SkillEvolutionLedger.write(target, report, now)
-            }catch(error: Exception){
+            } catch (error: Exception) {
                 ()
             }
         }
         // 推进水位线：下一轮只看之后再新增的素材
-        if(now > 0){
+        if (now > 0) {
             state.markRun(now)
         }
         report
@@ -237,12 +221,12 @@ public class SkillEvolutionJob {
 
     /** `since <= 0` 表示全量；`at == 0` 视为时间未知，始终保留 */
     private static func fresh(items: ArrayList<ExperienceItem>, since: Int64): ArrayList<ExperienceItem> {
-        if(since <= 0){
+        if (since <= 0) {
             return items
         }
         let result = ArrayList<ExperienceItem>()
-        for(item in items){
-            if(item.at == 0 || item.at > since){
+        for (item in items) {
+            if (item.at == 0 || item.at > since) {
                 result.add(item)
             }
         }
@@ -255,40 +239,41 @@ public class SkillEvolutionJob {
      * 经验写入时不绑定技能，所以按 `kind` 取；知识没有写入时间（`at = 0`），
      * 因此每轮都会参与归组——这也是新技能的主要来源。
      */
-    public static func load(gateway: LoomStoreGateway, userId: Int64, namespace: String,
-                            limit!: Int64 = 500): EvolutionInput {
+    public static func load(gateway: LoomStoreGateway, userId: Int64, namespace: String, limit!: Int64 = 500): EvolutionInput {
         EvolutionInput(experiencesOf(gateway, userId, namespace, 'experience', limit),
-                       experiencesOf(gateway, userId, namespace, 'experience_failed', limit),
-                       knowledge: knowledgeOf(gateway, limit))
+            experiencesOf(gateway, userId, namespace, 'experience_failed', limit),
+            knowledge: knowledgeOf(gateway, limit, userId, namespace))
     }
 
-    private static func experiencesOf(gateway: LoomStoreGateway, userId: Int64,
-                                      namespace: String, kind: String,
-                                      limit: Int64): ArrayList<ExperienceItem> {
+    private static func experiencesOf(gateway: LoomStoreGateway, userId: Int64, namespace: String, kind: String,
+        limit: Int64): ArrayList<ExperienceItem> {
         let result = ArrayList<ExperienceItem>()
-        let payload = '{"userId":${userId},'
-            + '"namespace":${FlowPlan.jsonQuote(namespace)},'
-            + '"kind":${FlowPlan.jsonQuote(kind)},'
-            + '"offset":0,"limit":${limit}}'
-        let text = try{
+        let payload = '{\"userId\":${userId},'
+            + '\"namespace\":${FlowPlan.jsonQuote(namespace)},'
+            + '\"kind\":${FlowPlan.jsonQuote(kind)},'
+            + '\"offset\":0,\"limit\":${limit}}'
+        let text = try {
             gateway.call('memory', 'list', payload)
-        }catch(error: Exception){
+        } catch (error: Exception) {
             '[]'
         }
-        let json = match(JsonValue.fromStr(text) as JsonArray){
+        let json = match (JsonValue.fromStr(text) as JsonArray) {
             case Some(value) => value
             case None => return result
         }
-        for(item in json){
-            match(item as JsonObject){
+        for (item in json) {
+            match (item as JsonObject) {
                 case Some(record) =>
                     let id = intField(record, 'id')
                     let content = strField(record, 'content')
-                    if(!content.isEmpty()){
+                    if (!content.isEmpty()) {
                         // 网关已暴露 saveTime；缺失（旧数据/别的网关实现）时退化为 id
                         let saveTime = intField(record, 'saveTime')
-                        result.add(ExperienceItem(id, content,
-                            at: if(saveTime > 0){ saveTime }else{ id }))
+                        result.add(ExperienceItem(id, content, at: if (saveTime > 0) {
+                            saveTime
+                        } else {
+                            id
+                        }))
                     }
                 case None => ()
             }
@@ -296,36 +281,48 @@ public class SkillEvolutionJob {
         result
     }
 
-    private static func knowledgeOf(gateway: LoomStoreGateway, limit: Int64): ArrayList<ExperienceItem> {
+    /**
+     * 知识文档是否属于该租户：`docId` 由提炼侧写成
+     * `loom:<userId>:<namespace>:<flow>:<stamp>-<seq>`，据此过滤，避免跨租户串味。
+     *
+     * 旧格式（`loom:<flow>:<seq>`）无法判定归属，一律不取——宁可少取，不可串味。
+     */
+    public static func ownedBy(docId: String, userId: Int64, namespace: String): Bool {
+        docId.startsWith('loom:${userId}:${namespace}:')
+    }
+
+    private static func knowledgeOf(gateway: LoomStoreGateway, limit: Int64, userId: Int64, namespace: String): ArrayList<ExperienceItem> {
         let result = ArrayList<ExperienceItem>()
-        let ids = try{
-            gateway.call('knowledge', 'docIds', '{"offset":0,"limit":${limit}}')
-        }catch(error: Exception){
+        let ids = try {
+            gateway.call('knowledge', 'docIds', '{\"offset\":0,\"limit\":${limit}}')
+        } catch (error: Exception) {
             '[]'
         }
-        let list = match(JsonValue.fromStr(ids) as JsonArray){
+        let list = match (JsonValue.fromStr(ids) as JsonArray) {
             case Some(value) => value
             case None => return result
         }
         var index: Int64 = 0
-        for(item in list){
-            match(item as JsonString){
+        for (item in list) {
+            match (item as JsonString) {
                 case Some(docId) =>
-                    let text = try{
-                        gateway.call('knowledge', 'get',
-                            '{"docId":${FlowPlan.jsonQuote(docId.value)}}')
-                    }catch(error: Exception){
+                    // 只吃本租户写进来的知识：docId 形如 loom:<userId>:<namespace>:<flow>:<stamp>-<seq>
+                    if (!ownedBy(docId.value, userId, namespace)) {
+                        continue
+                    }
+                    let text = try {
+                        gateway.call('knowledge', 'get', '{\"docId\":${FlowPlan.jsonQuote(docId.value)}}')
+                    } catch (error: Exception) {
                         ''
                     }
-                    if(!text.trimAscii().isEmpty()){
-                        match(JsonValue.fromStr(text) as JsonObject){
+                    if (!text.trimAscii().isEmpty()) {
+                        match (JsonValue.fromStr(text) as JsonObject) {
                             case Some(doc) =>
                                 let content = strField(doc, 'content')
-                                if(!content.isEmpty()){
+                                if (!content.isEmpty()) {
                                     index++
                                     // source = docId：用于「已消费就不重复聚类」
-                                    result.add(ExperienceItem(index, content, at: 0,
-                                        source: docId.value))
+                                    result.add(ExperienceItem(index, content, at: 0, source: docId.value))
                                 }
                             case None => ()
                         }
@@ -337,19 +334,18 @@ public class SkillEvolutionJob {
     }
 
     private static func intField(json: JsonObject, key: String): Int64 {
-        match(json.get(key)){
+        match (json.get(key)) {
             case Some(value) => Int64.tryParse(value.toString()) ?? 0
             case None => 0
         }
     }
 
     private static func strField(json: JsonObject, key: String): String {
-        match(json.get(key)){
-            case Some(value) =>
-                match(value as JsonString){
-                    case Some(text) => text.value
-                    case None => ''
-                }
+        match (json.get(key)) {
+            case Some(value) => match (value as JsonString) {
+                case Some(text) => text.value
+                case None => ''
+            }
             case None => ''
         }
     }
@@ -359,33 +355,26 @@ public class SkillEvolutionJob {
      *
      * 水位线从 `state.lastRunAt()` 取，因此重启后不会把历史素材重跑一遍。
      */
-    public static func schedule(name: String, cron: String, scheduler: LoomScheduler,
-                                skills: () -> ArrayList<Skill>,
-                                input: () -> EvolutionInput,
-                                chat: (String, String) -> String,
-                                state: EvolutionStateStore,
-                                policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(),
-                                embedder!: ?(String) -> Array<Float64> = None,
-                                nameCandidates!: Bool = false,
-                                ledger!: ?EvolutionStore = None,
-                                lease!: ?EvolutionLease = None,
-                                clock!: () -> Int64 = { => 0 }): Unit {
-        scheduler.schedule(name, cron, { =>
-            try{
+    public static func schedule(name: String, cron: String, scheduler: LoomScheduler, skills: () -> ArrayList<Skill>,
+        input: () -> EvolutionInput, chat: (String, String) -> String, state: EvolutionStateStore,
+        policy!: SkillEvolutionPolicy = SkillEvolutionPolicy(), embedder!: ?(String) -> Array<Float64> = None,
+        nameCandidates!: Bool = false, ledger!: ?EvolutionStore = None, lease!: ?EvolutionLease = None,
+        clock!: () -> Int64 = {=> 0}): Unit {
+        scheduler.schedule(name, cron, {
+            => try {
                 let now = clock()
                 // 每日租约：只有抢到今天的进程才执行，其余进程直接放弃
-                let allowed = match(lease){
+                let allowed = match (lease) {
                     case Some(value) => !value.acquire(now).isEmpty()
                     case None => true
                 }
-                if(allowed){
+                if (allowed) {
                     let materials = input()
-                    let _ = run(skills(), materials.successes, materials.failures,
-                        materials.knowledge, chat, state, policy: policy, embedder: embedder,
-                        nameCandidates: nameCandidates, ledger: ledger,
+                    let _ = run(skills(), materials.successes, materials.failures, materials.knowledge, chat, state,
+                        policy: policy, embedder: embedder, nameCandidates: nameCandidates, ledger: ledger,
                         since: state.lastRunAt(), now: now)
                 }
-            }catch(error: Exception){
+            } catch (error: Exception) {
                 // 定时线程不能把异常抛出去，否则会中断后续调度
                 ()
             }
@@ -396,13 +385,13 @@ public class SkillEvolutionJob {
     private static var sink: ?(Skill) -> Unit = None
 
     public static func installSink(fn: (Skill) -> Unit): Unit {
-        synchronized(sinkMutex){
+        synchronized(sinkMutex) {
             sink = Some(fn)
         }
     }
 
     public static func resetSink(): Unit {
-        synchronized(sinkMutex){
+        synchronized(sinkMutex) {
             sink = None
         }
     }
@@ -410,16 +399,15 @@ public class SkillEvolutionJob {
     private static let sinkMutex = Mutex()
 
     private static func skillStoreUpsert(skill: Skill, newDetails: String): Unit {
-        emit(Skill(skill.id, skill.title, newDetails, skill.functions,
-                   version: skill.version + 1))
+        emit(Skill(skill.id, skill.title, newDetails, skill.functions, version: skill.version + 1))
     }
 
     private static func emit(skill: Skill): Unit {
         let box = SinkBox()
-        synchronized(sinkMutex){
+        synchronized(sinkMutex) {
             box.value = sink
         }
-        match(box.value){
+        match (box.value) {
             case Some(fn) => fn(skill)
             case None => ()
         }
@@ -429,20 +417,20 @@ public class SkillEvolutionJob {
     private static func samplesJson(samples: ArrayList<SkillSample>): String {
         var text = '{"samples":['
         var first = true
-        for(sample in samples){
-            if(!first){
+        for (sample in samples) {
+            if (!first) {
                 text += ','
             }
             first = false
-            text += '{"input":${FlowPlan.jsonQuote(sample.input)},'
-            text += '"expect":${FlowPlan.jsonQuote(sample.expect)}}'
+            text += '{\"input\":${FlowPlan.jsonQuote(sample.input)},'
+            text += '\"expect\":${FlowPlan.jsonQuote(sample.expect)}}'
         }
         text + ']}'
     }
 
     private static func usageOf(items: ArrayList<ExperienceItem>): String {
         var text = ''
-        for(item in items){
+        for (item in items) {
             text += '- ${item.content}\n'
         }
         text

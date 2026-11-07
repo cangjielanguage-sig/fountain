@@ -193,8 +193,9 @@ class LoomContextMemory_test {
         try{
             LoomRunner().run(plan(), MemoryHost(), start())
             let ids = gateway.call('knowledge', 'docIds', '{"offset":0,"limit":10}')
-            @Expect(ids.contains('loom:memory-flow'), true)
-            let doc = gateway.call('knowledge', 'get', '{"docId":"loom:memory-flow:1"}')
+            @Expect(ids.contains('loom:3:k:memory-flow:'), true)
+            let firstId = ids.split('"')[1]
+            let doc = gateway.call('knowledge', 'get', '{"docId":"' + firstId + '"}')
             @Expect(doc.contains('上下文摘要'), true)
         }finally{
             LoomHostApi.resetStore()
@@ -324,6 +325,27 @@ class LoomContextMemory_test {
             let records = gateway.call('memory', 'list',
                 '{"userId":7,"namespace":"np","offset":0,"limit":10}')
             @Expect(records.contains('严格'), false)
+        } finally {
+            LoomHostApi.resetStore()
+            LoomMemoryPolicy.reset()
+            LoomContextLog.clear()
+        }
+    }
+
+    /** 写进知识库的 docId 带归属，且两次执行不撞号 */
+    @TestCase
+    func testKnowledgeDocIdCarriesOwnerAndIsUnique(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        LoomHostApi.installStore(gateway.call)
+        LoomMemoryPolicy.install(LoomMemoryPolicy(userId: 7, namespace: 'kb', writeKnowledge: true))
+        try {
+            let host = ScriptedHost('')
+            LoomRunner().run(plan(), host, start())
+            LoomRunner().run(plan(), host, start())
+
+            let ids = gateway.call('knowledge', 'docIds', '{"offset":0,"limit":50}')
+            @Expect(ids.contains('loom:7:kb:memory-flow:'), true)
+            @Expect(ids.split(',').size, 2)
         } finally {
             LoomHostApi.resetStore()
             LoomMemoryPolicy.reset()

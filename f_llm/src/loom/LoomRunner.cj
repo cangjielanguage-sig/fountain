@@ -18,6 +18,7 @@ package fountain::f_llm.loom
 import std.collection.*
 import std.sync.*
 import fountain::f_data.*
+import fountain::f_log.*
 import fountain::f_egraph.base.*
 import fountain::f_llm.store.*
 
@@ -236,10 +237,18 @@ public class LoomRunner {
             LoomHostApi.clearSkills()
             if (policy.enabled && !turns.isEmpty()) {
                 try {
-                    LoomMemoryExtractor.extract(plan.name, turns, host, policy, outcome: outcome.value)
+                    let written = LoomMemoryExtractor.extract(plan.name, turns, host, policy, outcome: outcome.value)
+                    if (written == 0 && policy.enabled) {
+                        // 提炼「成功但一条没写」是最难查的静默失败：留一条 warn 便于定位
+                        LoggerFactory
+                            .getLogger<LoomRunner>()
+                            .warn('loom extract wrote nothing: flow=${plan.name}, turns=${turns.size}')
+                    }
                 } catch (error: Exception) {
-                    // 记忆提炼失败不影响流程结果
-                    ()
+                    // 记忆提炼失败不影响流程结果，但必须留痕
+                    LoggerFactory
+                        .getLogger<LoomRunner>()
+                        .warn('loom extract failed: flow=${plan.name}, ${error.message}')
                 }
             }
         }

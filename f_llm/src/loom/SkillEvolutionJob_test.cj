@@ -348,7 +348,7 @@ class SkillEvolutionJob_test {
         gateway.call('memory', 'add',
             '{"userId":1,"namespace":"n","title":"c","content":"日报 失败一","kind":"experience_failed"}')
         gateway.call('knowledge', 'upsert',
-            '{"docId":"k1","title":"t","content":"知识正文"}')
+            '{"docId":"loom:1:n:daily:1-1","title":"t","content":"知识正文"}')
 
         let input = SkillEvolutionJob.load(gateway, 1, 'n')
         @Expect(input.successes.size, 2)
@@ -434,5 +434,14 @@ class SkillEvolutionJob_test {
         }finally{
             SkillEvolutionJob.resetSink()
         }
+    }
+
+    /** 知识素材按租户前缀过滤 */
+    @TestCase
+    func testOwnedByFiltersOtherTenants(): Unit {
+        @Expect(SkillEvolutionJob.ownedBy('loom:7:work:daily:1-1', 7, 'work'), true)
+        @Expect(SkillEvolutionJob.ownedBy('loom:8:work:daily:1-1', 7, 'work'), false)
+        @Expect(SkillEvolutionJob.ownedBy('loom:7:other:daily:1-1', 7, 'work'), false)
+        @Expect(SkillEvolutionJob.ownedBy('loom:daily:1', 7, 'work'), false)
     }
 }

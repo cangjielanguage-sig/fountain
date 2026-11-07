@@ -177,4 +177,17 @@ class LoomWiringSupervisor_test {
             LoomServices.reset()
         }
     }
+
+    /** 演进归属跟随记忆策略：写端与读端同源 */
+    @TestCase
+    func testEvolutionOwnerFollowsPolicy(): Unit {
+        let (uid, ns) = LoomWiring.evolutionOwner(
+            Some(LoomMemoryPolicy(userId: 7, namespace: 'work')), 0, '')
+        @Expect(uid, 7)
+        @Expect(ns, 'work')
+
+        let (explicitId, explicitNs) = LoomWiring.evolutionOwner(None, 9, 'explicit')
+        @Expect(explicitId, 9)
+        @Expect(explicitNs, 'explicit')
+    }
 }

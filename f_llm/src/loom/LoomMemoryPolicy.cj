@@ -17,10 +17,17 @@ package fountain::f_llm.loom
 
 import std.collection.*
 import std.sync.*
+import std.time.*
 import fountain::f_data.*
+import fountain::f_log.*
 import fountain::f_llm.util.TextClip
 
 /** `synchronized` 块是 Unit 语义，序号用持有者带出 */
+/** `synchronized` 块是 Unit 语义，策略用持有者带出 */
+class PolicyBox {
+    public var value: LoomMemoryPolicy = LoomMemoryPolicy()
+}
+
 class DocSeqBox {
     public var value: Int64 = 0
 }
@@ -64,18 +71,27 @@ public class LoomMemoryPolicy {
         this.skillMinScore = skillMinScore
     }
 
+    private static let policyMutex = Mutex()
     private static var current = LoomMemoryPolicy()
 
     public static func install(policy: LoomMemoryPolicy): Unit {
-        current = policy
+        synchronized(policyMutex) {
+            current = policy
+        }
     }
 
     public static func reset(): Unit {
-        current = LoomMemoryPolicy()
+        synchronized(policyMutex) {
+            current = LoomMemoryPolicy()
+        }
     }
 
     public static func effective(): LoomMemoryPolicy {
-        current
+        let box = PolicyBox()
+        synchronized(policyMutex) {
+            box.value = current
+        }
+        box.value
     }
 }
 
@@ -135,7 +151,9 @@ public class LoomMemoryExtractor {
             written++
         }
         if (policy.writeKnowledge && !memory.trimAscii().isEmpty()) {
-            let docId = 'loom:${flowName}:${nextDocSeq()}'
+            // 归属写进 id：跨进程/跨租户不会撞号，演进侧也能按前缀只取自己的知识
+            let stamp = DateTime.now().toUnixTimeStamp().toSeconds()
+            let docId = 'loom:${policy.userId}:${policy.namespace}:${flowName}:${stamp}-${nextDocSeq()}'
             let payload = '{\"docId\":${FlowPlan.jsonQuote(docId)},'
                 + '\"title\":${FlowPlan.jsonQuote('流程 ${flowName} 记忆')},'
                 + '\"content\":${FlowPlan.jsonQuote(memory)}}'
