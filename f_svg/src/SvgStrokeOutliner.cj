@@ -323,16 +323,33 @@ private func addJoin(
     let outer2 = SvgPoint(vertex.x + sign * n2x * half, vertex.y + sign * n2y * half)
     if (style.lineJoin == SvgLineJoin.Miter || style.lineJoin == SvgLineJoin.MiterClip) {
         let ratio = sqrt(2.0 / denominator)
-        if (ratio <= style.miterLimit) {
-            var dirX = sign * (n1x + n2x)
-            var dirY = sign * (n1y + n2y)
-            let dirLength = sqrt(dirX * dirX + dirY * dirY)
-            if (dirLength > STROKE_EPSILON) {
-                dirX = dirX / dirLength
-                dirY = dirY / dirLength
+        var dirX = sign * (n1x + n2x)
+        var dirY = sign * (n1y + n2y)
+        let dirLength = sqrt(dirX * dirX + dirY * dirY)
+        if (dirLength > STROKE_EPSILON) {
+            dirX = dirX / dirLength
+            dirY = dirY / dirLength
+            if (ratio <= style.miterLimit) {
                 let tip = SvgPoint(vertex.x + dirX * half * ratio, vertex.y + dirY * half * ratio)
                 addContour(result, [vertex, outer1, tip, outer2])
                 return
+            }
+            if (style.lineJoin == SvgLineJoin.MiterClip && style.miterLimit > 0.0) {
+                // 在距顶点 `miterlimit × half` 处作垂直于角平分线的截断线，
+                // 求两条外边与截断线的交点，保留截断后的尖角区域。
+                let limitDistance = style.miterLimit * half
+                let firstBase = (outer1.x - vertex.x) * dirX + (outer1.y - vertex.y) * dirY
+                let firstSlope = u1x * dirX + u1y * dirY
+                let secondBase = (outer2.x - vertex.x) * dirX + (outer2.y - vertex.y) * dirY
+                let secondSlope = u2x * dirX + u2y * dirY
+                if (abs(firstSlope) > STROKE_EPSILON && abs(secondSlope) > STROKE_EPSILON) {
+                    let firstT = (limitDistance - firstBase) / firstSlope
+                    let secondT = (limitDistance - secondBase) / secondSlope
+                    let firstClip = SvgPoint(outer1.x + u1x * firstT, outer1.y + u1y * firstT)
+                    let secondClip = SvgPoint(outer2.x + u2x * secondT, outer2.y + u2y * secondT)
+                    addContour(result, [vertex, outer1, firstClip, secondClip, outer2])
+                    return
+                }
             }
         }
     }
