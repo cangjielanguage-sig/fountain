@@ -107,6 +107,8 @@ public class SvgTrueTypeFont <: SvgFont {
     private let kernPairs: ?SvgKernPairs
     private let gposPairs: ?SvgGposPairs
     private let ligatureTable: ?SvgGsubLigatures
+    /** M6 上下文替换表；无 Type 5 / 6 子表时为 `None`。 */
+    private let gsubContext: ?SvgGsubContextTable
     /** `OS/2.sxHeight`；缺表或非法时为 `None`。 */
     private let xHeightValue: ?Int64
 
@@ -127,6 +129,7 @@ public class SvgTrueTypeFont <: SvgFont {
         kernPairs: ?SvgKernPairs,
         gposPairs: ?SvgGposPairs,
         ligatureTable: ?SvgGsubLigatures,
+        gsubContext: ?SvgGsubContextTable,
         xHeightValue: ?Int64
     ) {
         this.unitsPerEmValue = unitsPerEmValue
@@ -145,6 +148,7 @@ public class SvgTrueTypeFont <: SvgFont {
         this.kernPairs = kernPairs
         this.gposPairs = gposPairs
         this.ligatureTable = ligatureTable
+        this.gsubContext = gsubContext
         this.xHeightValue = xHeightValue
     }
 
@@ -261,6 +265,10 @@ public class SvgTrueTypeFont <: SvgFont {
             case Some(table) => SvgGsubLigatures.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
             case None => Option<SvgGsubLigatures>.None
         }
+        let gsubContext = match (directory.table("GSUB")) {
+            case Some(table) => SvgGsubContextTable.parse(SvgTtfTableReader(bytes, table), layoutWarnings)
+            case None => Option<SvgGsubContextTable>.None
+        }
         let xHeight = match (directory.table("OS/2")) {
             case Some(table) => if (table.length >= 88) {
                 Some(SvgTtfTableReader(bytes, table).i16(86))
@@ -286,6 +294,7 @@ public class SvgTrueTypeFont <: SvgFont {
             kern,
             gpos,
             ligatures,
+            gsubContext,
             xHeight
         )
     }
@@ -324,6 +333,32 @@ public class SvgTrueTypeFont <: SvgFont {
     /** 字体是否提供 `liga` 连字。 */
     internal func hasLigatures(): Bool {
         this.ligatureTable.isSome()
+    }
+
+    /** 字体是否提供 M6 上下文替换（Type 5 / 6）。 */
+    internal func hasContextSubstitutions(): Bool {
+        this.gsubContext.isSome()
+    }
+
+    /** 按启用的特性整形整个 run；无上下文表时返回恒等结果。 */
+    internal func shapeGlyphs(
+        codePoints: Array<Int64>,
+        features: SvgFontFeatures,
+        warnings: ArrayList<String>
+    ): SvgGsubShapeResult {
+        let glyphs = ArrayList<Int64>()
+        for (codePoint in codePoints) {
+            glyphs.add(this.glyphIndexOrZero(codePoint))
+        }
+        match (this.gsubContext) {
+            case Some(table) => table.shapeGlyphs(glyphs.toArray(), features, warnings)
+            case None =>
+                let origins = ArrayList<Int64>()
+                for (index in 0..glyphs.size) {
+                    origins.add(index)
+                }
+                SvgGsubShapeResult(glyphs.toArray(), origins.toArray(), Array<Int64>())
+        }
     }
 
     /** 从 `start` 起匹配最长连字，返回 `(连字字形 id, 消费字符数)`。 */

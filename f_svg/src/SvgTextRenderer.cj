@@ -409,6 +409,14 @@ public class SvgTextRenderer {
         // 先 GSUB 连字，再 kern / GPOS 字距；optimizeSpeed 关闭两者。
         if (style.textRendering() != SvgTextRendering.OptimizeSpeed) {
             applyFontLigatures(chars, resolvedFonts, advances, paths)
+            applyFontContextShaping(
+                chars,
+                resolvedFonts,
+                advances,
+                paths,
+                style,
+                this.warnings
+            )
         }
         let shapedChars = ArrayList<SvgTextChar>()
         let shapedAdvances = ArrayList<Float64>()
@@ -1606,7 +1614,7 @@ private func applyFontLigatures(
         }
         match (font) {
             case truetype: SvgTrueTypeFont =>
-                if (!truetype.hasLigatures()) {
+                if (!truetype.hasLigatures() || truetype.hasContextSubstitutions()) {
                     index++
                     continue
                 }
@@ -1644,6 +1652,72 @@ private func applyFontLigatures(
                         index += consumed
                     case None => index++
                 }
+            case _ => index++
+        }
+    }
+}
+
+/**
+ * M6 上下文整形：在同一个 run 内按启用特性应用 Type 5 / 6 替换。
+ *
+ * 与 M5 连字路径互斥：带上下文表的字体在 `applyFontLigatures` 中跳过，
+ * 由其统一处理特性分组、嵌套 lookup 与连字消费。
+ */
+private func applyFontContextShaping(
+    chars: ArrayList<SvgTextChar>,
+    fonts: ArrayList<Option<SvgFont>>,
+    advances: ArrayList<Float64>,
+    paths: ArrayList<?SvgPathData>,
+    style: SvgComputedStyle,
+    warnings: ArrayList<String>
+): Unit {
+    var index: Int64 = 0
+    let features = style.fontFeatures()
+    while (index < chars.size) {
+        let font = match (fonts[index]) {
+            case Some(value) => value
+            case None =>
+                index++
+                continue
+        }
+        match (font) {
+            case truetype: SvgTrueTypeFont =>
+                if (!truetype.hasContextSubstitutions()) {
+                    index++
+                    continue
+                }
+                var runEnd = index + 1
+                while (runEnd < chars.size) {
+                    let candidate = chars[runEnd]
+                    if (candidate.fontSize != chars[index].fontSize ||
+                        candidate.family != chars[index].family ||
+                        candidate.weight != chars[index].weight ||
+                        candidate.style != chars[index].style) {
+                        break
+                    }
+                    runEnd++
+                }
+                let codePoints = ArrayList<Int64>()
+                for (position in index..runEnd) {
+                    codePoints.add(chars[position].codePoint)
+                }
+                let shaped = truetype.shapeGlyphs(codePoints.toArray(), features, warnings)
+                for (position in 0..shaped.glyphs.size) {
+                    let origin = index + shaped.origins[position]
+                    let glyph = shaped.glyphs[position]
+                    if (glyph != truetype.glyphIndexOrZero(chars[origin].codePoint)) {
+                        advances[origin] = truetype.advanceById(glyph, chars[origin].fontSize)
+                        paths[origin] = truetype.pathById(glyph, chars[origin].fontSize)
+                        chars[origin].glyphId = glyph
+                    }
+                }
+                for (removed in shaped.removed) {
+                    let target = index + removed
+                    advances[target] = 0.0
+                    paths[target] = Option<SvgPathData>.None
+                    chars[target].consumed = true
+                }
+                index = runEnd
             case _ => index++
         }
     }
