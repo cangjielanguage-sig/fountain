@@ -1,7 +1,7 @@
 # add-f-svg-m6 校验报告（verification）
 
 - 校验对象：`openspec/changes/add-f-svg-m6`（proposal / design / tasks / 10 个 delta spec）与 `f_svg/src` 全部实现、测试。
-- 校验基线：`feature/f_svg`；任务 1.2 记录的原始基线为 **997** 条用例，M6 完成后为 **1137** 条。
+- 校验基线：`feature/f_svg`；任务 1.2 记录的原始基线为 **997** 条用例，M6 完成后为 **1137** 条，第二轮修复后为 **1178** 条，第三轮修复后为 **1186** 条。
 - 校验方式：只读审阅 + 全量测试 + 构建 + 快照逐字节/哈希复核；未归档、未执行 `git worktree` 或改写 `.git`。
 - 环境说明：工作树 `.git` 指向 `/storage/...`（实际挂载为 `/mnt/linux_share/storage/...`），git 读写使用显式 `GIT_DIR` / `GIT_WORK_TREE` 完成。
 
@@ -18,19 +18,19 @@
 
 ## 1. Requirement / Scenario 覆盖矩阵
 
-口径：每个 Scenario 单列一行；“落点”为直接断言或该 Requirement 的专用测试入口。所有列出的用例均在 1137 条全绿结果内。
+口径：每个 Scenario 单列一行，场景名与 `specs/*/spec.md` 逐字一致；"落点"为直接断言或该 Requirement 的专用测试入口。所有列出的用例均在 **1186** 条全绿结果内（第三轮结束后）。
 
 ### svg-animation
 
 | # | Requirement | Scenario | 落点 | 状态 |
 |---|---|---|---|---|
-| 1 | 时间模型 | 毫秒解析 | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
-| 2 | 时间模型 | id.begin | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
-| 3 | 时间模型 | 重复次数 | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
-| 4 | 时间模型 | repeatDur 截断 | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
-| 5 | 时间模型 | fill freeze | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
-| 6 | 时间模型 | 事件型 begin | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
-| 7 | 时间模型 | begin indefinite | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource/indefiniteBegin/fireEvent` | ✅ |
+| 1 | 时间模型 | 毫秒解析 | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
+| 2 | 时间模型 | id.begin | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
+| 3 | 时间模型 | 重复次数 | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
+| 4 | 时间模型 | repeatDur 截断 | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
+| 5 | 时间模型 | fill freeze | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
+| 6 | 时间模型 | 事件型 begin | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
+| 7 | 时间模型 | begin indefinite | `SvgAnimation_test`；`SvgAnimationControlM6_test.timeSource` | ✅ |
 | 8 | 采样快照 | 不修改原文档 | `SvgAnimation_test`；`SvgAnimationControlM6_test.m5SampleStability` | ✅ |
 | 9 | 采样快照 | 时长 | `SvgAnimation_test`；`SvgAnimationControlM6_test.m5SampleStability` | ✅ |
 | 10 | 采样快照 | 无动画 | `SvgAnimation_test`；`SvgAnimationControlM6_test.m5SampleStability` | ✅ |
@@ -45,10 +45,10 @@
 | 19 | M6 动画触发与时间控制 | 设置时间 | `SvgAnimationControlM6_test.timeSource/pauseAndUnpause/indefiniteBegin/fireEvent/explicitEnd` | ✅ |
 | 20 | M6 动画触发与时间控制 | 非法时间 | `SvgAnimationControlM6_test.timeSource/pauseAndUnpause/indefiniteBegin/fireEvent/explicitEnd` | ✅ |
 | 21 | M6 动画触发与时间控制 | 暂停与恢复 | `SvgAnimationControlM6_test.timeSource/pauseAndUnpause/indefiniteBegin/fireEvent/explicitEnd` | ✅ |
-| 22 | M6 动画写入类型 | XML 默认 | `SvgAnimationControlM6_test.attributeTypeCss` | ✅ |
-| 23 | M6 动画写入类型 | CSS 写入 | `SvgAnimationControlM6_test.attributeTypeCss` | ✅ |
-| 24 | M6 动画写入类型 | 保留既有内联样式 | `SvgAnimationControlM6_test.attributeTypeCss` | ✅ |
-| 25 | M6 动画写入类型 | 非法值 | `SvgAnimationControlM6_test.attributeTypeCss` | ✅ |
+| 22 | M6 动画写入类型 | XML 默认 | `SvgAnimationControlM6_test.attributeTypeCss/attributeTypeInvalid` | ✅ |
+| 23 | M6 动画写入类型 | CSS 写入 | `SvgAnimationControlM6_test.attributeTypeCss/attributeTypeInvalid` | ✅ |
+| 24 | M6 动画写入类型 | 保留既有内联样式 | `SvgAnimationControlM6_test.attributeTypeCss/attributeTypeInvalid` | ✅ |
+| 25 | M6 动画写入类型 | 非法值 | `SvgAnimationControlM6_test.attributeTypeCss/attributeTypeInvalid` | ✅ |
 | 26 | M6 活动时长钳制 | max 截断 | `SvgAnimationControlM6_test.minMax` | ✅ |
 | 27 | M6 活动时长钳制 | min 延长 | `SvgAnimationControlM6_test.minMax` | ✅ |
 | 28 | M6 活动时长钳制 | min 大于 max | `SvgAnimationControlM6_test.minMax` | ✅ |
@@ -99,10 +99,10 @@
 | 35 | M6 OpenType 特性属性 | 禁用常见连字 | `SvgFontDetailsM6_test.fontFeatureParsing/featureMerge` | ✅ |
 | 36 | M6 OpenType 特性属性 | 显式设置覆盖变体 | `SvgFontDetailsM6_test.fontFeatureParsing/featureMerge` | ✅ |
 | 37 | M6 OpenType 特性属性 | 条目上限 | `SvgFontDetailsM6_test.fontFeatureParsing/featureMerge` | ✅ |
-| 38 | M6 装饰长属性 | 简写展开 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry` | ✅ |
-| 39 | M6 装饰长属性 | 组合线型 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry` | ✅ |
-| 40 | M6 装饰长属性 | 缺省颜色 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry` | ✅ |
-| 41 | M6 装饰长属性 | 非法样式 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry` | ✅ |
+| 38 | M6 装饰长属性 | 简写展开 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry`；`SvgDecorationM6_test` | ✅ |
+| 39 | M6 装饰长属性 | 组合线型 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry`；`SvgDecorationM6_test` | ✅ |
+| 40 | M6 装饰长属性 | 缺省颜色 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry`；`SvgDecorationM6_test` | ✅ |
+| 41 | M6 装饰长属性 | 非法样式 | `SvgFontDetailsM6_test.decorationLonghands/decorationGeometry`；`SvgDecorationM6_test` | ✅ |
 
 ### svg-document-model
 
@@ -117,11 +117,11 @@
 | 7 | M6 元素结构变更 | 追加语义 | `SvgDomApiM6_test.childMutations` | ✅ |
 | 8 | M6 元素结构变更 | 非法引用 | `SvgDomApiM6_test.childMutations` | ✅ |
 | 9 | M6 元素结构变更 | 移除 | `SvgDomApiM6_test.childMutations` | ✅ |
-| 10 | M6 变更监听 | 属性变更通知 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit` | ✅ |
-| 11 | M6 变更监听 | 子节点变更通知 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit` | ✅ |
-| 12 | M6 变更监听 | 上限 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit` | ✅ |
-| 13 | M6 变更监听 | 异常隔离 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit` | ✅ |
-| 14 | M6 变更监听 | 移除 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit` | ✅ |
+| 10 | M6 变更监听 | 属性变更通知 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit/removeListenerByReference/namespacedAttributesNotify` | ✅ |
+| 11 | M6 变更监听 | 子节点变更通知 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit/removeListenerByReference/namespacedAttributesNotify` | ✅ |
+| 12 | M6 变更监听 | 上限 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit/removeListenerByReference/namespacedAttributesNotify` | ✅ |
+| 13 | M6 变更监听 | 异常隔离 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit/removeListenerByReference/namespacedAttributesNotify` | ✅ |
+| 14 | M6 变更监听 | 移除 | `SvgDomApiM6_test.mutationListeners/listenerExceptionIsolated/listenerLimit/removeListenerByReference/namespacedAttributesNotify` | ✅ |
 | 15 | M6 命中查询 API | 相交列表 | `SvgDomApiM6_test.hitQueries/queriesAreReadOnly/largeDocumentPerformance` | ✅ |
 | 16 | M6 命中查询 API | 包含列表 | `SvgDomApiM6_test.hitQueries/queriesAreReadOnly/largeDocumentPerformance` | ✅ |
 | 17 | M6 命中查询 API | 单元素检查 | `SvgDomApiM6_test.hitQueries/queriesAreReadOnly/largeDocumentPerformance` | ✅ |
@@ -136,62 +136,63 @@
 
 | # | Requirement | Scenario | 落点 | 状态 |
 |---|---|---|---|---|
-| 1 | M6 命中测试 | 顶层优先 | `SvgHitTestM6_test` | ✅ |
-| 2 | M6 命中测试 | pointer-events: none | `SvgHitTestM6_test` | ✅ |
-| 3 | M6 命中测试 | 仅描边命中 | `SvgHitTestM6_test` | ✅ |
-| 4 | M6 命中测试 | bounding-box | `SvgHitTestM6_test` | ✅ |
-| 5 | M6 命中测试 | 隐藏元素 | `SvgHitTestM6_test` | ✅ |
-| 6 | M6 命中测试 | 设备坐标换算 | `SvgHitTestM6_test` | ✅ |
-| 7 | M6 命中测试 | 空文档 | `SvgHitTestM6_test` | ✅ |
-| 8 | M6 pathLength 校准 | 校准比例 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength` | ✅ |
-| 9 | M6 pathLength 校准 | 斜率相同 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength` | ✅ |
-| 10 | M6 pathLength 校准 | 非法值 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength` | ✅ |
-| 11 | M6 pathLength 校准 | 缺失属性 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength` | ✅ |
-| 12 | M6 矢量效果几何语义 | 去缩放 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
-| 13 | M6 矢量效果几何语义 | 去旋转 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
-| 14 | M6 矢量效果几何语义 | 固定位置 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
-| 15 | M6 矢量效果几何语义 | 组合顺序 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
-| 16 | M6 矢量效果几何语义 | 既有值不受影响 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
+| 1 | M6 命中测试 | 顶层优先 | `SvgHitTestM6_test.elementsAtSpecApi/elementsAtStaticApi` | ✅ |
+| 2 | M6 命中测试 | 设备坐标换算 | `SvgHitTestM6_test.elementsAtSpecApi/elementsAtStaticApi` | ✅ |
+| 3 | M6 命中测试 | 空文档 | `SvgHitTestM6_test.elementsAtSpecApi/elementsAtStaticApi` | ✅ |
+| 4 | M6 命中语义 | pointer-events: none | `SvgHitTestM6_test.visibilityCombinations/allUsesGeometry/autoEqualsVisiblePainted/fillVersusStroke/boundingBox/textHit/rootNonePrunes` | ✅ |
+| 5 | M6 命中语义 | 仅描边命中 | `SvgHitTestM6_test.visibilityCombinations/allUsesGeometry/autoEqualsVisiblePainted/fillVersusStroke/boundingBox/textHit/rootNonePrunes` | ✅ |
+| 6 | M6 命中语义 | bounding-box | `SvgHitTestM6_test.visibilityCombinations/allUsesGeometry/autoEqualsVisiblePainted/fillVersusStroke/boundingBox/textHit/rootNonePrunes` | ✅ |
+| 7 | M6 命中语义 | 隐藏元素 | `SvgHitTestM6_test.visibilityCombinations/allUsesGeometry/autoEqualsVisiblePainted/fillVersusStroke/boundingBox/textHit/rootNonePrunes` | ✅ |
+| 8 | M6 命中语义 | auto 等价 visiblePainted | `SvgHitTestM6_test.visibilityCombinations/allUsesGeometry/autoEqualsVisiblePainted/fillVersusStroke/boundingBox/textHit/rootNonePrunes` | ✅ |
+| 9 | M6 pathLength 校准 | 校准比例 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
+| 10 | M6 pathLength 校准 | 斜率相同 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
+| 11 | M6 pathLength 校准 | 非法值 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
+| 12 | M6 pathLength 校准 | 缺失属性 | `SvgFontDetailsM6_test.pathLengthRatio/pathLengthDashRendering/textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
+| 13 | M6 矢量效果几何语义 | 去缩放 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.fixedApplicationOrder/renderTreeWiring` | ✅ |
+| 14 | M6 矢量效果几何语义 | 去旋转 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.fixedApplicationOrder/renderTreeWiring` | ✅ |
+| 15 | M6 矢量效果几何语义 | 固定位置 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.fixedApplicationOrder/renderTreeWiring` | ✅ |
+| 16 | M6 矢量效果几何语义 | 组合顺序 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.fixedApplicationOrder/renderTreeWiring` | ✅ |
+| 17 | M6 矢量效果几何语义 | 既有值不受影响 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.fixedApplicationOrder/renderTreeWiring` | ✅ |
 
 ### svg-paint-and-clip
 
 | # | Requirement | Scenario | 落点 | 状态 |
 |---|---|---|---|---|
-| 1 | 线性渐变 | 端点颜色 | `SvgGradientSampler_test`、`SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged` | ✅ |
-| 2 | 线性渐变 | 中点插值 | `SvgGradientSampler_test`、`SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged` | ✅ |
-| 3 | 线性渐变 | spreadMethod | `SvgGradientSampler_test`、`SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged` | ✅ |
-| 4 | 线性渐变 | stop 乱序与越界 | `SvgGradientSampler_test`、`SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged` | ✅ |
-| 5 | 线性渐变 | linearRGB 中点 | `SvgGradientSampler_test`、`SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged` | ✅ |
-| 6 | M6 颜色插值模式 | 缺省不变 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline` | ✅ |
-| 7 | M6 颜色插值模式 | 线性光两端一致 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline` | ✅ |
-| 8 | M6 颜色插值模式 | 与滤镜独立 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline` | ✅ |
-| 9 | M6 颜色插值模式 | 继承 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline` | ✅ |
-| 10 | M6 颜色配置回退 | 缺省 | `SvgRenderingHintsM6_test.colorProfileRendering/colorProfileProperty` | ✅ |
-| 11 | M6 颜色配置回退 | 已声明非 sRGB | `SvgRenderingHintsM6_test.colorProfileRendering/colorProfileProperty` | ✅ |
-| 12 | M6 颜色配置回退 | 未声明名称 | `SvgRenderingHintsM6_test.colorProfileRendering/colorProfileProperty` | ✅ |
+| 1 | 线性渐变 | 端点颜色 | `SvgGradientSampler_test` | ✅ |
+| 2 | 线性渐变 | 中点插值 | `SvgGradientSampler_test` | ✅ |
+| 3 | 线性渐变 | spreadMethod | `SvgGradientSampler_test` | ✅ |
+| 4 | 线性渐变 | stop 乱序与越界 | `SvgGradientSampler_test` | ✅ |
+| 5 | 线性渐变 | linearRGB 中点 | `SvgGradientSampler_test` | ✅ |
+| 6 | M6 颜色插值模式 | 缺省不变 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline`、`SvgGradientColorSpaceM6_test` | ✅ |
+| 7 | M6 颜色插值模式 | 线性光两端一致 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline`、`SvgGradientColorSpaceM6_test` | ✅ |
+| 8 | M6 颜色插值模式 | 与滤镜独立 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline`、`SvgGradientColorSpaceM6_test` | ✅ |
+| 9 | M6 颜色插值模式 | 继承 | `SvgRenderingHintsM6_test.linearRgbInterpolation/srgbUnchanged/linearRgbPipeline`、`SvgGradientColorSpaceM6_test` | ✅ |
+| 10 | M6 颜色配置回退 | 缺省 | `SvgRenderingHintsM6_test.colorProfileRendering/colorProfileProperty`、`SvgGradientColorSpaceM6_test.gradientColorProfileWarns` | ✅ |
+| 11 | M6 颜色配置回退 | 已声明非 sRGB | `SvgRenderingHintsM6_test.colorProfileRendering/colorProfileProperty`、`SvgGradientColorSpaceM6_test.gradientColorProfileWarns` | ✅ |
+| 12 | M6 颜色配置回退 | 未声明名称 | `SvgRenderingHintsM6_test.colorProfileRendering/colorProfileProperty`、`SvgGradientColorSpaceM6_test.gradientColorProfileWarns` | ✅ |
 
 ### svg-rasterization
 
 | # | Requirement | Scenario | 落点 | 状态 |
 |---|---|---|---|---|
-| 1 | 抗锯齿 | 斜边覆盖 | `SvgRasterizer_test`、`SvgRenderingHintsM6_test.shapeOptimizeSpeed/defaultRasterUnchanged` | ✅ |
-| 2 | 抗锯齿 | 关闭抗锯齿 | `SvgRasterizer_test`、`SvgRenderingHintsM6_test.shapeOptimizeSpeed/defaultRasterUnchanged` | ✅ |
-| 3 | 抗锯齿 | 解析档 | `SvgRasterizer_test`、`SvgRenderingHintsM6_test.shapeOptimizeSpeed/defaultRasterUnchanged` | ✅ |
-| 4 | 抗锯齿 | optimizeSpeed 覆盖全局档位 | `SvgRasterizer_test`、`SvgRenderingHintsM6_test.shapeOptimizeSpeed/defaultRasterUnchanged` | ✅ |
-| 5 | 抗锯齿 | 缺省不受影响 | `SvgRasterizer_test`、`SvgRenderingHintsM6_test.shapeOptimizeSpeed/defaultRasterUnchanged` | ✅ |
+| 1 | 抗锯齿 | 斜边覆盖 | `SvgRasterizer_test` | ✅ |
+| 2 | 抗锯齿 | 关闭抗锯齿 | `SvgRasterizer_test` | ✅ |
+| 3 | 抗锯齿 | 解析档 | `SvgRasterizer_test` | ✅ |
+| 4 | 抗锯齿 | optimizeSpeed 覆盖全局档位 | `SvgRasterizer_test` | ✅ |
+| 5 | 抗锯齿 | 缺省不受影响 | `SvgRasterizer_test` | ✅ |
 | 6 | join 与 dash 规则 | miter 截断 | `SvgStrokeOutliner_test`、`SvgLineJoinM6_test`、`SvgFontDetailsM6_test.pathLengthDashRendering` | ✅ |
 | 7 | join 与 dash 规则 | miter-clip | `SvgStrokeOutliner_test`、`SvgLineJoinM6_test`、`SvgFontDetailsM6_test.pathLengthDashRendering` | ✅ |
 | 8 | join 与 dash 规则 | arcs | `SvgStrokeOutliner_test`、`SvgLineJoinM6_test`、`SvgFontDetailsM6_test.pathLengthDashRendering` | ✅ |
 | 9 | join 与 dash 规则 | dash 相位 | `SvgStrokeOutliner_test`、`SvgLineJoinM6_test`、`SvgFontDetailsM6_test.pathLengthDashRendering` | ✅ |
 | 10 | join 与 dash 规则 | pathLength 影响 dash | `SvgStrokeOutliner_test`、`SvgLineJoinM6_test`、`SvgFontDetailsM6_test.pathLengthDashRendering` | ✅ |
 | 11 | join 与 dash 规则 | 非法 pathLength | `SvgStrokeOutliner_test`、`SvgLineJoinM6_test`、`SvgFontDetailsM6_test.pathLengthDashRendering` | ✅ |
-| 12 | M6 渲染提示到光栅参数 | shape geometricPrecision | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
-| 13 | M6 渲染提示到光栅参数 | text optimizeSpeed | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
-| 14 | M6 渲染提示到光栅参数 | text optimizeLegibility | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
-| 15 | M6 渲染提示到光栅参数 | text geometricPrecision | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
-| 16 | M6 渲染提示到光栅参数 | 渐变量化 | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
-| 17 | M6 渲染提示到光栅参数 | 继承范围 | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
-| 18 | M6 渲染提示到光栅参数 | 缺省一致 | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable` | ✅ |
+| 12 | M6 渲染提示到光栅参数 | shape geometricPrecision | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
+| 13 | M6 渲染提示到光栅参数 | text optimizeSpeed | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
+| 14 | M6 渲染提示到光栅参数 | text optimizeLegibility | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
+| 15 | M6 渲染提示到光栅参数 | text geometricPrecision | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
+| 16 | M6 渲染提示到光栅参数 | 渐变量化 | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
+| 17 | M6 渲染提示到光栅参数 | 继承范围 | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
+| 18 | M6 渲染提示到光栅参数 | 缺省一致 | `SvgRenderingHintsM6_test.shapeRenderingPipeline/colorRenderingQuantization/combinedHintsStable`、`SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering` | ✅ |
 
 ### svg-render-pipeline
 
@@ -200,54 +201,54 @@
 | 1 | 渲染选项扩展 | 既有调用不变 | `SvgSnapshotM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
 | 2 | 渲染选项扩展 | 选项校验 | `SvgSnapshotM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
 | 3 | 渲染选项扩展 | 空交互集合 | `SvgSnapshotM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
-| 4 | use 展开 | 基本复用 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test`、`SvgBBoxM5_test.useCycleIsGuarded` | ✅ |
-| 5 | use 展开 | 引用 symbol | `SvgRenderTree_test`、`SvgExternalDocumentM6_test`、`SvgBBoxM5_test.useCycleIsGuarded` | ✅ |
-| 6 | use 展开 | 循环引用 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test`、`SvgBBoxM5_test.useCycleIsGuarded` | ✅ |
-| 7 | use 展开 | 外部文档 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test`、`SvgBBoxM5_test.useCycleIsGuarded` | ✅ |
-| 8 | use 展开 | 外部文档缺 provider | `SvgRenderTree_test`、`SvgExternalDocumentM6_test`、`SvgBBoxM5_test.useCycleIsGuarded` | ✅ |
-| 9 | use 展开 | 外部文档上限 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test`、`SvgBBoxM5_test.useCycleIsGuarded` | ✅ |
-| 10 | view 不参与默认渲染 | 默认渲染不变 | `SvgInitialViewM6_test.viewTargetIgnored` | ✅ |
-| 11 | view 不参与默认渲染 | 单独渲染 view | `SvgInitialViewM6_test.viewTargetIgnored` | ✅ |
-| 12 | M6 初始视图片段导航 | 命中 view | `SvgInitialViewM6_test` | ✅ |
-| 13 | M6 初始视图片段导航 | 不带井号 | `SvgInitialViewM6_test` | ✅ |
-| 14 | M6 初始视图片段导航 | 未命中 | `SvgInitialViewM6_test` | ✅ |
-| 15 | M6 初始视图片段导航 | 缺省 | `SvgInitialViewM6_test` | ✅ |
-| 16 | M6 foreignObject 注入渲染 | 注入位图 | `SvgForeignObjectM6_test` | ✅ |
-| 17 | M6 foreignObject 注入渲染 | 缺 renderer | `SvgForeignObjectM6_test` | ✅ |
-| 18 | M6 foreignObject 注入渲染 | renderer 返回空 | `SvgForeignObjectM6_test` | ✅ |
-| 19 | M6 foreignObject 注入渲染 | 缺少尺寸 | `SvgForeignObjectM6_test` | ✅ |
-| 20 | M6 foreignObject 注入渲染 | 不解析 XHTML | `SvgForeignObjectM6_test` | ✅ |
-| 21 | M6 交互状态贯通 | hover 改变填充 | `CssInteractionM6_test`、`SvgStyleResolverM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
-| 22 | M6 交互状态贯通 | 级联优先级 | `CssInteractionM6_test`、`SvgStyleResolverM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
-| 23 | M6 交互状态贯通 | 非交互文档不变 | `CssInteractionM6_test`、`SvgStyleResolverM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
-| 24 | M6 视图状态 | 缩放 | `SvgDomApiM6_test.viewState` | ✅ |
-| 25 | M6 视图状态 | 平移 | `SvgDomApiM6_test.viewState` | ✅ |
-| 26 | M6 视图状态 | 缺省 | `SvgDomApiM6_test.viewState` | ✅ |
-| 27 | M6 自动尺寸 | 根自动宽度 | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged` | ✅ |
-| 28 | M6 自动尺寸 | 嵌套自动尺寸 | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged` | ✅ |
-| 29 | M6 自动尺寸 | 无法确定 | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged` | ✅ |
-| 30 | M6 自动尺寸 | 未声明 auto | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged` | ✅ |
-| 31 | M6 矢量效果的矩阵应用 | 应用顺序 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
-| 32 | M6 矢量效果的矩阵应用 | 父子累乘 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
-| 33 | M6 矢量效果的矩阵应用 | 既有描边 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected` | ✅ |
+| 4 | use 展开 | 基本复用 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 5 | use 展开 | 引用 symbol | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 6 | use 展开 | 循环引用 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 7 | use 展开 | 外部文档 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 8 | use 展开 | 外部文档缺 provider | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 9 | use 展开 | 外部文档上限 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 10 | use 展开 | 外部文档不递归 | `SvgRenderTree_test`、`SvgExternalDocumentM6_test.noRecursion/externalDocumentForcesRemovePolicy/providerNoneCached` | ✅ |
+| 11 | view 不参与默认渲染 | 默认渲染不变 | `SvgInitialViewM6_test.viewTargetIgnored` | ✅ |
+| 12 | view 不参与默认渲染 | 单独渲染 view | `SvgInitialViewM6_test.viewTargetIgnored` | ✅ |
+| 13 | M6 初始视图片段导航 | 命中 view | `SvgInitialViewM6_test` | ✅ |
+| 14 | M6 初始视图片段导航 | 不带井号 | `SvgInitialViewM6_test` | ✅ |
+| 15 | M6 初始视图片段导航 | 未命中 | `SvgInitialViewM6_test` | ✅ |
+| 16 | M6 初始视图片段导航 | 缺省 | `SvgInitialViewM6_test` | ✅ |
+| 17 | M6 foreignObject 注入渲染 | 注入位图 | `SvgForeignObjectM6_test` | ✅ |
+| 18 | M6 foreignObject 注入渲染 | 缺 renderer | `SvgForeignObjectM6_test` | ✅ |
+| 19 | M6 foreignObject 注入渲染 | renderer 返回空 | `SvgForeignObjectM6_test` | ✅ |
+| 20 | M6 foreignObject 注入渲染 | 缺少尺寸 | `SvgForeignObjectM6_test` | ✅ |
+| 21 | M6 foreignObject 注入渲染 | 不解析 XHTML | `SvgForeignObjectM6_test` | ✅ |
+| 22 | M6 交互状态贯通 | hover 改变填充 | `CssInteractionM6_test`、`SvgStyleResolverM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
+| 23 | M6 交互状态贯通 | 级联优先级 | `CssInteractionM6_test`、`SvgStyleResolverM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
+| 24 | M6 交互状态贯通 | 非交互文档不变 | `CssInteractionM6_test`、`SvgStyleResolverM6_test`、`SvgHitTestM6_test.renderInteractionAndByteStability` | ✅ |
+| 25 | M6 视图状态 | 缩放 | `SvgDomApiM6_test.viewState` | ✅ |
+| 26 | M6 视图状态 | 平移 | `SvgDomApiM6_test.viewState` | ✅ |
+| 27 | M6 视图状态 | 缺省 | `SvgDomApiM6_test.viewState` | ✅ |
+| 28 | M6 自动尺寸 | 根自动宽度 | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged`、`SvgAutoSizeM6_test` | ✅ |
+| 29 | M6 自动尺寸 | 嵌套自动尺寸 | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged`、`SvgAutoSizeM6_test` | ✅ |
+| 30 | M6 自动尺寸 | 无法确定 | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged`、`SvgAutoSizeM6_test` | ✅ |
+| 31 | M6 自动尺寸 | 未声明 auto | `SvgSvg2M6_test.autoSize/explicitSizeUnchanged`、`SvgAutoSizeM6_test` | ✅ |
+| 32 | M6 矢量效果的矩阵应用 | 应用顺序 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.renderTreeWiring` | ✅ |
+| 33 | M6 矢量效果的矩阵应用 | 父子累乘 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.renderTreeWiring` | ✅ |
+| 34 | M6 矢量效果的矩阵应用 | 既有描边 | `SvgSvg2M6_test.vectorEffectMatrix/nonScalingStrokeUnaffected`、`SvgVectorEffectMultiM6_test.renderTreeWiring` | ✅ |
 
 ### svg-security
 
 | # | Requirement | Scenario | 落点 | 状态 |
 |---|---|---|---|---|
-| 1 | 渲染期无外部访问 | 外部 CSS 引用 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 2 | 渲染期无外部访问 | 外部图片 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 3 | 渲染期无外部访问 | 未注入图片资源 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 4 | 渲染期无外部访问 | 注入 provider | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 5 | 渲染期无外部访问 | 动画不执行脚本 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 6 | 渲染期无外部访问 | 外部文档不递归加载 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 7 | 渲染期无外部访问 | foreignObject 不经库渲染 | `SvgExternalDocumentM6_test`、`SvgForeignObjectM6_test` | ✅ |
-| 8 | M6 上限与降级 | 外部文档深度 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 9 | M6 上限与降级 | 外部文档字节 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 10 | M6 上限与降级 | 特性条目上限 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 11 | M6 上限与降级 | 监听器上限 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 12 | M6 上限与降级 | discard 嵌套 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
-| 13 | M6 上限与降级 | 命中测试规模 | `SvgExternalDocumentM6_test.noRecursion/byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgHitTestM6_test.boundaries` | ✅ |
+| 1 | 渲染期无外部访问 | 外部 CSS 引用 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 2 | 渲染期无外部访问 | 外部图片 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 3 | 渲染期无外部访问 | 未注入图片资源 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 4 | 渲染期无外部访问 | 注入 provider | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 5 | 渲染期无外部访问 | 动画不执行脚本 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 6 | 渲染期无外部访问 | 外部文档不递归加载 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 7 | 渲染期无外部访问 | foreignObject 不经库渲染 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy/externalDocumentCannotChain/noRecursion`、`SvgForeignObjectM6_test` | ✅ |
+| 8 | M6 上限与降级 | 外部文档字节 | `SvgExternalDocumentM6_test.byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgAnimationControlM6_test.nestedDiscardWarns`、`SvgHitTestM6_test.boundaries/securityMaxElements` | ✅ |
+| 9 | M6 上限与降级 | 特性条目上限 | `SvgExternalDocumentM6_test.byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgAnimationControlM6_test.nestedDiscardWarns`、`SvgHitTestM6_test.boundaries/securityMaxElements` | ✅ |
+| 10 | M6 上限与降级 | 监听器上限 | `SvgExternalDocumentM6_test.byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgAnimationControlM6_test.nestedDiscardWarns`、`SvgHitTestM6_test.boundaries/securityMaxElements` | ✅ |
+| 11 | M6 上限与降级 | discard 嵌套 | `SvgExternalDocumentM6_test.byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgAnimationControlM6_test.nestedDiscardWarns`、`SvgHitTestM6_test.boundaries/securityMaxElements` | ✅ |
+| 12 | M6 上限与降级 | 命中测试规模 | `SvgExternalDocumentM6_test.byteLimit`、`SvgFontDetailsM6_test.fontFeatureParsing`、`SvgDomApiM6_test.listenerLimit`、`SvgAnimationControlM6_test.nestedDiscardWarns`、`SvgHitTestM6_test.boundaries/securityMaxElements` | ✅ |
 
 ### svg-text
 
@@ -260,39 +261,39 @@
 | 5 | 文本布局 | textLength spacingAndGlyphs | `SvgTextRenderer_test`、`SvgKerningLayoutM5_test`、`SvgGsubContextM6_test` | ✅ |
 | 6 | 文本布局 | 连字消费列表项 | `SvgTextRenderer_test`、`SvgKerningLayoutM5_test`、`SvgGsubContextM6_test` | ✅ |
 | 7 | 文本布局 | optimizeSpeed 关闭整形 | `SvgTextRenderer_test`、`SvgKerningLayoutM5_test`、`SvgGsubContextM6_test` | ✅ |
-| 8 | 文本装饰线 | 下划线像素 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 9 | 文本装饰线 | 组合装饰 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 10 | 文本装饰线 | 与填充同色 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 11 | 文本装饰线 | 沿路径旋转 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 12 | 文本装饰线 | 祖先传播 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 13 | 文本装饰线 | none 关闭 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 14 | 文本装饰线 | 独立颜色 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 15 | 文本装饰线 | 样式与厚度 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 16 | 文本装饰线 | 双线 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize` | ✅ |
-| 17 | textPath 路径与起点 | 水平路径 | `SvgTextPathLayout_test`、`SvgTextPathExtensionM4_test`、`SvgFontDetailsM6_test.textPathPathLength` | ✅ |
-| 18 | textPath 路径与起点 | 百分比起点 | `SvgTextPathLayout_test`、`SvgTextPathExtensionM4_test`、`SvgFontDetailsM6_test.textPathPathLength` | ✅ |
-| 19 | textPath 路径与起点 | pathLength 校准起点 | `SvgTextPathLayout_test`、`SvgTextPathExtensionM4_test`、`SvgFontDetailsM6_test.textPathPathLength` | ✅ |
+| 8 | 文本装饰线 | 下划线像素 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 9 | 文本装饰线 | 组合装饰 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 10 | 文本装饰线 | 与填充同色 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 11 | 文本装饰线 | 沿路径旋转 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 12 | 文本装饰线 | 祖先传播 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 13 | 文本装饰线 | none 关闭 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 14 | 文本装饰线 | 独立颜色 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 15 | 文本装饰线 | 样式与厚度 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 16 | 文本装饰线 | 双线 | `SvgTextDecorationM4_test`、`SvgFontDetailsM6_test.decorationGeometry/decorationThicknessFollowsFinalFontSize`、`SvgDecorationM6_test` | ✅ |
+| 17 | textPath 路径与起点 | 水平路径 | `SvgTextPathLayout_test`、`SvgTextPathExtensionM4_test`、`SvgFontDetailsM6_test.textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
+| 18 | textPath 路径与起点 | 百分比起点 | `SvgTextPathLayout_test`、`SvgTextPathExtensionM4_test`、`SvgFontDetailsM6_test.textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
+| 19 | textPath 路径与起点 | pathLength 校准起点 | `SvgTextPathLayout_test`、`SvgTextPathExtensionM4_test`、`SvgFontDetailsM6_test.textPathPathLength`、`SvgTextPathLengthM6_test` | ✅ |
 | 20 | OpenType 字距调整 | kern 表配对 | `SvgKernTableM5_test`、`SvgKerningLayoutM5_test` | ✅ |
 | 21 | OpenType 字距调整 | GPOS 优先 | `SvgKernTableM5_test`、`SvgKerningLayoutM5_test` | ✅ |
 | 22 | OpenType 字距调整 | font-kerning none | `SvgKernTableM5_test`、`SvgKerningLayoutM5_test` | ✅ |
 | 23 | OpenType 字距调整 | 跨 tspan 不配对 | `SvgKernTableM5_test`、`SvgKerningLayoutM5_test` | ✅ |
 | 24 | OpenType 字距调整 | 特性开关关闭 | `SvgKernTableM5_test`、`SvgKerningLayoutM5_test` | ✅ |
 | 25 | OpenType 字距调整 | font-kerning 优先 | `SvgKernTableM5_test`、`SvgKerningLayoutM5_test` | ✅ |
-| 26 | 标准连字 | fi 连字 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test` | ✅ |
-| 27 | 标准连字 | 最长匹配优先 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test` | ✅ |
-| 28 | 标准连字 | 深度上限 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test` | ✅ |
-| 29 | 标准连字 | 关闭常见连字 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test` | ✅ |
-| 30 | 标准连字 | 历史连字 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test` | ✅ |
-| 31 | M6 字体匹配与合成 | stretch 精确匹配 | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio` | ✅ |
-| 32 | M6 字体匹配与合成 | 百分比合成 | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio` | ✅ |
-| 33 | M6 字体匹配与合成 | small-caps | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio` | ✅ |
-| 34 | M6 字体匹配与合成 | font-size-adjust | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio` | ✅ |
-| 35 | M6 字体匹配与合成 | 缺少 OS/2 | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio` | ✅ |
-| 36 | M6 字体特性开关 | 默认开启 | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle` | ✅ |
-| 37 | M6 字体特性开关 | none 关闭 | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle` | ✅ |
-| 38 | M6 字体特性开关 | discretionary | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle` | ✅ |
-| 39 | M6 字体特性开关 | contextual | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle` | ✅ |
-| 40 | M6 字体特性开关 | 显式覆盖 | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle` | ✅ |
+| 26 | 标准连字 | fi 连字 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 27 | 标准连字 | 最长匹配优先 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 28 | 标准连字 | 深度上限 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 29 | 标准连字 | 关闭常见连字 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 30 | 标准连字 | 历史连字 | `SvgOpenTypeLayoutM5_test`、`SvgKerningLayoutM5_test`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 31 | M6 字体匹配与合成 | stretch 精确匹配 | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio/sizeAdjustContinuesAfterMissingOs2`、`SvgFontStretchMatchM6_test` | ✅ |
+| 32 | M6 字体匹配与合成 | 百分比合成 | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio/sizeAdjustContinuesAfterMissingOs2`、`SvgFontStretchMatchM6_test` | ✅ |
+| 33 | M6 字体匹配与合成 | small-caps | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio/sizeAdjustContinuesAfterMissingOs2`、`SvgFontStretchMatchM6_test` | ✅ |
+| 34 | M6 字体匹配与合成 | font-size-adjust | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio/sizeAdjustContinuesAfterMissingOs2`、`SvgFontStretchMatchM6_test` | ✅ |
+| 35 | M6 字体匹配与合成 | 缺少 OS/2 | `SvgFontDetailsM6_test.stretchSynthesisScalesGlyphAndAdvance/smallCapsUsesUppercaseGlyph/sizeAdjustUsesXHeightRatio/sizeAdjustContinuesAfterMissingOs2`、`SvgFontStretchMatchM6_test` | ✅ |
+| 36 | M6 字体特性开关 | 默认开启 | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 37 | M6 字体特性开关 | none 关闭 | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 38 | M6 字体特性开关 | discretionary | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 39 | M6 字体特性开关 | contextual | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle`、`SvgFontFeatureApplyM6_test` | ✅ |
+| 40 | M6 字体特性开关 | 显式覆盖 | `SvgFontDetailsM6_test.featureMerge`、`SvgGsubContextM6_test.featureGroupingGatesContext/featureGroupingRespectsStyle`、`SvgFontFeatureApplyM6_test` | ✅ |
 | 41 | M6 GSUB 上下文替换 | 单层上下文替换 | `SvgGsubContextM6_test` | ✅ |
 | 42 | M6 GSUB 上下文替换 | 链式上下文 | `SvgGsubContextM6_test` | ✅ |
 | 43 | M6 GSUB 上下文替换 | 嵌套连字 | `SvgGsubContextM6_test` | ✅ |
@@ -349,7 +350,7 @@
 ## 4. 结论
 
 - **CRITICAL = 0**；C1–C4 全部关闭，W1–W5 全部落地（W5 的 9.5/9.8 属环境/流程边界，不计功能缺陷）。
-- M6 新增用例未改变 M1–M5 默认路径：25 张既有快照逐字节一致，9 张 M6 快照确定性通过。
+- M6 新增用例未改变 M1–M5 默认路径：25 张既有快照逐字节一致，9 张 M6 快照确定性通过。旧 M1–M5 用例并非逐字未改：`CssStyleSheet_test.cj`、`CssSelectorCascadeM5_test.cj`、`CssSelectorStructuralM5_test.cj` 把“不支持伪类”样本由 `:hover` 改为 `:active`（适配 M6 新增 hover 支持），`SvgKerningLayoutM5_test.cj` 的 `m5BuildLayoutTtf` 增加可选 `cmap` / `os2` 参数（纯扩展）；未削弱任何旧断言。
 - `cjpm test` 0 error / 0 failed，`cjpm build` 成功且 `f_svg` 自身 0 warning。
 
 ---
@@ -366,7 +367,7 @@
 
 | 编号 | 结论 | 实现落点 | 直接用例 |
 |---|---|---|---|
-| C1 命中 API | ✅ | `SvgHitTest.elementsAt/elementAt`，`hitTest` 转调同一核心 | `SvgHitTestM6_test.elementsAtSpecApi` |
+| C1 命中 API | ✅ | `SvgHitTest.elementsAt/elementAt`（第三轮改为 `public static`），`hitTest` 转调同一核心 | `SvgHitTestM6_test.elementsAtSpecApi/elementsAtStaticApi` |
 | C2 装饰长属性 | ✅ | `resolveSvgDecorationStyle` + `appendSvgDecorationSegments`；style/color/thickness/underline-position 进入渲染 | `SvgDecorationM6_test` 8 条 |
 | C3 text-rendering 容差 | ✅ | `svgTextTolerance` → 文本指令 `textTolerance` → 光栅容差 | `SvgTextToleranceM6_test.textToleranceFactors/textRenderingTolerance` |
 | C4 textPath pathLength | ✅ | 真实排版传入 `actual/pathLength`，起点与字形弧长同步缩放 | `SvgTextPathLengthM6_test` |
@@ -460,7 +461,7 @@
 
 | Requirement | 状态 | 证据 |
 |---|---|---|
-| M6 命中测试 | ✅ | `SvgHitTestM6_test.elementsAtSpecApi` |
+| M6 命中测试 | ✅ | `SvgHitTestM6_test.elementsAtSpecApi/elementsAtStaticApi` |
 | M6 命中语义 | ✅ | `autoEqualsVisiblePainted`、`visibleFillAndPainted`、`boundingBox` |
 | M6 pathLength 校准 | ✅ | `SvgTextPathLengthM6_test`、`pathLengthRatio` |
 | M6 矢量效果几何语义 | ✅ | `SvgVectorEffectMultiM6_test.fixedApplicationOrder/renderTreeWiring` |
@@ -533,4 +534,57 @@
 - 第一轮 13 项 CRITICAL 全部关闭；W1–W14、S1–S4 全部落地。
 - 新增 41 条用例，`cjpm test` 1178 全绿；`cjpm build` 成功且 `f_svg` 0 warning。
 - M1–M5 的 25 张快照逐字节一致；3 张 M6 快照因功能修正重新生成，原因见 §4。
-- 说明：`svg-security` 的上限清单仍列有“外部文档展开深度 4”；按主流程统一后的“外部文档不递归加载”语义，provider 返回的文档不再触发二次外部加载，该深度分支仅保留为异常路径的防御性检查，不参与正常渲染。
+- 说明：`svg-security` 的上限清单不含外部文档深度；`SVG_EXTERNAL_MAX_DEPTH` 与 `svgExternalDepthAllows` 仅保留为异常路径的防御性检查，外部文档不递归加载，正常渲染不会触达该分支。
+
+---
+
+# 第三轮修复验证（fix-plan-3）
+
+- 基线：第二轮 **1178** 条用例；本轮结束 **1186** 条（新增 8 条）。
+- 门禁：`cjpm test` **1186 / 1186 PASSED / 0 ERROR / 0 FAILED**；`cjpm build success`，`f_svg` 自身 **0 warning**（22 条 warning 全部来自 `f_base` / `f_xml`）。
+- 约束：未运行 `git worktree`；未改写 `.git`；未修改 `M1–M5` 公开 API 语义；25 张 M1–M5 快照逐字节一致。
+- 规格：本轮未修改 `specs/`（两份副本保持一致，仍为 **55 Requirement / 256 Scenario**）。
+
+## 1. CRITICAL 修复结果
+
+| 编号 | 结论 | 实现落点 | 直接用例 |
+|---|---|---|---|
+| N1 外部文档不递归 | ✅ | `SvgRenderTree.svgExternalParseOptions` 对外部文档强制 `unsafePolicy=Remove`、`allowExternalReferences=false`；`allowScript` / `allowEventAttributes` / `allowDataImages` / `maxElements` / `maxDepth` / `maxDecompressedBytes` 与 `strict` 沿用主文档 | `SvgExternalDocumentM6_test.externalDocumentForcesRemovePolicy`（`Reject` / `Remove` / `Keep` 三策略，断言 provider 只调用一次、无异常、warning 存在） |
+
+## 2. WARNING 落地
+
+| 编号 | 结论 | 实现落点 | 直接用例 |
+|---|---|---|---|
+| W1 `pointer-events: all` | ✅ | `SvgHitTest.svgHitElementMatches` 移除 `all` 的包围盒短路；`svgHitWantsFill/Stroke` 将 `all` 纳入填充与描边几何，且不检查 `visibility` / 画笔 | `SvgHitTestM6_test.allUsesGeometry`（三角形包围盒内路径外不命中、`fill/stroke:none` 仍命中、`visibility:hidden` 仍命中） |
+| W2 文本容差二次缩放 | ✅ | `SvgRenderer.drawPaint` 在存在 `textTolerance` 时直接使用该值，仅 `None` 时回退 `svgShapeTolerance` | `SvgTextToleranceM6_test.textToleranceIndependentOfShapeRendering`（`optimizeSpeed` 叠加 `geometricPrecision` 像素一致） |
+| W3 wavy 开放折线填充 | ✅ | `SvgDecorationRun.wavy` 标记波浪线；`SvgDisplayCommand.strokeWidthOverride` 提供线宽覆盖；`SvgRenderer` 以 `StrokePath`、线宽=`thickness`、空 dash 绘制 | `SvgDecorationM6_test.wavyStrokeWidth`（波谷下方 1px 仅描边可达） |
+| W4 stretch 非精确匹配 | ✅ | `applyFontStretchSynthesis` 以 `请求值 / 实际命中面 stretch` 缩放，仅 `percent == matched` 跳过 | `SvgFontStretchMatchM6_test.synthesisUsesMatchedStretch`（仅 75% 面请求 80%） |
+| W5 `clig` 未参与替换 | ✅ | `SvgTrueTypeFont` 解析并保存 `clig` 表，`ligatureTableFor` 支持 `clig`；`applyFontLigatures` 在 `hlig` / `liga` 之后按 `clig` 选择 Type 4 表 | `SvgFontFeatureApplyM6_test.contextualLigatureFeature`（默认开启、`none` 与显式 `clig 0` 关闭） |
+| W6 命中 API 形态 | ✅ | `elementsAt` / `elementAt` 改为 `public static func`，语料与快照调用点同步更新 | `SvgHitTestM6_test.elementsAtStaticApi`；`elementsAtSpecApi` 改为静态调用 |
+| W7 provider `None` 未缓存 | ✅ | `SvgRenderTreeBuilder.missingExternalDocuments` 缓存负结果，同一 href 单次渲染只询问一次 | `SvgExternalDocumentM6_test.providerNoneCached`（两次 `use` → `calls == 1`） |
+| W8 旧用例表述 | ✅ | 本文件“第一轮结论”改为“未削弱旧断言”，列明 `CssStyleSheet_test.cj`、`CssSelectorCascadeM5_test.cj`、`CssSelectorStructuralM5_test.cj`（`:hover`→`:active` 样本适配）与 `SvgKerningLayoutM5_test.cj`（`m5BuildLayoutTtf` 增加可选 `cmap`/`os2`） | 文档核对 |
+| W9 design 深度残留 | ✅ | `design.md` D5 删除“深度 4 抛 `Limit`”，改为负结果缓存 + 强制 `Remove` + 深度常量仅防御；README / README_en 同步 | 文档核对 |
+| W10 覆盖矩阵计数 | ✅ | 第 1 节矩阵按 spec 重新生成：`svg-security` 12、`svg-geometry` 17、`svg-render-pipeline` 34，总计 **256**，场景名逐字一致 | 第 1 节矩阵 |
+
+## 3. 偏差与说明
+
+- **W6 兼容入口**：仓颉禁止同名静态与实例方法混载（编译器报 `overloaded functions 'elementsAt' cannot mix static and non-static`），因此静态化后不再保留实例形态。`elementsAt` / `elementAt` 属 M6 新增 API，`M1–M5` 公开 API 与 `hitTest` 未受影响。
+- **W7 负结果缓存**：命中负结果缓存后仍逐次产生“不可用”warning，但不再调用 provider。
+- **外部文档深度**：`SVG_EXTERNAL_MAX_DEPTH` 与 `svgExternalDepthAllows` 仅作为异常路径的防御性检查保留；外部文档不递归加载，正常渲染不触达。
+- **`strict` 边界**：按修复计划保留主文档 `strict`；外部文档中除外部 `href` 外的其他不安全内容仍受 `strict` 约束。
+
+## 4. 回归与快照
+
+| 项目 | 结果 | 证据 |
+|---|---|---|
+| 全量测试 | 1186 / 1186 PASSED | `f_svg/cjpm test` |
+| 构建 | success；`f_svg` 0 warning | `f_svg/cjpm build` |
+| 25 张 M1–M5 快照 | 逐字节一致 | 17 张 M1–M4 SHA-256 与 `doc/perf-baseline.md` 全部一致；8 张 M5 由 `SvgSnapshotM6_test.m5SnapshotsExact` 通过 |
+| 本轮 testdata 变更 | 无 | `git diff --name-status 4e51fa29..HEAD -- f_svg/testdata/render` 为空 |
+| M6 快照 | 9/9 未变且确定性通过 | `SvgSnapshotM6_test.scenesExact/scenesAreDeterministic` |
+
+## 5. 结论
+
+- **CRITICAL = 0**：N1 已关闭，`Reject` / `Remove` / `Keep` 三策略下外部文档均不再二次调用 provider、不抛 `Security` / `Limit`。
+- W1–W10 全部落地；覆盖矩阵重新生成后为 **55 Requirement / 256 Scenario**（security 12 / geometry 17 / render-pipeline 34）。
+- `cjpm test` 1186 全绿，`cjpm build` 成功且 `f_svg` 0 warning；25 张 M1–M5 快照逐字节一致。

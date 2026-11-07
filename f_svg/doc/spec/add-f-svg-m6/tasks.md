@@ -137,6 +137,20 @@
 - [x] 10.12 重新生成 `m6-hit-queries`、`m6-color-interpolation`、`m6-svg2` 快照并记录原因
 - [x] 10.13 追加 `verification.md` 修复结果表与覆盖矩阵；`cjpm test` / `cjpm build` 通过
 
+## 11. 第三轮校验修复（verify-report-2 / fix-plan-3）
+
+- [x] 11.1 N1 外部文档统一 `unsafePolicy=Remove`，`Reject` / `Remove` / `Keep` 三策略用例通过
+- [x] 11.2 W1 `pointer-events: all` 改用几何命中，补充三角形负向用例
+- [x] 11.3 W2 文本容差只由 `text-rendering` 决定，补充 `shape-rendering` 叠加像素用例
+- [x] 11.4 W3 wavy 装饰线改 `StrokePath`，线宽=thickness，补充像素用例
+- [x] 11.5 W4 font-stretch 无精确匹配按 `请求值 / 命中面` 合成，补充 75%/80% 用例
+- [x] 11.6 W5 `clig` 纳入 Type 4 连字替换，补充默认/关闭用例
+- [x] 11.7 W6 `elementsAt` / `elementAt` 改为规格静态入口并更新调用点
+- [x] 11.8 W7 provider `None` 负结果缓存，补充调用次数断言
+- [x] 11.9 W8–W9 修正 `verification.md` 旧用例表述与 `design.md` / README 深度残留
+- [x] 11.10 W10 重新生成覆盖矩阵（security 12 / geometry 17 / render-pipeline 34，合计 256）
+- [x] 11.11 追加 `verification.md` 第三轮结果表；`cjpm test` / `cjpm build` 通过，25 张 M1–M5 快照逐字节一致
+
 ## Workflow follow-up
 
 - 代码审查与验收通过后归档本变更（`openspec archive add-f-svg-m6`）。
