@@ -6,12 +6,24 @@
 
 系统 SHALL 提供 `SvgHitTest.elementsAt(root, point, viewport, styles)` 与 `SvgHitTest.elementAt(...)`。`point` SHALL 为设备像素坐标，按 `viewport` 的矩阵逆与 `devicePixelRatio` 换算到用户空间。返回列表 SHALL 按绘制顺序从上到下排列，`elementAt` 返回其中第一个；未命中的文档 SHALL 返回空列表与 `None`。
 
-命中判定 SHALL 遵循 `pointer-events`：`none` 的元素及其子树不参与；`visible*` 要求 `visibility != hidden`；`painted` 要求 `fill` 或 `stroke` 非 `none`；`bounding-box` 使用包围盒；其余使用路径 / 描边区域；`auto` 等价 `visiblePainted`。`image` 使用矩形，`text` 使用字形轮廓，容器仅在自身 `pointer-events` 允许包围盒命中时参与。
-
 #### Scenario: 顶层优先
 
 - **WHEN** 两个重叠矩形，后绘制者覆盖先绘制者，点落在重叠区
 - **THEN** 返回列表首项为后绘制的矩形
+
+#### Scenario: 设备坐标换算
+
+- **WHEN** `viewport` 含 2 倍 DPR 与平移，点以设备像素给出
+- **THEN** 换算后的用户空间点与直接使用逻辑坐标的结果一致
+
+#### Scenario: 空文档
+
+- **WHEN** 点在所有元素之外
+- **THEN** `elementsAt` 返回空列表，`elementAt` 返回 `None`
+
+### Requirement: M6 命中语义
+
+命中判定 SHALL 遵循 `pointer-events`：`none` 的元素及其子树不参与；`visible*` 要求 `visibility != hidden`；`painted` 要求 `fill` 或 `stroke` 非 `none`；`bounding-box` 使用包围盒；`visible` 命中内区或描边几何，但不要求 `fill` / `stroke` 非 `none`；其余使用路径 / 描边区域；`auto` 等价 `visiblePainted`。`image` 使用矩形，`text` 使用字形轮廓，容器仅在自身 `pointer-events` 允许包围盒命中时参与。
 
 #### Scenario: pointer-events: none
 
@@ -33,15 +45,10 @@
 - **WHEN** 元素 `visibility="hidden"`、`pointer-events="visibleFill"`
 - **THEN** 不命中；`pointer-events="all"` 时命中
 
-#### Scenario: 设备坐标换算
+#### Scenario: auto 等价 visiblePainted
 
-- **WHEN** `viewport` 含 2 倍 DPR 与平移，点以设备像素给出
-- **THEN** 换算后的用户空间点与直接使用逻辑坐标的结果一致
-
-#### Scenario: 空文档
-
-- **WHEN** 点在所有元素之外
-- **THEN** `elementsAt` 返回空列表，`elementAt` 返回 `None`
+- **WHEN** 元素 `visibility="hidden"` 且未声明 `pointer-events`
+- **THEN** 不命中
 
 ### Requirement: M6 pathLength 校准
 
@@ -89,7 +96,7 @@
 #### Scenario: 组合顺序
 
 - **WHEN** 同时声明三个新值且祖先含缩放、旋转与平移
-- **THEN** 结果等于按声明顺序逐个应用三个修正后的矩阵
+- **THEN** 结果等于固定按 `non-scaling-size` → `non-rotation` → `fixed-position` 顺序应用三个修正后的矩阵，与声明顺序无关
 
 #### Scenario: 既有值不受影响
 

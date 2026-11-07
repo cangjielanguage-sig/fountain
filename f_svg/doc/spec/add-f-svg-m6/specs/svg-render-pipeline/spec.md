@@ -40,7 +40,7 @@
 
 `use` 引用 `symbol` 时 SHALL 按嵌套视口处理其 `viewBox`；引用缺失或非片段引用 SHALL 跳过并记 warning。
 
-当 `SvgRenderOptions.externalDocuments` 非空时，指向外部文档的 `href` SHALL 交由该 provider 解析为 SVG 字节并按 `use` 规则实例化；`href` 中的片段 SHALL 在外部文档内按 id 定位，无片段时使用外部文档根。外部文档展开深度上限 4、单文档字节上限 16 MiB，超限 SHALL 抛 `Limit`；循环引用 SHALL warning 后停止。未提供 provider 时外部引用 SHALL 跳过并 warning。
+当 `SvgRenderOptions.externalDocuments` 非空时，指向外部文档的 `href` SHALL 交由该 provider 解析为 SVG 字节并按 `use` 规则实例化；`href` 中的片段 SHALL 在外部文档内按 id 定位，无片段时使用外部文档根。外部文档单文档字节上限 16 MiB，超限 SHALL 抛 `Limit`。外部文档内部的外部引用 SHALL NOT 再次触发 provider（不递归加载），遇到时跳过并 warning；同一 `href` 在一次渲染内 provider SHALL 只被调用一次。未提供 provider 时外部引用 SHALL 跳过并 warning。
 
 循环引用 SHALL 在深度 64 处终止并记 warning，不得栈溢出。
 
@@ -71,8 +71,13 @@
 
 #### Scenario: 外部文档上限
 
-- **WHEN** provider 返回超过 16 MiB 的字节，或嵌套深度达到 5
+- **WHEN** provider 返回超过 16 MiB 的字节
 - **THEN** 抛 `Limit`
+
+#### Scenario: 外部文档不递归
+
+- **WHEN** provider 返回的文档内部再声明 `use href="other.svg#x"`
+- **THEN** provider 只被调用一次，第二层外部引用被跳过并 warning，不抛 `Limit`
 
 ### Requirement: view 不参与默认渲染
 
