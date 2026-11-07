@@ -121,6 +121,22 @@
 - [x] 9.7 对照 `specs/` 逐条核对每个 Requirement 至少有一个可执行 Scenario，记录覆盖矩阵到 `verification.md`
 - [ ] 9.8 合并回上游并删除分支——属共享分支操作，等待用户确认
 
+## 10. 第二轮校验修复（verify-report / fix-plan-2）
+
+- [x] 10.1 C1 补齐 `SvgHitTest.elementsAt` / `elementAt` 规格 API，`hitTest` 保持兼容
+- [x] 10.2 C2 `text-decoration` 长属性（style / color / thickness / underline-position）接入真实渲染
+- [x] 10.3 C3 `text-rendering` 容差映射到文本轮廓扁平化
+- [x] 10.4 C4 `textPath` 真实排版接入 `pathLength` 校准
+- [x] 10.5 C5 渐变采样读取渐变元素自身 / 祖先的颜色插值与 `color-profile`
+- [x] 10.6 C6 `vector-effect` 多值解析、未知值 warning 与固定应用顺序
+- [x] 10.7 C7 auto 尺寸单轴 `viewBox` 推导与无法确定 warning
+- [x] 10.8 C8 外部文档不递归语义统一，`depthLimit` 用例改为 `noRecursion`
+- [x] 10.9 C9–C13 命中 auto 语义、变更事件契约、监听器按引用移除、font-stretch 匹配、字体特性开关
+- [x] 10.10 W1–W14 全部落地（根 none、安全上限、text 轮廓、discard / attributeType 告警、min 断言、size-adjust、命名空间通知、文档与快照、feature warning、foreignObject 像素上限）
+- [x] 10.11 S1–S4：删除调试输出、公开枚举解析、统一 `SvgLineJoin` 字符串、删除死装饰几何
+- [x] 10.12 重新生成 `m6-hit-queries`、`m6-color-interpolation`、`m6-svg2` 快照并记录原因
+- [x] 10.13 追加 `verification.md` 修复结果表与覆盖矩阵；`cjpm test` / `cjpm build` 通过
+
 ## Workflow follow-up
 
 - 代码审查与验收通过后归档本变更（`openspec archive add-f-svg-m6`）。

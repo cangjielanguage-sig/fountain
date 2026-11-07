@@ -2,7 +2,7 @@
 
 ## Context
 
-`f_svg` 是单包仓颉模块（`f_svg/src` 245 个源文件，其中 99 个测试文件）。M1–M5 已形成固定管线：`CssStyleSheet.parse` → `SvgStyleResolver.compute` → `SvgRenderTreeBuilder.build` → `SvgDisplayList` → `SvgRenderer.renderDisplayList` → `SvgBitmap`。当前基线为 **997** 条用例（`@TestCase` 计数）全绿，M1–M5 共 25 张渲染快照。
+`f_svg` 是单包仓颉模块（`f_svg/src` 288 个源文件，其中 163 个测试文件）。M1–M5 已形成固定管线：`CssStyleSheet.parse` → `SvgStyleResolver.compute` → `SvgRenderTreeBuilder.build` → `SvgDisplayList` → `SvgRenderer.renderDisplayList` → `SvgBitmap`。当前基线为 **997** 条用例（`@TestCase` 计数）全绿，M1–M5 共 25 张渲染快照。
 
 与本变更直接相关的现状：
 
@@ -62,7 +62,7 @@
 - `fill` / `visibleFill` / `painted` / `visiblePainted`：点落在填充内。填充判定复用 `flattenPathData`（`SvgRasterizer.cj:461`）得到轮廓，再按 `fill-rule` 做射线 / 环绕判定；
 - `stroke` / `visibleStroke`：点到扁平化中心线的距离 ≤ `stroke-width / 2`，`stroke-linecap` 只在端点影响结果；
 - `all`：忽略 `visibility` 与画笔；
-- `visible`：要求 `visibility != hidden`，命中包围盒。
+- `visible`：要求 `visibility != hidden`，命中内区或描边几何，不要求 `fill` / `stroke` 非 `none`。
 
 `image` 用矩形，`text` 用字形轮廓（`SvgTextRenderer` 的布局结果），容器只用包围盒且仅当 `pointer-events` 为 `all` / `bounding-box` 时参与。备选「渲染 1×1 覆盖率」需要完整光栅化，成本高且无法返回元素链，否决。
 
@@ -200,12 +200,12 @@ GSUB Type 5/6 解析为 `SvgGsubContextRule`（覆盖表、回溯 / 输入 / 前
 
 ### D18 文件与改动映射
 
-按设计文档 §9 建 18 个新文件；测试文件同名加 `_test.cj` 或按阶段拆分为 `*M6_test.cj`。
+按设计文档 §9 建 15 个新文件（原计划 18 个，其中 `SvgColorProfile.cj` 并入 `SvgRenderingHints.cj`、`SvgLineJoin2.cj` 并入 `SvgShape.cj` / `SvgStrokeOutliner.cj`、`SvgAnimationControl.cj` 并入 `SvgTimeline.cj`）；测试文件同名加 `_test.cj` 或按阶段拆分为 `*M6_test.cj`。
 
-- 解析 / 样式层：`SvgPointerEvents.cj`、`SvgCursor.cj`、`SvgRenderingHints.cj`、`SvgColorProfile.cj`、`SvgFontVariant.cj`、`SvgTextDecoration2.cj` 只被 `CssStyleSheet` / `SvgStyleResolver` / `SvgComputedStyle` 引用；
-- 渲染层：`SvgHitTest.cj`、`SvgForeignObject.cj`、`SvgExternalDocument.cj`、`SvgInitialView.cj`、`SvgVectorEffect2.cj`、`SvgLineJoin2.cj`、`SvgAutoSize.cj` 只被 `SvgRenderTree` / `SvgRenderer` / `SvgRasterizer` / `SvgStrokeOutliner` 引用；
+- 解析 / 样式层：`SvgPointerEvents.cj`、`SvgCursor.cj`、`SvgRenderingHints.cj`、`SvgFontVariant.cj`、`SvgTextDecoration2.cj` 只被 `CssStyleSheet` / `SvgStyleResolver` / `SvgComputedStyle` 引用；
+- 渲染层：`SvgHitTest.cj`、`SvgForeignObject.cj`、`SvgExternalDocument.cj`、`SvgInitialView.cj`、`SvgVectorEffect2.cj`、`SvgAutoSize.cj` 只被 `SvgRenderTree` / `SvgRenderer` / `SvgRasterizer` / `SvgStrokeOutliner` 引用；
 - 文本层：`SvgGsubContext.cj`、`SvgPathLength.cj` 只被 `SvgTextRenderer` / `SvgTextPathLayout` / `SvgStrokeOutliner` 引用；
-- DOM / 动画层：`SvgAnimationControl.cj`、`SvgHitQueries.cj`、`SvgMutation.cj` 只被 `SvgTimeline` / `SvgDocument` / `SvgElement` 引用。
+- DOM / 动画层：`SvgHitQueries.cj`、`SvgMutation.cj` 只被 `SvgTimeline` / `SvgDocument` / `SvgElement` 引用。
 
 公开方法声明写在既有类体内（`SvgElement` / `SvgDocument` / `SvgTimeline` / `SvgPoint` / `SvgMatrix` / `SvgTransform`），避免扩展对私有状态的可见性问题；新文件只放内部实现与公开枚举 / 结构体。
 
