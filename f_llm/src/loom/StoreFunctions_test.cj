@@ -113,4 +113,55 @@ class StoreFunctions_test {
         let again = fn.call(remove)
         @Expect((again.result as JsonString).getOrThrow().value.contains('false'), true)
     }
+
+    // ---------- loomStoreCall：工具层的通用读能力 ----------
+
+    private func storeCall(kind: String, op: String, payload: String): String {
+        let param = StoreCallParam()
+        param.nextEvent = 'done'
+        param.kind = kind
+        param.op = op
+        param.payload = payload
+        return (StoreCallFunction().call(param).result as JsonString).getOrThrow().value
+    }
+
+    @TestCase
+    func testStoreCallReadsKnowledge(): Unit {
+        let gateway = LoomStoreGateway(InMemoryContentStore(), InMemoryMetaStore())
+        let _ = gateway.call('knowledge', 'upsert',
+            '{"docId":"k1","title":"指南","content":"cangjie loom gateway"}')
+        LoomHostApi.installStore(gateway.call)
+        try {
+            let hits = storeCall('knowledge', 'search', '{"text":"cangjie","limit":5}')
+            @Expect(hits.contains('k1'), true)
+        } finally {
+            LoomHostApi.installStore({ kind, op, payload => '[]' })
+        }
+    }
+
+    @TestCase
+    func testStoreCallLoadsSkill(): Unit {
+        let meta = InMemoryMetaStore()
+        meta.skills.upsert(Skill(1, '日报助手', '先列三段式，再给数据', '{}', version: 1))
+        let gateway = LoomStoreGateway(InMemoryContentStore(), meta)
+        LoomHostApi.installStore(gateway.call)
+        try {
+            let loaded = storeCall('skill', 'load', '{"title":"日报助手"}')
+            @Expect(loaded.contains('先列三段式'), true)
+        } finally {
+            LoomHostApi.installStore({ kind, op, payload => '[]' })
+        }
+    }
+
+    @TestCase
+    func testStoreCallRequiresKind(): Unit {
+        let message = storeCall('', 'search', '{}')
+        @Expect(message.contains('requires kind'), true)
+    }
+
+    @TestCase
+    func testStoreCallRejectsNonObjectPayload(): Unit {
+        let message = storeCall('memory', 'list', 'oops')
+        @Expect(message.contains('must be a JSON object'), true)
+    }
 }

@@ -396,6 +396,7 @@ let _ = LoomRunner().run(plan, host,
 | `loomDelete` | `name` | 从注册表与库中移除 |
 | `memoryCall` | `op`(search/add/remove) + `payload` | 与 `loomStore("memory", …)` 同一网关 |
 | `knowledgeIngest` | `docId, title, content` | 写入知识库 |
+| `loomStoreCall` | `kind, op, payload` | 通用读写入口，与 `loomStore` 同源（读知识/经验、加载技能） |
 | `listTools` / `searchTools` | `offset, limit` / `query, topK` | 列工具、按关键词检索工具 |
 | `skillImport` | `path` | 导入技能包目录，同名 title 幂等 |
 | `scheduleCreate` / `scheduleDelete` | `name, cron, payload?` / `name` | 注册/取消定时任务 |
@@ -488,7 +489,7 @@ plan.persona = ''
 
 | 方式 | 用法 | 说明 |
 |---|---|---|
-| 显式 | `LoomRunner().run(plan, host, start, skills: ['日报助手'])` | 按标题加载，顺序固定 |
+| 显式 | `LoomRunner().run(plan, host, start, skills: ['日报助手'])` 或计划 JSON 的 `"skills"` | 按标题加载，顺序固定；`executeNow(skills:)` 可临时覆盖 |
 | 自动 | 不传 `skills` 且 `autoSkills=true`（默认） | 用「计划备注 + 起始输入」检索，取 `skillTopK`（默认 3）条 |
 
 `SkillCatalog` 两种模式：装了编码器走向量余弦（向量按 `标题#版本` 缓存），否则/失败退关键词

@@ -132,6 +132,7 @@ let outcome = Supervisor.current().getOrThrow().dispatch('把今天的提交汇�
 | `loomDelete` | `name` | 从注册表与库中移除 |
 | `memoryCall` | `op`(search/add/remove) + `payload` JSON | 读写长期记忆，与 `loomStore("memory", …)` 同一条网关 |
 | `knowledgeIngest` | `docId, title, content` | 写入知识库，可用 `knowledge.search` 检索 |
+| `loomStoreCall` | `kind, op, payload` | **通用入口**：与 `loomStore(kind, op, payload)` 完全同源，`kind=tool` 的步骤靠它读知识/经验、加载技能 |
 | `listTools` | `offset, limit` | 列出已注册工具（名称 + 描述） |
 | `searchTools` | `query, topK` | 关键词检索工具：名称命中 3 分、描述命中 1 分 |
 | `skillImport` | `path` | 导入技能包目录（`skill.json` + `details.md`），同名 title 幂等 |
@@ -436,8 +437,9 @@ SkillEvolutionJob.schedule('nightly-skill', '0 0 3 * * * *', TicktockScheduler()
 
 | 方式 | 用法 | 说明 |
 |---|---|---|
-| 显式 | `LoomRunner.run(..., skills: ['日报助手'])` | 按标题加载，顺序固定 |
-| 自动 | 不传 `skills`，`LoomMemoryPolicy.autoSkills = true`（默认） | 用「计划备注 + 起始输入」去 `SkillCatalog` 检索，取 `skillTopK`（默认 3）条 |
+| 显式 | `LoomRunner.run(..., skills: ['日报助手'])` 或 `LoomService.executeNow(..., skills: [...])` | 按标题加载，顺序固定；`executeNow` 的参数优先于计划 |
+| 计划 | 计划 JSON 里写 `"skills": ["日报助手"]` | 编译后由 `executeNow` 透传给 `LoomRunner`，重启回放也生效 |
+| 自动 | 都不给，`LoomMemoryPolicy.autoSkills = true`（默认） | 用「计划备注 + 起始输入」去 `SkillCatalog` 检索，取 `skillTopK`（默认 3）条 |
 
 `SkillCatalog` 的检索方式：
 

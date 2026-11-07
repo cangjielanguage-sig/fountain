@@ -390,6 +390,7 @@ let _ = LoomRunner().run(plan, host,
 | `loomDelete` | `name` | Remove from registry and store |
 | `memoryCall` | `op`(search/add/remove) + `payload` | Same gateway as `loomStore("memory", …)` |
 | `knowledgeIngest` | `docId, title, content` | Write a knowledge document |
+| `loomStoreCall` | `kind, op, payload` | Generic read/write entry on the same gateway as `loomStore` (read knowledge/experience, load skills) |
 | `listTools` / `searchTools` | `offset, limit` / `query, topK` | List tools, keyword-search tools |
 | `skillImport` | `path` | Import a skill package; idempotent by title |
 | `scheduleCreate` / `scheduleDelete` | `name, cron, payload?` / `name` | Register / cancel a scheduled flow |

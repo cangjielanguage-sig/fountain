@@ -67,6 +67,8 @@ public class EdgePlan {
 public class FlowPlan {
     public let name: String
     public var persona: String = ''
+    /** 计划声明要加载的技能标题：执行时注入 system（空则由任务描述自动检索） */
+    public var skills: ArrayList<String> = ArrayList<String>()
     public var steps: ArrayList<StepPlan> = ArrayList<StepPlan>()
     public var edges: ArrayList<EdgePlan> = ArrayList<EdgePlan>()
     public var notes: String = ''
@@ -143,6 +145,16 @@ public class FlowPlan {
         text += '  \"name\": ${jsonQuote(name)},\n'
         if (!persona.isEmpty()) {
             text += '  \"persona\": ${jsonQuote(persona)},\n'
+        }
+        if (!skills.isEmpty()) {
+            text += '  \"skills\": ['
+            for (index in 0..skills.size) {
+                if (index > 0) {
+                    text += ', '
+                }
+                text += jsonQuote(skills[index])
+            }
+            text += '],\n'
         }
         text += '  "steps": [\n'
         for (index in 0..steps.size) {
