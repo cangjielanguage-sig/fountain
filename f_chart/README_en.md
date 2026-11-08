@@ -91,6 +91,7 @@ let svg = chart.draw(data)
 | M25 | 2D histogram `Histogram2DChart` (square/hexagon bins) | Done |
 | M26 | Bubble chart `BubbleChart` (radius mapping, labels) | Done |
 | M27 | Correlation matrix `CorrelationMatrixChart` (color bands, values) | Done |
+| M28 | Parallel coordinates `ParallelCoordinatesChart` (normalized polylines) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
