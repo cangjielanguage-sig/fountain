@@ -69,6 +69,7 @@ let svg = chart.draw(data)
 | M3 | Stacked bar chart `StackedBarChart` | Done |
 | M4 | Percent-stacked bar chart `PercentStackedBarChart` | Done |
 | M5 | Line chart `LineChart` (category / XY / time, smooth, symbols) | Done |
+| M6 | Scatter chart `ScatterChart` (numeric / time axes) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
