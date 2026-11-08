@@ -49,11 +49,32 @@ public open class BaseException <: Exception {
     public init(message: String) {
         super(message)
     }
+    @When[env != 'ohos']
     public init(caused: Exception) {
         super(caused)
     }
+    @When[env != 'ohos']
     public init(message: String, caused: Exception) {
         super(message, caused)
+    }
+
+    @When[env == 'ohos']
+    private var caused = None<Exception>
+    @When[env == 'ohos']
+    public init(caused: Exception) {
+        this.caused = caused
+    }
+    @When[env == 'ohos']
+    public init(message: String, caused: Exception) {
+        super(message)
+        this.caused = caused
+    }
+
+    @When[env == 'ohos']
+    public prop causedBy: Option<Exception> {
+        get() {
+            caused
+        }
     }
 
     public func addSuppressed(suppressed: Exception): Unit {
