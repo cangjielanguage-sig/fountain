@@ -99,6 +99,7 @@ let svg = chart.draw(data)
 | M33 | Mosaic chart `MosaicChart` (column widths, stacking) | Done |
 | M34 | Treemap `TreemapChart` (hierarchical areas, squarify) | Done |
 | M35 | Funnel chart `FunnelChart` (stages, conversion) | Done |
+| M36 | Sankey chart `SankeyChart` (layered nodes, flows) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
