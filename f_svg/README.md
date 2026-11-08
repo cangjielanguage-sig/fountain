@@ -748,7 +748,7 @@ SvgBuilder(200.0, 100.0)
   `strokeOpacity` / `transform` / `attr` / `id` / `className`，全部写成当前元素的
   呈现属性，不生成 `<style>`；`strokeWidth` 带 `px`，三种透明度写无单位数值。
 - **动画**：`animate` / `animateTransform` / `animateMotion`（`mpath:` 自动生成
-  `<mpath>` 子元素）/ `set`，追加到当前形状；`repeatCount`、`restart`、`fill`
+  `<mpath>` 子元素）/ `set`，追加到当前形状；`mpath` 固定输出裸 `href`（SVG 2 写法，`xlink` 选项不影响它）；`repeatCount`、`restart`、`fill`
   与 `values`（分号分隔）按 SVG 拼写输出。
 - **时间表达式**：`SvgBegin.offset(1.5)` → `1.5s`、`at("a")` → `a.begin`、
   `after("a", -0.5)` → `a.end-0.5s`、`repeatOf("a", 2)` → `a.repeat(2)`、

@@ -588,6 +588,19 @@ public class SvgBuilderM7_test {
         let timeline = SvgTimeline(builder.document())
         let sampled = timeline.sample(0.5)
         @Assert(sampled.root.tag == "svg")
-        @Assert(timeline.warnings.size > 0)
+        var endWarned = false
+        var repeatWarned = false
+        for (warning in timeline.warnings) {
+            if (warning.contains("a.end+1s")) {
+                endWarned = true
+            }
+            if (warning.contains("a.repeat(2)")) {
+                repeatWarned = true
+            }
+        }
+        @Assert(endWarned)
+        @Assert(repeatWarned)
+        @Assert(timeline.animations().size == 3)
+        @Assert(timeline.duration() > 0.0)
     }
 }

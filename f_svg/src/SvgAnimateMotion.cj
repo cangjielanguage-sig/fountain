@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_svg
 
+import std.collection.*
+
 /** `animateMotion` 的路径引用子元素。 */
 public class SvgMpath <: SvgElement {
     public init() {
@@ -92,16 +94,17 @@ public class SvgAnimateMotion <: SvgAnimate {
 
     /** 追加唯一的 `mpath` 子元素；重复调用替换旧引用。 */
     public func mpath(href: String): SvgMpath {
-        var index = this.children.size - 1
-        while (index >= 0) {
-            let isMpath = match (this.children[index]) {
-                case ElementNode(element) => element.tag == "mpath"
-                case _ => false
+        let stale = ArrayList<SvgElement>()
+        for (node in this.children) {
+            match (node) {
+                case ElementNode(element) => if (element.tag == "mpath") {
+                    stale.add(element)
+                }
+                case _ => ()
             }
-            if (isMpath) {
-                this.children.remove(at: index)
-            }
-            index--
+        }
+        for (element in stale) {
+            this.removeChild(SvgNode.ElementNode(element))
         }
         let child = SvgMpath()
         child.href = href

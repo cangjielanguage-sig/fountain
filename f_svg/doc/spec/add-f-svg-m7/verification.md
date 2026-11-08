@@ -22,7 +22,7 @@
 
 | 项 | 命令 | 结果 |
 |---|---|---|
-| 全量单元测试 | `cjpm test` | `TOTAL: 1225`、`PASSED: 1225`、`SKIPPED: 0`、`ERROR: 0`、`FAILED: 0`。其中既有 1187 条零改动，M7 新增 38 条 |
+| 全量单元测试 | `cjpm test` | `TOTAL: 1226`、`PASSED: 1226`、`SKIPPED: 0`、`ERROR: 0`、`FAILED: 0`。其中既有 1187 条零改动，M7 新增 39 条 |
 | 构建 | `cjpm build` | `cjpm build success`；`f_svg/src` 0 warning；22 条 warning 仍全部来自 `f_xml` / `f_base` |
 | 兼容边界 | `git diff --stat c41a0847 -- f_svg/src` | 仅 11 个新增文件（实现 7 个、测试 4 个），既有源码 0 改动 |
 | 规格校验 | `openspec validate add-f-svg-m7 --strict` | `Change 'add-f-svg-m7' is valid` |
@@ -123,7 +123,7 @@
 
 ## 4. 已知限制
 
-- `SvgTimeline` 仍按 M6 规则解析 `begin`；`a.end+1s`、`a.repeat(2)` 等扩展形式只保证浏览器播放，采样时记录 warning 后忽略。测试只断言「不抛异常 + 有 warning」，与 `design.md` D10 一致。
+- `SvgTimeline` 仍按 M6 规则解析 `begin`；`a.end+1s`、`a.repeat(2)` 等扩展形式只保证浏览器播放，采样时记录 warning 后忽略。测试断言具体 warning 文本（分别含 `a.end+1s` / `a.repeat(2)`）、`animations().size == 3` 与 `duration() > 0`。
 - 生成侧不校验属性合法性；`values` / `keyTimes` / `keySplines` 按分号字符串原样保存。
 - 默认输出为紧凑格式；设计文档 §1 的缩进示例是可读性示意，需要缩进时显式传 `SvgWriteOptions(indent: Some("  "))`。
 
@@ -131,3 +131,15 @@
 
 - `README.md` / `README_en.md` 的 M7 链式示例与 `SvgBuilderM7_test.designExampleEndToEnd` 使用同一组参数（`rect(x:10, y:30, width:40, height:40)`、`fill("#3366cc")`、`animate(attribute:"x", from:"10", to:"150", dur:"2s", begin: offset(0.0), repeatCount:"indefinite")`），示例输出已被该用例断言并落盘重解析。
 - `CHANGELOG` 顶部新增 2026-11-08 条目，记录 M7 新增类型、输出能力与文档更新。
+
+## 6. 校验 WARNING 修复
+
+| 编号 | 结论 | 处理 |
+|---|---|---|
+| W-1 动画元素重解析覆盖 | 已修复 | 新增 `SvgAnimateM7_test.generatedAnimationElementsSurviveParse`：`animateTransform` / `animateMotion + mpath` / `set` 均走 `writeSvgString → SvgParser.parse` 并断言标签、父子结构与关键属性 |
+| W-2 时间轴断言偏弱 | 已修复 | `extendedBeginKeepsTimelineStable` 改为断言 `a.end+1s` / `a.repeat(2)` 两条具体 warning、动画数 3、时长 > 0 |
+| W-3 `mpath` 的 `href` | 记录边界 | README 中英与设计文档明确：`mpath` 固定输出裸 `href`（SVG 2 写法），`xlink` 选项不影响它 |
+| W-4 构建器首参命名参数 | 记录偏差 | 设计文档补充：为使 `animate(attribute: "x")` 可编译，首参改为命名参数，行为不变 |
+| W-5 替换 `mpath` 遗留父引用 | 已修复 | 改用 `removeChild` 删除旧 `mpath`，清空 `parent` 并发送 `ChildList` 事件；`animateMotionMpath` 断言旧引用 `parent.isNone()` |
+
+修复后复跑：`cjpm test` **1226 / 1226 PASSED**，`f_svg` 0 warning；既有 1187 条仍零改动。

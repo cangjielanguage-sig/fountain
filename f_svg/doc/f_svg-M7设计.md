@@ -186,6 +186,11 @@ public class SvgAnimate <: SvgElement {
 
 `SvgAnimateTransform` 额外 `transformType: SvgAnimationTransformType`；`SvgAnimateMotion` 额外 `path` / `keyPoints` / `rotate: SvgMotionRotate` 与 `mpath(href)`（创建 `<mpath>` 子元素）；`SvgSet` 提供 `attributeName` / `to` / `begin` / `restart`。
 
+实现补充：
+
+- 设计草案中 `animate(attribute: ...)` 等首参为位置参数；实现改为命名参数（`attribute!` / `transformType!` / `to!`），以支持 `animate(attribute: "x")` 的链式写法，行为不变。
+- `mpath` 固定输出裸 `href`（SVG 2 写法），`SvgWriteOptions.xlink` 不影响它；若需 SVG 1.1 的 `xlink:href`，由调用方自行写入命名空间属性。
+
 约定：
 
 - 所有属性通过 `setAttr` 写入，未知值原样输出，不在生成侧校验。

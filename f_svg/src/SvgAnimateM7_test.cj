@@ -173,6 +173,45 @@ public class SvgAnimateM7_test {
         @Assert(motion.children.size == 1)
         @Assert(motion.toString().contains("<mpath href=\"#q\"/>"))
         @Assert(!motion.toString().contains("#p"))
+        @Assert(mpath.parent.isNone())
+        @Assert(replacement.parent.isSome())
+    }
+
+    /** 三类生成动画元素均可 writeSvgString -> SvgParser.parse 往返。 */
+    @TestCase
+    public func generatedAnimationElementsSurviveParse(): Unit {
+        let builder = SvgBuilder(100.0, 100.0)
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .animateTransform(
+                attribute: "transform",
+                transformType: SvgAnimationTransformType.Rotate,
+                from: "0",
+                to: "360",
+                dur: "1s"
+            )
+        builder.circle(cx: 5.0, cy: 5.0, r: 4.0)
+            .animateMotion(mpath: "#p", dur: "1s")
+        builder.rect(x: 0.0, y: 0.0, width: 5.0, height: 5.0)
+            .id("set-target")
+            .set(attribute: "fill", to: "red", begin: SvgBegin.offset(0.0))
+
+        let parsed = SvgParser.parse(builder.toSvgString())
+        let rect = parsed.root.child("rect").getOrThrow()
+        let transform = rect.child("animateTransform").getOrThrow()
+        @Assert(transform.attr("type") == Some("rotate"))
+        @Assert(transform.attr("from") == Some("0"))
+        @Assert(transform.attr("to") == Some("360"))
+
+        let circle = parsed.root.child("circle").getOrThrow()
+        let motion = circle.child("animateMotion").getOrThrow()
+        let mpath = motion.child("mpath").getOrThrow()
+        @Assert(mpath.attr("href") == Some("#p"))
+
+        let setTarget = parsed.elementById("set-target").getOrThrow()
+        let setElement = setTarget.child("set").getOrThrow()
+        @Assert(setElement.attr("attributeName") == Some("fill"))
+        @Assert(setElement.attr("to") == Some("red"))
+        @Assert(setElement.attr("begin") == Some("0s"))
     }
 
     /** `set` 的四个属性映射，重复赋值保持属性原位置。 */

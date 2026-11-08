@@ -830,7 +830,8 @@ SvgBuilder(200.0, 100.0)
   presentation attributes on the current element with no `<style>` element.
   `strokeWidth` carries `px`; the three opacity values are unitless.
 - **Animation**: `animate` / `animateTransform` / `animateMotion` (`mpath:` emits the
-  `<mpath>` child) / `set`, appended to the current shape. `repeatCount`, `restart`,
+  `<mpath>` child) / `set`, appended to the current shape. `mpath` always emits a bare
+  `href` (SVG 2 form) and ignores the `xlink` option. `repeatCount`, `restart`,
   `fill` and semicolon-separated `values` follow SVG spelling.
 - **Time expressions**: `SvgBegin.offset(1.5)` → `1.5s`, `at("a")` → `a.begin`,
   `after("a", -0.5)` → `a.end-0.5s`, `repeatOf("a", 2)` → `a.repeat(2)`,
