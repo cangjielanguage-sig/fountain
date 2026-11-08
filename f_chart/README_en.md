@@ -90,6 +90,7 @@ let svg = chart.draw(data)
 | M24 | Ridgeline `RidgeChart` (offset densities, overlap) | Done |
 | M25 | 2D histogram `Histogram2DChart` (square/hexagon bins) | Done |
 | M26 | Bubble chart `BubbleChart` (radius mapping, labels) | Done |
+| M27 | Correlation matrix `CorrelationMatrixChart` (color bands, values) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

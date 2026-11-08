@@ -90,6 +90,7 @@ let svg = chart.draw(data)
 | M24 | 山脊图 `RidgeChart`（逐行错位密度、重叠系数） | 已完成 |
 | M25 | 二维直方图 `Histogram2DChart`（方形/六边形分箱） | 已完成 |
 | M26 | 气泡图 `BubbleChart`（半径映射、标签） | 已完成 |
+| M27 | 相关矩阵图 `CorrelationMatrixChart`（三色分段、数值标注） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
