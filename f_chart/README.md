@@ -119,7 +119,8 @@ let svg = chart.draw(data)
 | M53 | 冰柱图 `IcicleChart`（自顶向下、调用栈树） | 已完成 |
 | M54 | 差分火焰图 `DifferentialFlameChart`（红增蓝减、双版本对比） | 已完成 |
 | M55 | 离线火焰图 `OfflineFlameChart`（指定子树、深度限制） | 已完成 |
-| M56–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M56 | 热火焰图 `HeatFlameChart`（热度字段、冷热渐变） | 已完成 |
+| M57–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
