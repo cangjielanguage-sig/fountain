@@ -183,6 +183,54 @@ public class SvgBuilder {
         this
     }
 
+    public func stroke(paint: String): SvgBuilder {
+        this.cursor.setAttr("stroke", paint)
+        this
+    }
+
+    /** 描边宽度以 `px` 写入。 */
+    public func strokeWidth(value: Float64): SvgBuilder {
+        this.cursor.setAttr("stroke-width", svgPx(value).toString())
+        this
+    }
+
+    /** 透明度无单位数值。 */
+    public func opacity(value: Float64): SvgBuilder {
+        this.cursor.setAttr("opacity", formatSvgNumber(value))
+        this
+    }
+
+    public func fillOpacity(value: Float64): SvgBuilder {
+        this.cursor.setAttr("fill-opacity", formatSvgNumber(value))
+        this
+    }
+
+    public func strokeOpacity(value: Float64): SvgBuilder {
+        this.cursor.setAttr("stroke-opacity", formatSvgNumber(value))
+        this
+    }
+
+    public func transform(value: String): SvgBuilder {
+        this.cursor.setAttr("transform", value)
+        this
+    }
+
+    /** 任意属性原样写入；转义由 `SvgWriter` 负责。 */
+    public func attr(name: String, value: String): SvgBuilder {
+        this.cursor.setAttr(name, value)
+        this
+    }
+
+    public func id(value: String): SvgBuilder {
+        this.cursor.setAttr("id", value)
+        this
+    }
+
+    public func className(value: String): SvgBuilder {
+        this.cursor.setAttr("class", value)
+        this
+    }
+
     private func adopt(element: SvgElement): SvgBuilder {
         this.container.appendElement(element)
         this.cursor = element

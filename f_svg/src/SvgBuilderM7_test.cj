@@ -241,4 +241,85 @@ public class SvgBuilderM7_test {
             case None => @Fail("缺少 g")
         }
     }
+
+    /** 十个样式与通用属性方法全部落在当前形状。 */
+    @TestCase
+    public func styleMethods(): Unit {
+        let builder = SvgBuilder(100.0, 100.0)
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .fill("#3366cc")
+            .stroke("#000")
+            .strokeWidth(2.0)
+            .opacity(0.5)
+            .fillOpacity(0.25)
+            .strokeOpacity(0.75)
+            .transform("translate(1 2)")
+            .attr("data-x", "v")
+            .id("r1")
+            .className("card")
+        let root = builder.document().root
+        match (root.child("rect")) {
+            case Some(rect) =>
+                @Assert(rect.attr("fill") == Some("#3366cc"))
+                @Assert(rect.attr("stroke") == Some("#000"))
+                @Assert(rect.attr("stroke-width") == Some("2px"))
+                @Assert(rect.attr("opacity") == Some("0.5"))
+                @Assert(rect.attr("fill-opacity") == Some("0.25"))
+                @Assert(rect.attr("stroke-opacity") == Some("0.75"))
+                @Assert(rect.attr("transform") == Some("translate(1 2)"))
+                @Assert(rect.attr("data-x") == Some("v"))
+                @Assert(rect.attr("id") == Some("r1"))
+                @Assert(rect.attr("class") == Some("card"))
+            case None => @Fail("缺少 rect")
+        }
+    }
+
+    /** 单位与转义：透明度无单位、描边带 px、属性值经 Writer 转义后可重解析。 */
+    @TestCase
+    public func unitsAndEscaping(): Unit {
+        let builder = SvgBuilder(100.0, 100.0)
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .fill("url(#g)")
+            .strokeWidth(1.5)
+            .opacity(0.25)
+            .attr("data-x", "a\"b")
+        let text = writeSvgString(builder.document())
+        @Assert(text.contains("fill=\"url(#g)\""))
+        @Assert(text.contains("stroke-width=\"1.5px\""))
+        @Assert(text.contains("opacity=\"0.25\""))
+        @Assert(text.contains("data-x=\"a&quot;b\""))
+        @Assert(!text.contains("opacity=\"0.25px\""))
+
+        let parsed = SvgParser.parse(text)
+        match (parsed.root.child("rect")) {
+            case Some(rect) =>
+                @Assert(rect.attr("data-x") == Some("a\"b"))
+                @Assert(rect.attr("stroke-width") == Some("1.5px"))
+                @Assert(rect.attr("fill") == Some("url(#g)"))
+            case None => @Fail("重解析缺少 rect")
+        }
+    }
+
+    /** 样式只用呈现属性，不生成 `style` 元素或 CSS。 */
+    @TestCase
+    public func stylesNeverCreateStyleElement(): Unit {
+        let builder = SvgBuilder(100.0, 100.0)
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .fill("red")
+            .stroke("blue")
+            .opacity(0.5)
+        let document = builder.document()
+        let text = writeSvgString(document)
+        @Assert(!text.contains("<style"))
+        @Assert(document.elementsByTag("style").size == 0)
+        let parsed = SvgParser.parse(text)
+        @Assert(parsed.elementsByTag("style").size == 0)
+        match (parsed.root.child("rect")) {
+            case Some(rect) =>
+                @Assert(rect.attr("fill") == Some("red"))
+                @Assert(rect.attr("stroke") == Some("blue"))
+                @Assert(rect.attr("opacity") == Some("0.5"))
+            case None => @Fail("重解析缺少 rect")
+        }
+    }
 }
