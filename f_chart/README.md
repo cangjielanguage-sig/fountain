@@ -68,6 +68,7 @@ let svg = chart.draw(data)
 | M2 | 分组柱状图 `GroupedBarChart` | 已完成 |
 | M3 | 堆叠柱状图 `StackedBarChart` | 已完成 |
 | M4 | 百分比堆叠柱状图 `PercentStackedBarChart` | 已完成 |
+| M5 | 折线图 `LineChart`（类目 / XY / 时间轴、平滑、符号） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义

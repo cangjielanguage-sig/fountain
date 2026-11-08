@@ -240,4 +240,50 @@ internal class ChartFrame {
             )
         }
     }
+
+    func drawXAxisNumeric(
+        kit: ChartSvgKit,
+        ticks: Array<Float64>,
+        scale: LinearScale,
+        labels: Array<String>
+    ): Unit {
+        let axis = this.config.xAxis
+        let theme = this.config.theme
+        kit.line(
+            this.plot.x, this.plot.bottom(), this.plot.right(), this.plot.bottom(),
+            stroke: theme.axisColor, strokeWidth: 1.0, className: "axis"
+        )
+        let rotate = axis.labelRotate
+        for (index in 0..ticks.size) {
+            let x = scale.scale(ticks[index])
+            kit.line(
+                x, this.plot.bottom(), x, this.plot.bottom() + 4.0,
+                stroke: theme.axisColor, strokeWidth: 1.0, className: "tick"
+            )
+            let labelY = if (rotate == 0.0) {
+                this.plot.bottom() + 6.0 + theme.fontSize / 2.0
+            } else {
+                this.plot.bottom() + 10.0
+            }
+            kit.text(
+                x, labelY, labels[index],
+                size: theme.fontSize,
+                color: theme.axisColor,
+                anchor: if (rotate == 0.0) { "middle" } else { "end" },
+                className: "tick-label",
+                rotate: rotate
+            )
+        }
+        if (!axis.title.isEmpty()) {
+            kit.text(
+                this.plot.centerX(),
+                this.plot.bottom() + theme.fontSize + 14.0,
+                axis.title,
+                size: theme.fontSize,
+                color: theme.textColor,
+                anchor: "middle",
+                className: "axis-title"
+            )
+        }
+    }
 }

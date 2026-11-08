@@ -115,6 +115,50 @@ internal class ChartSvgKit {
         this.builder.end()
     }
 
+    func circle(
+        cx: Float64,
+        cy: Float64,
+        radius: Float64,
+        fill!: String,
+        className!: String = ""
+    ): Unit {
+        this.builder.group()
+        this.builder.circle(cx: cx, cy: cy, r: radius)
+        if (!className.isEmpty()) {
+            this.builder.className(className)
+        }
+        this.builder.fill(fill)
+        this.builder.end()
+    }
+
+    func square(
+        cx: Float64,
+        cy: Float64,
+        size: Float64,
+        fill!: String,
+        className!: String = ""
+    ): Unit {
+        this.rect(
+            cx - size / 2.0, cy - size / 2.0, size, size,
+            fill: fill, className: className
+        )
+    }
+
+    func diamond(
+        cx: Float64,
+        cy: Float64,
+        size: Float64,
+        fill!: String,
+        className!: String = ""
+    ): Unit {
+        let half = size / 2.0
+        let d = "M ${formatSvgNumber(cx)} ${formatSvgNumber(cy - half)} " +
+            "L ${formatSvgNumber(cx + half)} ${formatSvgNumber(cy)} " +
+            "L ${formatSvgNumber(cx)} ${formatSvgNumber(cy + half)} " +
+            "L ${formatSvgNumber(cx - half)} ${formatSvgNumber(cy)} Z"
+        this.path(d, fill: fill, className: className)
+    }
+
     func path(
         d: String,
         fill!: ?String = None,
