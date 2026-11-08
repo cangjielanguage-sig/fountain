@@ -84,6 +84,7 @@ let svg = chart.draw(data)
 | M18 | Density chart `DensityChart` (Gaussian KDE, Silverman bandwidth) | Done |
 | M19 | Box plot `BoxPlotChart` (five-number summary, whiskers, outliers) | Done |
 | M20 | Violin chart `ViolinChart` (mirrored density, inner box) | Done |
+| M21 | Swarm / jitter chart `SwarmChart` (deterministic jitter) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
