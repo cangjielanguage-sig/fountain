@@ -33,6 +33,7 @@
   "fountain::f_rx" = {path = "./f_rx"}
   "fountain::f_security" = {path = "./f_security"}
   "fountain::f_svg" = {path = "./f_svg"}
+  "fountain::f_chart" = {path = "./f_chart"}
   "fountain::f_ticktock" = {path = "./f_ticktock"}
   "fountain::f_time" = {path = "./f_time"}
   "fountain::f_util" = {path = "./f_util"}
