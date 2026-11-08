@@ -100,6 +100,7 @@ let svg = chart.draw(data)
 | M34 | Treemap `TreemapChart` (hierarchical areas, squarify) | Done |
 | M35 | Funnel chart `FunnelChart` (stages, conversion) | Done |
 | M36 | Sankey chart `SankeyChart` (layered nodes, flows) | Done |
+| M37 | Pareto chart `ParetoChart` (sorted bars, cumulative line) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

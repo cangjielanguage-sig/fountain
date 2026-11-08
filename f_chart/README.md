@@ -100,6 +100,7 @@ let svg = chart.draw(data)
 | M34 | 矩形树图 `TreemapChart`（层级面积、squarify 布局） | 已完成 |
 | M35 | 漏斗图 `FunnelChart`（阶段条、转化率） | 已完成 |
 | M36 | 桑基图 `SankeyChart`（分层节点、流量带） | 已完成 |
+| M37 | 帕累托图 `ParetoChart`（降序柱、累计折线） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
