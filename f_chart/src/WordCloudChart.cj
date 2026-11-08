@@ -37,8 +37,10 @@ public class WordCloudChart <: Chart {
     public init() {}
 
     public func draw(data: JsonObject): String {
-        let config = ChartConfig.parse(data, "word-cloud")
         let root = ChartJson.of(data)
+        let chartType = root.requiredString("type")
+        let expectedType = if (chartType == "tag-cloud") { "tag-cloud" } else { "word-cloud" }
+        let config = ChartConfig.parse(data, expectedType)
         let minFontSize = root.number("minFontSize", default: 12.0)
         let maxFontSize = root.number("maxFontSize", default: 64.0)
         if (minFontSize <= 0.0) {
