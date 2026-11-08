@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.collection.*
+import std.fs.{FSException, File, Path}
 
 /**
  * 作者侧链式 SVG 构建器。
@@ -48,6 +49,25 @@ public class SvgBuilder {
     /** 当前构建结果。 */
     public func document(): SvgDocument {
         SvgDocument(this.root)
+    }
+
+    /** 复用 `SvgWriter` 输出；声明、`xmlns`、转义与缩进都由既有实现负责。 */
+    public func toSvgString(options!: SvgWriteOptions = SvgWriteOptions()): String {
+        writeSvgString(this.document(), options: options)
+    }
+
+    /** 以 UTF-8 写入给定路径。 */
+    public func save(path: String): Unit {
+        this.save(Path(path))
+    }
+
+    /** 以 UTF-8 写入给定路径；文件系统失败包装为 `InvalidValue`。 */
+    public func save(path: Path): Unit {
+        try {
+            File.writeTo(path, this.toSvgString().toArray())
+        } catch (_: FSException) {
+            throw invalidValue("无法写入 SVG：${path}")
+        }
     }
 
     /** 追加 `g` 元素并把游标移入该组。 */
@@ -231,6 +251,134 @@ public class SvgBuilder {
         this
     }
 
+    /** 追加 `animate` 到当前元素。 */
+    public func animate(
+        attribute!: String,
+        from!: ?String = None,
+        to!: ?String = None,
+        by!: ?String = None,
+        values!: ?Array<String> = None,
+        dur!: ?String = None,
+        begin!: ?SvgBegin = None,
+        end!: ?SvgBegin = None,
+        repeatCount!: ?String = None,
+        repeatDur!: ?String = None,
+        fill!: ?SvgAnimationFill = None,
+        calcMode!: ?SvgCalcMode = None,
+        keyTimes!: ?String = None,
+        keySplines!: ?String = None,
+        additive!: ?String = None,
+        accumulate!: ?String = None,
+        restart!: ?SvgRestart = None
+    ): SvgBuilder {
+        let element = SvgAnimate()
+        element.attributeName = attribute
+        element.from = from
+        element.to = to
+        element.by = by
+        element.values = match (values) {
+            case Some(items) => Some(svgAnimationValues(items))
+            case None => None
+        }
+        element.dur = dur
+        element.begin = begin
+        element.end = end
+        element.repeatCount = repeatCount
+        element.repeatDur = repeatDur
+        element.fill = fill
+        element.calcMode = calcMode
+        element.keyTimes = keyTimes
+        element.keySplines = keySplines
+        element.additive = additive
+        element.accumulate = accumulate
+        element.restart = restart
+        this.cursor.appendElement(element)
+        this
+    }
+
+    /** 追加 `animateTransform` 到当前元素。 */
+    public func animateTransform(
+        attribute!: String,
+        transformType!: SvgAnimationTransformType,
+        from!: ?String = None,
+        to!: ?String = None,
+        by!: ?String = None,
+        values!: ?Array<String> = None,
+        dur!: ?String = None,
+        begin!: ?SvgBegin = None,
+        repeatCount!: ?String = None,
+        fill!: ?SvgAnimationFill = None,
+        restart!: ?SvgRestart = None
+    ): SvgBuilder {
+        let element = SvgAnimateTransform()
+        element.attributeName = attribute
+        element.transformType = transformType
+        element.from = from
+        element.to = to
+        element.by = by
+        element.values = match (values) {
+            case Some(items) => Some(svgAnimationValues(items))
+            case None => None
+        }
+        element.dur = dur
+        element.begin = begin
+        element.repeatCount = repeatCount
+        element.fill = fill
+        element.restart = restart
+        this.cursor.appendElement(element)
+        this
+    }
+
+    /** 追加 `animateMotion` 到当前元素。 */
+    public func animateMotion(
+        path!: ?String = None,
+        mpath!: ?String = None,
+        dur!: ?String = None,
+        begin!: ?SvgBegin = None,
+        repeatCount!: ?String = None,
+        rotate!: ?SvgMotionRotate = None,
+        keyPoints!: ?String = None,
+        keyTimes!: ?String = None,
+        fill!: ?SvgAnimationFill = None,
+        restart!: ?SvgRestart = None
+    ): SvgBuilder {
+        let element = SvgAnimateMotion()
+        element.path = path
+        element.dur = dur
+        element.begin = begin
+        element.repeatCount = repeatCount
+        match (rotate) {
+            case Some(value) => element.rotate = value
+            case None => ()
+        }
+        element.keyPoints = keyPoints
+        element.keyTimes = keyTimes
+        element.fill = fill
+        element.restart = restart
+        match (mpath) {
+            case Some(link) => element.mpath(link)
+            case None => ()
+        }
+        this.cursor.appendElement(element)
+        this
+    }
+
+    /** 追加 `set` 到当前元素。 */
+    public func set(
+        attribute!: String,
+        to!: String,
+        begin!: ?SvgBegin = None,
+        restart!: ?SvgRestart = None
+    ): SvgBuilder {
+        let element = SvgSet()
+        element.attributeName = attribute
+        element.to = to
+        element.begin = begin
+        element.restart = restart
+        this.cursor.appendElement(element)
+        this
+    }
+
     private func adopt(element: SvgElement): SvgBuilder {
         this.container.appendElement(element)
         this.cursor = element
@@ -248,4 +396,13 @@ private func svgOptionalPx(value: ?Float64): ?SvgLength {
         case Some(number) => Some(svgPx(number))
         case None => None
     }
+}
+
+/** 动画 `values` 为分号分隔字符串。 */
+private func svgAnimationValues(items: Array<String>): String {
+    let list = ArrayList<String>()
+    for (item in items) {
+        list.add(item)
+    }
+    joinCssStrings(list, ";")
 }

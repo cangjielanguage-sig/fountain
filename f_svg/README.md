@@ -36,6 +36,7 @@ f_svg
 | 模型 | `SvgDocument` / `SvgRoot` / `SvgElement` 及形状、文本、渐变、`use`、`image` 子类 |
 | 类型化属性 | `SvgLength` / `SvgColor` / `SvgPaint` / `SvgTransform` / `SvgPathData` / `SvgViewBox` |
 | 生成 | `SvgWriter` / `writeSvgString`，内部经 `XmlDocument` 交给 `f_xml::XmlWriter` |
+| 生成（M7） | `SvgBuilder` 链式构建、类型化动画元素与 `SvgBegin` 时间表达式 |
 | 安全 | 默认移除脚本、事件属性、外部引用；元素数与深度硬上限 |
 | CSS | `CssStyleSheet` / `CssSelector` / `SvgStyleResolver` / `SvgComputedStyle` |
 | 几何 | `SvgBounds` / `SvgGeometry` / `SvgViewport` |
@@ -719,6 +720,44 @@ let frame = timeline.sample(timeline.currentTime())
   `stroke-miterlimit` 时截断，`arcs` 以 `stroke-width / 2` 圆弧连接。
 - **`width` / `height: auto`**：根元素按内容包围盒与 `viewBox` 比例推导；
   仅显式 `auto` 生效，缺失属性保持 M5 的视口推导。无法确定时回退并 warning。
+
+## M7：SVG 生成 API
+
+`SvgBuilder` 从根尺寸起步，链式写形状、样式与 SMIL 动画，最后输出字符串或文件。
+作者侧类放在 `SvgAuthoringBuilder.cj`，与解析期 `SvgBuilder.cj` 的内部函数互不影响。
+
+```cangjie
+SvgBuilder(200.0, 100.0)
+    .rect(x: 10.0, y: 30.0, width: 40.0, height: 40.0)
+    .fill("#3366cc")
+    .animate(
+        attribute: "x",
+        from: "10",
+        to: "150",
+        dur: "2s",
+        begin: SvgBegin.offset(0.0),
+        repeatCount: "indefinite"
+    )
+    .save("card.svg")
+```
+
+- **结构**：`group(id!)` 进入分组，`end()` 退回父级；栈底为根，多余的 `end()` 不报错。
+- **形状**：`rect` / `circle` / `ellipse` / `line` / `polyline` / `polygon` / `path` /
+  `text` / `use` / `image`。几何数值写 `px`，`points` 与 `d` 按传入字符串原样写入。
+- **样式**：`fill` / `stroke` / `strokeWidth` / `opacity` / `fillOpacity` /
+  `strokeOpacity` / `transform` / `attr` / `id` / `className`，全部写成当前元素的
+  呈现属性，不生成 `<style>`；`strokeWidth` 带 `px`，三种透明度写无单位数值。
+- **动画**：`animate` / `animateTransform` / `animateMotion`（`mpath:` 自动生成
+  `<mpath>` 子元素）/ `set`，追加到当前形状；`repeatCount`、`restart`、`fill`
+  与 `values`（分号分隔）按 SVG 拼写输出。
+- **时间表达式**：`SvgBegin.offset(1.5)` → `1.5s`、`at("a")` → `a.begin`、
+  `after("a", -0.5)` → `a.end-0.5s`、`repeatOf("a", 2)` → `a.repeat(2)`、
+  `event("click")`、`indefinite()`、`literal("5s")`，`join` 生成 `; ` 分隔列表。
+- **输出**：`document()` / `toSvgString(options!)` / `save(path)`。默认紧凑输出，
+  带 XML 声明与 `xmlns`；需要缩进时显式传 `SvgWriteOptions(indent: Some("  "))`。
+  `save` 的文件系统失败包装为 `SvgException(kind: InvalidValue)`，消息保留目标路径。
+- **已知限制**：`SvgTimeline` 仍按 M6 规则解析 `begin`，`a.end+1s` / `a.repeat(2)`
+  等扩展形式只保证浏览器播放，采样时按 M6 记录 warning 后忽略。
 
 ## M3 不做什么
 

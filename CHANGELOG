@@ -1,3 +1,9 @@
+2026-11-08
+    feat(f_svg): M7 生成 API——新增作者侧 SvgBuilder（SvgAuthoringBuilder.cj）、
+      十种形状与引用元素、样式呈现属性、类型化 animate / animateTransform /
+      animateMotion / set、SvgBegin 表达式与四个生成枚举；document / toSvgString /
+      save 三种输出；不修改 SvgTag / SvgTimeline / SvgParser / SvgWriter
+    docs(f_svg): README / README_en 增补 M7 生成章节、链式示例与已知限制
 2026-11-07
     feat(f_svg): M6 P1 静态交互——pointer-events 11 值、cursor 关键字白名单、
       :hover / :focus 静态求值、SvgHitTest 设备坐标命中与 maxElements 上限

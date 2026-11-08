@@ -38,6 +38,7 @@ When a central repository is configured, `"fountain::f_svg" = "1.3.17"` also wor
 | Model | `SvgDocument`, `SvgRoot`, `SvgElement`, shapes, text, gradients, `use`, `image` |
 | Typed values | `SvgLength`, `SvgColor`, `SvgPaint`, `SvgTransform`, `SvgPathData`, `SvgViewBox` |
 | Write | `SvgWriter` / `writeSvgString`, via `XmlDocument` and `f_xml::XmlWriter` |
+| Write (M7) | `SvgBuilder` chaining, typed animation elements and `SvgBegin` expressions |
 | Security | Scripts, event attributes and external references removed by default; hard size limits |
 | Preservation | Unknown elements/attributes, comments, PIs, CDATA and DOCTYPE kept |
 | CSS | `CssStyleSheet`, `CssSelector`, `SvgStyleResolver`, `SvgComputedStyle` |
@@ -797,6 +798,50 @@ let frame = timeline.sample(timeline.currentTime())
 - **`width` / `height: auto`**: the root derives size from the content bounding box and
   the `viewBox` ratio; only explicit `auto` takes effect, and missing attributes keep the
   M5 viewport derivation. When size cannot be determined, it warns and falls back.
+
+## M7: SVG authoring API
+
+`SvgBuilder` starts from the root size and chains shapes, styles and SMIL animations,
+then emits a string or a file. The authoring class lives in `SvgAuthoringBuilder.cj`
+and does not touch the parse-time helpers in `SvgBuilder.cj`.
+
+```cangjie
+SvgBuilder(200.0, 100.0)
+    .rect(x: 10.0, y: 30.0, width: 40.0, height: 40.0)
+    .fill("#3366cc")
+    .animate(
+        attribute: "x",
+        from: "10",
+        to: "150",
+        dur: "2s",
+        begin: SvgBegin.offset(0.0),
+        repeatCount: "indefinite"
+    )
+    .save("card.svg")
+```
+
+- **Structure**: `group(id!)` enters a group and `end()` returns to the parent; the root
+  is the stack bottom and extra `end()` calls are no-ops.
+- **Shapes**: `rect` / `circle` / `ellipse` / `line` / `polyline` / `polygon` / `path` /
+  `text` / `use` / `image`. Geometry is written in `px`; `points` and `d` are stored
+  verbatim.
+- **Styles**: `fill` / `stroke` / `strokeWidth` / `opacity` / `fillOpacity` /
+  `strokeOpacity` / `transform` / `attr` / `id` / `className`, all written as
+  presentation attributes on the current element with no `<style>` element.
+  `strokeWidth` carries `px`; the three opacity values are unitless.
+- **Animation**: `animate` / `animateTransform` / `animateMotion` (`mpath:` emits the
+  `<mpath>` child) / `set`, appended to the current shape. `repeatCount`, `restart`,
+  `fill` and semicolon-separated `values` follow SVG spelling.
+- **Time expressions**: `SvgBegin.offset(1.5)` → `1.5s`, `at("a")` → `a.begin`,
+  `after("a", -0.5)` → `a.end-0.5s`, `repeatOf("a", 2)` → `a.repeat(2)`,
+  `event("click")`, `indefinite()`, `literal("5s")`; `join` produces a `; ` list.
+- **Output**: `document()` / `toSvgString(options!)` / `save(path)`. The default is
+  compact with an XML declaration and `xmlns`; pass
+  `SvgWriteOptions(indent: Some("  "))` for indentation. `save` wraps file-system
+  failures as `SvgException(kind: InvalidValue)` with the target path in the message.
+- **Known limitation**: `SvgTimeline` still parses `begin` with the M6 rules. Extended
+  forms such as `a.end+1s` / `a.repeat(2)` are intended for browser playback; sampling
+  emits the M6 warning and ignores them.
 
 ## Non-goals for M3
 
