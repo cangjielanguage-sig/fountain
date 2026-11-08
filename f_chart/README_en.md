@@ -64,7 +64,8 @@ let svg = chart.draw(data)
 | Milestone | Capability | Status |
 |---|---|---|
 | M0 | `Chart` interface, `ChartException`, JSON specification | Done |
-| M1–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
+| M1 | Bar chart `BarChart` + shared rendering infrastructure | Done |
+| M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
 
