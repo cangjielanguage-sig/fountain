@@ -161,7 +161,8 @@ let svg = chart.draw(data)
 | M94 | 提升图 `LiftChart`（升序折线、数据点、基准虚线） | 已完成 |
 | M95 | 增益图 `GainChart`（累计捕获曲线、对角线基准） | 已完成 |
 | M96 | 校准曲线 `CalibrationChart`（预测-实际对照、对角线开关） | 已完成 |
-| M97–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M97 | 学习曲线 `LearningCurveChart`（训练/验证、标准差带、metric） | 已完成 |
+| M98–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
