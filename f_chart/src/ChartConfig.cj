@@ -127,6 +127,7 @@ internal class ChartConfig {
     let legend: ChartLegend
     let xAxis: ChartAxis
     let yAxis: ChartAxis
+    let yAxis2: ?ChartAxis
 
     private init(
         chartType: String,
@@ -141,7 +142,8 @@ internal class ChartConfig {
         theme: ChartTheme,
         legend: ChartLegend,
         xAxis: ChartAxis,
-        yAxis: ChartAxis
+        yAxis: ChartAxis,
+        yAxis2: ?ChartAxis
     ) {
         this.chartType = chartType
         this.title = title
@@ -156,6 +158,7 @@ internal class ChartConfig {
         this.legend = legend
         this.xAxis = xAxis
         this.yAxis = yAxis
+        this.yAxis2 = yAxis2
     }
 
     static func parse(data: JsonObject, expectedType: String): ChartConfig {
@@ -203,10 +206,14 @@ internal class ChartConfig {
         let legend = ChartLegend.parse(root.object("legend"))
         let xAxis = ChartAxis.parse(root.object("xAxis"), "category", false)
         let yAxis = ChartAxis.parse(root.object("yAxis"), "linear", true)
+        let yAxis2 = match (root.object("yAxis2")) {
+            case Some(value) => Some(ChartAxis.parse(Some(value), "linear", true))
+            case None => None<ChartAxis>
+        }
 
         ChartConfig(
             chartType, title, subtitle, titleAlign, titleFontSize, titleColor,
-            width, height, padding, theme, legend, xAxis, yAxis
+            width, height, padding, theme, legend, xAxis, yAxis, yAxis2
         )
     }
 }

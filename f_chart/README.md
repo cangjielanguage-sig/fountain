@@ -70,6 +70,7 @@ let svg = chart.draw(data)
 | M4 | 百分比堆叠柱状图 `PercentStackedBarChart` | 已完成 |
 | M5 | 折线图 `LineChart`（类目 / XY / 时间轴、平滑、符号） | 已完成 |
 | M6 | 散点图 `ScatterChart`（数值 / 时间双轴） | 已完成 |
+| M7 | 组合图 `ComboChart`（柱/线/点任意叠加、双轴） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义

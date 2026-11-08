@@ -59,7 +59,8 @@ internal class ChartFrame {
         config: ChartConfig,
         legendVisible: Bool,
         yLabelWidth: Float64,
-        xLabelHeight: Float64
+        xLabelHeight: Float64,
+        rightLabelWidth!: Float64 = 0.0
     ) {
         this.config = config
         this.legendVisible = legendVisible
@@ -82,7 +83,7 @@ internal class ChartFrame {
         }
         this.legendY = legendY
         let left = padding.left + yLabelWidth
-        let right = padding.right
+        let right = padding.right + rightLabelWidth
         var bottom = padding.bottom + xLabelHeight
         if (legendVisible && config.legend.position == "bottom") {
             bottom += 26.0
@@ -237,6 +238,39 @@ internal class ChartFrame {
                 color: theme.textColor,
                 anchor: "middle",
                 className: "axis-title"
+            )
+        }
+    }
+
+    func drawYAxisRight(kit: ChartSvgKit, ticks: Array<Float64>, scale: LinearScale, axis: ChartAxis): Unit {
+        let theme = this.config.theme
+        for (tick in ticks) {
+            let y = scale.scale(tick)
+            kit.line(
+                this.plot.right(), y, this.plot.right() + 4.0, y,
+                stroke: theme.axisColor, strokeWidth: 1.0, className: "tick"
+            )
+            kit.text(
+                this.plot.right() + 8.0, y,
+                chartFormatTick(tick, axis.labelFormat),
+                size: theme.fontSize,
+                color: theme.axisColor,
+                anchor: "start",
+                className: "tick-label"
+            )
+        }
+        kit.line(
+            this.plot.right(), this.plot.y, this.plot.right(), this.plot.bottom(),
+            stroke: theme.axisColor, strokeWidth: 1.0, className: "axis"
+        )
+        if (!axis.title.isEmpty()) {
+            kit.text(
+                this.config.width - 8.0, this.plot.centerY(), axis.title,
+                size: theme.fontSize,
+                color: theme.textColor,
+                anchor: "middle",
+                className: "axis-title",
+                rotate: 90.0
             )
         }
     }
