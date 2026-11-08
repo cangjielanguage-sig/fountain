@@ -92,6 +92,7 @@ let svg = chart.draw(data)
 | M26 | Bubble chart `BubbleChart` (radius mapping, labels) | Done |
 | M27 | Correlation matrix `CorrelationMatrixChart` (color bands, values) | Done |
 | M28 | Parallel coordinates `ParallelCoordinatesChart` (normalized polylines) | Done |
+| M29 | Contour chart `ContourChart` (level bands, iso-lines) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

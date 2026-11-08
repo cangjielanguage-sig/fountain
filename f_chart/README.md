@@ -92,6 +92,7 @@ let svg = chart.draw(data)
 | M26 | 气泡图 `BubbleChart`（半径映射、标签） | 已完成 |
 | M27 | 相关矩阵图 `CorrelationMatrixChart`（三色分段、数值标注） | 已完成 |
 | M28 | 平行坐标图 `ParallelCoordinatesChart`（多维归一化折线） | 已完成 |
+| M29 | 等高线图 `ContourChart`（网格分层、等值边界） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
