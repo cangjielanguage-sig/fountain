@@ -81,6 +81,7 @@ let svg = chart.draw(data)
 | M15 | Stacked area chart `StackedAreaChart` (stack groups) | Done |
 | M16 | Waterfall chart `WaterfallChart` (running totals, connectors) | Done |
 | M17 | Histogram `HistogramChart` (equal-width bins) | Done |
+| M18 | Density chart `DensityChart` (Gaussian KDE, Silverman bandwidth) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
