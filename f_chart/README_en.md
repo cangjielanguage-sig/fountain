@@ -73,6 +73,7 @@ let svg = chart.draw(data)
 | M7 | Combo chart `ComboChart` (bar/line/scatter, dual axes) | Done |
 | M8 | Gantt chart `GanttChart` (timeline, progress, dependencies) | Done |
 | M9 | Flowchart `Flowchart` (layered layout, six shapes, arrowed edges) | Done |
+| M10 | Sequence chart `SequenceChart` (participants, lifelines, messages) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
