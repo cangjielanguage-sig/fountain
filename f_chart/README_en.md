@@ -87,6 +87,7 @@ let svg = chart.draw(data)
 | M21 | Swarm / jitter chart `SwarmChart` (deterministic jitter) | Done |
 | M22 | Stem-and-leaf `StemLeafChart` (text grouping) | Done |
 | M23 | QQ plot `QQChart` (theoretical quantiles, fit line) | Done |
+| M24 | Ridgeline `RidgeChart` (offset densities, overlap) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
