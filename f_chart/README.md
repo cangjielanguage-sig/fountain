@@ -121,7 +121,8 @@ let svg = chart.draw(data)
 | M55 | 离线火焰图 `OfflineFlameChart`（指定子树、深度限制） | 已完成 |
 | M56 | 热火焰图 `HeatFlameChart`（热度字段、冷热渐变） | 已完成 |
 | M57 | 分级统计地图 `ChoroplethChart`（区域路径、颜色分档、质心标签） | 已完成 |
-| M58–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M58 | 点密度地图 `DotDensityMapChart`（底图、权重半径） | 已完成 |
+| M59–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
