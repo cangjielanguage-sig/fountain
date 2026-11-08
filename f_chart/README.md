@@ -86,6 +86,7 @@ let svg = chart.draw(data)
 | M20 | 小提琴图 `ViolinChart`（镜像密度、内嵌箱体） | 已完成 |
 | M21 | 蜂群图 / 抖动图 `SwarmChart`（确定性抖动） | 已完成 |
 | M22 | 茎叶图 `StemLeafChart`（文本分组、叶钳制） | 已完成 |
+| M23 | QQ 图 `QQChart`（理论分位、最小二乘参考线） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义

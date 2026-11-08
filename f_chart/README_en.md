@@ -86,6 +86,7 @@ let svg = chart.draw(data)
 | M20 | Violin chart `ViolinChart` (mirrored density, inner box) | Done |
 | M21 | Swarm / jitter chart `SwarmChart` (deterministic jitter) | Done |
 | M22 | Stem-and-leaf `StemLeafChart` (text grouping) | Done |
+| M23 | QQ plot `QQChart` (theoretical quantiles, fit line) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
