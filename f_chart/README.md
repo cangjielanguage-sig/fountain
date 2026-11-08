@@ -170,7 +170,9 @@ let svg = chart.draw(data)
 | M103 | 词网络图 `WordNetworkChart`（权重半径、force/circular、节点内标签） | 已完成 |
 | M104 | 标签云 `tag-cloud`（`WordCloudChart` 别名，回归测试） | 已完成 |
 | M105 | 仪表盘 `GaugeChart`（阈值色带、指针、中心数值） | 已完成 |
-| M106 | 各图实现（最后一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M106 | 日历热力图里程碑闭合（复用 `CalendarHeatmapChart`，回归测试） | 已完成 |
+
+M1–M106 全部完成。测试总数 985，全部通过。
 
 ## 错误语义
 
