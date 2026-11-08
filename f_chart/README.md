@@ -137,7 +137,8 @@ let svg = chart.draw(data)
 | M71 | 组织图 `OrgChart`（垂直/水平布局、正交连线、父节点居中） | 已完成 |
 | M72 | 南丁格尔玫瑰图 `RoseChart`（等角扇区、radius/area 半径） | 已完成 |
 | M73 | 华夫图 `WaffleChart`（最大余数取整、方格矩阵、图例） | 已完成 |
-| M74–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M74 | 象形图 `PictogramChart`（单位换算、person/circle/square/自定义路径） | 已完成 |
+| M75–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
