@@ -194,7 +194,7 @@ public interface Chart {
 | M56 | 热火焰图 | `HeatFlameChart.cj` |
 | M57 | 分级统计地图 | `ChoroplethChart.cj` |
 | M58 | 点密度地图 | `DotDensityMapChart.cj` |
-| M59 | 热力地图 | `HeatMapChart.cj` |
+| M59 | 热力地图 | `HeatMap.cj`（公开类型 `HeatMapChart`，避开与 M43 文件名大小写冲突） |
 | M60 | 流向地图 | `FlowMapChart.cj` |
 | M61 | 变形地图 | `CartogramChart.cj` |
 | M62 | 节点-链接图 | `NodeLinkChart.cj` |

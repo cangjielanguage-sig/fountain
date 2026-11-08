@@ -192,7 +192,7 @@
 | M56 | `heat-flame` | `HeatFlameChart.cj` | H | 热火焰图 |
 | M57 | `choropleth` | `ChoroplethChart.cj` | S | 分级统计地图 |
 | M58 | `dot-density-map` | `DotDensityMapChart.cj` | S | 点密度地图 |
-| M59 | `heat-map` | `HeatMapChart.cj` | S | 热力地图 |
+| M59 | `heat-map` | `HeatMap.cj`（公开类型 `HeatMapChart`） | S | 热力地图 |
 | M60 | `flow-map` | `FlowMapChart.cj` | S | 流向地图 |
 | M61 | `cartogram` | `CartogramChart.cj` | S | 变形地图 |
 | M62 | `node-link` | `NodeLinkChart.cj` | N | 节点-链接图 |
