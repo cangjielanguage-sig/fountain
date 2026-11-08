@@ -139,7 +139,8 @@ let svg = chart.draw(data)
 | M73 | 华夫图 `WaffleChart`（最大余数取整、方格矩阵、图例） | 已完成 |
 | M74 | 象形图 `PictogramChart`（单位换算、person/circle/square/自定义路径） | 已完成 |
 | M75 | 百分比条 `PercentBarChart`（复用百分比堆叠、`type=percent-bar`） | 已完成 |
-| M76–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M76 | 子弹图 `BulletChart`（区间色带、值条、目标线） | 已完成 |
+| M77–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
