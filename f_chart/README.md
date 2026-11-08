@@ -164,7 +164,8 @@ let svg = chart.draw(data)
 | M97 | 学习曲线 `LearningCurveChart`（训练/验证、标准差带、metric） | 已完成 |
 | M98 | LASSO 路径图 `LassoPathChart`（系数收缩轨迹、零线、图例） | 已完成 |
 | M99 | 决策树图 `DecisionTreeChart`（叶子槽位、分支标签、叶节点配色） | 已完成 |
-| M100–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M100 | 部分依赖图 `PdpChart`（边际效应曲线、特征标注） | 已完成 |
+| M101–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
