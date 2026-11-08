@@ -151,7 +151,8 @@ let svg = chart.draw(data)
 | M85 | 泳道图 `SwimlaneChart`（横/纵泳道、节点、正交箭头） | 已完成 |
 | M86 | 漏斗图别名（复用 `FunnelChart`，回归测试） | 已完成 |
 | M87 | 瀑布图别名（复用 `WaterfallChart`，回归测试） | 已完成 |
-| M88–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M88 | 雨云图 `RaincloudChart`（半小提琴、雨点、箱线组合） | 已完成 |
+| M89–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
