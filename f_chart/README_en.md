@@ -67,6 +67,7 @@ let svg = chart.draw(data)
 | M1 | Bar chart `BarChart` + shared rendering infrastructure | Done |
 | M2 | Grouped bar chart `GroupedBarChart` | Done |
 | M3 | Stacked bar chart `StackedBarChart` | Done |
+| M4 | Percent-stacked bar chart `PercentStackedBarChart` | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

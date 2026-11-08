@@ -40,6 +40,7 @@ internal enum BarMode {
     | Simple
     | Grouped
     | Stacked
+    | PercentStacked
 }
 
 /**
@@ -59,6 +60,7 @@ internal class BarRenderer {
         validateLengths(series, labels)
         let range = match (mode) {
             case Stacked => resolveStackedRange(config.yAxis, series, labels)
+            case PercentStacked => resolvePercentRange(config.yAxis)
             case _ => resolveRange(config.yAxis, series)
         }
         let ticks = if (!config.yAxis.values.isEmpty()) {
@@ -154,6 +156,44 @@ internal class BarRenderer {
                                     )
                                     negative += value
                                 }
+                            case None => ()
+                        }
+                    }
+                }
+            case PercentStacked =>
+                let percentWidth = match (series[0].barWidth) {
+                    case Some(value) => value
+                    case None => band.bandWidth * 0.6
+                }
+                let barWidth = minFloat(percentWidth, band.bandWidth * 0.95)
+                for (index in 0..labels.size) {
+                    var total = 0.0
+                    for (item in series) {
+                        match (item.values[index]) {
+                            case Some(value) => total += abs(value)
+                            case None => ()
+                        }
+                    }
+                    if (total <= 0.0) {
+                        continue
+                    }
+                    let x = stackedBarX(band, index, barWidth)
+                    var cumulative = 0.0
+                    for (seriesIndex in 0..series.size) {
+                        match (series[seriesIndex].values[index]) {
+                            case Some(value) =>
+                                let portion = percentStackedValue(value, total)
+                                let from = scale.scale(cumulative)
+                                let to = scale.scale(cumulative + portion)
+                                let color = match (series[seriesIndex].color) {
+                                    case Some(itemColor) => itemColor
+                                    case None => config.theme.colorAt(seriesIndex)
+                                }
+                                kit.rect(
+                                    x, minFloat(from, to), barWidth, abs(to - from),
+                                    fill: color, className: "bar"
+                                )
+                                cumulative += portion
                             case None => ()
                         }
                     }
@@ -336,6 +376,21 @@ internal class BarRenderer {
         applyAxisRange(axis, dataMin, dataMax)
     }
 
+    private static func resolvePercentRange(axis: ChartAxis): Array<Float64> {
+        let minimum = match (axis.min) {
+            case Some(value) => value
+            case None => 0.0
+        }
+        let maximum = match (axis.max) {
+            case Some(value) => value
+            case None => 100.0
+        }
+        if (maximum <= minimum) {
+            throw chartInvalidValue("yAxis.min", "yAxis.min 必须小于 yAxis.max")
+        }
+        [minimum, maximum]
+    }
+
     private static func applyAxisRange(
         axis: ChartAxis,
         dataMin: Float64,
@@ -380,6 +435,15 @@ internal func groupedBarX(
     let count = maxInt64(seriesCount, 1)
     let slot = band.bandWidth / Float64(count)
     band.bandStart(categoryIndex) + Float64(seriesIndex) * slot + (slot - barWidth) / 2.0
+}
+
+/** 百分比堆叠中单个值的占比（0–100）。 */
+internal func percentStackedValue(value: Float64, total: Float64): Float64 {
+    if (total <= 0.0) {
+        0.0
+    } else {
+        abs(value) / total * 100.0
+    }
 }
 
 /** 堆叠柱的 x 坐标：同一类目的所有段共用。 */
