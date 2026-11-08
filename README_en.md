@@ -324,6 +324,11 @@ DTD internal entities, security limits.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_xml/README_en.md>
 
+### `fountain::f_svg`
+SVG 1.1 static documents: value types, typed DOM, parser and writer, lossless preservation of unknown content, security filtering and size limits
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_svg/README_en.md>
+
 ### `fountain::f_zip`
 ZIP container reader/writer: ZIP64 in both directions, streaming writes (24-byte ZIP64 descriptor),
 large-entry spilling, Zip Slip / symlink / bomb protection.

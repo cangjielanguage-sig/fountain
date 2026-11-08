@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <style>
+    .frame { fill: #e6e6e6; }
+    rect.frame + circle { fill: #cc0066; }
+    g[data-active] > rect:last-child { fill: #0066cc; }
+  </style>
+  <g data-active="1">
+    <rect class="frame" x="4" y="4" width="24" height="24"/>
+    <circle cx="44" cy="16" r="10"/>
+    <rect x="4" y="36" width="24" height="20"/>
+  </g>
+</svg>

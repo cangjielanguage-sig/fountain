@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <rect width="64" height="64" fill="#ffffff"/>
+  <text x="4" y="18" font-family="Hershey" font-size="14" font-stretch="80%">AB</text>
+  <text x="4" y="36" font-family="Hershey" font-size="14" font-variant="small-caps">ab</text>
+  <text x="4" y="54" font-family="Hershey" font-size="12"
+        font-feature-settings="'liga' 0" text-decoration="underline">AB</text>
+</svg>

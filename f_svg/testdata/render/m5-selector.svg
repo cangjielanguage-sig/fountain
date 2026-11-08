@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <style>
+    rect[data-role] { fill: #336699; }
+    g > rect:first-child { fill: #cc3300; }
+    rect:not(.skip) + circle { fill: #009933; }
+    circle:nth-child(even) { fill: #9933cc; }
+  </style>
+  <g>
+    <rect data-role="a" x="4" y="4" width="16" height="16"/>
+    <circle cx="36" cy="12" r="8"/>
+    <rect class="skip" x="4" y="28" width="16" height="16"/>
+    <circle cx="36" cy="36" r="8"/>
+    <rect data-role="b" x="4" y="48" width="16" height="16"/>
+    <circle cx="36" cy="52" r="6"/>
+  </g>
+</svg>

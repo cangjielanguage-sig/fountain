@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <rect width="64" height="64" fill="#c86432"/>
+  <rect x="8" y="8" width="32" height="48" fill="#808080" style="mix-blend-mode: multiply"/>
+  <rect x="28" y="8" width="28" height="48" fill="#3366cc" style="mix-blend-mode: screen"/>
+</svg>
