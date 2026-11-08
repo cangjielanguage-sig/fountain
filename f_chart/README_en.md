@@ -79,6 +79,7 @@ let svg = chart.draw(data)
 | M13 | Radar chart `RadarChart` (multi-indicator polygons) | Done |
 | M14 | Area chart `AreaChart` (fill opacity, smooth, gaps) | Done |
 | M15 | Stacked area chart `StackedAreaChart` (stack groups) | Done |
+| M16 | Waterfall chart `WaterfallChart` (running totals, connectors) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
