@@ -129,7 +129,8 @@ let svg = chart.draw(data)
 | M63 | 弧线图 `ArcChart`（圆周节点、二次贝塞尔弧、按值排序） | 已完成 |
 | M64 | 和弦图 `ChordChart`（外圈分段、带状线、标签） | 已完成 |
 | M65 | 蜂巢图 `HiveChart`（分组聚簇、簇内环形、跨组连线） | 已完成 |
-| M66–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M66 | 冲积图 `AlluvialChart`（阶段列、流量带、高度分配） | 已完成 |
+| M67–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
