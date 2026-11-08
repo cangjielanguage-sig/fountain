@@ -136,6 +136,33 @@ internal class ChartSvgKit {
         this.builder.end()
     }
 
+    func ellipse(
+        cx: Float64,
+        cy: Float64,
+        rx: Float64,
+        ry: Float64,
+        fill!: ?String = None,
+        stroke!: ?String = None,
+        className!: String = ""
+    ): Unit {
+        this.builder.group()
+        this.builder.ellipse(cx: cx, cy: cy, rx: rx, ry: ry)
+        if (!className.isEmpty()) {
+            this.builder.className(className)
+        }
+        match (fill) {
+            case Some(color) => this.builder.fill(color)
+            case None => ()
+        }
+        match (stroke) {
+            case Some(color) =>
+                this.builder.stroke(color)
+                this.builder.strokeWidth(1.0)
+            case None => ()
+        }
+        this.builder.end()
+    }
+
     func square(
         cx: Float64,
         cy: Float64,
