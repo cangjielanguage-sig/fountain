@@ -76,6 +76,7 @@ let svg = chart.draw(data)
 | M10 | Sequence chart `SequenceChart` (participants, lifelines, messages) | Done |
 | M11 | Horizontal bar chart `HorizontalBarChart` | Done |
 | M12 | Dot / Cleveland dot chart `DotChart` | Done |
+| M13 | Radar chart `RadarChart` (multi-indicator polygons) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

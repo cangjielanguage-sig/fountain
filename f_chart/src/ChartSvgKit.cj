@@ -196,7 +196,8 @@ internal class ChartSvgKit {
         fill!: ?String = None,
         stroke!: ?String = None,
         strokeWidth!: Float64 = 1.0,
-        className!: String = ""
+        className!: String = "",
+        fillOpacity!: Float64 = 1.0
     ): Unit {
         this.builder.group()
         this.builder.path(d: d)
@@ -204,7 +205,11 @@ internal class ChartSvgKit {
             this.builder.className(className)
         }
         match (fill) {
-            case Some(color) => this.builder.fill(color)
+            case Some(color) =>
+                this.builder.fill(color)
+                if (fillOpacity < 1.0) {
+                    this.builder.fillOpacity(fillOpacity)
+                }
             case None => ()
         }
         match (stroke) {
