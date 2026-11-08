@@ -44,6 +44,11 @@ internal class ChartTime {
         "${pad(date[0], 4)}-${pad(date[1], 2)}-${pad(date[2], 2)}"
     }
 
+    /** 把天数拆成 `[年, 月, 日]`。 */
+    static func partsOfDays(days: Float64): Array<Int64> {
+        civilFromDays(Int64(days))
+    }
+
     private static func parseIntOrThrow(text: String, path: String): Int64 {
         try {
             Int64.parse(text)

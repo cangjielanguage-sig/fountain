@@ -107,7 +107,8 @@ let svg = chart.draw(data)
 | M41 | 杠杆图 `InfluenceChart`（Cook 距离映射点大小、标签） | 已完成 |
 | M42 | 概率图 `ProbabilityChart`（三种分布、最小二乘参考线） | 已完成 |
 | M43 | 热力图 `HeatmapChart`（矩阵单元格、三色插值、数值标签） | 已完成 |
-| M44–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M44 | 日历热力图 `CalendarHeatmapChart`（周网格、日期范围、颜色分档） | 已完成 |
+| M45–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
