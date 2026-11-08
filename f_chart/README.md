@@ -133,7 +133,8 @@ let svg = chart.draw(data)
 | M67 | 桑基图别名（复用 `SankeyChart`，回归测试） | 已完成 |
 | M68 | 网络热力图 `NetworkHeatmapChart`（节点方阵、行列标签） | 已完成 |
 | M69 | 旭日图 `SunburstChart`（同心环、层级角度、一级标签） | 已完成 |
-| M70–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M70 | 圆堆积图 `CirclePackingChart`（嵌套圆、面积半径、网格布局） | 已完成 |
+| M71–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
