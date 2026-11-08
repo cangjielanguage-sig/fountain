@@ -116,7 +116,8 @@ let svg = chart.draw(data)
 | M50 | 森林图 `ForestChart`（置信区间、无效线、权重方块、对数轴） | 已完成 |
 | M51 | 列线图 `NomogramChart`（变量尺、总分尺、风险刻度） | 已完成 |
 | M52 | 火焰图 `FlameChart`（调用栈树、自底向上、名称/值配色） | 已完成 |
-| M53–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M53 | 冰柱图 `IcicleChart`（自顶向下、调用栈树） | 已完成 |
+| M54–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
