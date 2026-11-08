@@ -78,7 +78,28 @@ public class SvgPelicanBikeM7_test {
 
         for (sheep in ["sheep-1", "sheep-2", "sheep-3"]) {
             @Assert(parsed.elementById(sheep).isSome())
+            let move = parsed.elementById(sheep + "-move").getOrThrow().child("animateTransform").getOrThrow()
+            @Assert(move.attr("type") == Some("translate"))
         }
+
+        for (leg in ["leg-left", "leg-right"]) {
+            let pedal = parsed.elementById(leg).getOrThrow().child("animateTransform").getOrThrow()
+            @Assert(pedal.attr("type") == Some("rotate"))
+            @Assert(pedal.attr("dur") == Some("1s"))
+        }
+
+        let rain = parsed.elementById("rain-fall").getOrThrow()
+        let rainFall = rain.child("animateTransform").getOrThrow()
+        @Assert(rainFall.attr("type") == Some("translate"))
+        @Assert(rainFall.attr("repeatCount") == Some("indefinite"))
+        @Assert(rain.children.size > 40)
+
+        let snow = parsed.elementById("snow-fall").getOrThrow()
+        let snowFall = snow.child("animateTransform").getOrThrow()
+        @Assert(snowFall.attr("type") == Some("translate"))
+        @Assert(snowFall.attr("repeatCount") == Some("indefinite"))
+        @Assert(snow.children.size > 30)
+
         println("PELICAN_SVG=${target}")
     }
 
@@ -138,13 +159,24 @@ public class SvgPelicanBikeM7_test {
         builder.rect(x: 0.0, y: 0.0, width: 800.0, height: 450.0).fill("#7F8C99")
         this.addCloud(builder, 240.0, 80.0, 1.2, color: "#6C7A87")
         this.addCloud(builder, 560.0, 70.0, 1.0, color: "#6C7A87")
+        builder.group(id: "rain-fall").animateTransform(
+            attribute: "transform",
+            transformType: SvgAnimationTransformType.Translate,
+            from: "0 -240",
+            to: "0 240",
+            dur: "1.2s",
+            repeatCount: "indefinite"
+        )
         for (index in 0..14) {
-            let x = 60.0 + Float64(index) * 52.0
-            builder.line(x1: x, y1: 150.0, x2: x - 18.0, y2: 235.0)
-                .stroke("#D6E6F5")
-                .strokeWidth(2.0)
-                .attr("stroke-linecap", "round")
-                .attr("opacity", "0.85")
+            let x = 40.0 + Float64(index) * 56.0
+            for (row in 0..19) {
+                let y = -240.0 + Float64(row) * 40.0
+                builder.line(x1: x, y1: y, x2: x - 7.0, y2: y + 22.0)
+                    .stroke("#D6E6F5")
+                    .strokeWidth(2.0)
+                    .attr("stroke-linecap", "round")
+                    .attr("opacity", "0.85")
+            }
         }
         builder.end()
     }
@@ -160,10 +192,21 @@ public class SvgPelicanBikeM7_test {
             repeatCount: "indefinite"
         )
         builder.rect(x: 0.0, y: 0.0, width: 800.0, height: 450.0).fill("#E6EEF5")
-        for (index in 0..18) {
-            let x = 30.0 + Float64(index % 9) * 85.0
-            let y = 60.0 + Float64(index / 9) * 85.0
-            builder.circle(cx: x, cy: y, r: 4.0).fill("#FFFFFF")
+        builder.group(id: "snow-fall").animateTransform(
+            attribute: "transform",
+            transformType: SvgAnimationTransformType.Translate,
+            from: "0 -240",
+            to: "0 240",
+            dur: "6s",
+            repeatCount: "indefinite"
+        )
+        for (row in 0..13) {
+            let y = -240.0 + Float64(row) * 60.0
+            for (column in 0..8) {
+                let x = 30.0 + Float64(column) * 95.0 + Float64(row % 2) * 42.0
+                let radius = 2.5 + Float64((row + column) % 3)
+                builder.circle(cx: x, cy: y, r: radius).fill("#FFFFFF")
+            }
         }
         builder.end()
     }
@@ -197,6 +240,13 @@ public class SvgPelicanBikeM7_test {
     /** 一只羊：云朵状身体、头、耳朵、四条腿。 */
     private func addSheep(builder: SvgBuilder, x: Float64, y: Float64, id: String): Unit {
         builder.group().id(id).transform("translate(${x} ${y})")
+        builder.group(id: id + "-move").animateTransform(
+            attribute: "transform",
+            transformType: SvgAnimationTransformType.Translate,
+            values: ["0 0", "0 -6", "0 0"],
+            dur: "2s",
+            repeatCount: "indefinite"
+        )
         builder.ellipse(cx: 0.0, cy: 0.0, rx: 22.0, ry: 14.0).fill("#F7F7F2")
         builder.circle(cx: -8.0, cy: -10.0, r: 8.0).fill("#F7F7F2")
         builder.circle(cx: 8.0, cy: -11.0, r: 9.0).fill("#F7F7F2")
@@ -208,6 +258,7 @@ public class SvgPelicanBikeM7_test {
                 .stroke("#3B3B3B")
                 .strokeWidth(2.0)
         }
+        builder.end()
         builder.end()
     }
 
@@ -239,13 +290,37 @@ public class SvgPelicanBikeM7_test {
         builder.ellipse(cx: 28.0, cy: -52.0, rx: 20.0, ry: 14.0).fill("#FAFAF4")
         builder.path(d: "M38 -60 Q46 -74 54 -70 L58 -66 Q50 -60 42 -56 Z").fill("#FAFAF4")
         builder.circle(cx: 58.0, cy: -72.0, r: 10.0).fill("#FAFAF4")
-        builder.polygon(points: "66,-74 92,-68 66,-62").fill("#F2A03D")
+        builder.path(d: "M64 -75 L94 -70 Q88 -50 68 -55 Q58 -59 61 -67 Z").fill("#F2A03D")
         builder.circle(cx: 60.0, cy: -74.0, r: 1.8).fill("#1F1F1F")
         builder.path(d: "M22 -54 Q34 -66 42 -54 Q34 -46 22 -48 Z").fill("#EDEDE4")
-        // 腿与脚踏
-        builder.line(x1: 24.0, y1: -40.0, x2: 30.0, y2: -12.0).stroke("#F2A03D").strokeWidth(3.0)
-        builder.line(x1: 30.0, y1: -12.0, x2: 36.0, y2: -6.0).stroke("#F2A03D").strokeWidth(3.0)
-        builder.circle(cx: 30.0, cy: -6.0, r: 3.0).fill("#2E2E2E")
+        // 双腿交替蹬踏
+        this.addLeg(builder, "leg-left", 24.0, -40.0, "18 24 -40;-14 24 -40;18 24 -40")
+        this.addLeg(builder, "leg-right", 30.0, -40.0, "-18 30 -40;14 30 -40;-18 30 -40")
+        builder.end()
+    }
+
+    /** 一条摆动的腿：绕髋部旋转。 */
+    private func addLeg(
+        builder: SvgBuilder,
+        id: String,
+        hipX: Float64,
+        hipY: Float64,
+        values: String
+    ): Unit {
+        builder.group(id: id).animateTransform(
+            attribute: "transform",
+            transformType: SvgAnimationTransformType.Rotate,
+            values: [values],
+            dur: "1s",
+            repeatCount: "indefinite"
+        )
+        builder.line(x1: hipX, y1: hipY, x2: hipX + 6.0, y2: hipY + 16.0)
+            .stroke("#F2A03D")
+            .strokeWidth(3.0)
+        builder.line(x1: hipX + 6.0, y1: hipY + 16.0, x2: hipX + 12.0, y2: hipY + 30.0)
+            .stroke("#F2A03D")
+            .strokeWidth(3.0)
+        builder.circle(cx: hipX + 12.0, cy: hipY + 30.0, r: 3.0).fill("#2E2E2E")
         builder.end()
     }
 
