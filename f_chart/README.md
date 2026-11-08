@@ -150,7 +150,8 @@ let svg = chart.draw(data)
 | M84 | 螺旋图 `SpiralChart`（阿基米德螺旋、圈数/方向、周期标签） | 已完成 |
 | M85 | 泳道图 `SwimlaneChart`（横/纵泳道、节点、正交箭头） | 已完成 |
 | M86 | 漏斗图别名（复用 `FunnelChart`，回归测试） | 已完成 |
-| M87–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M87 | 瀑布图别名（复用 `WaterfallChart`，回归测试） | 已完成 |
+| M88–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
