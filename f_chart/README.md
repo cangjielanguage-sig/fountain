@@ -95,6 +95,7 @@ let svg = chart.draw(data)
 | M29 | 等高线图 `ContourChart`（网格分层、等值边界） | 已完成 |
 | M30 | 散点矩阵图 `ScatterMatrixChart`（两两散点、对角标签） | 已完成 |
 | M31 | 饼图 `PieChart`（扇区、百分比标签） | 已完成 |
+| M32 | 环形图 `DonutChart`（内孔、中心文本） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
