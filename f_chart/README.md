@@ -104,7 +104,8 @@ let svg = chart.draw(data)
 | M38 | 控制图 `ControlChart`（中心线、上下控制限、越限点） | 已完成 |
 | M39 | 误差线图 `ErrorBarChart`（中心值、上下界、端帽） | 已完成 |
 | M40 | 残差图 `ResidualChart`（拟合值对残差、零参考线） | 已完成 |
-| M41–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M41 | 杠杆图 `InfluenceChart`（Cook 距离映射点大小、标签） | 已完成 |
+| M42–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
