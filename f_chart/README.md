@@ -141,7 +141,8 @@ let svg = chart.draw(data)
 | M75 | 百分比条 `PercentBarChart`（复用百分比堆叠、`type=percent-bar`） | 已完成 |
 | M76 | 子弹图 `BulletChart`（区间色带、值条、目标线） | 已完成 |
 | M77 | 哑铃图 `DumbbellChart`（成对端点、连接线、自动范围） | 已完成 |
-| M78–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M78 | 斜率图 `SlopeChart`（双时间点、斜率线、右侧标签） | 已完成 |
+| M79–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
