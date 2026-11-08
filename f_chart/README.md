@@ -110,7 +110,8 @@ let svg = chart.draw(data)
 | M44 | 日历热力图 `CalendarHeatmapChart`（周网格、日期范围、颜色分档） | 已完成 |
 | M45 | 箱线散点图 `BoxScatterChart`（箱体、须线、抖动原始点） | 已完成 |
 | M46 | 小提琴箱线图 `ViolinBoxChart`（密度轮廓、箱体、异常值） | 已完成 |
-| M47–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M47 | ROC 曲线 `RocChart`（曲线、对角线、AUC 标注） | 已完成 |
+| M48–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
