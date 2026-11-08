@@ -66,6 +66,7 @@ let svg = chart.draw(data)
 | M0 | `Chart` interface, `ChartException`, JSON specification | Done |
 | M1 | Bar chart `BarChart` + shared rendering infrastructure | Done |
 | M2 | Grouped bar chart `GroupedBarChart` | Done |
+| M3 | Stacked bar chart `StackedBarChart` | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

@@ -66,6 +66,7 @@ let svg = chart.draw(data)
 | M0 | `Chart` 接口、`ChartException`、JSON 规范文档 | 已完成 |
 | M1 | 柱状图 `BarChart` + 公共渲染基础设施 | 已完成 |
 | M2 | 分组柱状图 `GroupedBarChart` | 已完成 |
+| M3 | 堆叠柱状图 `StackedBarChart` | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义

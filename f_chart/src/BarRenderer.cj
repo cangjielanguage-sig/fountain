@@ -39,6 +39,7 @@ internal class BarSeries {
 internal enum BarMode {
     | Simple
     | Grouped
+    | Stacked
 }
 
 /**
@@ -56,7 +57,10 @@ internal class BarRenderer {
         }
         let labels = resolveLabels(config.xAxis.labels, series)
         validateLengths(series, labels)
-        let range = resolveRange(config.yAxis, series)
+        let range = match (mode) {
+            case Stacked => resolveStackedRange(config.yAxis, series, labels)
+            case _ => resolveRange(config.yAxis, series)
+        }
         let ticks = if (!config.yAxis.values.isEmpty()) {
             config.yAxis.values
         } else {
@@ -115,16 +119,56 @@ internal class BarRenderer {
         }
         let baseline = scale.scale(baselineValue)
         let seriesCount = maxInt64(series.size, 1)
-        let slotWidth = match (mode) {
-            case Simple =>
-                if (series.size == 1) {
-                    band.bandWidth
-                } else {
-                    band.bandWidth / Float64(seriesCount)
+        match (mode) {
+            case Stacked =>
+                let stackedWidth = match (series[0].barWidth) {
+                    case Some(value) => value
+                    case None => band.bandWidth * 0.6
                 }
-            case Grouped => band.bandWidth / Float64(seriesCount)
-        }
-        for (seriesIndex in 0..series.size) {
+                let barWidth = minFloat(stackedWidth, band.bandWidth * 0.95)
+                for (index in 0..labels.size) {
+                    let x = stackedBarX(band, index, barWidth)
+                    var positive = 0.0
+                    var negative = 0.0
+                    for (seriesIndex in 0..series.size) {
+                        match (series[seriesIndex].values[index]) {
+                            case Some(value) =>
+                                let color = match (series[seriesIndex].color) {
+                                    case Some(itemColor) => itemColor
+                                    case None => config.theme.colorAt(seriesIndex)
+                                }
+                                if (value >= 0.0) {
+                                    let from = scale.scale(positive)
+                                    let to = scale.scale(positive + value)
+                                    kit.rect(
+                                        x, minFloat(from, to), barWidth, abs(to - from),
+                                        fill: color, className: "bar"
+                                    )
+                                    positive += value
+                                } else {
+                                    let from = scale.scale(negative)
+                                    let to = scale.scale(negative + value)
+                                    kit.rect(
+                                        x, minFloat(from, to), barWidth, abs(to - from),
+                                        fill: color, className: "bar bar-negative"
+                                    )
+                                    negative += value
+                                }
+                            case None => ()
+                        }
+                    }
+                }
+            case _ =>
+                let slotWidth = match (mode) {
+                    case Simple =>
+                        if (series.size == 1) {
+                            band.bandWidth
+                        } else {
+                            band.bandWidth / Float64(seriesCount)
+                        }
+                    case _ => band.bandWidth / Float64(seriesCount)
+                }
+                for (seriesIndex in 0..series.size) {
             let item = series[seriesIndex]
             let color = match (item.color) {
                 case Some(value) => value
@@ -151,6 +195,7 @@ internal class BarRenderer {
                     case None => ()
                 }
             }
+        }
         }
 
         frame.drawXAxis(kit, labels, band)
@@ -251,6 +296,51 @@ internal class BarRenderer {
             dataMin = 0.0
             dataMax = 1.0
         }
+        applyAxisRange(axis, dataMin, dataMax)
+    }
+
+    private static func resolveStackedRange(
+        axis: ChartAxis,
+        series: Array<BarSeries>,
+        labels: Array<String>
+    ): Array<Float64> {
+        var dataMin = 0.0
+        var dataMax = 0.0
+        var hasData = false
+        for (index in 0..labels.size) {
+            var positive = 0.0
+            var negative = 0.0
+            for (item in series) {
+                match (item.values[index]) {
+                    case Some(number) =>
+                        hasData = true
+                        if (number >= 0.0) {
+                            positive += number
+                        } else {
+                            negative += number
+                        }
+                    case None => ()
+                }
+            }
+            if (positive > dataMax) {
+                dataMax = positive
+            }
+            if (negative < dataMin) {
+                dataMin = negative
+            }
+        }
+        if (!hasData) {
+            dataMin = 0.0
+            dataMax = 1.0
+        }
+        applyAxisRange(axis, dataMin, dataMax)
+    }
+
+    private static func applyAxisRange(
+        axis: ChartAxis,
+        dataMin: Float64,
+        dataMax: Float64
+    ): Array<Float64> {
         var minimum = match (axis.min) {
             case Some(value) => value
             case None =>
@@ -290,6 +380,11 @@ internal func groupedBarX(
     let count = maxInt64(seriesCount, 1)
     let slot = band.bandWidth / Float64(count)
     band.bandStart(categoryIndex) + Float64(seriesIndex) * slot + (slot - barWidth) / 2.0
+}
+
+/** 堆叠柱的 x 坐标：同一类目的所有段共用。 */
+internal func stackedBarX(band: BandScale, categoryIndex: Int64, barWidth: Float64): Float64 {
+    band.center(categoryIndex) - barWidth / 2.0
 }
 
 internal func minFloat(left: Float64, right: Float64): Float64 {
