@@ -128,7 +128,8 @@ let svg = chart.draw(data)
 | M62 | 节点-链接图 `NodeLinkChart`（force/circular/manual 布局） | 已完成 |
 | M63 | 弧线图 `ArcChart`（圆周节点、二次贝塞尔弧、按值排序） | 已完成 |
 | M64 | 和弦图 `ChordChart`（外圈分段、带状线、标签） | 已完成 |
-| M65–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M65 | 蜂巢图 `HiveChart`（分组聚簇、簇内环形、跨组连线） | 已完成 |
+| M66–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
