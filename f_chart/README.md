@@ -157,7 +157,8 @@ let svg = chart.draw(data)
 | M91 | Bland-Altman 图 `BlandAltmanChart`（均值差、±1.96 SD 界限） | 已完成 |
 | M92 | 火山图 `VolcanoChart`（上调/下调分类、阈值线、显著标签） | 已完成 |
 | M93 | 曼哈顿图 `ManhattanChart`（染色体分段、交替配色、阈值线） | 已完成 |
-| M93b–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M93b | 混淆矩阵 `ConfusionMatrixChart`（行列归一化、热度格、数值） | 已完成 |
+| M94–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
