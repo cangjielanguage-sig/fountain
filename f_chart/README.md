@@ -155,7 +155,8 @@ let svg = chart.draw(data)
 | M89 | 豆图 `DotStripChart`（确定性抖动、散点、点大小） | 已完成 |
 | M90 | 累积频率图 `EcdfChart`（排序阶梯、累计频率） | 已完成 |
 | M91 | Bland-Altman 图 `BlandAltmanChart`（均值差、±1.96 SD 界限） | 已完成 |
-| M92–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M92 | 火山图 `VolcanoChart`（上调/下调分类、阈值线、显著标签） | 已完成 |
+| M93–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
