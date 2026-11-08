@@ -25,6 +25,7 @@
 | M4 范围    | `clip` / `overflow` / `vector-effect`、剩余滤镜原语与光照、`pattern` 视口、基线 / 装饰 / 竖排 / TTF、`view` / `switch` / 锚点、路径长度与 CTM API |
 | M5 范围    | CSS 属性/伪类/兄弟选择器与 `@media` / `@font-face` / 变量 / `calc()`、`paint-order` / 混合模式 / `feDropShadow` / `transform-origin` / `context-*`、`kern` / `GPOS` / `GSUB` / bidi、元素级 `getBBox` / `getCTM` / 查询 API |
 | M6 范围    | 静态交互（pointer-events/cursor/:hover/:focus）、嵌入（foreignObject 注入/外部文档/initialView）、渲染提示与颜色、字体细节与 GSUB 5/6、动画控制、DOM 查询与变更监听、SVG 2 收尾（vector-effect/linejoin/auto） |
+| M7 范围    | SVG 生成 API：`SvgBuilder` 链式构建、类型化 `SvgAnimate` / `SvgAnimateTransform` / `SvgAnimateMotion` / `SvgSet`、`SvgBegin`（多值/偏移/repeat/事件）、`.save(path)` |
 
 ---
 
