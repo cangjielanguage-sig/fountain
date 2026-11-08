@@ -83,6 +83,7 @@ let svg = chart.draw(data)
 | M17 | 直方图 `HistogramChart`（等宽分箱、频数柱） | 已完成 |
 | M18 | 核密度图 `DensityChart`（高斯核、Silverman 带宽、填充） | 已完成 |
 | M19 | 箱线图 `BoxPlotChart`（五数概括、须、异常值） | 已完成 |
+| M20 | 小提琴图 `ViolinChart`（镜像密度、内嵌箱体） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义

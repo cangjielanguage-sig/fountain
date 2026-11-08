@@ -818,7 +818,7 @@
 
 #### M20 小提琴图 `violin`
 
-专属字段：`series[].bandwidth`、`series[].showBox`（默认 true）。`data` 为原始数值数组。
+专属字段：`series[].bandwidth`、`series[].showBox`（默认 true）。`data` 为「每组一个数值数组」的嵌套数组；单组时可写扁平数值数组。
 
 ```json
 {
@@ -828,14 +828,14 @@
   "yAxis": { "type": "linear", "title": "客单价（元）", "min": 0 },
   "legend": { "show": false },
   "series": [
-    { "name": "客单价", "data": [88, 92, 95, 99, 105, 110, 115, 120, 130, 150], "bandwidth": 6.0, "showBox": true }
+    { "name": "客单价", "data": [[88, 92, 95, 99, 105], [110, 115, 120, 130, 150], [90, 96, 102, 108, 118], [85, 89, 94, 101, 112]], "bandwidth": 6.0, "showBox": true }
   ]
 }
 ```
 
 #### M21 蜂群图 / 抖动图 `swarm`
 
-专属字段：`series[].jitter`（抖动宽度，默认自动）、`series[].side`（`both` / `left` / `right`）。
+专属字段：`series[].jitter`（抖动宽度，默认自动）、`series[].side`（`both` / `left` / `right`）。`data` 为「每组一个数值数组」的嵌套数组；单组时可写扁平数值数组。
 
 ```json
 {
@@ -844,7 +844,7 @@
   "xAxis": { "type": "category", "labels": ["对照组", "低剂量", "高剂量"] },
   "yAxis": { "type": "linear", "title": "测量值", "min": 0 },
   "series": [
-    { "name": "测量值", "data": [12, 14, 15, 18, 22, 25, 30, 33, 36, 41], "jitter": 0.25, "side": "both" }
+    { "name": "测量值", "data": [[12, 14, 15, 18], [22, 25, 30, 33], [36, 38, 40, 41]], "jitter": 0.25, "side": "both" }
   ]
 }
 ```
