@@ -88,6 +88,7 @@ let svg = chart.draw(data)
 | M22 | Stem-and-leaf `StemLeafChart` (text grouping) | Done |
 | M23 | QQ plot `QQChart` (theoretical quantiles, fit line) | Done |
 | M24 | Ridgeline `RidgeChart` (offset densities, overlap) | Done |
+| M25 | 2D histogram `Histogram2DChart` (square/hexagon bins) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
