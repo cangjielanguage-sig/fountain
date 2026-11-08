@@ -112,7 +112,8 @@ let svg = chart.draw(data)
 | M46 | 小提琴箱线图 `ViolinBoxChart`（密度轮廓、箱体、异常值） | 已完成 |
 | M47 | ROC 曲线 `RocChart`（曲线、对角线、AUC 标注） | 已完成 |
 | M48 | PR 曲线 `PrChart`（曲线、精确率基线、AP 标注） | 已完成 |
-| M49–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M49 | 生存曲线 `SurvivalChart`（阶梯线、删失标记、置信带） | 已完成 |
+| M50–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
