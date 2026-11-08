@@ -74,6 +74,7 @@ let svg = chart.draw(data)
 | M8 | Gantt chart `GanttChart` (timeline, progress, dependencies) | Done |
 | M9 | Flowchart `Flowchart` (layered layout, six shapes, arrowed edges) | Done |
 | M10 | Sequence chart `SequenceChart` (participants, lifelines, messages) | Done |
+| M11 | Horizontal bar chart `HorizontalBarChart` | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

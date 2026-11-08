@@ -74,6 +74,7 @@ let svg = chart.draw(data)
 | M8 | 甘特图 `GanttChart`（时间轴、进度、依赖） | 已完成 |
 | M9 | 流程图 `Flowchart`（分层布局、六种形状、带箭头边） | 已完成 |
 | M10 | 时序图 `SequenceChart`（参与者、生命线、消息、返回虚线） | 已完成 |
+| M11 | 条形图 `HorizontalBarChart` | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
