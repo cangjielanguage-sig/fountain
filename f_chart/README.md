@@ -154,7 +154,8 @@ let svg = chart.draw(data)
 | M88 | 雨云图 `RaincloudChart`（半小提琴、雨点、箱线组合） | 已完成 |
 | M89 | 豆图 `DotStripChart`（确定性抖动、散点、点大小） | 已完成 |
 | M90 | 累积频率图 `EcdfChart`（排序阶梯、累计频率） | 已完成 |
-| M91–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M91 | Bland-Altman 图 `BlandAltmanChart`（均值差、±1.96 SD 界限） | 已完成 |
+| M92–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
