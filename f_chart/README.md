@@ -173,7 +173,22 @@ let svg = chart.draw(data)
 | M105 | 仪表盘 `GaugeChart`（阈值色带、指针、中心数值） | 已完成 |
 | M106 | 日历热力图里程碑闭合（复用 `CalendarHeatmapChart`，回归测试） | 已完成 |
 
-M1–M106 全部完成。测试总数 985，全部通过。
+M1–M106 全部完成。测试总数 1092，全部通过。
+
+## 图表样例（charts/）
+
+`src/ChartGallery_test.cj` 为每个里程碑准备了一份真实 JSON，渲染后把 SVG 写入 `charts/`：
+
+- 文件命名：`M<编号>-<type>.svg`，例如 `M001-bar.svg`、`M093b-confusion-matrix.svg`、`M106-calendar-heatmap.svg`。
+- 共 107 个文件（M1–M106 含 M93b；别名各占一份），均为可被浏览器直接打开的完整 SVG。
+- 重新生成：
+
+```bash
+cd f_chart
+cjpm test --skip-build
+```
+
+测试会断言 SVG 包含 `<svg`，并自动创建 `charts/` 目录；SVG 内容变化会直接体现在 `git diff` 中，便于做视觉回归。
 
 ## 错误语义
 
