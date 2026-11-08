@@ -146,7 +146,8 @@ let svg = chart.draw(data)
 | M80 | 配对连线图 `PairedLineChart`（before/after 配对、端点与标签） | 已完成 |
 | M81 | 时间线图 `TimelineChart`（水平/垂直、交替事件、描述文本） | 已完成 |
 | M82 | 主题河流图 `StreamgraphChart`（居中堆叠、wiggle/zero/symmetry） | 已完成 |
-| M83–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M83 | 蜡烛图 `CandlestickChart`（影线、实体、涨跌配色） | 已完成 |
+| M84–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
