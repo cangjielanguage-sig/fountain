@@ -98,6 +98,7 @@ let svg = chart.draw(data)
 | M32 | 环形图 `DonutChart`（内孔、中心文本） | 已完成 |
 | M33 | 马赛克图 `MosaicChart`（列宽、列内堆叠） | 已完成 |
 | M34 | 矩形树图 `TreemapChart`（层级面积、squarify 布局） | 已完成 |
+| M35 | 漏斗图 `FunnelChart`（阶段条、转化率） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
