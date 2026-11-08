@@ -166,7 +166,8 @@ let svg = chart.draw(data)
 | M99 | 决策树图 `DecisionTreeChart`（叶子槽位、分支标签、叶节点配色） | 已完成 |
 | M100 | 部分依赖图 `PdpChart`（边际效应曲线、特征标注） | 已完成 |
 | M101 | SHAP 图 `ShapChart`（绝对值降序、正负配色、零基线） | 已完成 |
-| M102–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M102 | 词云图 `WordCloudChart`（开方字号映射、旋转循环、货架布局） | 已完成 |
+| M103–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
