@@ -135,7 +135,8 @@ let svg = chart.draw(data)
 | M69 | 旭日图 `SunburstChart`（同心环、层级角度、一级标签） | 已完成 |
 | M70 | 圆堆积图 `CirclePackingChart`（嵌套圆、面积半径、网格布局） | 已完成 |
 | M71 | 组织图 `OrgChart`（垂直/水平布局、正交连线、父节点居中） | 已完成 |
-| M72–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M72 | 南丁格尔玫瑰图 `RoseChart`（等角扇区、radius/area 半径） | 已完成 |
+| M73–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
