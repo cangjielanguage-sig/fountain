@@ -80,6 +80,7 @@ let svg = chart.draw(data)
 | M14 | 面积图 `AreaChart`（填充透明度、平滑、缺测分段） | 已完成 |
 | M15 | 堆叠面积图 `StackedAreaChart`（按 stack 分组累加） | 已完成 |
 | M16 | 瀑布图 `WaterfallChart`（增减累计、连接器、语义色） | 已完成 |
+| M17 | 直方图 `HistogramChart`（等宽分箱、频数柱） | 已完成 |
 | M2–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
