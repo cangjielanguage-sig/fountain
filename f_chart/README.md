@@ -143,7 +143,8 @@ let svg = chart.draw(data)
 | M77 | 哑铃图 `DumbbellChart`（成对端点、连接线、自动范围） | 已完成 |
 | M78 | 斜率图 `SlopeChart`（双时间点、斜率线、右侧标签） | 已完成 |
 | M79 | 棒棒糖图 `LollipopChart`（茎线、圆头、null 跳过） | 已完成 |
-| M80–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M80 | 配对连线图 `PairedLineChart`（before/after 配对、端点与标签） | 已完成 |
+| M81–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
