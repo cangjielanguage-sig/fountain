@@ -124,7 +124,8 @@ let svg = chart.draw(data)
 | M58 | 点密度地图 `DotDensityMapChart`（底图、权重半径） | 已完成 |
 | M59 | 热力地图 `HeatMapChart`（底图、影响半径、颜色渐变） | 已完成 |
 | M60 | 流向地图 `FlowMapChart`（区域质心、折线路径、流量线宽） | 已完成 |
-| M61–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M61 | 变形地图 `CartogramChart`（质心缩放、value/sqrt 比例） | 已完成 |
+| M62–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
