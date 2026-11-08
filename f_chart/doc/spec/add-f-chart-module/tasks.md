@@ -13,7 +13,7 @@
 - [x] 2.2 运行 `cjpm test`，确认因 `Chart` 不存在而失败
 - [x] 2.3 Green：写 `src/Chart.cj` 声明 `public interface Chart`
 - [x] 2.4 写 `src/ChartException.cj`（`ChartErrorKind` + `ChartException <: BaseException`），补测试覆盖 kind / message / path
-- [x] 2.5 `cjpm test --no-run` 编译通过（运行阶段见文末「执行环境说明」）
+- [x] 2.5 `cjpm test` 全绿（5/5）
 
 ## 3. JSON 规范文档
 
@@ -28,18 +28,21 @@
 
 ## 5. 验证与归档
 
-- [x] 5.1 `cjpm build` 通过；测试编译通过（运行阶段见文末「执行环境说明」）
+- [x] 5.1 `cjpm build` + `cjpm test` 通过
 - [x] 5.2 `openspec validate add-f-chart-module --strict` 通过
 - [x] 5.3 `openspec archive add-f-chart-module`
 - [x] 5.4 四件套同步到 `f_chart/doc/spec/add-f-chart-module/`
 - [x] 5.5 分支内独立提交（含测试）
 
-## 执行环境说明
+## 鸿蒙侧测试流程
 
-当前会话运行在鸿蒙 PC 沙箱内，内核拒绝执行任何自行编译的 ELF（`Operation not permitted`），
-`cjpm test` 的编译与运行是两步：编译通过后，测试运行器 `std.testrunner` 无法被沙箱拉起。
-已完成的验证：
+鸿蒙沙箱只允许执行已签名的 ELF。`cjpm test` 生成的测试运行器与动态库需要先剥离旧的
+`.codesign` 段并自签名，再执行：
 
-- `cjpm build`：成功；
-- `cjpm test --no-run`：编译成功（Red → Green 的编译阶段均已观察）；
-- 运行阶段需在 Linux/融合环境执行 `cjpm test`，或用仓库既有 CI。
+```bash
+cjpm test --no-run
+python3 ~/tmp_sign/sign_elfs.py target/release
+cjpm test --skip-build
+```
+
+M0 实跑结果：`TOTAL: 5, PASSED: 5, FAILED: 0`。
