@@ -106,7 +106,8 @@ let svg = chart.draw(data)
 | M40 | 残差图 `ResidualChart`（拟合值对残差、零参考线） | 已完成 |
 | M41 | 杠杆图 `InfluenceChart`（Cook 距离映射点大小、标签） | 已完成 |
 | M42 | 概率图 `ProbabilityChart`（三种分布、最小二乘参考线） | 已完成 |
-| M43–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M43 | 热力图 `HeatmapChart`（矩阵单元格、三色插值、数值标签） | 已完成 |
+| M44–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
