@@ -102,7 +102,8 @@ let svg = chart.draw(data)
 | M36 | 桑基图 `SankeyChart`（分层节点、流量带） | 已完成 |
 | M37 | 帕累托图 `ParetoChart`（降序柱、累计折线） | 已完成 |
 | M38 | 控制图 `ControlChart`（中心线、上下控制限、越限点） | 已完成 |
-| M39–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M39 | 误差线图 `ErrorBarChart`（中心值、上下界、端帽） | 已完成 |
+| M40–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
