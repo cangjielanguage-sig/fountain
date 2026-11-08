@@ -160,7 +160,8 @@ let svg = chart.draw(data)
 | M93b | 混淆矩阵 `ConfusionMatrixChart`（行列归一化、热度格、数值） | 已完成 |
 | M94 | 提升图 `LiftChart`（升序折线、数据点、基准虚线） | 已完成 |
 | M95 | 增益图 `GainChart`（累计捕获曲线、对角线基准） | 已完成 |
-| M96–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M96 | 校准曲线 `CalibrationChart`（预测-实际对照、对角线开关） | 已完成 |
+| M97–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
