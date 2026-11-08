@@ -71,6 +71,7 @@ let svg = chart.draw(data)
 | M5 | Line chart `LineChart` (category / XY / time, smooth, symbols) | Done |
 | M6 | Scatter chart `ScatterChart` (numeric / time axes) | Done |
 | M7 | Combo chart `ComboChart` (bar/line/scatter, dual axes) | Done |
+| M8 | Gantt chart `GanttChart` (timeline, progress, dependencies) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics

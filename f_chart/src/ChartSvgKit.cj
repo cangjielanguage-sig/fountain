@@ -42,7 +42,8 @@ internal class ChartSvgKit {
         stroke!: ?String = None,
         strokeWidth!: Float64 = 0.0,
         className!: String = "",
-        radius!: ?Float64 = None
+        radius!: ?Float64 = None,
+        fillOpacity!: Float64 = 1.0
     ): Unit {
         this.builder.group()
         this.builder.rect(x: x, y: y, width: width, height: height, rx: radius, ry: radius)
@@ -50,7 +51,11 @@ internal class ChartSvgKit {
             this.builder.className(className)
         }
         match (fill) {
-            case Some(color) => this.builder.fill(color)
+            case Some(color) =>
+                this.builder.fill(color)
+                if (fillOpacity < 1.0) {
+                    this.builder.fillOpacity(fillOpacity)
+                }
             case None => ()
         }
         match (stroke) {
