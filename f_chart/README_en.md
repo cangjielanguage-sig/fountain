@@ -96,6 +96,7 @@ let svg = chart.draw(data)
 | M30 | Scatter matrix `ScatterMatrixChart` (pairwise scatter, diagonal labels) | Done |
 | M31 | Pie chart `PieChart` (slices, percent labels) | Done |
 | M32 | Donut chart `DonutChart` (hole, center text) | Done |
+| M33 | Mosaic chart `MosaicChart` (column widths, stacking) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
 ## Error semantics
