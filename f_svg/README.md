@@ -753,8 +753,9 @@ SvgBuilder(200.0, 100.0)
 - **时间表达式**：`SvgBegin.offset(1.5)` → `1.5s`、`at("a")` → `a.begin`、
   `after("a", -0.5)` → `a.end-0.5s`、`repeatOf("a", 2)` → `a.repeat(2)`、
   `event("click")`、`indefinite()`、`literal("5s")`，`join` 生成 `; ` 分隔列表。
-- **输出**：`document()` / `toSvgString(options!)` / `save(path)`。默认紧凑输出，
+- **输出**：`document()` / `toSvgString(options!)` / `write(output: OutputStream)` / `save(path)` / `save(file: File)`。默认紧凑输出，
   带 XML 声明与 `xmlns`；需要缩进时显式传 `SvgWriteOptions(indent: Some("  "))`。
+  `write` 与 `save(file:)` 只写入并 `flush`，不关闭调用方的流或文件；
   `save` 的文件系统失败包装为 `SvgException(kind: InvalidValue)`，消息保留目标路径。
 - **已知限制**：`SvgTimeline` 仍按 M6 规则解析 `begin`，`a.end+1s` / `a.repeat(2)`
   等扩展形式只保证浏览器播放，采样时按 M6 记录 warning 后忽略。

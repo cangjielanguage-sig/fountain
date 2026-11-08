@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_svg
 
 import std.fs.{File, Path}
+import std.io.ByteBuffer
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -602,5 +603,33 @@ public class SvgBuilderM7_test {
         @Assert(repeatWarned)
         @Assert(timeline.animations().size == 3)
         @Assert(timeline.duration() > 0.0)
+    }
+
+    /** `write(OutputStream)` 与 `toSvgString` 逐字节一致，且不关闭流。 */
+    @TestCase
+    public func writeOutputStreamMatchesString(): Unit {
+        let builder = SvgBuilder(20.0, 10.0)
+        builder.rect(x: 1.0, y: 1.0, width: 5.0, height: 5.0).fill("red")
+        let expected = builder.toSvgString().toArray()
+        let buffer = ByteBuffer()
+        builder.write(buffer)
+        @Assert(buffer.bytes() == expected)
+        buffer.write("tail".toArray())
+        @Assert(buffer.bytes().size == expected.size + 4)
+    }
+
+    /** `save(File)` 写入已打开文件，且不关闭它。 */
+    @TestCase
+    public func saveOpenedFile(): Unit {
+        let builder = SvgBuilder(20.0, 10.0)
+        builder.circle(cx: 5.0, cy: 5.0, r: 4.0).fill("#0f0")
+        let file = File.createTemp(Path("target"))
+        let target = file.info.path
+        builder.save(file)
+        file.write("<!--tail-->".toArray())
+        file.flush()
+        file.close()
+        let text = String.fromUtf8(File.readFrom(target))
+        @Assert(text == builder.toSvgString() + "<!--tail-->")
     }
 }

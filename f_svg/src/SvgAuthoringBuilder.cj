@@ -17,6 +17,7 @@ package fountain::f_svg
 
 import std.collection.*
 import std.fs.{FSException, File, Path}
+import std.io.OutputStream
 
 /**
  * 作者侧链式 SVG 构建器。
@@ -67,6 +68,22 @@ public class SvgBuilder {
             File.writeTo(path, this.toSvgString().toArray())
         } catch (_: FSException) {
             throw invalidValue("无法写入 SVG：${path}")
+        }
+    }
+
+    /** 写入调用方提供的输出流；只 `flush`，不关闭流。 */
+    public func write(output: OutputStream): Unit {
+        let writer = SvgWriter(output)
+        writer.write(this.document())
+        writer.flush()
+    }
+
+    /** 写入调用方已打开的文件；只 `flush`，不关闭文件。 */
+    public func save(file: File): Unit {
+        try {
+            this.write(file)
+        } catch (_: FSException) {
+            throw invalidValue("无法写入 SVG 文件")
         }
     }
 

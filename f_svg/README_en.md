@@ -836,10 +836,13 @@ SvgBuilder(200.0, 100.0)
 - **Time expressions**: `SvgBegin.offset(1.5)` → `1.5s`, `at("a")` → `a.begin`,
   `after("a", -0.5)` → `a.end-0.5s`, `repeatOf("a", 2)` → `a.repeat(2)`,
   `event("click")`, `indefinite()`, `literal("5s")`; `join` produces a `; ` list.
-- **Output**: `document()` / `toSvgString(options!)` / `save(path)`. The default is
+- **Output**: `document()` / `toSvgString(options!)` / `write(output: OutputStream)` /
+  `save(path)` / `save(file: File)`. The default is
   compact with an XML declaration and `xmlns`; pass
   `SvgWriteOptions(indent: Some("  "))` for indentation. `save` wraps file-system
   failures as `SvgException(kind: InvalidValue)` with the target path in the message.
+  `write` and `save(file:)` only write and `flush`; they never close the caller's stream
+  or file.
 - **Known limitation**: `SvgTimeline` still parses `begin` with the M6 rules. Extended
   forms such as `a.end+1s` / `a.repeat(2)` are intended for browser playback; sampling
   emits the M6 warning and ignores them.
