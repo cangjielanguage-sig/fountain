@@ -571,4 +571,23 @@ public class SvgBuilderM7_test {
             case None => @Fail("端到端结果缺少 rect")
         }
     }
+
+    /** 扩展 `begin` 不破坏时间轴：采样不抛异常，并按 M6 规则记录 warning。 */
+    @TestCase
+    public func extendedBeginKeepsTimelineStable(): Unit {
+        let builder = SvgBuilder(100.0, 100.0)
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .id("a")
+            .animate(attribute: "x", from: "0", to: "10", dur: "1s", begin: SvgBegin.offset(0.0))
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .id("b")
+            .animate(attribute: "y", from: "0", to: "10", dur: "1s", begin: SvgBegin.after("a", 1.0))
+        builder.rect(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+            .id("c")
+            .animate(attribute: "x", from: "0", to: "20", dur: "1s", begin: SvgBegin.repeatOf("a", 2))
+        let timeline = SvgTimeline(builder.document())
+        let sampled = timeline.sample(0.5)
+        @Assert(sampled.root.tag == "svg")
+        @Assert(timeline.warnings.size > 0)
+    }
 }
