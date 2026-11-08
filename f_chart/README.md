@@ -148,7 +148,8 @@ let svg = chart.draw(data)
 | M82 | 主题河流图 `StreamgraphChart`（居中堆叠、wiggle/zero/symmetry） | 已完成 |
 | M83 | 蜡烛图 `CandlestickChart`（影线、实体、涨跌配色） | 已完成 |
 | M84 | 螺旋图 `SpiralChart`（阿基米德螺旋、圈数/方向、周期标签） | 已完成 |
-| M85–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
+| M85 | 泳道图 `SwimlaneChart`（横/纵泳道、节点、正交箭头） | 已完成 |
+| M86–M106 | 各图实现（每图一个 OpenSpec 变更 + TDD） | 按里程碑推进 |
 
 ## 错误语义
 
