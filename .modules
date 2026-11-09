@@ -53,6 +53,9 @@ f_chart
 f_zip
 f_excel
 f_rule
+f_probe
+f_tui
+fprobe
 f_llm
 fmq
 fdbm

@@ -396,6 +396,25 @@ x86_64 / aarch64 机器码后端执行，并以 `JitFunction.call<T>` 与宿主�
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jit/README.md>
 
+### `fountain::f_probe`
+服务器监控扩展契约：监控项 `ProbeAgent`、告警渠道 `AlarmMessageChannel`、线程安全注册表与
+稳定错误码。第三方扩展只需依赖本模块即可编译动态库，无需引入 RPC、邮件或 TUI 依赖。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_probe/README.md>
+
+### `fountain::f_tui`
+Unix 终端后端：POSIX `termios` raw mode、终端尺寸、按键解码、ANSI 差分渲染，以及
+`ratatui_buffer.Buffer → ANSI` 渲染器。只依赖 `f_base` 与 ratatui 基础包，
+不引入 `crossterm` / `ratatui_backend` / `ratatui_terminal` / `ratatui_widgets`。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_tui/README.md>
+
+### `fountain::fprobe`
+服务器监控可执行程序（`fprobe agent` / `fprobe supervisor`）：节点侧周期采集主机指标并通过 RPC
+暴露，监督端汇聚多节点数据，提供告警、图表、周期报告与 `custom/` 动态库扩展。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/fprobe/README.md>
+
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序
 

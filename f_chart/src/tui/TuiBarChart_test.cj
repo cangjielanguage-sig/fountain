@@ -158,4 +158,35 @@ public class TuiBarChart_test {
             @Assert(error.kind == ChartErrorKind.UnsupportedChart)
         }
     }
+
+    /** 逐单元格结果与 ANSI 输出同形，并包含柱体字符。 */
+    @TestCase
+    public func drawCellsMatchesBarSymbols(): Unit {
+        let chart = TuiBarChart()
+        let cells = chart.drawCells(JsonValue.fromStr(sample).asObject())
+        @Assert(cells.size, 18)
+        var hasBlock = false
+        for (row in cells) {
+            @Assert(row.size, 60)
+            for (cell in row) {
+                if (cell == "█") {
+                    hasBlock = true
+                }
+            }
+        }
+        @Assert(hasBlock)
+        let plain = tuiStripAnsi(chart.draw(JsonValue.fromStr(sample).asObject()))
+        var index = 0
+        let lines = plain.split('\n')
+        for (row in cells) {
+            let joined = String.join(row, delimiter: "")
+            while (index < lines.size && lines[index].isEmpty()) {
+                index++
+            }
+            if (index < lines.size) {
+                @Assert(joined, lines[index])
+                index++
+            }
+        }
+    }
 }
