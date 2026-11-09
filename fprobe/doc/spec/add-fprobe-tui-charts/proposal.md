@@ -20,7 +20,7 @@
 - `fprobe` 新增 `tui/ChartPanel.cj` 适配层：
   - `ChartPanel.render(series: Array<SparkSeries>, width: Int64, height: Int64, chartType: String): ?Array<Array<String>>`。
   - 只取第一条序列，避免「百分比」与「字节/秒」混在同一根数值轴上。
-  - 用 `ChartSpec.forCells` 生成图表 JSON，调用 `TuiLineChart`/`TuiBarChart` 的 `drawCells`。
+  - 直接用 `JsonObject` 构造图表 JSON（避免 `tui ↔ report` 循环依赖），调用 `TuiLineChart`/`TuiBarChart` 的 `drawCells`。
   - 空序列、空数值、未知类型、尺寸不足（宽 < 20 或高 < 8）、f_chart 抛异常时一律返回 `None`，由调用方回退。
 - `MetricPage` 新增 `chartType()`：CPU/内存/网络/服务/健康 → `line`，磁盘 → `bar`，拓扑/告警 → `""`。
 - `RenderPlan` 增加三个纯数据字段（带默认值，既有构造调用不破坏）：
@@ -32,7 +32,6 @@
   - 先画指标表，再留一行空白；
   - `chartHeight ≥ 8` 且宽度足够时逐单元格写入图表；任一条件不满足或 `ChartPanel` 返回 `None` 时回退为现有 sparkline（回退时仍画全部序列）；
   - 图表单元格跳过空字符串（宽字符后半格），统一使用宿主主题色。
-- `report/ChartSpec` 增加 `forCells` 工厂：标题为空、单具名系列、类目轴标签留空（由 TUI 自动生成 `1..N`）、指定字符画布宽高。报告路径不受影响。
 - 文档与镜像：更新 `f_chart/README.md`、`f_chart/doc/f_chart模块设计.md`、`fprobe/doc/tui.md`；把本变更四件套镜像到 `fprobe/doc/spec/add-fprobe-tui-charts/`。
 
 ## Capabilities
@@ -51,7 +50,6 @@
 - 代码：
   - `f_chart/src/tui/TuiCellChart.cj`（新增）、`TuiCanvas.cj`、`LineChart.cj`、`TuiBarRenderer.cj`、`BarChart.cj`。
   - `fprobe/src/tui/ChartPanel.cj`（新增）、`TuiLayout.cj`（新增）、`RenderPlan.cj`、`ViewModel.cj`（`MetricPage.chartType`）、`Painter.cj`、`FprobePainter.cj`、`RenderLoop.cj`。
-  - `fprobe/src/report/ChartSpec.cj`（新增 `forCells` 工厂，既有调用不变）。
   - `fprobe/src/runtime/RuntimeSupport.cj`（`NullPainter.viewportHeight`）。
   - 测试：`f_chart/src/tui/TuiCanvas_test.cj`、`TuiLineChart_test.cj`、`TuiBarChart_test.cj`（或新增 `TuiCellChart_test.cj`）；`fprobe/src/tui/ChartPanel_test.cj`（新增）、`TuiLayout_test.cj`（新增）、`RenderPlan_test.cj`、`FprobePainter_test.cj`、`RenderLoop_test.cj`、`SupervisorApp_test.cj`、`report/ChartSpec_test.cj`。
 - 依赖：不变。`fprobe` 已依赖 `f_chart`；`f_chart.tui` 仍为零第三方依赖；不引入 `ratatui_widgets`、`crossterm`。

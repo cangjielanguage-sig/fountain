@@ -70,14 +70,12 @@ public class ChartPanel {
 4. 只取 `series[0]`：不同指标可能是 `%`、`B`、`B/s`、`ms`，共用一根数值轴会误导；每页第一条在 `ProjectionCatalog` 中就是该页主指标。
 5. 构造 JSON 后调用对应类的 `drawCells`；捕获 `ChartException` 与其它 `Exception`，返回 `None`，**不允许**图表异常穿透到帧循环。
 
-JSON 构造复用 `report/ChartSpec`，新增工厂：
+JSON 由 `ChartPanel` 直接用 `JsonObject`/`JsonArray` 构造，**不**复用 `report/ChartSpec`：
 
-```cj
-public static func forCells(chartType: String, seriesName: String,
-    values: Array<Float64>, width: Int64, height: Int64): ChartSpec
-```
+- `report` 已经依赖 `tui`（`ReportBuilder` 使用 `HistorySource` 等），若 `tui` 反向引用 `report` 会形成包级循环依赖；
+- 需要的 JSON 只有 `type`/`title`/`width`/`height`/`xAxis.type=category`/单具名系列，直连构造比引入一个只为 TUI 服务的工厂更清晰。
 
-它把 `title` 设为空（面板本身已有页标题，序列名交给图例）、`xAxis.labels` 留空、`series` 设为单个 `ChartSeriesSpec(seriesName, values)`、`width`/`height` 设为字符画布尺寸。`jsonObject()` 仍负责把 `chartType` 改名为 `type`。
+`title` 留空（面板本身已有页标题，序列名交给图例），`xAxis.labels` 留空，`series` 是单个 `{"name": seriesName, "data": values}`。
 
 **坐标轴模式（调研修正）**：`ChartConfig` 的 `xAxis` 默认类型是 `category`；而 `TuiPointCommon.tuiParsePointSeries` 在 `linear`/`time` 模式下要求 `data` 的每一项是 `{x, y}` 对象，**不能**直接吃 `Array<Float64>`。因此 TUI 监控图唯一可行的输入是类目模式：`data` 为数值数组，`tuiResolveLabels` 自动生成 `1..N` 的横轴标签。这也正是需求底稿给出的 JSON 形态（不配 `xAxis.labels`）。标签在类目带过窄时由 `TuiFrame` 自动不绘制，只保留折线/柱体与纵轴刻度，符合监控趋势的阅读需求。
 
@@ -173,7 +171,7 @@ public init(renderer: FrameRenderer,
 ### D7：不改 SVG 报告路径
 
 - `ChartRenderer` / `ChartSelector` / `ReportBuilder` 不动；`ChartSpec.fromValues` 的语义不变。
-- `ChartSpec.forCells` 只增加一个工厂，`jsonObject()` 仍输出既有 `type`/`series` 结构；TUI 使用空 `title` 与空 `xAxis.labels`，不影响报告。
+- `report` 包完全不动；TUI 的图表 JSON 在 `tui/ChartPanel` 内自建，因此不存在 `tui → report` 的依赖，也不会影响报告输出。
 
 ## Testing
 
