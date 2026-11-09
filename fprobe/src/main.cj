@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fprobe
 
 import fountain::fprobe.config.{AgentSettings, SupervisorSettings}
+import fountain::fprobe.runtime.{AgentRuntime, SupervisorBootstrap}
 
 /**
  * fprobe 可执行文件入口。
@@ -109,8 +110,15 @@ private func runAgent(): Int64 {
         return 2
     }
     settings.apply()
-    eprintln("fprobe agent: 配置校验通过，采集与 RPC 服务将在后续任务中接入")
-    0
+    try {
+        return AgentRuntime.prepare(settings).serve()
+    } catch (e: Exception) {
+        eprintln("fprobe agent: 启动失败: ${e.message}")
+        1
+    } catch (e: Error) {
+        eprintln("fprobe agent: 启动失败: ${e.message}")
+        1
+    }
 }
 
 /** supervisor 启动：TTY 与 resident 模式共用同一份配置校验。 */
@@ -123,11 +131,13 @@ private func runSupervisor(resident: Bool): Int64 {
         }
         return 2
     }
-    let mode = if (resident) {
-        "resident"
-    } else {
-        "tui"
+    try {
+        return SupervisorBootstrap.run(settings, resident)
+    } catch (e: Exception) {
+        eprintln("fprobe supervisor: 启动失败: ${e.message}")
+        1
+    } catch (e: Error) {
+        eprintln("fprobe supervisor: 启动失败: ${e.message}")
+        1
     }
-    eprintln("fprobe supervisor: 配置校验通过（${mode}），拉取与告警将在后续任务中接入")
-    0
 }

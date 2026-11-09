@@ -30,6 +30,8 @@ import fountain::fprobe.rpc.NodeEndpoint
  */
 public class AgentSettings {
     public var port: UInt16 = 12323
+    /** 集群内唯一的节点编号；0 会被 f_protocol 拒绝。 */
+    public var hostId: Int64 = 1
     public var host: String = defaultHost()
     public var intervalMs: Int64 = 5000
     public var customDir: String = "./custom"
@@ -72,6 +74,7 @@ public class AgentSettings {
             case None => ()
         }
 
+        settings.hostId = readInt("probe_hostId", settings.hostId, 1, settings.errors)
         settings.intervalMs = readInt("probe_intervalMs", settings.intervalMs, 1, settings.errors)
 
         match (configString("probe_customDir")) {
@@ -140,6 +143,7 @@ public class AgentSettings {
      */
     public func apply(): Unit {
         Config.set([("rpcServer_port", port)])
+        Config.set([("protocol_hostId", hostId)])
     }
 }
 

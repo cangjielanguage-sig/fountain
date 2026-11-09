@@ -27,6 +27,8 @@ import fountain::fprobe.rpc.NodeEndpoint
  */
 public class SupervisorSettings {
     public var nodes: Array<NodeEndpoint> = []
+    /** 集群内唯一的节点编号；0 会被 f_protocol 拒绝。 */
+    public var hostId: Int64 = 1
     public var pollIntervalMs: Int64 = 5000
     public var nodeTimeoutMs: Int64 = 3000
     public var missingThreshold: Int64 = 2
@@ -60,6 +62,7 @@ public class SupervisorSettings {
             settings.nodes = parsed.toArray()
         }
 
+        settings.hostId = readInt("probe_hostId", settings.hostId, 1, settings.errors)
         settings.pollIntervalMs = readInt("probe_pollIntervalMs", settings.pollIntervalMs, 1, settings.errors)
         settings.nodeTimeoutMs = readInt("probe_nodeTimeoutMs", settings.nodeTimeoutMs, 1, settings.errors)
         settings.missingThreshold = readInt("probe_missingThreshold", settings.missingThreshold, 1, settings.errors)
@@ -70,6 +73,11 @@ public class SupervisorSettings {
 
     public func validate(): Array<String> {
         errors.toArray()
+    }
+
+    /** 把节点编号写进协议配置；RPC 客户端生成 MessageID 时读取。 */
+    public func apply(): Unit {
+        Config.set([("protocol_hostId", hostId)])
     }
 
     private static func defaultNode(): NodeEndpoint {

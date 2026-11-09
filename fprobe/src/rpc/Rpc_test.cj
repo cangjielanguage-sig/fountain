@@ -63,6 +63,8 @@ public class ProbeDTOTest {
         @Assert(restored.host, original.host)
         @Assert(restored.timestamp, original.timestamp)
         @Assert(restored.agents.size, 2)
+        @Assert(restored.agents[0].kind, original.agents[0].kind)
+        @Assert(restored.agents[0].host, original.agents[0].host)
         @Assert(restored.agents[0].dataJson, original.agents[0].dataJson)
         @Assert(restored.agents[1].error, original.agents[1].error)
     }

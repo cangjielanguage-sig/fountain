@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fprobe.snapshot
 
+import std.collection.ArrayList
 import std.sync.Mutex
 import fountain::f_data.*
 import fountain::f_data.macros.*
@@ -26,7 +27,7 @@ import fountain::f_data.macros.*
  * `JsonValue.from(agent.data).toString()` 的结果。失败时 `error` 非空，
  * `dataJson` 与 `collectedAt` 保留上一次成功的值。
  */
-@DataAssist[fields props]
+@DataAssist[props fields]
 public class ProbeAgentData {
     private var kind: String = ""
     private var host: String = ""
@@ -46,25 +47,74 @@ public class ProbeAgentData {
 }
 
 /** 一个节点一次采集的完整快照，作为 RPC 响应体整体传输。 */
-@DataAssist[fields props]
+@DataAssist[props fields]
 public class ProbeSnapshot {
     private var node: String = ""
     private var host: String = ""
     private var timestamp: Int64 = 0
-    private var agents: Array<ProbeAgentData> = []
+    /**
+     * 监控项数组的 JSON 文本。
+     *
+     * `f_rpc` 的二进制解码会为嵌套 DTO 数组创建默认元素但丢失字段，因此线上只传
+     * 字符串；`agents` 是本地派生视图，调用方无感知。
+     */
+    private var agentsJson: String = "[]"
 
     public init() {}
 
     public init(node: String, host: String, timestamp: Int64, agents: Array<ProbeAgentData>) {
+        this(node, host, timestamp, ProbeSnapshot.encodeAgents(agents))
+    }
+
+    public init(node: String, host: String, timestamp: Int64, agentsJson: String) {
         this.node = node
         this.host = host
         this.timestamp = timestamp
-        this.agents = agents
+        this.agentsJson = agentsJson
+    }
+
+    /** 本地视图；每次读取都从 `agentsJson` 解析。 */
+    public prop agents: Array<ProbeAgentData> {
+        get() {
+            ProbeSnapshot.decodeAgents(agentsJson)
+        }
+    }
+
+    public static func encodeAgents(entries: Array<ProbeAgentData>): String {
+        let array = JsonArray()
+        for (entry in entries) {
+            array.add(JsonValue.from(entry.toData()))
+        }
+        array.toJsonString()
+    }
+
+    public static func decodeAgents(json: String): Array<ProbeAgentData> {
+        let trimmed = json.trimAscii()
+        if (trimmed.isEmpty()) {
+            return []
+        }
+        let parsed = try {
+            JsonValue.fromStr(trimmed)
+        } catch (_: Exception) {
+            return []
+        }
+        let array = match (parsed) {
+            case value: JsonArray => value
+            case _ => return []
+        }
+        let result = ArrayList<ProbeAgentData>()
+        for (item in array) {
+            match (DataObject<ProbeAgentData>.populate(item.toData())) {
+                case Some(value) => result.add(value)
+                case None => ()
+            }
+        }
+        result.toArray()
     }
 }
 
 /** `kinds()` 的响应 DTO；`Array<String>` 不能直接作为 `DataFields` 返回。 */
-@DataAssist[fields props]
+@DataAssist[props fields]
 public class ProbeKinds {
     private var kinds: Array<String> = []
 
