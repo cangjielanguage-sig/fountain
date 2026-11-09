@@ -5,10 +5,10 @@
 ```bash
 cd fprobe
 cjpm build --release
-# 产物：target/release/bin/fprobe
+# 产物：target/release/bin/main（模块根目录的 fprobe.sh 会自动找到它）
 ```
 
-`cjpm install` 后可把 `fprobe` 放到 `/usr/local/bin`。
+`cjpm install` 后可把可执行文件放到 `/usr/local/bin/fprobe`。
 
 ## 节点代理
 
