@@ -19,6 +19,8 @@ import std.collection.ArrayList
 import std.convert.*
 import std.posix.gethostname
 import fountain::f_config.Config
+import fountain::fprobe.collect.hw.SnmpDevice
+import fountain::fprobe.rpc.NodeEndpoint
 
 /**
  * agent 子命令的运行期配置。
@@ -33,6 +35,16 @@ public class AgentSettings {
     public var customDir: String = "./custom"
     public var customFailFast: Bool = true
     public var diskExcludeFs: Array<String> = ["tmpfs", "devtmpfs", "overlay", "squashfs"]
+    /** `probe_serviceTargets` 的原始 `name@url` 项，由服务探针逐项解析。 */
+    public var serviceTargets: Array<String> = []
+    public var mvcHealthUrl: String = ""
+    public var rpcHealthTargets: Array<NodeEndpoint> = []
+    public var snmpDevices: Array<SnmpDevice> = []
+    public var ipmiEnabled: Bool = false
+    public var smartDevices: Array<String> = []
+    public var networkInterfaces: Array<String> = []
+    public var httpTimeoutMs: Int64 = 2000
+    public var commandTimeoutMs: Int64 = 3000
 
     private var errors = ArrayList<String>()
 
@@ -80,6 +92,39 @@ public class AgentSettings {
             case Some(raw) => settings.diskExcludeFs = parseDiskExcludeFs(raw, settings.errors)
             case None => ()
         }
+
+        settings.serviceTargets = parseServiceTargets(Config.getStringArray("probe_serviceTargets"),
+            settings.errors)
+
+        match (configString("probe_mvcHealthUrl")) {
+            case Some(value) =>
+                if (isHttpUrl(value)) {
+                    settings.mvcHealthUrl = value
+                } else {
+                    settings.errors.add('probe_mvcHealthUrl 必须是 http(s) 地址，实际为 "${value}"')
+                }
+            case None => ()
+        }
+
+        settings.rpcHealthTargets = parseRpcHealthTargets(Config.getStringArray("probe_rpcHealthTargets"),
+            settings.errors)
+        settings.snmpDevices = parseSnmpDevices(Config.getStringArray("probe_snmpDevices"), settings.errors)
+        settings.smartDevices = parseSmartDevices(Config.getStringArray("probe_smartDevices"), settings.errors)
+        settings.networkInterfaces = parseNetworkInterfaces(Config.getStringArray("probe_networkInterfaces"),
+            settings.errors)
+
+        match (configString("probe_ipmiEnabled")) {
+            case Some(raw) =>
+                match (Bool.tryParse(raw)) {
+                    case Some(value) => settings.ipmiEnabled = value
+                    case None => settings.errors.add('probe_ipmiEnabled 不是合法布尔值: "${raw}"')
+                }
+            case None => ()
+        }
+
+        settings.httpTimeoutMs = readInt("probe_httpTimeoutMs", settings.httpTimeoutMs, 1, settings.errors)
+        settings.commandTimeoutMs = readInt("probe_commandTimeoutMs", settings.commandTimeoutMs, 1,
+            settings.errors)
 
         settings
     }

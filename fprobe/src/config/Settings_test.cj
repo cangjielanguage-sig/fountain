@@ -19,6 +19,8 @@ import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
+import fountain::fprobe.collect.hw.SnmpDevice
+import fountain::fprobe.rpc.NodeEndpoint
 
 /** 配置是进程级全局状态：用例结束后必须还原，避免污染其它用例。 */
 private func restore(saved: ArrayList<(String, ?String)>): Unit {
@@ -241,6 +243,149 @@ public class SupervisorSettings_test {
         withKeys([("probe_nodes", "bad,other@host:0"), ("probe_historyPoints", "0")]) {
             let errors = SupervisorSettings.load().validate()
             @Assert(errors.size == 3)
+        }
+    }
+}
+
+/** 6.x/7.x 批次：构造各探针所需的 agent 配置项。 */
+@Test
+public class AgentSettingsProbeConfig_test {
+    private static let probeKeys = [
+        "probe_serviceTargets", "probe_mvcHealthUrl", "probe_rpcHealthTargets", "probe_snmpDevices",
+        "probe_ipmiEnabled", "probe_smartDevices", "probe_networkInterfaces", "probe_httpTimeoutMs",
+        "probe_commandTimeoutMs"
+    ]
+
+    @TestCase
+    public func probeConfigDefaults(): Unit {
+        withoutKeys(probeKeys) {
+            let settings = AgentSettings.load()
+            @Assert(settings.validate().isEmpty())
+            @Assert(settings.serviceTargets.size, 0)
+            @Assert(settings.mvcHealthUrl, "")
+            @Assert(settings.rpcHealthTargets.size, 0)
+            @Assert(settings.snmpDevices.size, 0)
+            @Assert(!settings.ipmiEnabled)
+            @Assert(settings.smartDevices.size, 0)
+            @Assert(settings.networkInterfaces.size, 0)
+            @Assert(settings.httpTimeoutMs, 2000)
+            @Assert(settings.commandTimeoutMs, 3000)
+        }
+    }
+
+    @TestCase
+    public func probeConfigIsParsed(): Unit {
+        withKeys([
+            ("probe_serviceTargets", "api@http://127.0.0.1:8080/health, db@tcp://10.0.0.2:5432"),
+            ("probe_mvcHealthUrl", "http://127.0.0.1:8080/health"),
+            ("probe_rpcHealthTargets", "core@10.0.0.1:1203, worker@10.0.0.2:1204"),
+            ("probe_snmpDevices", "switch@10.0.0.5@public"),
+            ("probe_ipmiEnabled", "true"),
+            ("probe_smartDevices", "/dev/sda, /dev/nvme0n1"),
+            ("probe_networkInterfaces", "eth0, eth1"),
+            ("probe_httpTimeoutMs", "1500"),
+            ("probe_commandTimeoutMs", "2500")
+        ]) {
+            let settings = AgentSettings.load()
+            @Assert(settings.validate().isEmpty())
+            @Assert(settings.serviceTargets.size, 2)
+            @Assert(settings.serviceTargets[0], "api@http://127.0.0.1:8080/health")
+            @Assert(settings.mvcHealthUrl, "http://127.0.0.1:8080/health")
+            @Assert(settings.rpcHealthTargets.size, 2)
+            @Assert(settings.rpcHealthTargets[0].name, "core")
+            @Assert(settings.rpcHealthTargets[0].host, "10.0.0.1")
+            @Assert(settings.rpcHealthTargets[0].port, 1203)
+            @Assert(settings.rpcHealthTargets[1].name, "worker")
+            @Assert(settings.snmpDevices.size, 1)
+            @Assert(settings.snmpDevices[0].name, "switch")
+            @Assert(settings.snmpDevices[0].host, "10.0.0.5")
+            @Assert(settings.snmpDevices[0].community, "public")
+            @Assert(settings.ipmiEnabled)
+            @Assert(settings.smartDevices.size, 2)
+            @Assert(settings.smartDevices[0], "/dev/sda")
+            @Assert(settings.smartDevices[1], "/dev/nvme0n1")
+            @Assert(settings.networkInterfaces.size, 2)
+            @Assert(settings.networkInterfaces[0], "eth0")
+            @Assert(settings.networkInterfaces[1], "eth1")
+            @Assert(settings.httpTimeoutMs, 1500)
+            @Assert(settings.commandTimeoutMs, 2500)
+        }
+    }
+
+    @TestCase
+    public func invalidServiceTargetIsRejected(): Unit {
+        withKeys([("probe_serviceTargets", "bogus")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_serviceTargets"))
+        }
+        withKeys([("probe_serviceTargets", "api@ftp://127.0.0.1:21")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_serviceTargets"))
+        }
+    }
+
+    @TestCase
+    public func invalidMvcHealthUrlIsRejected(): Unit {
+        withKeys([("probe_mvcHealthUrl", "ftp://127.0.0.1/health")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_mvcHealthUrl"))
+        }
+    }
+
+    @TestCase
+    public func invalidRpcHealthTargetIsRejected(): Unit {
+        withKeys([("probe_rpcHealthTargets", "bogus")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_rpcHealthTargets"))
+        }
+        withKeys([("probe_rpcHealthTargets", "core@10.0.0.1:70000")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_rpcHealthTargets"))
+        }
+    }
+
+    @TestCase
+    public func invalidSnmpDeviceIsRejected(): Unit {
+        withKeys([("probe_snmpDevices", "name@host")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_snmpDevices"))
+        }
+        withKeys([("probe_snmpDevices", "name@host@bad community")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_snmpDevices"))
+        }
+    }
+
+    @TestCase
+    public func invalidSmartDeviceIsRejected(): Unit {
+        withKeys([("probe_smartDevices", "/dev/sda,/etc/passwd")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_smartDevices"))
+        }
+    }
+
+    @TestCase
+    public func invalidNetworkInterfaceIsRejected(): Unit {
+        withKeys([("probe_networkInterfaces", "eth0,bad if")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_networkInterfaces"))
+        }
+    }
+
+    @TestCase
+    public func invalidBoolAndTimeoutsAreRejected(): Unit {
+        withKeys([("probe_ipmiEnabled", "yes"), ("probe_httpTimeoutMs", "0"), ("probe_commandTimeoutMs", "abc")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 3)
         }
     }
 }
