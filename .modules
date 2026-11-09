@@ -56,6 +56,7 @@ f_rule
 f_probe
 f_tui
 fprobe
+f_llm
 fmq
 fdbm
 fjsonrpcdemo
@@ -66,5 +67,4 @@ fboot
 [exclude]
 
 [detention]
-f_llm
 fleet

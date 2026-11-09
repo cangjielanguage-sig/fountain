@@ -103,6 +103,26 @@ let svg = chart.draw(data)
 | M37 | Pareto chart `ParetoChart` (sorted bars, cumulative line) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
+## TUI subpackage (fountain::f_chart.tui)
+
+For terminal/SSH output, the TUI subpackage renders the same JSON into ANSI character art. It has no third-party dependencies and implements the same `Chart` interface:
+
+```cangjie
+import fountain::f_chart.*
+import fountain::f_chart.tui.*
+import fountain::f_data.json.JsonValue
+
+let output = TuiBarChart().draw(data)
+print(output)
+```
+
+Supported classes: `TuiBarChart` (`bar`), `TuiGroupedBarChart` (`grouped-bar`), `TuiStackedBarChart` (`stacked-bar`), `TuiPercentStackedBarChart` (`percent-stacked-bar`), `TuiLineChart` (`line`), `TuiScatterChart` (`scatter`), `TuiComboChart` (`combo`, any two or three of the six bar/line/scatter types, with an optional right axis), and `TuiFlameChart` (`flame`, true-color call-stack flame graph with `bottom-up` / `top-down` and `colorBy`).
+
+- `width` / `height` are character columns/rows; default 80×24, minimum 20×8.
+- Output is ANSI 24-bit color, each row terminates with `\u{1B}[0m\n`.
+- Marks: bar families cycle `█ ▓ ▒ ░` per series, lines `*`, points `o`, grid `·`, axes `│ ─ └`, legend `■`.
+- CJK characters occupy two columns; long labels are truncated with `…`.
+
 ## Error semantics
 
 `draw` returns a string only on success; every structural or numeric problem is raised as `ChartException`. The `path` field looks like `series[0].data[2]` and is prefixed to the message when non-empty.

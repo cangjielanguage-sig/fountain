@@ -173,7 +173,7 @@ let svg = chart.draw(data)
 | M105 | 仪表盘 `GaugeChart`（阈值色带、指针、中心数值） | 已完成 |
 | M106 | 日历热力图里程碑闭合（复用 `CalendarHeatmapChart`，回归测试） | 已完成 |
 
-M1–M106 全部完成。测试总数 1092，全部通过。
+M1–M106 全部完成。测试总数 1168，全部通过（含 TUI 子包 76 个用例）。
 
 ## 图表样例（charts/）
 
@@ -189,6 +189,48 @@ cjpm test --skip-build
 ```
 
 测试会断言 SVG 包含 `<svg`，并自动创建 `charts/` 目录；SVG 内容变化会直接体现在 `git diff` 中，便于做视觉回归。
+
+TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 8 份字符画样例；`TuiFlameChart_test` 另输出 4 个火焰图变体：
+
+- 文件命名：`M<编号>-<type>.tui.txt`，例如 `M001-bar.tui.txt`、`M007-combo.tui.txt`、`M052-flame.tui.txt`。
+- 火焰图变体：`M052-flame-bottom-up`、`-top-down`、`-value`、`-frame-height`。
+- 全部保留 ANSI 24 位真彩颜色，`cat` 即可看到系列配色；分组/堆叠/百分比堆叠的各系列或分段、组合图的柱/线/散点、火焰图各节点均使用不同颜色。
+- 尺寸取 JSON 中的 `width`/`height`（字符列/行），与 SVG 样例共用同一批图表语义。
+
+## TUI 子包（fountain::f_chart.tui）
+
+终端/SSH 场景可直接渲染字符画。TUI 子包不引入任何第三方依赖，复用同一份 JSON 与 `Chart` 接口：
+
+```cangjie
+import fountain::f_chart.*
+import fountain::f_chart.tui.*
+import fountain::f_data.json.JsonValue
+
+let svg = TuiBarChart().draw(data)   // 返回 ANSI 彩色字符串
+print(svg)
+```
+
+| 类 | `type` | 说明 |
+|---|---|---|
+| `TuiBarChart` | `bar` | 单系列柱状图 |
+| `TuiGroupedBarChart` | `grouped-bar` | 类目内并排柱 |
+| `TuiStackedBarChart` | `stacked-bar` | 正负双向堆叠 |
+| `TuiPercentStackedBarChart` | `percent-stacked-bar` | 按类目归一到 100% |
+| `TuiLineChart` | `line` | 类目 / 数值 / 时间轴，null 断开 |
+| `TuiScatterChart` | `scatter` | 数值 / 时间轴散点 |
+| `TuiComboChart` | `combo` | 上述 6 种柱/线/点类型任意组合，支持右轴 |
+| `TuiFlameChart` | `flame` | 真彩调用栈火焰图，支持 `bottom-up` / `top-down` 与 `colorBy` |
+
+约定：
+
+- `width` / `height` 表示字符列数与行数，缺省 80×24，最小 20×8；建议 TUI JSON 显式写 `"width": 80, "height": 24`。
+- 输出为 ANSI 24 位真彩色字符串，每行以 `\u{1B}[0m\n` 结束，可直接 `print`。
+- 标记字符：柱族按系列循环使用 `█ ▓ ▒ ░`，折线 `*`、散点 `o`、网格 `·`、坐标轴 `│ ─ └`、图例 `■`；即使终端不支持颜色，多系列柱体也能通过符号区分。
+- CJK 字符按 2 列显示；标签超出可用宽度时截断并以 `…` 结尾。
+- TUI 组合图要求类目横轴；`axis: "right"` 的系列需要 `yAxis2`。
+- 火焰图的 `frameHeight` 在 TUI 中表示每层最大字符行数，缺省 18 会按可用高度压缩；`colorBy` 支持 `name` 与 `value`。
+
+完整用法（各类 JSON 示例、尺寸与版式、错误处理、样例文件）见文末[附：TUI 子包用法](#附tui-子包用法)。
 
 ## 错误语义
 
@@ -2816,4 +2858,276 @@ cjpm test --skip-build
   ]
 }
 ```
+
+---
+
+## 附：TUI 子包用法
+
+TUI 子包（`fountain::f_chart.tui`）把与 SVG 版相同的 JSON 渲染成终端字符画。8 个类都实现 `fountain::f_chart.Chart`，因此可以按统一接口调用、替换或注入。
+
+### 最小示例
+
+```cangjie
+import fountain::f_chart.tui.*
+import fountain::f_data.json.JsonValue
+
+main(): Int64 {
+    let json = """
+{
+  "type": "bar",
+  "title": "月度销售额",
+  "width": 60,
+  "height": 18,
+  "xAxis": { "type": "category", "labels": ["一月", "二月", "三月", "四月"] },
+  "yAxis": { "type": "linear", "min": 0 },
+  "series": [ { "name": "销售额", "data": [120, 200, 150, 180] } ]
+}
+"""
+    print(TuiBarChart().draw(JsonValue.fromStr(json).asObject()))
+    0
+}
+```
+
+`draw` 返回 ANSI 24 位真彩色字符串，每行以 `\u{1B}[0m\n` 结束，直接 `print` 即可在终端看到彩色字符画；写入文件时转义序列会保留，需纯文本时自行剥离 `\u{1B}[...m`。
+
+### 按图类型调用
+
+只需替换图表类；JSON 的 `type` 与类一一对应（`TuiFlameChart` 处理 M52，其余尚未 TUI 化的图类型仍不在范围内）。
+
+```cangjie
+let charts: Array<Chart> = [
+    TuiBarChart(),                  // bar
+    TuiGroupedBarChart(),           // grouped-bar
+    TuiStackedBarChart(),           // stacked-bar
+    TuiPercentStackedBarChart(),    // percent-stacked-bar
+    TuiLineChart(),                 // line
+    TuiScatterChart(),              // scatter
+    TuiComboChart(),                // combo
+    TuiFlameChart()                 // flame
+]
+for (chart in charts) {
+    println(chart.draw(data))
+}
+```
+
+#### 分组柱状图
+
+```json
+{
+  "type": "grouped-bar",
+  "width": 64,
+  "height": 18,
+  "xAxis": { "type": "category", "labels": ["Q1", "Q2", "Q3", "Q4"] },
+  "yAxis": { "type": "linear", "min": 0 },
+  "series": [
+    { "name": "产品 A", "data": [120, 150, 170, 160] },
+    { "name": "产品 B", "data": [90, 110, 130, 140] }
+  ]
+}
+```
+
+#### 堆叠柱状图
+
+```json
+{
+  "type": "stacked-bar",
+  "width": 60,
+  "height": 18,
+  "xAxis": { "type": "category", "labels": ["华东", "华南", "华北"] },
+  "yAxis": { "type": "linear", "min": 0 },
+  "series": [
+    { "name": "线上", "stack": "revenue", "data": [120, 90, 70] },
+    { "name": "门店", "stack": "revenue", "data": [80, 70, 60] },
+    { "name": "分销", "stack": "revenue", "data": [40, 35, 30] }
+  ]
+}
+```
+
+负值同样支持：正段向 0 基线以上堆叠，负段向基线以下堆叠。
+
+#### 百分比堆叠柱状图
+
+```json
+{
+  "type": "percent-stacked-bar",
+  "width": 60,
+  "height": 18,
+  "xAxis": { "type": "category", "labels": ["2024", "2025", "2026"] },
+  "series": [
+    { "name": "线上", "data": [60, 70, 80] },
+    { "name": "门店", "data": [30, 20, 15] },
+    { "name": "分销", "data": [10, 10, 5] }
+  ]
+}
+```
+
+每个类目按系列总和归一到 100%，纵轴刻度显示百分比。
+
+#### 折线图
+
+类目横轴使用数值数组，长度须与 `xAxis.labels` 一致：
+
+```json
+{
+  "type": "line",
+  "width": 60,
+  "height": 18,
+  "xAxis": { "type": "category", "labels": ["周一", "周二", "周三", "周四", "周五"] },
+  "yAxis": { "type": "linear" },
+  "series": [ { "name": "活跃", "data": [120, 160, 140, null, 180] } ]
+}
+```
+
+数值或时间横轴使用 `{x, y}` 点；`null` 处断线：
+
+```json
+{
+  "type": "line",
+  "width": 64,
+  "height": 16,
+  "xAxis": { "type": "time" },
+  "yAxis": { "type": "linear" },
+  "series": [
+    { "name": "访问", "data": [
+      { "x": "2026-01-01", "y": 120 },
+      { "x": "2026-02-01", "y": 180 },
+      { "x": "2026-03-01", "y": 150 }
+    ] }
+  ]
+}
+```
+
+时间轴也接受数字 x（按天序号）；数值轴则要求数字 x。
+
+#### 散点图
+
+散点图要求 `linear` 或 `time` 横轴，数据为 `{x, y}`：
+
+```json
+{
+  "type": "scatter",
+  "width": 60,
+  "height": 18,
+  "xAxis": { "type": "linear", "title": "身高" },
+  "yAxis": { "type": "linear", "title": "体重" },
+  "series": [
+    { "name": "样本", "data": [
+      { "x": 160, "y": 55 }, { "x": 165, "y": 60 }, { "x": 170, "y": 65 },
+      { "x": 175, "y": 70 }, { "x": 180, "y": 75 }
+    ] }
+  ]
+}
+```
+
+#### 组合图
+
+组合图要求类目横轴，`series[].type` 可取 `bar`、`grouped-bar`、`stacked-bar`、`percent-stacked-bar`、`line`、`scatter`；数据统一为数值数组并与 `xAxis.labels` 对齐：
+
+```json
+{
+  "type": "combo",
+  "width": 72,
+  "height": 20,
+  "xAxis": { "type": "category", "labels": ["Q1", "Q2", "Q3", "Q4"] },
+  "yAxis": { "type": "linear", "min": 0 },
+  "yAxis2": { "type": "linear", "labelFormat": "{value}%" },
+  "series": [
+    { "name": "产品 A", "type": "bar", "stack": "sales", "data": [120, 150, 170, 180] },
+    { "name": "产品 B", "type": "bar", "stack": "sales", "data": [90, 110, 120, 130] },
+    { "name": "增长", "type": "line", "axis": "right", "data": [8, 14, 18, 22] },
+    { "name": "样本", "type": "scatter", "axis": "right", "data": [10, 12, 17, 21] }
+  ]
+}
+```
+
+规则：
+
+- `bar` 系列各自占一个槽位；同 `stack` 值的 `stacked-bar` 合并堆叠；`percent-stacked-bar` 合并为一个百分比槽位；`grouped-bar` 在组内并排。
+- `axis: "right"` 的系列读取 `yAxis2`，未提供 `yAxis2` 会报错。
+- `line` / `scatter` 叠加在柱族之上；`smooth` 在 TUI 中按普通折线绘制。
+
+#### 火焰图
+
+`flame` 使用 `nodes` 树，节点值决定宽度，层级决定行：
+
+```json
+{
+  "type": "flame",
+  "title": "CPU 火焰图",
+  "width": 80,
+  "height": 24,
+  "orientation": "bottom-up",
+  "colorBy": "name",
+  "nodes": [
+    { "id": "root", "name": "main", "parent": null, "value": 100 },
+    { "id": "parse", "name": "parse", "parent": "root", "value": 40 },
+    { "id": "render", "name": "render", "parent": "root", "value": 60 },
+    { "id": "lex", "name": "lex", "parent": "parse", "value": 25 },
+    { "id": "ast", "name": "ast", "parent": "parse", "value": 15 },
+    { "id": "layout", "name": "layout", "parent": "render", "value": 35 },
+    { "id": "paint", "name": "paint", "parent": "render", "value": 25 }
+  ]
+}
+```
+
+- `orientation`：`bottom-up`（根在底部）或 `top-down`（根在顶部）。
+- `colorBy`：`name` 按名称稳定散列到调色板；`value` 按根节点占比映射热力色。
+- `frameHeight`：TUI 中表示每层最大字符行数，缺省 18 会压缩到可用高度；每层至少 1 行。
+- 节点块使用真彩色 `█` 填充，标签颜色按背景亮度自动选黑/白；块宽不足时省略标签。
+
+### 尺寸与版式
+
+- `width` / `height` 的单位是**字符列 / 行**，缺省 80×24，最小 20×8；低于下限抛 `ChartException`。
+- 高度需要容纳标题（1–2 行）、图例（1 行）、x 轴与标签（2 行）；宽度需要容纳 y 轴刻度（含右轴）。绘图区不足 1 列或 1 行时报错，建议至少 `60×18`。
+- SVG 的 `padding` 不参与字符布局，TUI 按终端行列重新排布。
+- `legend.position: "bottom"` 时图例占底部一行；`show: false` 可关闭。
+- `theme` 中的 `palette`、`textColor`、`axisColor`、`gridColor` 生效；`background` 不适用（终端背景由宿主决定）。
+- CJK 字符按 2 列显示，超宽标签截断并以 `…` 结尾。
+
+### 错误处理
+
+与 SVG 版一致，所有结构或数值问题都抛 `ChartException`，不会返回空串或半成品：
+
+```cangjie
+import fountain::f_chart.ChartException
+
+try {
+    print(TuiScatterChart().draw(JsonValue.fromStr(json).asObject()))
+} catch (error: ChartException) {
+    eprintln("图表配置错误: ${error.message}")
+}
+```
+
+常见错误：`scatter` 使用类目横轴、`combo` 非类目横轴、数据长度与标签不一致、`axis: "right"` 缺少 `yAxis2`、画布小于 20×8。
+
+### 样例与回归
+
+`src/tui/TuiGallery_test.cj` 的 8 个用例会把 M1–M7 与 M52 的字符画写入 `charts/`：
+
+- 文件命名：`M<编号>-<type>.tui.txt`。
+- 全部保留 ANSI 24 位真彩颜色，`cat` 即可看到系列配色。
+
+| 文件 | 类 |
+|---|---|
+| `M001-bar.tui.txt` | `TuiBarChart` |
+| `M002-grouped-bar.tui.txt` | `TuiGroupedBarChart` |
+| `M003-stacked-bar.tui.txt` | `TuiStackedBarChart` |
+| `M004-percent-stacked-bar.tui.txt` | `TuiPercentStackedBarChart` |
+| `M005-line.tui.txt` | `TuiLineChart` |
+| `M006-scatter.tui.txt` | `TuiScatterChart` |
+| `M007-combo.tui.txt` | `TuiComboChart` |
+| `M052-flame.tui.txt` | `TuiFlameChart` |
+
+火焰图的可视化测试还会输出 4 个变体：`M052-flame-bottom-up.tui.txt`、`M052-flame-top-down.tui.txt`、`M052-flame-value.tui.txt`、`M052-flame-frame-height.tui.txt`。
+
+分组柱状图按系列交替取 `theme.palette`（或 `series[].color`）的颜色；堆叠柱状图、百分比堆叠柱状图以及组合图中的柱系列每个分段/柱体同理。柱体同时按系列循环使用 `█ ▓ ▒ ░`，因此相邻系列在 ANSI 输出和无色文本中都能区分。
+
+重新生成：
+
+```bash
+cd f_chart
+cjpm test --skip-build
+```
+
+这些文件是纯文本（ANSI 已剥离），可直接 `cat` 查看或纳入视觉回归。
 

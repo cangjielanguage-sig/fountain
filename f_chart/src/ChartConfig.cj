@@ -161,7 +161,12 @@ internal class ChartConfig {
         this.yAxis2 = yAxis2
     }
 
-    static func parse(data: JsonObject, expectedType: String): ChartConfig {
+    static func parse(
+        data: JsonObject,
+        expectedType: String,
+        defaultWidth!: Float64 = 800.0,
+        defaultHeight!: Float64 = 480.0
+    ): ChartConfig {
         let root = ChartJson.of(data)
         let chartType = root.requiredString("type")
         if (chartType != expectedType) {
@@ -172,8 +177,8 @@ internal class ChartConfig {
             )
         }
 
-        let width = root.number("width", default: 800.0)
-        let height = root.number("height", default: 480.0)
+        let width = root.number("width", default: defaultWidth)
+        let height = root.number("height", default: defaultHeight)
         if (width <= 0.0 || height <= 0.0) {
             throw chartInvalidValue("width", "画布宽高必须大于 0")
         }
