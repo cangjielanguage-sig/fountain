@@ -23,12 +23,15 @@ import fountain::f_data.macros.*
 /** 类目轴；报告目前只使用标签，不生成时间轴。 */
 @DataAssist[props fields]
 public class ChartAxisSpec {
+    @FieldAlias['type']
+    private var axisType: String = ""
     private var labels: Array<String> = []
 
     public init() {}
 
-    public init(labels: Array<String>) {
+    public init(labels: Array<String>, axisType!: String = "") {
         this.labels = labels
+        this.axisType = axisType
     }
 }
 
@@ -94,6 +97,20 @@ public class ChartSpec {
                     root.add("type", value)
                 }
                 root.remove("chartType")
+            case None => ()
+        }
+        match (root.get("xAxis")) {
+            case Some(value) =>
+                let axis = value.asObject()
+                match (axis.get("axisType")) {
+                    case Some(kind) =>
+                        let name = kind.asString().value
+                        if (!name.isEmpty() && axis.get("type").isNone()) {
+                            axis.add("type", kind)
+                        }
+                        axis.remove("axisType")
+                    case None => ()
+                }
             case None => ()
         }
         root

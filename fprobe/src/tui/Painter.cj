@@ -27,6 +27,9 @@ public interface Painter {
     func draw(plan: RenderPlan): Unit
 
     func restore(): Unit
+
+    /** 当前视口高度；未知或非交互时返回 0。 */
+    func viewportHeight(): Int64
 }
 
 /** 按键来源抽象；生产实现由终端薄层提供，用例可注入脚本化按键。 */

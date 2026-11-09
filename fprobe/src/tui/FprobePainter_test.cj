@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fprobe.tui
 
+import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_tui.term.TuiSize
@@ -86,6 +87,28 @@ func displayRow(buffer: Buffer, row: Int64): String {
         x += 1
     }
     result
+}
+
+
+func chartPlan(chartType: String, chartHeight: Int64, series: Array<SparkSeries>): RenderPlan {
+    RenderPlan(
+        "fprobe  节点 1  告警 0  刷新 1000ms",
+        ["▸ node-a  在线"],
+        "node-a",
+        0,
+        "CPU",
+        [["使用率", "42%"]],
+        series,
+        [],
+        "",
+        chartType: chartType,
+        chartSeries: if (series.isEmpty()) {
+            None<SparkSeries>
+        } else {
+            Some(series[0])
+        },
+        chartHeight: chartHeight
+    )
 }
 
 func samplePlan(): RenderPlan {
@@ -208,5 +231,63 @@ public class FprobePainter_test {
         }
         @Assert(raised)
         @Assert(renderer.starts, 1)
+    }
+
+    /** 图表单元格写入：空串续格不写，但列号不左移。 */
+    @TestCase
+    public func chartCellsAreWrittenWithoutShifting(): Unit {
+        let renderer = RecordingFrameRenderer()
+        let calls = ArrayList<(Int64, Int64)>()
+        let painter = FprobePainter(renderer,
+            chartRender: {chartType: String, name: String, values: Array<Float64>, width: Int64, height: Int64 =>
+                calls.add((width, height))
+                Some([["A", "", "B"], ["", "C", ""]])
+            })
+        painter.draw(chartPlan("line", 10, [SparkSeries("使用率", "%", [1.0, 2.0, 3.0])]))
+        let buffer = renderer.lastBuffer.getOrThrow()
+        @Assert(calls.size, 1)
+        @Assert(calls[0][1] <= 10)
+        let first = displayRow(buffer, 4)
+        @Assert(first.contains("A"))
+        @Assert(first.contains("B"))
+        @Assert(first.indexOf("B").getOrThrow() - first.indexOf("A").getOrThrow(), 2)
+        @Assert(displayRow(buffer, 5).contains("C"))
+    }
+
+    /** 高度不足 8 行：不调用图表，回退到 sparkline。 */
+    @TestCase
+    public func lowHeightFallsBackToSparkline(): Unit {
+        let renderer = RecordingFrameRenderer()
+        let calls = ArrayList<Int64>()
+        let painter = FprobePainter(renderer,
+            chartRender: {chartType: String, name: String, values: Array<Float64>, width: Int64, height: Int64 =>
+                calls.add(1)
+                Some([["X"]])
+            })
+        painter.draw(chartPlan("line", 0, [SparkSeries("使用率", "%", [1.0, 2.0, 3.0])]))
+        @Assert(calls.size, 0)
+        let row = displayRow(renderer.lastBuffer.getOrThrow(), 4)
+        var hasBlock = false
+        for (block in ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]) {
+            if (row.contains(block)) {
+                hasBlock = true
+            }
+        }
+        @Assert(hasBlock)
+    }
+
+    /** 图表渲染失败：回退并画出该页全部序列。 */
+    @TestCase
+    public func chartFailureFallsBackToAllSeries(): Unit {
+        let renderer = RecordingFrameRenderer()
+        let painter = FprobePainter(renderer,
+            chartRender: {chartType: String, name: String, values: Array<Float64>, width: Int64, height: Int64 =>
+                None<Array<Array<String>>>
+            })
+        painter.draw(chartPlan("line", 10,
+            [SparkSeries("使用率", "%", [1.0, 2.0, 3.0]), SparkSeries("iowait", "%", [3.0, 2.0, 1.0])]))
+        let buffer = renderer.lastBuffer.getOrThrow()
+        @Assert(displayRow(buffer, 4).contains("使用率"))
+        @Assert(displayRow(buffer, 5).contains("iowait"))
     }
 }

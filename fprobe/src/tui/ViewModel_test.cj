@@ -91,4 +91,22 @@ public class ViewModel_test {
         view = view.nextPage().selectNext()
         @Assert(view.alarmCount, 3)
     }
+
+    /** 页面到图表类型的映射。 */
+    @TestCase
+    public func chartTypeFollowsPage(): Unit {
+        let expected: Array<(MetricPage, String)> = [
+            (MetricPage.CPU, "line"),
+            (MetricPage.MEMORY, "line"),
+            (MetricPage.DISK, "bar"),
+            (MetricPage.NETWORK, "line"),
+            (MetricPage.SERVICE, "line"),
+            (MetricPage.HEALTH, "line"),
+            (MetricPage.TOPOLOGY, ""),
+            (MetricPage.ALARMS, "")
+        ]
+        for ((page, kind) in expected) {
+            @Assert(page.chartType(), kind)
+        }
+    }
 }

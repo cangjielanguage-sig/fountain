@@ -46,6 +46,10 @@ class RecordingPainter <: Painter {
         restores += 1
         onEvent("painter.restore")
     }
+
+    public func viewportHeight(): Int64 {
+        24
+    }
 }
 
 class RecordingComponents <: SupervisorComponents {

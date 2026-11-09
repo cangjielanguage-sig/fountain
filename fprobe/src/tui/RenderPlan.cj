@@ -152,10 +152,17 @@ public class RenderPlan {
     public let series: Array<SparkSeries>
     public let alarmRows: Array<String>
     public let note: String
+    /** 该页的图表类型；空串表示不画图。 */
+    public let chartType: String
+    /** 参与图表的序列；只取当前页第一条，避免不同单位混轴。 */
+    public let chartSeries: ?SparkSeries
+    /** 图表可用高度；0 表示回退到单行 sparkline。 */
+    public let chartHeight: Int64
 
     public init(title: String, nodeRows: Array<String>, selectedNode: String, selectedIndex: Int64,
         pageTitle: String, metricRows: Array<Array<String>>, series: Array<SparkSeries>,
-        alarmRows: Array<String>, note: String) {
+        alarmRows: Array<String>, note: String, chartType!: String = "",
+        chartSeries!: ?SparkSeries = None<SparkSeries>, chartHeight!: Int64 = 0) {
         this.title = title
         this.nodeRows = nodeRows
         this.selectedNode = selectedNode
@@ -165,13 +172,16 @@ public class RenderPlan {
         this.series = series
         this.alarmRows = alarmRows
         this.note = note
+        this.chartType = chartType
+        this.chartSeries = chartSeries
+        this.chartHeight = chartHeight
     }
 }
 
 /** 由 ViewModel、NodeStateStore 快照与历史窗口生成一帧。 */
 public class RenderPlanBuilder {
     public static func build(view: ViewModel, states: Array<NodeState>, history: HistorySource,
-        nowMs: Int64, alarms: Array<String>): RenderPlan {
+        nowMs: Int64, alarms: Array<String>, viewportHeight!: Int64 = 0): RenderPlan {
         let selectedName = match (view.selectedNode()) {
             case Some(value) => value
             case None => if (states.isEmpty()) {
@@ -215,6 +225,12 @@ public class RenderPlanBuilder {
             }
         }
 
+        let chartType = page.chartType()
+        let chartSeries = if (!chartType.isEmpty() && !series.isEmpty()) {
+            Some(series[0])
+        } else {
+            None<SparkSeries>
+        }
         RenderPlan(
             "fprobe  节点 ${nodeCount}  告警 ${view.alarmCount}  刷新 ${nowMs}ms",
             nodeRows,
@@ -224,7 +240,14 @@ public class RenderPlanBuilder {
             metricRows.toArray(),
             series.toArray(),
             alarms,
-            note
+            note,
+            chartType: chartType,
+            chartSeries: chartSeries,
+            chartHeight: if (chartType.isEmpty()) {
+                0
+            } else {
+                TuiLayout.chartHeight(viewportHeight, Int64(metricRows.size))
+            }
         )
     }
 

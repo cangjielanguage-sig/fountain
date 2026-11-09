@@ -95,9 +95,19 @@ public class TerminalFrameRenderer <: FrameRenderer {
  */
 public class FprobePainter <: Painter {
     private let renderer: FrameRenderer
+    private let chartRender: (String, String, Array<Float64>, Int64, Int64) -> ?Array<Array<String>>
 
-    public init(renderer: FrameRenderer) {
+    /**
+     * `chartRender` 是图表注入点：默认调用 `fountain::f_chart.tui`；
+     * 用例可注入假实现，断言单元格写入与回退行为。
+     */
+    public init(renderer: FrameRenderer,
+        chartRender!: (String, String, Array<Float64>, Int64, Int64) -> ?Array<Array<String>> = {
+            chartType: String, name: String, values: Array<Float64>, width: Int64, height: Int64 =>
+            ChartPanel.render(chartType, name, values, width, height)
+        }) {
         this.renderer = renderer
+        this.chartRender = chartRender
     }
 
     public func start(): Unit {
@@ -108,6 +118,15 @@ public class FprobePainter <: Painter {
 
     public func restore(): Unit {
         renderer.restore()
+    }
+
+    public func viewportHeight(): Int64 {
+        let size = renderer.size()
+        if (size.isUnknown()) {
+            0
+        } else {
+            Int64(size.height)
+        }
     }
 
     public func draw(plan: RenderPlan): Unit {
@@ -196,9 +215,30 @@ public class FprobePainter <: Painter {
         if (plan.series.isEmpty() || y >= inner.bottom()) {
             return
         }
-        // 指标表与 sparkline 之间保留一行空白，避免视觉粘连。
+        // 指标表与图表之间保留一行空白，避免视觉粘连。
         if (y + 1 < inner.bottom()) {
             y += 1
+        }
+        let remaining = Int64(inner.bottom() - y)
+        if (remaining <= 0) {
+            return
+        }
+        match (plan.chartSeries) {
+            case Some(first) =>
+                if (plan.chartHeight > 0) {
+                    let height = if (plan.chartHeight < remaining) {
+                        plan.chartHeight
+                    } else {
+                        remaining
+                    }
+                    match (chartRender(plan.chartType, first.name, first.values, Int64(inner.width), height)) {
+                        case Some(cells) =>
+                            paintCells(buffer, Rect(inner.x, y, inner.width, UInt16(height)), cells)
+                            return
+                        case None => ()
+                    }
+                }
+            case None => ()
         }
         for (series in plan.series) {
             if (y >= inner.bottom()) {
@@ -206,6 +246,27 @@ public class FprobePainter <: Painter {
             }
             paintSeries(buffer, Rect(inner.x, y, inner.width, 1), series)
             y += 1
+        }
+    }
+
+    /** 逐单元格写入；空串是宽字符的续格，跳过但列号继续前进。 */
+    private func paintCells(buffer: Buffer, area: Rect, cells: Array<Array<String>>): Unit {
+        var row: Int64 = 0
+        for (line in cells) {
+            if (row >= Int64(area.height)) {
+                break
+            }
+            var column: Int64 = 0
+            for (symbol in line) {
+                if (column >= Int64(area.width)) {
+                    break
+                }
+                if (!symbol.isEmpty()) {
+                    buffer.setString(area.x + UInt16(column), area.y + UInt16(row), symbol, Style())
+                }
+                column += 1
+            }
+            row += 1
         }
     }
 

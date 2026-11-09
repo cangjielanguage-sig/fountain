@@ -32,6 +32,10 @@ public class NullPainter <: Painter {
     public func draw(plan: RenderPlan): Unit {}
 
     public func restore(): Unit {}
+
+    public func viewportHeight(): Int64 {
+        0
+    }
 }
 
 /**

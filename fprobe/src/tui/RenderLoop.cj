@@ -70,7 +70,7 @@ public class RenderLoop {
     public func renderOnce(): Unit {
         try {
             let plan = RenderPlanBuilder.build(viewProvider(), store.all(), history,
-                clock.nowMs(), alarms())
+                clock.nowMs(), alarms(), viewportHeight: painter.viewportHeight())
             painter.draw(plan)
         } catch (e: Exception) {
             onError('渲染失败: ${e.message}')

@@ -55,6 +55,10 @@ class SlowPainter <: Painter {
     }
 
     public func restore(): Unit {}
+
+    public func viewportHeight(): Int64 {
+        24
+    }
 }
 
 /** 12.6：渲染慢不拖慢拉取。假 painter 每帧睡 200ms，拉取仍按 50ms 周期推进。 */

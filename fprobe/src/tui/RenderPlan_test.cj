@@ -150,4 +150,25 @@ public class RenderPlan_test {
         @Assert(plan.metricRows[1][1], "sw2:Gi0/2")
         @Assert(plan.series.isEmpty())
     }
+
+    /** 图表字段：类型、首条序列与高度。 */
+    @TestCase
+    public func chartFieldsFollowPageAndViewport(): Unit {
+        let states = [cpuState("a", 12.5)]
+        let cpu = RenderPlanBuilder.build(ViewModel(["a"], 0, 0, 0), states, FixedHistory(60), 1000, [],
+            viewportHeight: 24)
+        @Assert(cpu.chartType, "line")
+        @Assert(cpu.chartSeries.isSome())
+        @Assert(cpu.chartHeight, 13)
+
+        let short = RenderPlanBuilder.build(ViewModel(["a"], 0, 0, 0), states, FixedHistory(60), 1000, [],
+            viewportHeight: 12)
+        @Assert(short.chartHeight, 0)
+
+        let topology = RenderPlanBuilder.build(ViewModel(["a"], 0, 6, 0), states, FixedHistory(60), 1000, [],
+            viewportHeight: 24)
+        @Assert(topology.chartType, "")
+        @Assert(topology.chartSeries.isNone())
+        @Assert(topology.chartHeight, 0)
+    }
 }

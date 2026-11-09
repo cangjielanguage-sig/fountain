@@ -52,6 +52,15 @@ public enum MetricPage <: Equatable<MetricPage> {
         }
     }
 
+    /** 该页在 TUI 中使用的图表类型；空串表示不画图。 */
+    public func chartType(): String {
+        match (this) {
+            case CPU | MEMORY | NETWORK | SERVICE | HEALTH => "line"
+            case DISK => "bar"
+            case TOPOLOGY | ALARMS => ""
+        }
+    }
+
     /** 与 `ProbeAgent.kind` 对应的键；告警页不绑定具体监控项。 */
     public func kind(): String {
         match (this) {
