@@ -2,7 +2,12 @@
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_health" = {path = "../f_health"}
+  "fountain::f_httpclient" = {path = "../f_httpclient"}
+  "fountain::f_net" = {path = "../f_net"}
   "fountain::f_probe" = {path = "../f_probe"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_rpc" = {path = "../f_rpc"}
 
 [package]
   cjc-version = "1.2.0"
