@@ -55,6 +55,7 @@ public class TuiLineChart_test {
     public func drawsLineAndPoints(): Unit {
         let svg = draw(categorySample)
         let plain = tuiStripAnsi(svg)
+        @Assert(svg.contains("\u{1B}[38;2;78;121;167m"))
         @Assert(plain.contains("*"))
         @Assert(plain.contains("o"))
         @Assert(plain.contains("周活跃用户"))

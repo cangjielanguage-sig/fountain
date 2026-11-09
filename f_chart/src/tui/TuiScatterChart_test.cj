@@ -56,7 +56,9 @@ public class TuiScatterChart_test {
     /** 散点标记与标题。 */
     @TestCase
     public func drawsPoints(): Unit {
-        let plain = tuiStripAnsi(draw(sample))
+        let svg = draw(sample)
+        let plain = tuiStripAnsi(svg)
+        @Assert(svg.contains("\u{1B}[38;2;78;121;167m"))
         @Assert(plain.contains("o"))
         @Assert(plain.contains("身高体重"))
         @Assert(count(plain, "o") >= 4)

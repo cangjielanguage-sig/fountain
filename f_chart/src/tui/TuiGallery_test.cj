@@ -25,7 +25,7 @@ import fountain::f_data.json.*
  * TUI 样例画廊：用真实 JSON 渲染 M1–M7，并把字符画写入 `charts/`。
  *
  * 运行 `cd f_chart && cjpm test --skip-build` 后，`f_chart/charts` 下会生成
- * 7 个可直接用文本编辑器打开的 `.tui.txt` 文件（ANSI 颜色已剥离）。
+ * 7 个保留 ANSI 24 位真彩色的 `.tui.txt` 文件，`cat` 即可看到系列颜色。
  */
 @Test
 public class TuiGallery_test {
@@ -40,7 +40,6 @@ public class TuiGallery_test {
             Directory.create(directory, recursive: true)
         }
         File.writeTo(Path("charts/${name}.tui.txt"), output.toArray())
-        File.writeTo(Path("charts/${name}.tui.plain.txt"), plain.toArray())
     }
 
     /** M1 柱状图。 */
