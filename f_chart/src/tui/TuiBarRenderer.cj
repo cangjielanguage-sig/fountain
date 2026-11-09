@@ -166,7 +166,10 @@ internal class TuiBarRenderer {
                         let row = clampTuiRow(
                             Int64(round(scale.scale(value))), frame.plot
                         )
-                        tuiFillColumn(canvas, x, barWidth, baselineRow, row, item.color)
+                        tuiFillColumn(
+                            canvas, x, barWidth, baselineRow, row, item.color,
+                            symbol: tuiSeriesSymbol(seriesIndex)
+                        )
                     case None => ()
                 }
             }
@@ -199,7 +202,8 @@ internal class TuiBarRenderer {
             }
             var positiveBase = 0.0
             var negativeBase = 0.0
-            for (item in series) {
+            for (seriesIndex in 0..series.size) {
+                let item = series[seriesIndex]
                 match (item.values[category]) {
                     case Some(value) =>
                         var from = 0.0
@@ -227,7 +231,10 @@ internal class TuiBarRenderer {
                         let toRow = clampTuiRow(
                             Int64(round(scale.scale(to))), frame.plot
                         )
-                        tuiFillColumn(canvas, x, barWidth, fromRow, toRow, item.color)
+                        tuiFillColumn(
+                            canvas, x, barWidth, fromRow, toRow, item.color,
+                            symbol: tuiSeriesSymbol(seriesIndex)
+                        )
                     case None => ()
                 }
             }

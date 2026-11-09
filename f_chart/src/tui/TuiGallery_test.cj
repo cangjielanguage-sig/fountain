@@ -172,6 +172,7 @@ public class TuiGallery_test {
   "yAxis2": { "type": "linear", "labelFormat": "{value}%" },
   "series": [
     { "name": "产品 A", "type": "bar", "data": [120, 150, 170, 180] },
+    { "name": "产品 B", "type": "bar", "data": [90, 110, 120, 130] },
     { "name": "增长", "type": "line", "axis": "right", "data": [8, 14, 18, 22] },
     { "name": "样本", "type": "scatter", "axis": "right", "data": [10, 12, 17, 21] }
   ]

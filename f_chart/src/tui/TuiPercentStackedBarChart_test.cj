@@ -49,6 +49,8 @@ public class TuiPercentStackedBarChart_test {
         @Assert(svg.contains("\u{1B}[38;2;242;142;43m"))
         @Assert(svg.contains("\u{1B}[38;2;225;87;89m"))
         @Assert(tuiStripAnsi(svg).contains("█"))
+        @Assert(tuiStripAnsi(svg).contains("▓"))
+        @Assert(tuiStripAnsi(svg).contains("▒"))
     }
 
     /** 纵轴为 0–100。 */

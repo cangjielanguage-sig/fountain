@@ -292,7 +292,10 @@ public class TuiComboChart <: Chart {
                             let toRow = clampTuiRow(
                                 Int64(round(scale.scale(value))), frame.plot
                             )
-                            tuiFillColumn(canvas, x, barWidth, fromRow, toRow, first.color)
+                            tuiFillColumn(
+                                canvas, x, barWidth, fromRow, toRow, first.color,
+                                symbol: tuiSeriesSymbol(slot.indexes[0])
+                            )
                         case None => ()
                     }
                 } else {
@@ -338,7 +341,10 @@ public class TuiComboChart <: Chart {
                                 let toRow = clampTuiRow(
                                     Int64(round(scale.scale(to))), frame.plot
                                 )
-                                tuiFillColumn(canvas, x, barWidth, fromRow, toRow, item.color)
+                                tuiFillColumn(
+                                    canvas, x, barWidth, fromRow, toRow, item.color,
+                                    symbol: tuiSeriesSymbol(slot.indexes[index])
+                                )
                             case None => ()
                         }
                     }

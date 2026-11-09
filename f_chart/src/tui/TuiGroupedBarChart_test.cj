@@ -48,6 +48,7 @@ public class TuiGroupedBarChart_test {
         @Assert(svg.contains("\u{1B}[38;2;78;121;167m"))
         @Assert(svg.contains("\u{1B}[38;2;242;142;43m"))
         @Assert(tuiStripAnsi(svg).contains("█"))
+        @Assert(tuiStripAnsi(svg).contains("▓"))
     }
 
     /** 图例包含两个系列。 */

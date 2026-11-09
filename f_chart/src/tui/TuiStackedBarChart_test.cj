@@ -50,6 +50,8 @@ public class TuiStackedBarChart_test {
         @Assert(svg.contains("\u{1B}[38;2;242;142;43m"))
         @Assert(svg.contains("\u{1B}[38;2;225;87;89m"))
         @Assert(tuiStripAnsi(svg).contains("█"))
+        @Assert(tuiStripAnsi(svg).contains("▓"))
+        @Assert(tuiStripAnsi(svg).contains("▒"))
     }
 
     /** 三个系列名进入图例。 */

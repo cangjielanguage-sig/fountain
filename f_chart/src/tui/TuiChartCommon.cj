@@ -118,6 +118,12 @@ internal func tuiLegendVisible(config: ChartConfig, names: Array<String>): Bool 
     false
 }
 
+/** 系列填充符号：在无色终端里也能区分多系列柱体。 */
+internal func tuiSeriesSymbol(index: Int64): String {
+    let symbols = ["█", "▓", "▒", "░"]
+    symbols[index % symbols.size]
+}
+
 /** 从 fromRow 到 toRow（含两端）填充 `width` 列的柱体。 */
 internal func tuiFillColumn(
     canvas: TuiCanvas,
@@ -125,13 +131,14 @@ internal func tuiFillColumn(
     width: Int64,
     fromRow: Int64,
     toRow: Int64,
-    color: String
+    color: String,
+    symbol!: String = "█"
 ): Unit {
     let top = tuiMinInt64(fromRow, toRow)
     let bottom = tuiMaxInt64(fromRow, toRow)
     for (row in top..bottom + 1) {
         for (column in x..x + width) {
-            canvas.set(column, row, "█", color)
+            canvas.set(column, row, symbol, color)
         }
     }
 }

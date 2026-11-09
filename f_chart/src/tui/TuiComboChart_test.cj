@@ -62,6 +62,33 @@ public class TuiComboChart_test {
         @Assert(plain.contains("%"))
     }
 
+    /** 多个柱系列按系列取不同颜色和符号。 */
+    @TestCase
+    public func colorsEachBarSeries(): Unit {
+        let json = """
+{
+  "type": "combo",
+  "width": 60,
+  "height": 18,
+  "xAxis": { "type": "category", "labels": ["A", "B"] },
+  "yAxis": { "type": "linear", "min": 0 },
+  "series": [
+    { "name": "柱1", "type": "bar", "data": [10, 20] },
+    { "name": "柱2", "type": "bar", "data": [15, 25] },
+    { "name": "线", "type": "line", "data": [12, 22] }
+  ]
+}
+"""
+        let svg = draw(json)
+        let plain = tuiStripAnsi(svg)
+        @Assert(svg.contains("\u{1B}[38;2;78;121;167m"))
+        @Assert(svg.contains("\u{1B}[38;2;242;142;43m"))
+        @Assert(svg.contains("\u{1B}[38;2;225;87;89m"))
+        @Assert(plain.contains("█"))
+        @Assert(plain.contains("▓"))
+        @Assert(plain.contains("*"))
+    }
+
     /** 分组柱与堆叠柱混合。 */
     @TestCase
     public func mixesBarFamilies(): Unit {
