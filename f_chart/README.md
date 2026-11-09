@@ -190,6 +190,12 @@ cjpm test --skip-build
 
 测试会断言 SVG 包含 `<svg`，并自动创建 `charts/` 目录；SVG 内容变化会直接体现在 `git diff` 中，便于做视觉回归。
 
+TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 7 份字符画样例：
+
+- 文件命名：`M<编号>-<type>.tui.txt`，例如 `M001-bar.tui.txt`、`M007-combo.tui.txt`。
+- 内容为剥离 ANSI 颜色后的纯文本网格，可直接用文本编辑器或 `cat` 查看。
+- 尺寸取 JSON 中的 `width`/`height`（字符列/行），与 SVG 样例共用同一批图表语义。
+
 ## TUI 子包（fountain::f_chart.tui）
 
 终端/SSH 场景可直接渲染字符画。TUI 子包不引入任何第三方依赖，复用同一份 JSON 与 `Chart` 接口：
