@@ -63,7 +63,7 @@ public class ProbeFactory_test {
     }
 
     @TestCase
-    public func registersFiveCoreKindsPlusHardware(): Unit {
+    public func registersCoreKindsAndHardware(): Unit {
         ProbeRegistry.clear()
         register(settings())
         let kinds = ProbeRegistry.agents()
@@ -73,7 +73,7 @@ public class ProbeFactory_test {
         @Assert(kinds.contains("system"))
         @Assert(kinds.contains("network"))
         @Assert(kinds.contains("hardware"))
-        @Assert(kinds.size, 6)
+        @Assert(kinds.size, 7)
     }
 
     @TestCase
@@ -97,7 +97,7 @@ public class ProbeFactory_test {
         let first = settings()
         register(first)
         register(first)
-        @Assert(ProbeRegistry.agents().size, 6)
+        @Assert(ProbeRegistry.agents().size, 7)
     }
 
     @TestCase
@@ -105,7 +105,7 @@ public class ProbeFactory_test {
         ProbeRegistry.clear()
         register(settings())
         let agents = ProbeFactory.instantiate()
-        @Assert(agents.size, 6)
+        @Assert(agents.size, 7)
         let kinds = ArrayList<String>()
         for (agent in agents) {
             kinds.add(agent.kind)

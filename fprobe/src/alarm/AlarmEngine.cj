@@ -239,6 +239,8 @@ public class AlarmEngine {
             let wasFiring = state.firing
             state.firing = false
             state.since = None
+            // 恢复后再次命中属于新告警：清空冷却起点，避免被上一轮的窗口抑制。
+            state.lastSentAt = None
             if (wasFiring && !isMuted(rule.name, now) && recoverNotify) {
                 emit(AlarmEvent(AlarmEventType.RECOVERY, node, rule.name, rule.kind, rule.level,
                     Some(value), rule.threshold, now,

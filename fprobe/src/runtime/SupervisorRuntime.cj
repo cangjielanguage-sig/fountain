@@ -59,6 +59,11 @@ class TransportSource <: NodeSource {
     }
 }
 
+/** 延迟绑定，解决「告警回调需要 advisor、advisor 构造又依赖 dispatcher」的构造环。 */
+private class AdvisorRef {
+    var value: ?ProbeAdvisor = None
+}
+
 /** LLM 装配结果；关闭时两者都是 `None`。 */
 private class AdvisorParts {
     let advisor: ?ProbeAdvisor
@@ -125,6 +130,7 @@ public class SupervisorRuntime <: SupervisorComponents {
         this.events = eventList
         this.eventLock = eventMutex
 
+        let advisorRef = AdvisorRef()
         let alarm = AlarmEngine(AlarmRule.load(), SystemClock(),
             {event =>
                 synchronized(eventMutex) {
@@ -134,6 +140,11 @@ public class SupervisorRuntime <: SupervisorComponents {
                     }
                 }
                 dispatcher.dispatch(event.format())
+                match (advisorRef.value) {
+                    case Some(advisor) =>
+                        spawn {=> advisor.analyzeAlarm(event, stateStore.all(), historyStore)}
+                    case None => ()
+                }
             },
             cooldownMs: SupervisorRuntime.cooldownSeconds() * 1000,
             recoverNotify: SupervisorRuntime.recoverNotify(),
@@ -142,7 +153,7 @@ public class SupervisorRuntime <: SupervisorComponents {
 
         this.poll = PollLoop(sources.toArray(), stateStore, SystemClock(), settings.pollIntervalMs,
             settings.missingThreshold,
-            {event => SupervisorRuntime.onNodeEvent(event, dispatcher)},
+            {event => SupervisorRuntime.onNodeEvent(event)},
             {states =>
                 alarm.evaluate(states)
                 for (state in states) {
@@ -161,6 +172,7 @@ public class SupervisorRuntime <: SupervisorComponents {
         }
 
         let llm = SupervisorRuntime.buildAdvisor(channels, dispatcher, alarm, reportJob)
+        advisorRef.value = llm.advisor
         this.advisor = llm.advisor
         this.replies = llm.replies
         this.llmIntervalMs = llm.intervalMs
@@ -190,7 +202,7 @@ public class SupervisorRuntime <: SupervisorComponents {
             case (Some(activeAdvisor), Some(monitor)) =>
                 spawn {=>
                     SupervisorRuntime.llmLoop(running, activeAdvisor, monitor, store, history,
-                        llmIntervalMs, replyPollMs)
+                        eventLock, events, llmIntervalMs, replyPollMs)
                 }
             case _ => ()
         }
@@ -213,7 +225,8 @@ public class SupervisorRuntime <: SupervisorComponents {
 
     /** LLM 周期分析与回复轮询共用一个后台线程，按各自间隔触发。 */
     private static func llmLoop(running: AtomicBool, advisor: ProbeAdvisor, replies: ReplyMonitor,
-        store: NodeStateStore, history: NodeHistoryStore, intervalMs: Int64, replyMs: Int64): Unit {
+        store: NodeStateStore, history: NodeHistoryStore, eventLock: Mutex, events: ArrayList<AlarmEvent>,
+        intervalMs: Int64, replyMs: Int64): Unit {
         let clock = SystemClock()
         var sinceLlm: Int64 = 0
         var sinceReply: Int64 = 0
@@ -233,7 +246,8 @@ public class SupervisorRuntime <: SupervisorComponents {
             }
             if (sinceLlm >= intervalMs) {
                 sinceLlm = 0
-                advisor.analyzeInterval(store.all(), history)
+                let batch = SupervisorRuntime.snapshotEvents(eventLock, events)
+                spawn {=> advisor.analyzeInterval(store.all(), history, events: batch)}
             }
         }
     }
@@ -268,8 +282,14 @@ public class SupervisorRuntime <: SupervisorComponents {
         names.toArray()
     }
 
-    private static func onNodeEvent(event: NodeEvent, dispatcher: ChannelDispatcher): Unit {
-        dispatcher.dispatch(event.message)
+    /**
+     * 节点事件只写日志。
+     *
+     * 不可达与恢复的对外告警由 `AlarmEngine` 统一发送，避免同一事件被
+     * `PollLoop` 与告警引擎重复通知。
+     */
+    private static func onNodeEvent(event: NodeEvent): Unit {
+        eprintln('[node] ${event.message}')
     }
 
     /**

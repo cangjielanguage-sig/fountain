@@ -26,7 +26,7 @@ fprobe --help                  # 用法
 | `mvc-health` | 指定 f_mvc `/health`（配置 `probe_mvcHealthUrl`） |
 | `rpc-health` | f_rpc `HealthRPC`（配置 `probe_rpcHealthTargets`） |
 | `service` | HTTP/TCP 可达性（配置 `probe_serviceTargets`） |
-| `topology` | SNMP IF-MIB / LLDP-MIB 拓扑（配置 `probe_snmpDevices`） |
+| `topology` | SNMP IF-MIB / LLDP-MIB 拓扑（`probe_snmpDevices` 为空时返回说明性 error） |
 
 扩展可以通过 `f_probe.ProbeRegistry.registerAgent` 增加新的 `kind`；重名注册会被拒绝。
 

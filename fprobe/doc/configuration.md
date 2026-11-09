@@ -26,8 +26,9 @@
 | `probe_httpTimeoutMs` | `2000` | HTTP 探测超时 |
 | `probe_commandTimeoutMs` | `3000` | 外部命令超时 |
 
-内置监控项固定为 `cpu`、`memory`、`disk`、`system`、`network`、`hardware`；
-`mvc-health`、`rpc-health`、`service`、`topology` 只在对应配置非空时注册。
+内置监控项固定为 `cpu`、`memory`、`disk`、`system`、`network`、`hardware`、`topology`；
+`mvc-health`、`rpc-health`、`service` 只在对应配置非空时注册。`topology` 在未配置
+`probe_snmpDevices` 时仍会上报，只是 `error` 说明已跳过。
 
 ## supervisor
 

@@ -27,7 +27,7 @@ fprobe --help                  # usage
 | `mvc-health` | f_mvc `/health` (`probe_mvcHealthUrl`) |
 | `rpc-health` | f_rpc `HealthRPC` (`probe_rpcHealthTargets`) |
 | `service` | HTTP/TCP reachability (`probe_serviceTargets`) |
-| `topology` | SNMP IF-MIB / LLDP-MIB topology (`probe_snmpDevices`) |
+| `topology` | SNMP IF-MIB / LLDP-MIB topology (empty `probe_snmpDevices` returns an explanatory error) |
 
 Extensions add new kinds through `f_probe.ProbeRegistry.registerAgent`; duplicate kinds are
 rejected.

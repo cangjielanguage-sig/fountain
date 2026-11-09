@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fprobe.tui
 
 import fountain::f_probe.{ProbeErrorCode, ProbeException}
+import std.collection.ArrayList
 import fountain::f_tui.render.{ExitHook, Terminal}
 import fountain::f_tui.term.{IoctlSizeProvider, RealPosixFfi, StdoutTerminalWriter, TuiSize}
 import fountain::f_tui.term.STDOUT_FILENO as TERM_STDOUT_FILENO
@@ -229,12 +230,17 @@ public class FprobePainter <: Painter {
     }
 
     private func paintFooter(buffer: Buffer, area: Rect, plan: RenderPlan): Unit {
-        let text = if (!plan.alarmRows.isEmpty()) {
-            "告警: " + join(plan.alarmRows, " | ")
-        } else if (!plan.note.isEmpty()) {
-            plan.note
-        } else {
+        let parts = ArrayList<String>()
+        if (!plan.note.isEmpty()) {
+            parts.add(plan.note)
+        }
+        if (!plan.alarmRows.isEmpty()) {
+            parts.add("告警: " + join(plan.alarmRows, " | "))
+        }
+        let text = if (parts.isEmpty()) {
             "无告警"
+        } else {
+            join(parts.toArray(), " | ")
         }
         let style = if (!plan.alarmRows.isEmpty()) {
             Style().withFg(Color.Yellow)

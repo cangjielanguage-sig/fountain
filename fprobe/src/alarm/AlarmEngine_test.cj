@@ -143,12 +143,9 @@ public class AlarmEngineCooldown_test {
         @Assert(events[1].eventType, AlarmEventType.RECOVERY)
         @Assert(events[1].node, "web1")
 
+        // 恢复后再次命中视为新告警，不受上一轮冷却窗口影响。
         clock.advance(1000)
         engine.evaluate([onlineState("web1", "cpu", '{"usagePercent":92}')])
-        @Assert(events.size, 2)
-
-        clock.advance(300000)
-        engine.evaluate([onlineState("web1", "cpu", '{"usagePercent":93}')])
         @Assert(events.size, 3)
         @Assert(events[2].eventType, AlarmEventType.FIRING)
     }

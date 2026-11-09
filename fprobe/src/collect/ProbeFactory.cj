@@ -67,11 +67,9 @@ public class ProbeFactory {
                 ServiceReachabilityProbe(http, tcp, settings.serviceTargets, timeoutMs: settings.httpTimeoutMs)
             })
         }
-        if (!settings.snmpDevices.isEmpty()) {
-            registerIfAbsent("topology", {=>
-                TopologyProbe(runner, settings.snmpDevices, timeoutMs: settings.commandTimeoutMs)
-            })
-        }
+        registerIfAbsent("topology", {=>
+            TopologyProbe(runner, settings.snmpDevices, timeoutMs: settings.commandTimeoutMs)
+        })
     }
 
     /** 按注册表顺序实例化全部监控项。 */

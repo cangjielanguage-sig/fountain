@@ -19,20 +19,13 @@ import fountain::f_data.*
 import fountain::f_data.macros.*
 import fountain::f_probe.ProbeAgent
 
-/** `hardware` 监控项的数据形状：三组硬件读数并列。 */
-@DataAssist[props fields]
-public class HardwareSample {
-    private var ipmi: Array<IpmiReading> = []
-    private var snmp: Array<SnmpReading> = []
-    private var smart: Array<SmartReading> = []
-
-    public init() {}
-
-    public init(ipmi: Array<IpmiReading>, snmp: Array<SnmpReading>, smart: Array<SmartReading>) {
-        this.ipmi = ipmi
-        this.snmp = snmp
-        this.smart = smart
+/** 把读数数组转成 `JsonArray`；避免再引入一层 `@DataAssist` 嵌套序列化。 */
+private func arrayOf<T>(readings: Array<T>): JsonArray where T <: DataFields<T> {
+    let values = JsonArray()
+    for (reading in readings) {
+        values.add(JsonValue.from(reading.toData()))
     }
+    values
 }
 
 /**
@@ -60,8 +53,11 @@ public class HardwareProbe <: ProbeAgent {
 
     public prop data: JsonObject {
         get() {
-            let sample = HardwareSample(ipmi.collect(), snmp.collect(), smart.collect())
-            JsonValue.from(sample.toData()).asObject()
+            let root = JsonObject()
+            root.add("ipmi", arrayOf(ipmi.collect()))
+            root.add("snmp", arrayOf(snmp.collect()))
+            root.add("smart", arrayOf(smart.collect()))
+            root
         }
     }
 }
