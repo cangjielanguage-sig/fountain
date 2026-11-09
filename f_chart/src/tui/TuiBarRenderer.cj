@@ -37,6 +37,14 @@ internal class TuiBarSeries {
 /** 柱状图族的 TUI 渲染器。 */
 internal class TuiBarRenderer {
     static func render(data: JsonObject, expectedType: String, mode: BarMode): String {
+        canvas(data, expectedType, mode).render()
+    }
+
+    static func renderCells(data: JsonObject, expectedType: String, mode: BarMode): Array<Array<String>> {
+        canvas(data, expectedType, mode).cellSymbols()
+    }
+
+    static func canvas(data: JsonObject, expectedType: String, mode: BarMode): TuiCanvas {
         let config = ChartConfig.parse(
             data, expectedType, defaultWidth: 80.0, defaultHeight: 24.0
         )
@@ -132,7 +140,7 @@ internal class TuiBarRenderer {
             )
         }
         frame.drawXAxisCategory(canvas, labels, band)
-        canvas.render()
+        canvas
     }
 
     private static func drawSideBySide(

@@ -21,10 +21,18 @@ import fountain::f_chart.*
 import fountain::f_data.json.*
 
 /** M5 折线图的 TUI 实现。 */
-public class TuiLineChart <: Chart {
+public class TuiLineChart <: Chart & TuiCellChart {
     public init() {}
 
     public func draw(data: JsonObject): String {
+        buildCanvas(data).render()
+    }
+
+    public func drawCells(data: JsonObject): Array<Array<String>> {
+        buildCanvas(data).cellSymbols()
+    }
+
+    private func buildCanvas(data: JsonObject): TuiCanvas {
         let config = ChartConfig.parse(
             data, "line", defaultWidth: 80.0, defaultHeight: 24.0
         )
@@ -95,7 +103,7 @@ public class TuiLineChart <: Chart {
             }
             frame.drawXAxisNumeric(canvas, xTicks, xScale, xLabels.toArray())
         }
-        canvas.render()
+        canvas
     }
 
     private func drawLines(
