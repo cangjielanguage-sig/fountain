@@ -54,3 +54,38 @@ func readInt(key: String, defaultValue: Int64, minimum: Int64, errors: ArrayList
         case None => defaultValue
     }
 }
+
+/**
+ * 解析逗号分隔的文件系统类型列表。
+ *
+ * 只接受字母、数字与 `_ . -`：这些值会参与磁盘过滤，不应携带空白或 shell 元字符。
+ * 非法项写入 `errors` 并跳过，其余合法项仍然生效。
+ */
+func parseDiskExcludeFs(raw: String, errors: ArrayList<String>): Array<String> {
+    let result = ArrayList<String>()
+    for (piece in raw.split(",")) {
+        let name = piece.trimAscii()
+        if (name.isEmpty()) {
+            continue
+        }
+        if (!isValidFsName(name)) {
+            errors.add('probe_diskExcludeFs 含有非法文件系统名: "${name}"')
+            continue
+        }
+        result.add(name.toAsciiLower())
+    }
+    result.toArray()
+}
+
+private func isValidFsName(name: String): Bool {
+    for (rune in name.toRuneArray()) {
+        let value = UInt32(rune)
+        let digit = value >= 48 && value <= 57
+        let upper = value >= 65 && value <= 90
+        let lower = value >= 97 && value <= 122
+        if (!digit && !upper && !lower && value != 95 && value != 46 && value != 45) {
+            return false
+        }
+    }
+    true
+}

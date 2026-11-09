@@ -32,6 +32,7 @@ public class AgentSettings {
     public var intervalMs: Int64 = 5000
     public var customDir: String = "./custom"
     public var customFailFast: Bool = true
+    public var diskExcludeFs: Array<String> = ["tmpfs", "devtmpfs", "overlay", "squashfs"]
 
     private var errors = ArrayList<String>()
 
@@ -72,6 +73,11 @@ public class AgentSettings {
                     case Some(value) => settings.customFailFast = value
                     case None => settings.errors.add('probe_customFailFast 不是合法布尔值: "${raw}"')
                 }
+            case None => ()
+        }
+
+        match (configString("probe_diskExcludeFs")) {
+            case Some(raw) => settings.diskExcludeFs = parseDiskExcludeFs(raw, settings.errors)
             case None => ()
         }
 

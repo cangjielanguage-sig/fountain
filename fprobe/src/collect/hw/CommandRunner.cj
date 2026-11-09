@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fprobe.collect.hw
 
+import std.collection.HashMap
 import std.process.*
 import fountain::f_probe.{ProbeErrorCode, ProbeException}
 
@@ -103,4 +104,39 @@ private func validate(command: Array<String>): Unit {
 
 private func containsWhitespace(value: String): Bool {
     value.contains(' ') || value.contains('\t') || value.contains('\n') || value.contains('\r')
+}
+
+/**
+ * 内存实现：按「命令 + 参数」返回预设结果。
+ *
+ * 探针用例用它注入 `df` 输出，不启动真实进程；未登记的命令返回明确的错误结果，
+ * 避免测试悄悄走到真实环境。
+ */
+public class FixtureCommandRunner <: CommandRunner {
+    private let results = HashMap<String, CommandResult>()
+
+    public init() {}
+
+    public func respond(command: Array<String>, result: CommandResult): Unit {
+        results[commandKey(command)] = result
+    }
+
+    public func run(command: Array<String>, timeoutMs!: Int64 = 3000): CommandResult {
+        let key = commandKey(command)
+        match (results.get(key)) {
+            case Some(result) => result
+            case None => CommandResult(-1, "", "", false, 'fixture 未登记命令: ${key} (timeout=${timeoutMs}ms)')
+        }
+    }
+}
+
+private func commandKey(command: Array<String>): String {
+    var key = ""
+    for (part in command) {
+        if (!key.isEmpty()) {
+            key += " "
+        }
+        key += part
+    }
+    key
 }

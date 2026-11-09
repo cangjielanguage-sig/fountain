@@ -60,13 +60,19 @@ private func withoutKeys(keys: Array<String>, body: () -> Unit): Unit {
 public class AgentSettings_test {
     @TestCase
     public func defaultsWhenNothingConfigured(): Unit {
-        withoutKeys(["probe_port", "probe_host", "probe_intervalMs", "probe_customDir", "probe_customFailFast"]) {
+        withoutKeys(["probe_port", "probe_host", "probe_intervalMs", "probe_customDir", "probe_customFailFast",
+            "probe_diskExcludeFs"]) {
             let settings = AgentSettings.load()
             @Assert(settings.port, 12323)
             @Assert(settings.intervalMs, 5000)
             @Assert(settings.customDir, "./custom")
             @Assert(settings.customFailFast)
             @Assert(!settings.host.isEmpty())
+            @Assert(settings.diskExcludeFs.size, 4)
+            @Assert(settings.diskExcludeFs[0], "tmpfs")
+            @Assert(settings.diskExcludeFs[1], "devtmpfs")
+            @Assert(settings.diskExcludeFs[2], "overlay")
+            @Assert(settings.diskExcludeFs[3], "squashfs")
             @Assert(settings.validate().isEmpty())
         }
     }
@@ -74,14 +80,28 @@ public class AgentSettings_test {
     @TestCase
     public func configuredValuesOverrideDefaults(): Unit {
         withKeys([("probe_port", "23456"), ("probe_host", "node-a"), ("probe_intervalMs", "1500"),
-            ("probe_customDir", "/opt/fprobe/custom"), ("probe_customFailFast", "false")]) {
+            ("probe_customDir", "/opt/fprobe/custom"), ("probe_customFailFast", "false"),
+            ("probe_diskExcludeFs", "ext4, xfs , btrfs")]) {
             let settings = AgentSettings.load()
             @Assert(settings.port, 23456)
             @Assert(settings.host, "node-a")
             @Assert(settings.intervalMs, 1500)
             @Assert(settings.customDir, "/opt/fprobe/custom")
             @Assert(!settings.customFailFast)
+            @Assert(settings.diskExcludeFs.size, 3)
+            @Assert(settings.diskExcludeFs[0], "ext4")
+            @Assert(settings.diskExcludeFs[1], "xfs")
+            @Assert(settings.diskExcludeFs[2], "btrfs")
             @Assert(settings.validate().isEmpty())
+        }
+    }
+
+    @TestCase
+    public func invalidDiskExcludeFsEntryIsRejected(): Unit {
+        withKeys([("probe_diskExcludeFs", "tmpfs,bad fs;rm -rf")]) {
+            let errors = AgentSettings.load().validate()
+            @Assert(errors.size, 1)
+            @Assert(errors[0].contains("probe_diskExcludeFs"))
         }
     }
 

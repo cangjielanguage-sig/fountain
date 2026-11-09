@@ -68,4 +68,42 @@ public class ProcReader_test {
         let content = createProcReader().read("/proc/sys/kernel/hostname")
         @Assert(content.isSome())
     }
+
+    @TestCase
+    public func fixtureListsConfiguredDirectory(): Unit {
+        let reader = FixtureProcReader([], [("/proc", ["1", "2", "self"])])
+        let entries = reader.list("/proc")
+        @Assert(entries.isSome())
+        let names = entries.getOrThrow()
+        @Assert(names.size, 3)
+        @Assert(names[0], "1")
+        @Assert(names[1], "2")
+        @Assert(names[2], "self")
+    }
+
+    @TestCase
+    public func fixtureReturnsNoneForMissingDirectory(): Unit {
+        let reader = FixtureProcReader([], [("/proc", ["1"])])
+        @Assert(reader.list("/sys").isNone())
+    }
+
+    @TestCase
+    public func realReaderListsProcDirectory(): Unit {
+        let entries = RealProcReader().list("/proc")
+        @Assert(entries.isSome())
+        @Assert(!entries.getOrThrow().isEmpty())
+    }
+
+    @TestCase
+    public func unsupportedReaderListThrowsCollectError(): Unit {
+        var caught = false
+        try {
+            UnsupportedProcReader().list("/proc")
+        } catch (e: ProbeException) {
+            caught = true
+            @Assert(e.code, ProbeErrorCode.COLLECT)
+            @Assert(e.message.contains("unsupported"))
+        }
+        @Assert(caught)
+    }
 }
