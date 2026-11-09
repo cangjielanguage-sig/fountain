@@ -40,7 +40,7 @@ public class SupervisorRuntime_test {
     @TestCase
     public func approveReplyRunsWhitelistedAction(): Unit {
         let muted = ArrayList<(String, Int64)>()
-        let whitelist = ActionWhitelist(mute: {pair => muted.add(pair)}, nowMs: {=> 1000}, muteSeconds: 600)
+        let whitelist = ActionWhitelist(mute: {rule: String, until: Int64 => muted.add((rule, until))}, nowMs: {=> 1000}, muteSeconds: 600)
         SupervisorRuntime.handleReply(ChannelMessage("m1", "ops@example.com", "同意", "同意 mute cpu-high"),
             whitelist)
         @Assert(muted.size, 1)
@@ -51,7 +51,7 @@ public class SupervisorRuntime_test {
     @TestCase
     public func rejectReplyDoesNotRunAction(): Unit {
         let muted = ArrayList<(String, Int64)>()
-        let whitelist = ActionWhitelist(mute: {pair => muted.add(pair)}, nowMs: {=> 1000}, muteSeconds: 600)
+        let whitelist = ActionWhitelist(mute: {rule: String, until: Int64 => muted.add((rule, until))}, nowMs: {=> 1000}, muteSeconds: 600)
         SupervisorRuntime.handleReply(ChannelMessage("m2", "ops@example.com", "拒绝", "拒绝 mute cpu-high"),
             whitelist)
         @Assert(muted.isEmpty())
@@ -60,7 +60,7 @@ public class SupervisorRuntime_test {
     @TestCase
     public func unrecognizedReplyIsIgnored(): Unit {
         let muted = ArrayList<(String, Int64)>()
-        let whitelist = ActionWhitelist(mute: {pair => muted.add(pair)}, nowMs: {=> 1000}, muteSeconds: 600)
+        let whitelist = ActionWhitelist(mute: {rule: String, until: Int64 => muted.add((rule, until))}, nowMs: {=> 1000}, muteSeconds: 600)
         SupervisorRuntime.handleReply(ChannelMessage("m3", "ops@example.com", "", "随便聊聊"), whitelist)
         @Assert(muted.isEmpty())
     }

@@ -359,7 +359,7 @@ public class SupervisorRuntime <: SupervisorComponents {
 
         let whitelist = ActionWhitelist(
             ack: {rule => eprintln('fprobe supervisor: 已确认告警 ${rule}')},
-            mute: {pair => alarm.mute(pair[0], pair[1])},
+            mute: {rule: String, until: Int64 => alarm.mute(rule, until)},
             report: {=>
                 match (reportJob) {
                     case Some(job) => job.runOnce()

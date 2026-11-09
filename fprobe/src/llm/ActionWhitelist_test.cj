@@ -29,7 +29,7 @@ public class ActionWhitelist_test {
         let reports = ArrayList<Int64>()
         let whitelist = ActionWhitelist(
             ack: {rule => acked.add(rule)},
-            mute: {pair => muted.add(pair)},
+            mute: {rule: String, until: Int64 => muted.add((rule, until))},
             report: {=> reports.add(1)},
             nowMs: {=> 1000},
             muteSeconds: 600)
@@ -59,7 +59,7 @@ public class ActionWhitelist_test {
         let reports = ArrayList<Int64>()
         let whitelist = ActionWhitelist(
             ack: {rule => acked.add(rule)},
-            mute: {pair => muted.add(pair)},
+            mute: {rule: String, until: Int64 => muted.add((rule, until))},
             report: {=> reports.add(1)},
             nowMs: {=> 1000},
             muteSeconds: 600)
@@ -77,7 +77,7 @@ public class ActionWhitelist_test {
         let reports = ArrayList<Int64>()
         let whitelist = ActionWhitelist(
             ack: {_ => ()},
-            mute: {pair => muted.add(pair)},
+            mute: {rule: String, until: Int64 => muted.add((rule, until))},
             report: {=> reports.add(1)},
             nowMs: {=> 1000},
             muteSeconds: 600)
@@ -93,7 +93,7 @@ public class ActionWhitelist_test {
         let muted = ArrayList<(String, Int64)>()
         let whitelist = ActionWhitelist(
             ack: {_ => ()},
-            mute: {pair => muted.add(pair)},
+            mute: {rule: String, until: Int64 => muted.add((rule, until))},
             report: {=> ()},
             nowMs: {=> 0},
             muteSeconds: 10)

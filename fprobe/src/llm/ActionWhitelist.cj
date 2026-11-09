@@ -54,14 +54,14 @@ public enum WhitelistResult <: Equatable<WhitelistResult> {
  */
 public class ActionWhitelist {
     private let ack: (String) -> Unit
-    private let mute: ((String, Int64)) -> Unit
+    private let mute: (String, Int64) -> Unit
     private let report: () -> Unit
     private let nowMs: () -> Int64
     private let muteSeconds: Int64
 
     public init(ack!: (String) -> Unit = {_ => ()},
-        mute!: ((String, Int64)) -> Unit = {pair =>
-            let _ = pair
+        mute!: (String, Int64) -> Unit = {rule: String, until: Int64 =>
+            let _ = (rule, until)
             ()
         },
         report!: () -> Unit = {=> ()},
@@ -82,7 +82,7 @@ public class ActionWhitelist {
                 ack(rule)
                 WhitelistResult.ACKED
             case "mute" =>
-                mute((rule, nowMs() + muteSeconds * 1000))
+                mute(rule, nowMs() + muteSeconds * 1000)
                 WhitelistResult.MUTED
             case "report" =>
                 report()
