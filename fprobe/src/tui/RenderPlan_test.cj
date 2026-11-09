@@ -41,6 +41,15 @@ func cpuState(node: String, usagePercent: Float64): NodeState {
     NodeState(node, NodeStatus.ONLINE, 0, Some(snapshot), "", 1000)
 }
 
+
+func topologyState(node: String): NodeState {
+    let dataJson = '{"devices":[{"name":"sw1","host":"10.0.0.1","ports":["Gi0/1","Gi0/2"]}],' +
+        '"links":[{"from":"sw1","to":"sw2","localPort":"Gi0/1","remotePort":"Gi0/2"}],"error":""}'
+    let snapshot = ProbeSnapshot(node, "${node}-host", 1000,
+        [ProbeAgentData("topology", "${node}-host", dataJson, 1000, "")])
+    NodeState(node, NodeStatus.ONLINE, 0, Some(snapshot), "", 1000)
+}
+
 /** 12.2：RenderPlan 是纯数据，行数、列数与序列长度都可直接断言。 */
 @Test
 public class RenderPlan_test {
@@ -126,5 +135,19 @@ public class RenderPlan_test {
         let plan = RenderPlanBuilder.build(ViewModel(["a"], 0, 0, 0), [state],
             FixedHistory(5), 1, [])
         @Assert(plan.note.contains("/proc/stat"))
+    }
+
+    /** 拓扑页：设备与链路以文本行展示，而不是空表。 */
+    @TestCase
+    public func topologyPageShowsDevicesAndLinks(): Unit {
+        let view = ViewModel(["n1"], 0, 6, 0)
+        let plan = RenderPlanBuilder.build(view, [topologyState("n1")], EmptyHistorySource(), 1000, [])
+        @Assert(plan.pageTitle, "拓扑")
+        @Assert(plan.metricRows.size, 2)
+        @Assert(plan.metricRows[0][0], "设备 sw1(10.0.0.1)")
+        @Assert(plan.metricRows[0][1], "Gi0/1,Gi0/2")
+        @Assert(plan.metricRows[1][0], "链路 sw1:Gi0/1")
+        @Assert(plan.metricRows[1][1], "sw2:Gi0/2")
+        @Assert(plan.series.isEmpty())
     }
 }

@@ -74,3 +74,18 @@ match (client.transfer(request, Duration.second * 3)) {
 
 `ProbeSnapshot`、`ProbeAgentData`、`ProbeKinds` 都必须是 `DataFields`；`dataJson`
 是字符串，因此监控项内部结构变化不需要改 RPC 契约，也不影响其它监控项。
+
+### `agentsJson` 线格式
+
+`ProbeSnapshot` 在线上只传一个字符串字段 `agentsJson`，内容是 `ProbeAgentData` 数组的
+JSON 文本；客户端侧的 `snapshot.agents` 是解析后的派生属性。原因：`f_rpc` 的二进制
+解码对嵌套 DTO 数组会创建默认元素并丢失字段，改用字符串后跨进程稳定。
+
+因此第三方客户端若手工构造响应，应写：
+
+```json
+{"node":"n1","host":"h1","timestamp":1730000000000,
+ "agentsJson":"[{\"kind\":\"cpu\",\"host\":\"h1\",\"dataJson\":\"{}\",\"collectedAt\":1730000000000,\"error\":\"\"}]"}
+```
+
+使用 `fprobe` 自己的 `NodeRpcTransport` 时不需要关心该细节。

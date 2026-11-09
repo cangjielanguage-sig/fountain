@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fprobe.tui
 
 import std.collection.ArrayList
+import fountain::f_data.*
 import fountain::fprobe.collect.{Aggregation, MetricProjection}
 import fountain::fprobe.snapshot.ProbeAgentData
 import fountain::fprobe.supervisor.{NodeState, NodeStatus}
@@ -196,6 +197,12 @@ public class RenderPlanBuilder {
             for (alarm in alarms) {
                 metricRows.add([alarm, ""])
             }
+        } else if (page == MetricPage.TOPOLOGY) {
+            let agent = findAgent(states, selectedName, "topology")
+            note = describeMissing(states, selectedName, agent, "topology")
+            for (row in topologyRows(agent)) {
+                metricRows.add(row)
+            }
         } else {
             let specs = ProjectionCatalog.specs(page)
             let kind = page.kind()
@@ -243,6 +250,99 @@ public class RenderPlanBuilder {
             rows.add("${marker} ${names[i]}  ${statusOf(states, names[i])}")
         }
         rows.toArray()
+    }
+
+    /** 拓扑页：把 `topology` 监控项的 devices/links 压成两组文本行。 */
+    private static func topologyRows(agent: ?ProbeAgentData): Array<Array<String>> {
+        let rows = ArrayList<Array<String>>()
+        let data = match (agent) {
+            case Some(value) =>
+                if (!value.error.isEmpty()) {
+                    return rows.toArray()
+                }
+                value.dataJson
+            case None => return rows.toArray()
+        }
+        let root = try {
+            JsonValue.fromStr(data).asObject()
+        } catch (_: Exception) {
+            return rows.toArray()
+        }
+        match (root.get("devices")) {
+            case Some(value) =>
+                let items = try {
+                    value.asArray()
+                } catch (_: Exception) {
+                    JsonArray()
+                }
+                for (item in items) {
+                    let device = try {
+                        item.asObject()
+                    } catch (_: Exception) {
+                        continue
+                    }
+                    let name = textOf(device, "name")
+                    let host = textOf(device, "host")
+                    let ports = listOf(device, "ports")
+                    rows.add(["设备 ${name}(${host})", ports])
+                }
+            case None => ()
+        }
+        match (root.get("links")) {
+            case Some(value) =>
+                let items = try {
+                    value.asArray()
+                } catch (_: Exception) {
+                    JsonArray()
+                }
+                for (item in items) {
+                    let link = try {
+                        item.asObject()
+                    } catch (_: Exception) {
+                        continue
+                    }
+                    let from = textOf(link, "from")
+                    let to = textOf(link, "to")
+                    let local = textOf(link, "localPort")
+                    let remote = textOf(link, "remotePort")
+                    rows.add(["链路 ${from}:${local}", "${to}:${remote}"])
+                }
+            case None => ()
+        }
+        rows.toArray()
+    }
+
+    private static func textOf(object: JsonObject, key: String): String {
+        match (object.get(key)) {
+            case Some(value) =>
+                try {
+                    value.asString().value
+                } catch (_: Exception) {
+                    ""
+                }
+            case None => ""
+        }
+    }
+
+    private static func listOf(object: JsonObject, key: String): String {
+        match (object.get(key)) {
+            case Some(value) =>
+                let items = try {
+                    value.asArray()
+                } catch (_: Exception) {
+                    return ""
+                }
+                let names = ArrayList<String>()
+                for (item in items) {
+                    names.add(try {
+                        item.asString().value
+                    } catch (_: Exception) {
+                        ""
+                    })
+                }
+                String.join(names.toArray(), delimiter: ",")
+            case None => ""
+        }
     }
 
     private static func statusOf(states: Array<NodeState>, name: String): String {

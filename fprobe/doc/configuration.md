@@ -10,6 +10,7 @@
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `probe_port` | `12323` | RPC 监听端口，映射到 `rpcServer_port` |
+| `probe_hostId` | `1` | 集群内唯一节点编号，映射到 `protocol_hostId`（必须非 0，多节点部署时各不相同） |
 | `probe_host` | 主机名 | 节点标识与上报的 host |
 | `probe_intervalMs` | `5000` | 采集间隔（毫秒） |
 | `probe_customDir` | `./custom` | 扩展动态库目录 |
@@ -33,6 +34,7 @@
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `probe_nodes` | `localhost@127.0.0.1:12323` | 节点列表，`name@host:port` |
+| `probe_hostId` | `1` | supervisor 自身的协议节点编号，映射到 `protocol_hostId` |
 | `probe_pollIntervalMs` | `5000` | 拉取间隔 |
 | `probe_nodeTimeoutMs` | `3000` | 单节点单次拉取超时 |
 | `probe_missingThreshold` | `2` | 连续失败多少次后发不可达告警 |
@@ -40,7 +42,8 @@
 | `probe_alarmRules` | 空 | 规则 JSON 数组，见 [alarm-rules.md](alarm-rules.md) |
 | `probe_alarmCooldownSeconds` | `300` | 同一规则重复告警的去重窗口 |
 | `probe_alarmRecoverNotify` | `true` | 恢复时是否发送恢复消息 |
-| `probe_alarmChannels` | `email` | 启用的告警渠道名 |
+| `probe_alarmChannels` | `email` | 启用的告警渠道名；未注册的名字会让启动失败 |
+| `probe_expectKinds` | 空 | 期望每个节点都有的监控项；缺失时告警 |
 
 ## 告警渠道
 
@@ -59,7 +62,7 @@
 | `probe_channel_email_subjectPrefix` | `[fprobe]` | 主题前缀 |
 | `probe_channel_email_imapHost` | 空 | IMAP 主机，用于接收回复 |
 | `probe_channel_email_imapPort` | `993` | IMAP 端口 |
-| `probe_channel_email_receiveLimit` | `20` | 每次收信条数 |
+| `probe_channel_email_receiveLimit` | `20` | 每次收信条数（由 `EmailAlarmChannel` 读取） |
 
 ## 图表与报告
 
@@ -69,7 +72,7 @@
 | `probe_reportCron` | 空 | 报告 CRON；为空表示关闭 |
 | `probe_reportReceivers` | 空 | 报告收件人 |
 | `probe_reportChannels` | `email` | 报告渠道 |
-| `probe_reportTmpDir` | 系统临时目录 | 图表附件临时目录 |
+| `probe_reportTmpDir` | `./data/fprobe-report` | 图表附件临时目录 |
 
 `probe_chart_*` 的默认值：`cpu`、`memory`、`network` 为 `line`，`disk` 为 `bar`，
 `topology` 为 `topology`，未配置的监控项回退到 `line`。

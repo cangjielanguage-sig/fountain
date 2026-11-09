@@ -16,13 +16,19 @@ limitations under the License.
 package fountain::fprobe.runtime
 
 import std.collection.ArrayList
-import std.sync.AtomicBool
+import std.sync.{AtomicBool, Mutex}
 import fountain::f_config.Config
-import fountain::f_probe.AlarmMessageChannel
+import fountain::f_data.{DataObject, JsonValue}
+import fountain::f_probe.{AlarmChannelRegistry, AlarmMessageChannel}
 import fountain::fprobe.alarm.{AlarmEngine, AlarmEvent, AlarmRule}
-import fountain::fprobe.channel.{ChannelDispatcher, EmailAlarmChannel, FEmailTransport}
+import fountain::fprobe.channel.{ChannelDispatcher, ChannelMessage, EmailAlarmChannel, FEmailTransport}
 import fountain::fprobe.collect.SystemClock
+import fountain::fprobe.collect.topology.TopologySample
 import fountain::fprobe.config.SupervisorSettings
+import fountain::fprobe.llm.{ActionWhitelist, FLlmClient, LlmAdvice, LlmTrigger, ProbeAdvisor, ReplyDecision,
+    ReplyMonitor, ReplyStateStore, WhitelistResult}
+import fountain::fprobe.report.{AttachmentStore, ChannelReportSender, ChartRenderer, ChartSelector, ReportBuilder,
+    ReportJob, TicktockJobScheduler}
 import fountain::fprobe.rpc.{NodeEndpoint, NodeRpcTransport}
 import fountain::fprobe.snapshot.ProbeSnapshot
 import fountain::fprobe.supervisor.{NodeEvent, NodeSource, NodeState, NodeStateStore, PollLoop}
@@ -53,14 +59,28 @@ class TransportSource <: NodeSource {
     }
 }
 
+/** LLM 装配结果；关闭时两者都是 `None`。 */
+private class AdvisorParts {
+    let advisor: ?ProbeAdvisor
+    let replies: ?ReplyMonitor
+    let intervalMs: Int64
+    let replyPollMs: Int64
+
+    public init(advisor: ?ProbeAdvisor, replies: ?ReplyMonitor, intervalMs: Int64, replyPollMs: Int64) {
+        this.advisor = advisor
+        this.replies = replies
+        this.intervalMs = intervalMs
+        this.replyPollMs = replyPollMs
+    }
+}
+
 /**
  * supervisor 的运行时装配。
  *
- * 把节点拉取、告警评估、历史记录、渲染与退出串起来；TUI 是否初始化由
- * `resident` 决定，resident 模式下完全不触碰终端。
+ * 把节点拉取、告警评估、历史记录、渲染、周期报告与可选 LLM 智能体串起来；
+ * TUI 是否初始化由 `resident` 决定，resident 模式下完全不触碰终端。
  *
- * 与 `AgentRuntime` 一样，装配逻辑只做接线，采集/告警/渲染的语义都在各自
- * 模块里（且已有用例覆盖）。
+ * 装配逻辑只做接线：采集、告警、渲染、报告的语义都在各自模块里并有单测覆盖。
  */
 public class SupervisorRuntime <: SupervisorComponents {
     private let settings: SupervisorSettings
@@ -71,6 +91,12 @@ public class SupervisorRuntime <: SupervisorComponents {
     private let poll: PollLoop
     private let render: ?RenderLoop
     private let dispatcher: ChannelDispatcher
+    private let events: ArrayList<AlarmEvent>
+    private let eventLock: Mutex
+    private let advisor: ?ProbeAdvisor
+    private let replies: ?ReplyMonitor
+    private let llmIntervalMs: Int64
+    private let replyPollMs: Int64
     private let running = AtomicBool(false)
 
     init(settings: SupervisorSettings, resident: Bool, painter: Painter, holder: AppHolder) {
@@ -89,27 +115,64 @@ public class SupervisorRuntime <: SupervisorComponents {
         }
         this.sources = transports.toArray()
 
-        let dispatcher = SupervisorRuntime.buildDispatcher()
+        let (channels, enabled) = SupervisorRuntime.buildChannels()
+        let dispatcher = ChannelDispatcher(channels, enabled,
+            logWarning: {message => eprintln(message)}, logError: {message => eprintln(message)})
         this.dispatcher = dispatcher
 
-        let alarm = AlarmEngine(AlarmRule.load(), SystemClock(), {event => dispatcher.dispatch(event.message)},
+        let eventList = ArrayList<AlarmEvent>()
+        let eventMutex = Mutex()
+        this.events = eventList
+        this.eventLock = eventMutex
+
+        let alarm = AlarmEngine(AlarmRule.load(), SystemClock(),
+            {event =>
+                synchronized(eventMutex) {
+                    eventList.add(event)
+                    while (eventList.size > 50) {
+                        eventList.remove(0..1)
+                    }
+                }
+                dispatcher.dispatch(event.format())
+            },
             cooldownMs: SupervisorRuntime.cooldownSeconds() * 1000,
             recoverNotify: SupervisorRuntime.recoverNotify(),
-            missingThreshold: settings.missingThreshold)
+            missingThreshold: settings.missingThreshold,
+            expectKinds: Config.getStringArray("probe_expectKinds"))
 
         this.poll = PollLoop(sources.toArray(), stateStore, SystemClock(), settings.pollIntervalMs,
             settings.missingThreshold,
             {event => SupervisorRuntime.onNodeEvent(event, dispatcher)},
             {states =>
                 alarm.evaluate(states)
-                SupervisorRuntime.recordHistoryOf(historyStore, states)
+                for (state in states) {
+                    match (state.snapshot) {
+                        case Some(snapshot) => historyStore.observe(state.node, snapshot.agents)
+                        case None => ()
+                    }
+                }
             })
+
+        let reportJob = SupervisorRuntime.buildReportJob(dispatcher, stateStore, historyStore, eventMutex,
+            eventList)
+        match (reportJob) {
+            case Some(job) => job.register()
+            case None => ()
+        }
+
+        let llm = SupervisorRuntime.buildAdvisor(channels, dispatcher, alarm, reportJob)
+        this.advisor = llm.advisor
+        this.replies = llm.replies
+        this.llmIntervalMs = llm.intervalMs
+        this.replyPollMs = llm.replyPollMs
 
         if (resident) {
             this.render = None<RenderLoop>
         } else {
-            this.render = Some(RenderLoop(stateStore, {=> SupervisorRuntime.viewOf(holder, stateStore)},
-                historyStore, painter, 500, SystemClock(), {=> []}))
+            this.render = Some(RenderLoop(stateStore,
+                {=> SupervisorRuntime.viewOf(holder, stateStore, eventMutex, eventList)},
+                historyStore, painter, 500, SystemClock(),
+                {=> SupervisorRuntime.alarmTexts(eventMutex, eventList)}))
         }
     }
 
@@ -122,6 +185,14 @@ public class SupervisorRuntime <: SupervisorComponents {
         match (render) {
             case Some(loop) => spawn {=> loop.run()}
             case None => ()
+        }
+        match ((advisor, replies)) {
+            case (Some(activeAdvisor), Some(monitor)) =>
+                spawn {=>
+                    SupervisorRuntime.llmLoop(running, activeAdvisor, monitor, store, history,
+                        llmIntervalMs, replyPollMs)
+                }
+            case _ => ()
         }
     }
 
@@ -140,34 +211,52 @@ public class SupervisorRuntime <: SupervisorComponents {
         }
     }
 
-    /** 周期评估时记录关键指标，供 TUI 画 Sparkline。 */
-    private static func recordHistoryOf(history: NodeHistoryStore, states: Array<NodeState>): Unit {
-        for (state in states) {
-            match (state.snapshot) {
-                case Some(snapshot) =>
-                    for (agent in snapshot.agents) {
-                        if (!agent.error.isEmpty()) {
-                            continue
-                        }
-                        SupervisorRuntime.recordMetric(history, state.node, agent.kind, agent.dataJson)
-                    }
-                case None => ()
+    /** LLM 周期分析与回复轮询共用一个后台线程，按各自间隔触发。 */
+    private static func llmLoop(running: AtomicBool, advisor: ProbeAdvisor, replies: ReplyMonitor,
+        store: NodeStateStore, history: NodeHistoryStore, intervalMs: Int64, replyMs: Int64): Unit {
+        let clock = SystemClock()
+        var sinceLlm: Int64 = 0
+        var sinceReply: Int64 = 0
+        while (running.load()) {
+            clock.wait(1000)
+            sinceLlm += 1000
+            sinceReply += 1000
+            if (sinceReply >= replyMs) {
+                sinceReply = 0
+                try {
+                    replies.pollOnce()
+                } catch (e: Exception) {
+                    eprintln("fprobe supervisor: 回复轮询失败: ${e.message}")
+                } catch (e: Error) {
+                    eprintln("fprobe supervisor: 回复轮询失败: ${e.message}")
+                }
+            }
+            if (sinceLlm >= intervalMs) {
+                sinceLlm = 0
+                advisor.analyzeInterval(store.all(), history)
             }
         }
     }
 
-    private static func recordMetric(history: NodeHistoryStore, node: String, kind: String, json: String): Unit {
-        let value = match (MetricExtractor.primary(kind, json)) {
-            case Some(found) => found
-            case None => return
+    private static func viewOf(holder: AppHolder, store: NodeStateStore, lock: Mutex,
+        events: ArrayList<AlarmEvent>): ViewModel {
+        let base = match (holder.app) {
+            case Some(app) => app.view()
+            case None => ViewModel.empty()
         }
-        history.record(node, kind, value)
+        let count = synchronized(lock) {
+            Int64(events.size)
+        }
+        base.withNodes(SupervisorRuntime.nodesOf(store)).withAlarmCount(count)
     }
 
-    private static func viewOf(holder: AppHolder, store: NodeStateStore): ViewModel {
-        match (holder.app) {
-            case Some(app) => app.view()
-            case None => ViewModel(SupervisorRuntime.nodesOf(store), 0, 0, 0)
+    private static func alarmTexts(lock: Mutex, events: ArrayList<AlarmEvent>): Array<String> {
+        synchronized(lock) {
+            let texts = ArrayList<String>()
+            for (event in events) {
+                texts.add(event.message)
+            }
+            texts.toArray()
         }
     }
 
@@ -181,6 +270,158 @@ public class SupervisorRuntime <: SupervisorComponents {
 
     private static func onNodeEvent(event: NodeEvent, dispatcher: ChannelDispatcher): Unit {
         dispatcher.dispatch(event.message)
+    }
+
+    /**
+     * 构建周期报告；`probe_reportCron` 为空时返回 `None`。
+     *
+     * `register()` 在构造期调用，非法 CRON 会让进程以非 0 退出，而不是静默不注册。
+     */
+    private static func buildReportJob(dispatcher: ChannelDispatcher, store: NodeStateStore,
+        history: NodeHistoryStore, lock: Mutex, events: ArrayList<AlarmEvent>): ?ReportJob {
+        let cron = (Config.getString("probe_reportCron") ?? "").trimAscii()
+        if (cron.isEmpty()) {
+            return None<ReportJob>
+        }
+        let receivers = Config.getStringArray("probe_reportReceivers")
+        let builder = ReportBuilder(ChartSelector(), ChartRenderer(),
+            AttachmentStore(Config.getString("probe_reportTmpDir") ?? "./data/fprobe-report"), SystemClock())
+        Some(ReportJob(
+            {=>
+                builder.build(store.all(), history, SupervisorRuntime.snapshotEvents(lock, events),
+                    SupervisorRuntime.topologyOf(store))
+            },
+            ChannelReportSender(dispatcher), TicktockJobScheduler(), cron, receivers: receivers))
+    }
+
+    private static func snapshotEvents(lock: Mutex, events: ArrayList<AlarmEvent>): Array<AlarmEvent> {
+        synchronized(lock) {
+            events.toArray()
+        }
+    }
+
+    private static func topologyOf(store: NodeStateStore): ?TopologySample {
+        for (state in store.all()) {
+            match (state.snapshot) {
+                case Some(snapshot) =>
+                    for (agent in snapshot.agents) {
+                        if (agent.kind != "topology" || !agent.error.isEmpty()) {
+                            continue
+                        }
+                        let parsed = try {
+                            JsonValue.fromStr(agent.dataJson)
+                        } catch (_: Exception) {
+                            continue
+                        }
+                        match (DataObject<TopologySample>.populate(parsed.toData())) {
+                            case Some(value) => return Some(value)
+                            case None => ()
+                        }
+                    }
+                case None => ()
+            }
+        }
+        None<TopologySample>
+    }
+
+    private static func buildAdvisor(channels: Array<(String, AlarmMessageChannel)>,
+        dispatcher: ChannelDispatcher, alarm: AlarmEngine, reportJob: ?ReportJob): AdvisorParts {
+        let intervalMs = Config.getValue<Int64>("probe_llmIntervalMs") ?? 300000
+        let replyPollMs = Config.getValue<Int64>("probe_llmReplyPollMs") ?? 30000
+        let enabled = Config.getValue<Bool>("probe_llmAgent") ?? false
+        if (!enabled) {
+            return AdvisorParts(None<ProbeAdvisor>, None<ReplyMonitor>, intervalMs, replyPollMs)
+        }
+        let trigger = LlmTrigger.parse(Config.getString("probe_llmTrigger") ?? "alarm")
+        let model = Config.getString("probe_llmName") ?? "deepseek-flash"
+        let muteSeconds = Config.getValue<Int64>("probe_llmMuteSeconds") ?? 600
+        let stateFile = Config.getString("probe_replyStateFile") ?? "./data/reply-state.json"
+
+        let whitelist = ActionWhitelist(
+            ack: {rule => eprintln('fprobe supervisor: 已确认告警 ${rule}')},
+            mute: {pair => alarm.mute(pair[0], pair[1])},
+            report: {=>
+                match (reportJob) {
+                    case Some(job) => job.runOnce()
+                    case None => eprintln("fprobe supervisor: 未配置 probe_reportCron，无法立即生成报告")
+                }
+            },
+            nowMs: {=> SystemClock().nowMs()},
+            muteSeconds: muteSeconds)
+
+        let advisor = ProbeAdvisor(true, trigger, FLlmClient(model),
+            onAdvice: {advice => dispatcher.dispatch(SupervisorRuntime.formatAdvice(advice))},
+            historyPoints: 20)
+
+        let monitor = ReplyMonitor(channels, ReplyStateStore(stateFile),
+            {message => SupervisorRuntime.handleReply(message, whitelist)},
+            logWarning: {message => eprintln(message)}, logError: {message => eprintln(message)})
+
+        AdvisorParts(Some(advisor), Some(monitor), intervalMs, replyPollMs)
+    }
+
+    /** 建议消息：摘要 + 问题 + 建议 + 回复格式说明。 */
+    static func formatAdvice(advice: LlmAdvice): String {
+        var text = "【智能体建议】${advice.summary}"
+        if (!advice.problems.isEmpty()) {
+            text += "\n问题:"
+            for (problem in advice.problems) {
+                text += "\n- ${problem}"
+            }
+        }
+        if (!advice.solutions.isEmpty()) {
+            text += "\n建议:"
+            for (solution in advice.solutions) {
+                text += "\n- [${solution.action}] ${solution.title}（风险: ${solution.risk}）"
+            }
+        }
+        text += "\n回复格式：同意 <action> <rule> / 拒绝 <action> <rule>；只有白名单动作会被执行。"
+        text
+    }
+
+    /** 解析授权回复：`同意 mute cpu-high` / `拒绝 mute cpu-high`。 */
+    static func handleReply(message: ChannelMessage, whitelist: ActionWhitelist): Unit {
+        let words = ArrayList<String>()
+        for (word in message.body.trimAscii().split(" ")) {
+            let trimmed = word.trimAscii()
+            if (!trimmed.isEmpty()) {
+                words.add(trimmed)
+            }
+        }
+        if (words.isEmpty()) {
+            eprintln("fprobe supervisor: 忽略空回复 ${message.id}")
+            return
+        }
+        let decision = match (words[0]) {
+            case "同意" => ReplyDecision.APPROVE
+            case "拒绝" => ReplyDecision.REJECT
+            case _ =>
+                eprintln('fprobe supervisor: 无法识别的回复 "${words[0]}"（${message.id}）')
+                return
+        }
+        let action = if (words.size > 1) {
+            words[1]
+        } else {
+            "none"
+        }
+        let rule = if (words.size > 2) {
+            words[2]
+        } else {
+            ""
+        }
+        let result = whitelist.apply(decision, action, rule)
+        eprintln('fprobe supervisor: 回复 ${message.id} 处理结果 ${resultName(result)}')
+    }
+
+    private static func resultName(result: WhitelistResult): String {
+        match (result) {
+            case ACKED => "ACKED"
+            case MUTED => "MUTED"
+            case REPORTED => "REPORTED"
+            case NONE => "NONE"
+            case REJECTED => "REJECTED"
+            case UNSUPPORTED => "UNSUPPORTED"
+        }
     }
 
     private static func cooldownSeconds(): Int64 {
@@ -202,12 +443,12 @@ public class SupervisorRuntime <: SupervisorComponents {
     }
 
     /**
-     * 按 `probe_alarmChannels` 构建分发器。
+     * 按 `probe_alarmChannels` 构建渠道表与启用列表。
      *
-     * 只有配置齐全的渠道才会被启用；未配置 SMTP 时邮件渠道不构建，
-     * 告警仍写入日志（`ChannelDispatcher.dispatch` 本身会记录）。
+     * 未注册的渠道名会原样交给 `ChannelDispatcher`，由它在构造期抛 `CONFIG`，
+     * 保证配置错误在启动时暴露，而不是运行期静默跳过。
      */
-    static func buildDispatcher(): ChannelDispatcher {
+    static func buildChannels(): (Array<(String, AlarmMessageChannel)>, Array<String>) {
         let channels = ArrayList<(String, AlarmMessageChannel)>()
         match (buildEmailChannel()) {
             case Some(channel) => channels.add(("email", channel))
@@ -225,19 +466,30 @@ public class SupervisorRuntime <: SupervisorComponents {
             if (trimmed.isEmpty()) {
                 continue
             }
-            var existed = false
+            var built = false
             for ((channelName, _) in channels) {
                 if (channelName == trimmed) {
-                    existed = true
+                    built = true
                 }
             }
-            if (existed) {
+            if (built) {
                 enabled.add(trimmed)
+                continue
+            }
+            let known = trimmed == "email" || AlarmChannelRegistry.channel(trimmed).isSome()
+            if (known) {
+                eprintln('fprobe supervisor: 渠道 "${trimmed}" 已注册但未配置，已跳过')
             } else {
-                eprintln('fprobe supervisor: 告警渠道 "${trimmed}" 未配置，已跳过')
+                enabled.add(trimmed)
             }
         }
-        ChannelDispatcher(channels.toArray(), enabled.toArray(),
+        (channels.toArray(), enabled.toArray())
+    }
+
+    /** 兼容旧调用：只要分发器。 */
+    static func buildDispatcher(): ChannelDispatcher {
+        let (channels, enabled) = buildChannels()
+        ChannelDispatcher(channels, enabled,
             logWarning: {message => eprintln(message)}, logError: {message => eprintln(message)})
     }
 
@@ -263,5 +515,4 @@ public class SupervisorRuntime <: SupervisorComponents {
             None<EmailAlarmChannel>
         }
     }
-
 }
