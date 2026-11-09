@@ -34,6 +34,23 @@ internal func tuiAnsiForeground(color: String): String {
     }
 }
 
+/** 根据背景亮度选择黑/白前景色，保证标签可读。 */
+internal func tuiContrastColor(color: String): String {
+    try {
+        let parsed = SvgColor.parse(color)
+        let luminance = 0.299 * Float64(parsed.red) +
+            0.587 * Float64(parsed.green) +
+            0.114 * Float64(parsed.blue)
+        if (luminance >= 150.0) {
+            "#000000"
+        } else {
+            "#ffffff"
+        }
+    } catch (_: Exception) {
+        "#ffffff"
+    }
+}
+
 /** 去掉字符串中的 ANSI CSI 序列，便于测试断言纯文本。 */
 internal func tuiStripAnsi(text: String): String {
     let bytes = text.toArray()

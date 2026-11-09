@@ -173,7 +173,7 @@ let svg = chart.draw(data)
 | M105 | 仪表盘 `GaugeChart`（阈值色带、指针、中心数值） | 已完成 |
 | M106 | 日历热力图里程碑闭合（复用 `CalendarHeatmapChart`，回归测试） | 已完成 |
 
-M1–M106 全部完成。测试总数 1144，全部通过（含 TUI 子包 52 个用例）。
+M1–M106 全部完成。测试总数 1168，全部通过（含 TUI 子包 76 个用例）。
 
 ## 图表样例（charts/）
 
@@ -190,10 +190,10 @@ cjpm test --skip-build
 
 测试会断言 SVG 包含 `<svg`，并自动创建 `charts/` 目录；SVG 内容变化会直接体现在 `git diff` 中，便于做视觉回归。
 
-TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 7 份字符画样例：
+TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 8 份字符画样例：
 
-- 文件命名：`M<编号>-<type>.tui.txt`，例如 `M001-bar.tui.txt`、`M007-combo.tui.txt`。
-- 全部保留 ANSI 24 位真彩颜色，`cat` 即可看到系列配色；分组/堆叠/百分比堆叠的各系列或分段、组合图的柱/线/散点均使用不同颜色。
+- 文件命名：`M<编号>-<type>.tui.txt`，例如 `M001-bar.tui.txt`、`M007-combo.tui.txt`、`M052-flame.tui.txt`。
+- 全部保留 ANSI 24 位真彩颜色，`cat` 即可看到系列配色；分组/堆叠/百分比堆叠的各系列或分段、组合图的柱/线/散点、火焰图各节点均使用不同颜色。
 - 尺寸取 JSON 中的 `width`/`height`（字符列/行），与 SVG 样例共用同一批图表语义。
 
 ## TUI 子包（fountain::f_chart.tui）
@@ -218,6 +218,7 @@ print(svg)
 | `TuiLineChart` | `line` | 类目 / 数值 / 时间轴，null 断开 |
 | `TuiScatterChart` | `scatter` | 数值 / 时间轴散点 |
 | `TuiComboChart` | `combo` | 上述 6 种柱/线/点类型任意组合，支持右轴 |
+| `TuiFlameChart` | `flame` | 真彩调用栈火焰图，支持 `bottom-up` / `top-down` 与 `colorBy` |
 
 约定：
 
@@ -226,6 +227,7 @@ print(svg)
 - 标记字符：柱族按系列循环使用 `█ ▓ ▒ ░`，折线 `*`、散点 `o`、网格 `·`、坐标轴 `│ ─ └`、图例 `■`；即使终端不支持颜色，多系列柱体也能通过符号区分。
 - CJK 字符按 2 列显示；标签超出可用宽度时截断并以 `…` 结尾。
 - TUI 组合图要求类目横轴；`axis: "right"` 的系列需要 `yAxis2`。
+- 火焰图的 `frameHeight` 在 TUI 中表示每层最大字符行数，缺省 18 会按可用高度压缩；`colorBy` 支持 `name` 与 `value`。
 
 完整用法（各类 JSON 示例、尺寸与版式、错误处理、样例文件）见文末[附：TUI 子包用法](#附tui-子包用法)。
 
@@ -2860,7 +2862,7 @@ print(svg)
 
 ## 附：TUI 子包用法
 
-TUI 子包（`fountain::f_chart.tui`）把与 SVG 版相同的 JSON 渲染成终端字符画。7 个类都实现 `fountain::f_chart.Chart`，因此可以按统一接口调用、替换或注入。
+TUI 子包（`fountain::f_chart.tui`）把与 SVG 版相同的 JSON 渲染成终端字符画。8 个类都实现 `fountain::f_chart.Chart`，因此可以按统一接口调用、替换或注入。
 
 ### 最小示例
 
@@ -2889,7 +2891,7 @@ main(): Int64 {
 
 ### 按图类型调用
 
-只需替换图表类；JSON 的 `type` 与类一一对应（`word-cloud` 等非 M1–M7 图不在 TUI 范围内）。
+只需替换图表类；JSON 的 `type` 与类一一对应（`TuiFlameChart` 处理 M52，其余尚未 TUI 化的图类型仍不在范围内）。
 
 ```cangjie
 let charts: Array<Chart> = [
@@ -2899,7 +2901,8 @@ let charts: Array<Chart> = [
     TuiPercentStackedBarChart(),    // percent-stacked-bar
     TuiLineChart(),                 // line
     TuiScatterChart(),              // scatter
-    TuiComboChart()                 // combo
+    TuiComboChart(),                // combo
+    TuiFlameChart()                 // flame
 ]
 for (chart in charts) {
     println(chart.draw(data))
@@ -3042,6 +3045,35 @@ for (chart in charts) {
 - `axis: "right"` 的系列读取 `yAxis2`，未提供 `yAxis2` 会报错。
 - `line` / `scatter` 叠加在柱族之上；`smooth` 在 TUI 中按普通折线绘制。
 
+#### 火焰图
+
+`flame` 使用 `nodes` 树，节点值决定宽度，层级决定行：
+
+```json
+{
+  "type": "flame",
+  "title": "CPU 火焰图",
+  "width": 80,
+  "height": 24,
+  "orientation": "bottom-up",
+  "colorBy": "name",
+  "nodes": [
+    { "id": "root", "name": "main", "parent": null, "value": 100 },
+    { "id": "parse", "name": "parse", "parent": "root", "value": 40 },
+    { "id": "render", "name": "render", "parent": "root", "value": 60 },
+    { "id": "lex", "name": "lex", "parent": "parse", "value": 25 },
+    { "id": "ast", "name": "ast", "parent": "parse", "value": 15 },
+    { "id": "layout", "name": "layout", "parent": "render", "value": 35 },
+    { "id": "paint", "name": "paint", "parent": "render", "value": 25 }
+  ]
+}
+```
+
+- `orientation`：`bottom-up`（根在底部）或 `top-down`（根在顶部）。
+- `colorBy`：`name` 按名称稳定散列到调色板；`value` 按根节点占比映射热力色。
+- `frameHeight`：TUI 中表示每层最大字符行数，缺省 18 会压缩到可用高度；每层至少 1 行。
+- 节点块使用真彩色 `█` 填充，标签颜色按背景亮度自动选黑/白；块宽不足时省略标签。
+
 ### 尺寸与版式
 
 - `width` / `height` 的单位是**字符列 / 行**，缺省 80×24，最小 20×8；低于下限抛 `ChartException`。
@@ -3069,7 +3101,7 @@ try {
 
 ### 样例与回归
 
-`src/tui/TuiGallery_test.cj` 的 7 个用例会把 M1–M7 的字符画写入 `charts/`：
+`src/tui/TuiGallery_test.cj` 的 8 个用例会把 M1–M7 与 M52 的字符画写入 `charts/`：
 
 - 文件命名：`M<编号>-<type>.tui.txt`。
 - 全部保留 ANSI 24 位真彩颜色，`cat` 即可看到系列配色。
@@ -3083,6 +3115,7 @@ try {
 | `M005-line.tui.txt` | `TuiLineChart` |
 | `M006-scatter.tui.txt` | `TuiScatterChart` |
 | `M007-combo.tui.txt` | `TuiComboChart` |
+| `M052-flame.tui.txt` | `TuiFlameChart` |
 
 分组柱状图按系列交替取 `theme.palette`（或 `series[].color`）的颜色；堆叠柱状图、百分比堆叠柱状图以及组合图中的柱系列每个分段/柱体同理。柱体同时按系列循环使用 `█ ▓ ▒ ░`，因此相邻系列在 ANSI 输出和无色文本中都能区分。
 

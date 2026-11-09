@@ -22,19 +22,28 @@ import fountain::f_chart.Chart
 import fountain::f_data.json.*
 
 /**
- * TUI 样例画廊：用真实 JSON 渲染 M1–M7，并把字符画写入 `charts/`。
+ * TUI 样例画廊：用真实 JSON 渲染 M1–M7、M52，并把字符画写入 `charts/`。
  *
  * 运行 `cd f_chart && cjpm test --skip-build` 后，`f_chart/charts` 下会生成
- * 7 个保留 ANSI 24 位真彩色的 `.tui.txt` 文件，`cat` 即可看到系列颜色。
+ * 8 个保留 ANSI 24 位真彩色的 `.tui.txt` 文件，`cat` 即可看到系列颜色。
  */
 @Test
 public class TuiGallery_test {
-    private func save(name: String, chart: Chart, json: String): Unit {
+    private func save(
+        name: String,
+        chart: Chart,
+        json: String,
+        axes!: Bool = true
+    ): Unit {
         let output = chart.draw(JsonValue.fromStr(json).asObject())
         @Assert(output.contains("\u{1B}["))
         let plain = tuiStripAnsi(output)
-        @Assert(plain.contains("└"))
-        @Assert(plain.contains("─"))
+        if (axes) {
+            @Assert(plain.contains("└"))
+            @Assert(plain.contains("─"))
+        } else {
+            @Assert(plain.contains("█"))
+        }
         let directory = Path("charts")
         if (!exists(directory)) {
             Directory.create(directory, recursive: true)
@@ -177,5 +186,29 @@ public class TuiGallery_test {
   ]
 }
 """)
+    }
+
+    /** M52 火焰图：真彩色调用栈块。 */
+    @TestCase
+    public func m052Flame(): Unit {
+        save("M052-flame", TuiFlameChart(), """
+{
+  "type": "flame",
+  "title": "CPU 火焰图",
+  "width": 80,
+  "height": 24,
+  "orientation": "bottom-up",
+  "colorBy": "name",
+  "nodes": [
+    { "id": "root", "name": "main", "parent": null, "value": 100 },
+    { "id": "parse", "name": "parse", "parent": "root", "value": 40 },
+    { "id": "render", "name": "render", "parent": "root", "value": 60 },
+    { "id": "lex", "name": "lex", "parent": "parse", "value": 25 },
+    { "id": "ast", "name": "ast", "parent": "parse", "value": 15 },
+    { "id": "layout", "name": "layout", "parent": "render", "value": 35 },
+    { "id": "paint", "name": "paint", "parent": "render", "value": 25 }
+  ]
+}
+""", axes: false)
     }
 }

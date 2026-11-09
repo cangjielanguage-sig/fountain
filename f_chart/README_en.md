@@ -116,11 +116,11 @@ let output = TuiBarChart().draw(data)
 print(output)
 ```
 
-Supported classes: `TuiBarChart` (`bar`), `TuiGroupedBarChart` (`grouped-bar`), `TuiStackedBarChart` (`stacked-bar`), `TuiPercentStackedBarChart` (`percent-stacked-bar`), `TuiLineChart` (`line`), `TuiScatterChart` (`scatter`), and `TuiComboChart` (`combo`, any two or three of the six bar/line/scatter types, with an optional right axis).
+Supported classes: `TuiBarChart` (`bar`), `TuiGroupedBarChart` (`grouped-bar`), `TuiStackedBarChart` (`stacked-bar`), `TuiPercentStackedBarChart` (`percent-stacked-bar`), `TuiLineChart` (`line`), `TuiScatterChart` (`scatter`), `TuiComboChart` (`combo`, any two or three of the six bar/line/scatter types, with an optional right axis), and `TuiFlameChart` (`flame`, true-color call-stack flame graph with `bottom-up` / `top-down` and `colorBy`).
 
 - `width` / `height` are character columns/rows; default 80×24, minimum 20×8.
 - Output is ANSI 24-bit color, each row terminates with `\u{1B}[0m\n`.
-- Marks: bars `█`, lines `*`, points `o`, grid `·`, axes `│ ─ └`, legend `■`.
+- Marks: bar families cycle `█ ▓ ▒ ░` per series, lines `*`, points `o`, grid `·`, axes `│ ─ └`, legend `■`.
 - CJK characters occupy two columns; long labels are truncated with `…`.
 
 ## Error semantics
