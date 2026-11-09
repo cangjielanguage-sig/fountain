@@ -1,15 +1,22 @@
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_chart" = {path = "../f_chart"}
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_email" = {path = "../f_email"}
   "fountain::f_health" = {path = "../f_health"}
   "fountain::f_httpclient" = {path = "../f_httpclient"}
+  "fountain::f_io" = {path = "../f_io"}
+  "fountain::f_llm" = {path = "../f_llm"}
   "fountain::f_net" = {path = "../f_net"}
   "fountain::f_probe" = {path = "../f_probe"}
   "fountain::f_protocol" = {path = "../f_protocol"}
   "fountain::f_rpc" = {path = "../f_rpc"}
+  "fountain::f_svg" = {path = "../f_svg"}
+  "fountain::f_ticktock" = {path = "../f_ticktock"}
+  "fountain::f_time" = {path = "../f_time"}
   "fountain::f_tui" = {path = "../f_tui"}
+  "fountain::f_util" = {path = "../f_util"}
   "ratatui_buffer" = "0.1.2"
   "ratatui_core" = "0.1.2"
   "ratatui_layout" = "0.1.2"

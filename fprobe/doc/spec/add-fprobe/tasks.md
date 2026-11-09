@@ -112,11 +112,11 @@
 - [x] 13.1 `ViewModel`：节点列表、选中、分页、`Tab`/`Shift+Tab`、`↑/↓`、`a` 告警页；验证：纯函数用例断言选中项与页索引。
 - [x] 13.2 `RenderPlan`：由 ViewModel + store 生成顶部/左侧/右侧/底部区域；验证：断言行数、列数、Sparkline 数据长度 = 历史点数。
 - [x] 13.3 `TtyDetector`：非 TTY 报错并提示 resident；验证：假 detector 返回 false，断言错误消息。
-- [ ] 13.4 `FprobePainter`（基于 `f_tui::BufferRenderer`）：用 ratatui 基础类型构建 `Buffer`，自绘 panel、table、sparkline 最小组件，把 `RenderPlan` 映射为顶部/左/右/底一帧；验证：先跑通「进入 alternate screen → 绘制 → 退出恢复」冒烟；注入假 renderer 断言 Buffer 单元格、绘制调用与 flush 次数；依赖树无 `ratatui_widgets`。
+- [x] 13.4 `FprobePainter`（基于 `f_tui::BufferRenderer`）：用 ratatui 基础类型构建 `Buffer`，自绘 panel、table、sparkline 最小组件，把 `RenderPlan` 映射为顶部/左/右/底一帧；验证：先跑通「进入 alternate screen → 绘制 → 退出恢复」冒烟；注入假 renderer 断言 Buffer 单元格、绘制调用与 flush 次数；依赖树无 `ratatui_widgets`。
 - [x] 13.5 `KeyMap`：`q` 退出、`r` 刷新、`Tab`、`Shift+Tab`、方向键、`a`；验证：表驱动断言映射结果。
 - [x] 13.6 渲染线程与拉取线程分离：渲染慢不影响拉取；验证：假 painter 睡眠 200ms，断言 tick 间隔仍符合配置（允许误差）。
-- [ ] 13.7 `TtyKeySource`：把 `f_tui::TerminalKey` 映射为 `UiKey`；验证：表驱动覆盖全部 `TerminalKey` 分支，未知值落 `UiKey.Unknown`。
-- [ ] 13.8 `SupervisorApp` 装配：TTY 模式下 `f_tui` backend `init/restore`、按键线程、非 TTY 拒绝；验证：假 backend 断言 `init`/`restore` 顺序与未调用次数；`q` 退出后 `restore` 被调用。
+- [x] 13.7 `TtyKeySource`：把 `f_tui::TerminalKey` 映射为 `UiKey`；验证：表驱动覆盖全部 `TerminalKey` 分支，未知值落 `UiKey.Unknown`。
+- [x] 13.8 `SupervisorApp` 装配：TTY 模式下 `f_tui` backend `init/restore`、按键线程、非 TTY 拒绝；验证：假 backend 断言 `init`/`restore` 顺序与未调用次数；`q` 退出后 `restore` 被调用。
 
 ## 14. resident 模式
 
@@ -126,21 +126,21 @@
 
 ## 15. 图表与报告
 
-- [ ] 15.1 `ChartSelector`：默认类型、自定义类型、未知类型回退；验证：4 条用例（cpu/memory/disk/network + 未知）。
-- [ ] 15.2 `ChartSpec` DTO → `JsonValue` → `Chart.draw`；验证：SVG 非空、可被 `f_svg.SvgParser.parse` 解析、`series[0].data` 点数 = 历史点数。
-- [ ] 15.3 `ReportBuilder`：HTML 摘要（在线状态、告警统计、关键指标）+ 附件清单；验证：断言摘要包含节点名与「无数据」文案。
-- [ ] 15.4 附件命名与清理：`<node>-<metric>.svg`、发送后临时目录删除；验证：临时目录中文件存在后被删除；节点名含 `/` 时被清洗。
-- [ ] 15.5 `ReportJob`：CRON 为空不注册、非法 CRON 启动失败、`runOnce()` 生成并发送；验证：假 Ticktock 断言注册次数；假 dispatcher 断言收到报告。
-- [ ] 15.6 `TopologyRenderer`：确定性布局、设备/链路 SVG；验证：同输入两次输出完全一致；空拓扑返回 None。
+- [x] 15.1 `ChartSelector`：默认类型、自定义类型、未知类型回退；验证：4 条用例（cpu/memory/disk/network + 未知）。
+- [x] 15.2 `ChartSpec` DTO → `JsonValue` → `Chart.draw`；验证：SVG 非空、可被 `f_svg.SvgParser.parse` 解析、`series[0].data` 点数 = 历史点数。
+- [x] 15.3 `ReportBuilder`：HTML 摘要（在线状态、告警统计、关键指标）+ 附件清单；验证：断言摘要包含节点名与「无数据」文案。
+- [x] 15.4 附件命名与清理：`<node>-<metric>.svg`、发送后临时目录删除；验证：临时目录中文件存在后被删除；节点名含 `/` 时被清洗。
+- [x] 15.5 `ReportJob`：CRON 为空不注册、非法 CRON 启动失败、`runOnce()` 生成并发送；验证：假 Ticktock 断言注册次数；假 dispatcher 断言收到报告。
+- [x] 15.6 `TopologyRenderer`：确定性布局、设备/链路 SVG；验证：同输入两次输出完全一致；空拓扑返回 None。
 
 ## 16. LLM 智能体
 
-- [ ] 16.1 `PromptBuilder`：节点摘要 + 告警 + 最近 N 点；验证：断言提示词包含节点名、阈值、历史长度。
-- [ ] 16.2 `AdviceParser`：合法 JSON、带 ```json 围栏、纯文本兜底；验证：3 条用例，断言 `summary/problems/solutions`。
-- [ ] 16.3 `ProbeAdvisor`：开关关闭不调用 LLM；`alarm`/`interval`/`both` 触发；LLM 抛错不影响其它组件；验证：假 LLM 记录调用次数。
-- [ ] 16.4 `ReplyMonitor`：逐渠道 receive、非法消息跳过、未授权固定回复；验证：假渠道返回未授权发件人，断言回复文案与不执行动作。
-- [ ] 16.5 `ActionWhitelist`：`ack/mute/report/none` 执行，`restart-service` 不执行；验证：表驱动；`mute` 调用 alarm engine 并带 `probe_llmMuteSeconds`。
-- [ ] 16.6 `ReplyStateStore`：已处理 id 落盘、重启不重复、文件损坏按空集合、最多 1000 条；验证：临时目录 4 条用例。
+- [x] 16.1 `PromptBuilder`：节点摘要 + 告警 + 最近 N 点；验证：断言提示词包含节点名、阈值、历史长度。
+- [x] 16.2 `AdviceParser`：合法 JSON、带 ```json 围栏、纯文本兜底；验证：3 条用例，断言 `summary/problems/solutions`。
+- [x] 16.3 `ProbeAdvisor`：开关关闭不调用 LLM；`alarm`/`interval`/`both` 触发；LLM 抛错不影响其它组件；验证：假 LLM 记录调用次数。
+- [x] 16.4 `ReplyMonitor`：逐渠道 receive、非法消息跳过、未授权固定回复；验证：假渠道返回未授权发件人，断言回复文案与不执行动作。
+- [x] 16.5 `ActionWhitelist`：`ack/mute/report/none` 执行，`restart-service` 不执行；验证：表驱动；`mute` 调用 alarm engine 并带 `probe_llmMuteSeconds`。
+- [x] 16.6 `ReplyStateStore`：已处理 id 落盘、重启不重复、文件损坏按空集合、最多 1000 条；验证：临时目录 4 条用例。
 
 ## 17. 文档
 
