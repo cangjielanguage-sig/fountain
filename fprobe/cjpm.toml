@@ -9,6 +9,12 @@
   "fountain::f_probe" = {path = "../f_probe"}
   "fountain::f_protocol" = {path = "../f_protocol"}
   "fountain::f_rpc" = {path = "../f_rpc"}
+  "fountain::f_tui" = {path = "../f_tui"}
+  "ratatui_buffer" = "0.1.2"
+  "ratatui_core" = "0.1.2"
+  "ratatui_layout" = "0.1.2"
+  "ratatui_style" = "0.1.2"
+  "ratatui_text" = "0.1.2"
 
 [package]
   cjc-version = "1.2.0"

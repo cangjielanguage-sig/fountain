@@ -26,17 +26,25 @@ class RecordingPainter <: Painter {
     public var starts = 0
     public var draws = 0
     public var restores = 0
+    private let onEvent: (String) -> Unit
+
+    init(onEvent!: (String) -> Unit = {_ => ()}) {
+        this.onEvent = onEvent
+    }
 
     public func start(): Unit {
         starts += 1
+        onEvent("painter.start")
     }
 
     public func draw(_: RenderPlan): Unit {
         draws += 1
+        onEvent("painter.draw")
     }
 
     public func restore(): Unit {
         restores += 1
+        onEvent("painter.restore")
     }
 }
 
@@ -45,22 +53,46 @@ class RecordingComponents <: SupervisorComponents {
     public var stops = 0
     public var closes = 0
     private let onStop: () -> Unit
+    private let onEvent: (String) -> Unit
 
-    init(onStop!: () -> Unit = {=> ()}) {
+    init(onStop!: () -> Unit = {=> ()}, onEvent!: (String) -> Unit = {_ => ()}) {
         this.onStop = onStop
+        this.onEvent = onEvent
     }
 
     public func start(): Unit {
         starts += 1
+        onEvent("components.start")
     }
 
     public func stop(): Unit {
         stops += 1
+        onEvent("components.stop")
         onStop()
     }
 
     public func close(): Unit {
         closes += 1
+        onEvent("components.close")
+    }
+}
+
+/** 按脚本返回按键的假来源；脚本耗尽后每次读取都超时。 */
+class ScriptedKeySource <: KeySource {
+    private let keys: ArrayList<UiKey>
+    private var index = 0
+
+    init(keys: Array<UiKey>) {
+        this.keys = ArrayList<UiKey>(keys)
+    }
+
+    public func readKey(_: Int64): ?UiKey {
+        if (index >= keys.size) {
+            return None<UiKey>
+        }
+        let value = keys[index]
+        index += 1
+        Some(value)
     }
 }
 
@@ -112,6 +144,23 @@ func testApp(painter: Painter, hooks: ExitHooks, components: SupervisorComponent
     log: (String) -> Unit): SupervisorApp {
     SupervisorApp(painter, FakeTtyDetector(false), hooks, components,
         log: log, keySource: None<KeySource>)
+}
+
+func testTtyApp(painter: Painter, hooks: ExitHooks, components: SupervisorComponents,
+    log: (String) -> Unit, keySource: ?KeySource): SupervisorApp {
+    SupervisorApp(painter, FakeTtyDetector(true), hooks, components,
+        log: log, keySource: keySource)
+}
+
+func eventsText(events: ArrayList<String>): String {
+    var text = ""
+    for (event in events) {
+        if (!text.isEmpty()) {
+            text += ","
+        }
+        text += event
+    }
+    text
 }
 
 /** 13.1 / 13.2 / 13.3：resident 模式、信号退出、无 ANSI 输出。 */
@@ -177,6 +226,7 @@ public class SupervisorApp_test {
 
         @Assert(app.start(false), 2)
         @Assert(painter.starts, 0)
+        @Assert(painter.restores, 0)
         @Assert(!app.running())
         var hinted = false
         for (line in lines) {
@@ -185,5 +235,61 @@ public class SupervisorApp_test {
             }
         }
         @Assert(hinted)
+    }
+
+    /** 13.8：TTY 模式按 init → 后台组件 → stop/close → restore 的顺序收尾。 */
+    @TestCase
+    public func ttyModeInitializesAndRestoresInOrder(): Unit {
+        let events = ArrayList<String>()
+        let recorder: (String) -> Unit = {event => events.add(event)}
+        let painter = RecordingPainter(onEvent: recorder)
+        let components = RecordingComponents(onEvent: recorder)
+        let app = testTtyApp(painter, RecordingHooks(), components, {_ => ()},
+            None<KeySource>)
+
+        @Assert(app.start(false), 0)
+        @Assert(app.running())
+        @Assert(painter.starts, 1)
+        @Assert(components.starts, 1)
+        app.shutdown()
+
+        @Assert(eventsText(events),
+            "painter.start,components.start,components.stop,components.close,painter.restore")
+        @Assert(painter.restores, 1)
+    }
+
+    /** 13.8：`q` 触发退出，终端在返回前已恢复。 */
+    @TestCase
+    public func qKeyExitsAndRestoresTerminal(): Unit {
+        let painter = RecordingPainter()
+        let components = RecordingComponents()
+        let app = testTtyApp(painter, RecordingHooks(), components, {_ => ()},
+            Some<KeySource>(ScriptedKeySource([UiKey.Quit])))
+
+        @Assert(app.run(false), 0)
+
+        @Assert(!app.running())
+        @Assert(painter.starts, 1)
+        @Assert(painter.restores, 1)
+        @Assert(components.stops, 1)
+        @Assert(components.closes, 1)
+    }
+
+    /** 13.8：重复退出只恢复一次，不产生额外 init/restore。 */
+    @TestCase
+    public func repeatedShutdownRestoresOnlyOnce(): Unit {
+        let painter = RecordingPainter()
+        let components = RecordingComponents()
+        let app = testTtyApp(painter, RecordingHooks(), components, {_ => ()},
+            None<KeySource>)
+
+        @Assert(app.start(false), 0)
+        app.shutdown()
+        app.shutdown()
+
+        @Assert(painter.starts, 1)
+        @Assert(painter.restores, 1)
+        @Assert(components.stops, 1)
+        @Assert(components.closes, 1)
     }
 }

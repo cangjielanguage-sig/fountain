@@ -152,26 +152,38 @@ public class SupervisorApp {
         log("fprobe supervisor: 已退出")
     }
 
-    /** 阻塞运行直到 [shutdown]。 */
+    /** 阻塞运行直到 [shutdown]；按键读取在独立线程，主线程只等待运行态结束。 */
     public func run(resident: Bool): Int64 {
         let code = start(resident)
         if (code != 0) {
             return code
         }
-        while (running()) {
-            match (keySource) {
-                case Some(source) =>
-                    match (source.readKey(100)) {
-                        case Some(key) =>
-                            if (!handle(key)) {
-                                break
-                            }
-                        case None => ()
-                    }
-                case None => sleep(Duration.millisecond * 200)
-            }
+        match (keySource) {
+            case Some(source) =>
+                let keyThread = spawn {=> keyLoop(source)}
+                while (running()) {
+                    sleep(Duration.millisecond * 50)
+                }
+                keyThread.get()
+            case None =>
+                while (running()) {
+                    sleep(Duration.millisecond * 200)
+                }
         }
         0
+    }
+
+    /** 按键线程主体：每次读取有超时，外部 shutdown 后最迟一个超时周期退出。 */
+    private func keyLoop(source: KeySource): Unit {
+        while (running()) {
+            match (source.readKey(100)) {
+                case Some(key) =>
+                    if (!handle(key)) {
+                        return
+                    }
+                case None => ()
+            }
+        }
     }
 
     public func view(): ViewModel {
