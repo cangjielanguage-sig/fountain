@@ -190,9 +190,10 @@ cjpm test --skip-build
 
 测试会断言 SVG 包含 `<svg`，并自动创建 `charts/` 目录；SVG 内容变化会直接体现在 `git diff` 中，便于做视觉回归。
 
-TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 8 份字符画样例：
+TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 8 份字符画样例；`TuiFlameChart_test` 另输出 4 个火焰图变体：
 
 - 文件命名：`M<编号>-<type>.tui.txt`，例如 `M001-bar.tui.txt`、`M007-combo.tui.txt`、`M052-flame.tui.txt`。
+- 火焰图变体：`M052-flame-bottom-up`、`-top-down`、`-value`、`-frame-height`。
 - 全部保留 ANSI 24 位真彩颜色，`cat` 即可看到系列配色；分组/堆叠/百分比堆叠的各系列或分段、组合图的柱/线/散点、火焰图各节点均使用不同颜色。
 - 尺寸取 JSON 中的 `width`/`height`（字符列/行），与 SVG 样例共用同一批图表语义。
 
@@ -3116,6 +3117,8 @@ try {
 | `M006-scatter.tui.txt` | `TuiScatterChart` |
 | `M007-combo.tui.txt` | `TuiComboChart` |
 | `M052-flame.tui.txt` | `TuiFlameChart` |
+
+火焰图的可视化测试还会输出 4 个变体：`M052-flame-bottom-up.tui.txt`、`M052-flame-top-down.tui.txt`、`M052-flame-value.tui.txt`、`M052-flame-frame-height.tui.txt`。
 
 分组柱状图按系列交替取 `theme.palette`（或 `series[].color`）的颜色；堆叠柱状图、百分比堆叠柱状图以及组合图中的柱系列每个分段/柱体同理。柱体同时按系列循环使用 `█ ▓ ▒ ░`，因此相邻系列在 ANSI 输出和无色文本中都能区分。
 

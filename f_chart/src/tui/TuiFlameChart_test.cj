@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_chart.tui
 
+import std.fs.{Directory, File, Path, exists}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_chart.*
@@ -24,6 +25,16 @@ import fountain::f_data.json.*
 public class TuiFlameChart_test {
     private func draw(json: String): String {
         TuiFlameChart().draw(JsonValue.fromStr(json).asObject())
+    }
+
+    /** 把可视化用例的字符画写入 `charts/`，便于终端直接查看。 */
+    private func save(name: String, output: String): Unit {
+        @Assert(output.contains("\u{1B}["))
+        let directory = Path("charts")
+        if (!exists(directory)) {
+            Directory.create(directory, recursive: true)
+        }
+        File.writeTo(Path("charts/${name}.tui.txt"), output.toArray())
     }
 
     private func lineOf(text: String, needle: String): Int64 {
@@ -60,6 +71,7 @@ public class TuiFlameChart_test {
     @TestCase
     public func drawsFlameGraph(): Unit {
         let svg = draw(sample)
+        save("M052-flame-bottom-up", svg)
         let plain = tuiStripAnsi(svg)
         @Assert(svg.contains("\u{1B}[38;2;"))
         @Assert(svg.contains("\u{1B}[0m\n"))
@@ -96,6 +108,7 @@ public class TuiFlameChart_test {
 }
 """
         let svg = draw(json)
+        save("M052-flame-value", svg)
         @Assert(svg.contains("\u{1B}[38;2;8;48;107m"))
         @Assert(svg.contains("\u{1B}[38;2;33;113;181m"))
     }
@@ -123,7 +136,9 @@ public class TuiFlameChart_test {
   ]
 }
 """
-        let plain = tuiStripAnsi(draw(json))
+        let svg = draw(json)
+        save("M052-flame-top-down", svg)
+        let plain = tuiStripAnsi(svg)
         @Assert(lineOf(plain, "main") < lineOf(plain, "child"))
     }
 
@@ -142,7 +157,9 @@ public class TuiFlameChart_test {
   ]
 }
 """
-        let plain = tuiStripAnsi(draw(json))
+        let svg = draw(json)
+        save("M052-flame-frame-height", svg)
+        let plain = tuiStripAnsi(svg)
         @Assert(plain.split("\n").size == 15)
     }
 
