@@ -173,7 +173,7 @@ let svg = chart.draw(data)
 | M105 | 仪表盘 `GaugeChart`（阈值色带、指针、中心数值） | 已完成 |
 | M106 | 日历热力图里程碑闭合（复用 `CalendarHeatmapChart`，回归测试） | 已完成 |
 
-M1–M106 全部完成。测试总数 1092，全部通过。
+M1–M106 全部完成。测试总数 1144，全部通过（含 TUI 子包 52 个用例）。
 
 ## 图表样例（charts/）
 
@@ -189,6 +189,37 @@ cjpm test --skip-build
 ```
 
 测试会断言 SVG 包含 `<svg`，并自动创建 `charts/` 目录；SVG 内容变化会直接体现在 `git diff` 中，便于做视觉回归。
+
+## TUI 子包（fountain::f_chart.tui）
+
+终端/SSH 场景可直接渲染字符画。TUI 子包不引入任何第三方依赖，复用同一份 JSON 与 `Chart` 接口：
+
+```cangjie
+import fountain::f_chart.*
+import fountain::f_chart.tui.*
+import fountain::f_data.json.JsonValue
+
+let svg = TuiBarChart().draw(data)   // 返回 ANSI 彩色字符串
+print(svg)
+```
+
+| 类 | `type` | 说明 |
+|---|---|---|
+| `TuiBarChart` | `bar` | 单系列柱状图 |
+| `TuiGroupedBarChart` | `grouped-bar` | 类目内并排柱 |
+| `TuiStackedBarChart` | `stacked-bar` | 正负双向堆叠 |
+| `TuiPercentStackedBarChart` | `percent-stacked-bar` | 按类目归一到 100% |
+| `TuiLineChart` | `line` | 类目 / 数值 / 时间轴，null 断开 |
+| `TuiScatterChart` | `scatter` | 数值 / 时间轴散点 |
+| `TuiComboChart` | `combo` | 上述 6 种柱/线/点类型任意组合，支持右轴 |
+
+约定：
+
+- `width` / `height` 表示字符列数与行数，缺省 80×24，最小 20×8；建议 TUI JSON 显式写 `"width": 80, "height": 24`。
+- 输出为 ANSI 24 位真彩色字符串，每行以 `\u{1B}[0m\n` 结束，可直接 `print`。
+- 标记字符：柱 `█`、折线 `*`、散点 `o`、网格 `·`、坐标轴 `│ ─ └`、图例 `■`。
+- CJK 字符按 2 列显示；标签超出可用宽度时截断并以 `…` 结尾。
+- TUI 组合图要求类目横轴；`axis: "right"` 的系列需要 `yAxis2`。
 
 ## 错误语义
 

@@ -43,6 +43,12 @@ f_chart/
     ├── ChartSvgKit.cj            SVG 输出助手（internal）
     ├── BarChart.cj               M1
     ├── BarChart_test.cj          M1 测试
+    ├── tui/                      M1–M7 的 TUI 子包（fountain::f_chart.tui）
+    │   ├── TuiCanvas.cj          字符画布与 ANSI 输出（internal）
+    │   ├── TuiFrame.cj           字符坐标框、轴、图例（internal）
+    │   ├── TuiBarRenderer.cj     柱族共享渲染（internal）
+    │   ├── BarChart.cj           TuiBarChart
+    │   └── ...
     └── ...
 ```
 
@@ -267,3 +273,29 @@ public interface Chart {
 - 复杂图（M7、M9、M10、M36、M85）加黄金文件，比较前统一换行与数值格式。
 - 公共助手单独测试：比例尺、刻度、图例布局、数值格式化。
 - 测试只放在模块 `src/` 内，不创建项目外单文件测试。
+
+
+## 10. TUI 子包（M1–M7）
+
+`f_chart/src/tui/` 声明包 `fountain::f_chart.tui`，为 M1–M7 提供字符画实现，全部实现 `fountain::f_chart.Chart`，不引入第三方依赖。
+
+| TUI 类 | `type` | 复用 |
+|---|---|---|
+| `TuiBarChart` | `bar` | `TuiBarRenderer`（Simple） |
+| `TuiGroupedBarChart` | `grouped-bar` | `TuiBarRenderer`（Grouped） |
+| `TuiStackedBarChart` | `stacked-bar` | `TuiBarRenderer`（Stacked） |
+| `TuiPercentStackedBarChart` | `percent-stacked-bar` | `TuiBarRenderer`（PercentStacked） |
+| `TuiLineChart` | `line` | `TuiPointCommon` + Bresenham |
+| `TuiScatterChart` | `scatter` | `TuiPointCommon` |
+| `TuiComboChart` | `combo` | 柱槽位 + 线/点叠加 + 右轴 |
+
+约定：
+
+- `width` / `height` 为字符列/行，缺省 80×24，最小 20×8；`ChartConfig.parse` 新增 `defaultWidth` / `defaultHeight` 可选参数，SVG 调用不变。
+- 子包可访问根包 `internal`（`ChartConfig`、`ChartJson`、`ChartScale`、`ChartTime`），不新增公开 JSON 字段。
+- 画布 `TuiCanvas` 按显示宽度处理文本（CJK=2 列），输出 ANSI 24 位真彩色，每行 `ESC[0m\n`。
+- 标记：柱 `█`、折线 `*`、散点 `o`、网格 `·`、轴 `│ ─ └`、图例 `■`。
+- 组合图要求类目横轴；柱族按 `bar`/`grouped-bar` 独立槽位、`stacked-bar` 按 `stack` 分组、`percent-stacked-bar` 合并为一个槽位；`axis: right` 使用 `yAxis2`。
+- TUI 的 `smooth` 仅接受不报错，字符网格按折线绘制。
+
+测试策略：每个 TUI 类一个测试文件，另加 `TuiCanvas_test` / `TuiFrame_test` / `TuiConfig_test`；断言纯文本（`tuiStripAnsi`）与 ANSI 颜色序列，覆盖默认尺寸、CJK 截断、null 断开、负值、类型错误。
