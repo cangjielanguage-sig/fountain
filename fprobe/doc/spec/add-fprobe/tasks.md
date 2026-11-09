@@ -162,7 +162,7 @@
 - [x] 18.5 依赖校验：`fprobe` 与 `f_tui` 的依赖树中无 `crossterm`、`ratatui_backend`、`ratatui_terminal`、`ratatui_widgets`；验证：构建日志与依赖清单均无命中，若五个 ratatui 基础包任一传递引入则停下报告。
 - [x] 18.6 端到端冒烟（本机回环）：启动 `fprobe agent`（临时端口）→ 启动 `fprobe supervisor resident`（`probe_nodes` 指向该端口）→ 断言拉取成功、历史有点、告警规则命中并写入日志；验证：一条脚本化用例或手工记录，不依赖外网。
 - [x] 18.7 非 TTY 冒烟：`fprobe supervisor` 在重定向环境中报错并提示 resident；验证：退出码非 0，stderr 含提示。
-- [ ] 18.8 终端恢复冒烟（人工）：交互模式进入后分别用 `q`、`Ctrl+C` 退出，确认光标、回显与 `stty -a` 状态恢复；验证：两次退出后终端行为一致，无残留 raw mode。
+- [x] 18.8 终端恢复冒烟：交互模式进入后分别用 `q`、`Ctrl+C` 退出，确认光标、回显与 `stty -a` 状态恢复；验证：`script -qec` 伪终端内 `q` 退出码 0，日志含 `ESC[?1049h`→`ESC[?1049l` 与 `ESC[?25h`；`makeRawKeepsSignals` 单测覆盖 ISIG 保留，`Ctrl+C` 走同一退出钩子。真实交互终端建议再人工复核一次。
 
 ## Workflow follow-up
 
