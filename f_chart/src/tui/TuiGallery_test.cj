@@ -39,8 +39,8 @@ public class TuiGallery_test {
         if (!exists(directory)) {
             Directory.create(directory, recursive: true)
         }
-        File.writeTo(Path("charts/${name}.tui.txt"), plain.toArray())
-        File.writeTo(Path("charts/${name}.tui.color.txt"), output.toArray())
+        File.writeTo(Path("charts/${name}.tui.txt"), output.toArray())
+        File.writeTo(Path("charts/${name}.tui.plain.txt"), plain.toArray())
     }
 
     /** M1 柱状图。 */

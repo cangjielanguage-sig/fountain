@@ -192,9 +192,8 @@ cjpm test --skip-build
 
 TUI 子包另由 `src/tui/TuiGallery_test.cj` 生成 7 份字符画样例：
 
-- 文件命名：`M<编号>-<type>.tui.txt`，例如 `M001-bar.tui.txt`、`M007-combo.tui.txt`。
-- 同名 `.tui.color.txt` 保留 ANSI 24 位颜色，`cat` 时可看到系列配色；分组柱状图与堆叠柱状图的各系列使用不同颜色。
-- `.tui.txt` 为剥离 ANSI 后的纯文本网格，可直接用文本编辑器查看；`.tui.color.txt` 适合在终端预览。
+- 主文件 `M<编号>-<type>.tui.txt` 保留 ANSI 24 位颜色，`cat` 时可看到系列配色；分组柱状图、堆叠柱状图与百分比堆叠柱状图的各系列/各分段使用不同颜色。
+- 同名 `.tui.plain.txt` 为剥离 ANSI 后的纯文本网格，便于文本编辑器和 diff。
 - 尺寸取 JSON 中的 `width`/`height`（字符列/行），与 SVG 样例共用同一批图表语义。
 
 ## TUI 子包（fountain::f_chart.tui）
@@ -3072,8 +3071,8 @@ try {
 
 `src/tui/TuiGallery_test.cj` 的 7 个用例会把 M1–M7 的字符画写入 `charts/`。每个图生成两份：
 
-- `M<编号>-<type>.tui.txt`：纯文本，便于编辑器和 diff。
-- `M<编号>-<type>.tui.color.txt`：保留 ANSI 24 位颜色，`cat` 即可看到系列配色。
+- `M<编号>-<type>.tui.txt`：保留 ANSI 24 位颜色，`cat` 即可看到系列配色。
+- `M<编号>-<type>.tui.plain.txt`：纯文本，便于编辑器和 diff。
 
 | 文件 | 类 |
 |---|---|
@@ -3085,7 +3084,7 @@ try {
 | `M006-scatter.tui.txt` | `TuiScatterChart` |
 | `M007-combo.tui.txt` | `TuiComboChart` |
 
-分组柱状图按系列交替取 `theme.palette`（或 `series[].color`）的颜色，堆叠柱状图的每个分段同理，因此相邻系列在 ANSI 输出中始终可区分。
+分组柱状图按系列交替取 `theme.palette`（或 `series[].color`）的颜色；堆叠柱状图与百分比堆叠柱状图的每个分段同理，因此相邻系列在 ANSI 输出中始终可区分。
 
 重新生成：
 
