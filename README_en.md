@@ -426,6 +426,14 @@ depends only on this module to build a dynamic library, without RPC, mail or TUI
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_probe/README_en.md>
 
+### `fountain::f_tui`
+Unix terminal backend: POSIX `termios` raw mode, terminal size, key decoding, ANSI differential
+rendering, and a `ratatui_buffer.Buffer → ANSI` renderer. It depends only on `f_base` and the
+ratatui base packages, never on `crossterm` / `ratatui_backend` / `ratatui_terminal` /
+`ratatui_widgets`.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_tui/README_en.md>
+
 ### `fountain::fprobe`
 Server-monitoring executable (`fprobe agent` / `fprobe supervisor`): the node agent periodically
 collects host metrics and exposes them over RPC; the supervisor aggregates multiple nodes and
