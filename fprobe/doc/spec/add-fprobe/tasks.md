@@ -144,24 +144,24 @@
 
 ## 17. 文档
 
-- [ ] 17.1 `fprobe/README.md` + `README_en.md`：能力、子命令、最小部署、systemd 示例、配置索引；验证：与 `--help` 输出逐项一致。
-- [ ] 17.2 `fprobe/doc/configuration.md`：全部 `probe_*` 键、默认值、取值范围。
-- [ ] 17.3 `fprobe/doc/alarm-rules.md`：规则 JSON、`path` 写法、`forSeconds`/冷却/恢复示例。
-- [ ] 17.4 `fprobe/doc/tui.md`：布局、按键、非 TTY 处理、终端后端来自 `f_tui` 的说明。
-- [ ] 17.5 `fprobe/doc/deployment.md`：agent/supervisor 的 systemd 单元、日志、扩展目录。
-- [ ] 17.6 `fprobe/doc/rpc.md`：RPC 线协议表与最小客户端示例（`typeName`/方法/命令）。
-- [ ] 17.7 `f_probe/README.md` + `README_en.md`、`doc/contract.md`、`doc/extension-guide.md`：契约、注册、回复消息格式、最小扩展。
-- [ ] 17.8 `f_tui/README.md` + `README_en.md`、`doc/terminal-backend.md`：平台、能力边界、`TerminalKey`、`Buffer → ANSI` 渲染器、可测试接口。
+- [x] 17.1 `fprobe/README.md` + `README_en.md`：能力、子命令、最小部署、systemd 示例、配置索引；验证：与 `--help` 输出逐项一致。
+- [x] 17.2 `fprobe/doc/configuration.md`：全部 `probe_*` 键、默认值、取值范围。
+- [x] 17.3 `fprobe/doc/alarm-rules.md`：规则 JSON、`path` 写法、`forSeconds`/冷却/恢复示例。
+- [x] 17.4 `fprobe/doc/tui.md`：布局、按键、非 TTY 处理、终端后端来自 `f_tui` 的说明。
+- [x] 17.5 `fprobe/doc/deployment.md`：agent/supervisor 的 systemd 单元、日志、扩展目录。
+- [x] 17.6 `fprobe/doc/rpc.md`：RPC 线协议表与最小客户端示例（`typeName`/方法/命令）。
+- [x] 17.7 `f_probe/README.md` + `README_en.md`、`doc/contract.md`、`doc/extension-guide.md`：契约、注册、回复消息格式、最小扩展。
+- [x] 17.8 `f_tui/README.md` + `README_en.md`、`doc/terminal-backend.md`：平台、能力边界、`TerminalKey`、`Buffer → ANSI` 渲染器、可测试接口。
 
 ## 18. 回归与冒烟
 
-- [ ] 18.1 `cd f_probe && cjpm test` 全绿；验证：输出贴入交付说明。
-- [ ] 18.2 `cd f_tui && cjpm test` 全绿；验证：输出贴入交付说明，且用例不要求真实 TTY。
-- [ ] 18.3 `cd fprobe && cjpm test` 全绿；验证：同上。
-- [ ] 18.4 回归 `f_rpc`、`f_email`、`f_chart`、`f_ticktock` 的 `cjpm test`；验证：四个模块均通过（本变更不改其源码）。
-- [ ] 18.5 依赖校验：`fprobe` 与 `f_tui` 的依赖树中无 `crossterm`、`ratatui_backend`、`ratatui_terminal`、`ratatui_widgets`；验证：构建日志与依赖清单均无命中，若五个 ratatui 基础包任一传递引入则停下报告。
-- [ ] 18.6 端到端冒烟（本机回环）：启动 `fprobe agent`（临时端口）→ 启动 `fprobe supervisor resident`（`probe_nodes` 指向该端口）→ 断言拉取成功、历史有点、告警规则命中并写入日志；验证：一条脚本化用例或手工记录，不依赖外网。
-- [ ] 18.7 非 TTY 冒烟：`fprobe supervisor` 在重定向环境中报错并提示 resident；验证：退出码非 0，stderr 含提示。
+- [x] 18.1 `cd f_probe && cjpm test` 全绿；验证：输出贴入交付说明。
+- [x] 18.2 `cd f_tui && cjpm test` 全绿；验证：输出贴入交付说明，且用例不要求真实 TTY。
+- [x] 18.3 `cd fprobe && cjpm test` 全绿；验证：同上。
+- [x] 18.4 回归 `f_rpc`、`f_email`、`f_chart`、`f_ticktock` 的 `cjpm test`；验证：四个模块均通过（本变更不改其源码）。
+- [x] 18.5 依赖校验：`fprobe` 与 `f_tui` 的依赖树中无 `crossterm`、`ratatui_backend`、`ratatui_terminal`、`ratatui_widgets`；验证：构建日志与依赖清单均无命中，若五个 ratatui 基础包任一传递引入则停下报告。
+- [x] 18.6 端到端冒烟（本机回环）：启动 `fprobe agent`（临时端口）→ 启动 `fprobe supervisor resident`（`probe_nodes` 指向该端口）→ 断言拉取成功、历史有点、告警规则命中并写入日志；验证：一条脚本化用例或手工记录，不依赖外网。
+- [x] 18.7 非 TTY 冒烟：`fprobe supervisor` 在重定向环境中报错并提示 resident；验证：退出码非 0，stderr 含提示。
 - [ ] 18.8 终端恢复冒烟（人工）：交互模式进入后分别用 `q`、`Ctrl+C` 退出，确认光标、回显与 `stty -a` 状态恢复；验证：两次退出后终端行为一致，无残留 raw mode。
 
 ## Workflow follow-up
