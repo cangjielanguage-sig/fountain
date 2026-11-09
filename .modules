@@ -53,6 +53,7 @@ f_chart
 f_zip
 f_excel
 f_rule
+f_llm
 fmq
 fdbm
 fjsonrpcdemo
@@ -63,5 +64,4 @@ fboot
 [exclude]
 
 [detention]
-f_llm
 fleet
