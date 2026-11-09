@@ -92,6 +92,11 @@ public class PollLoop {
         running.store(false)
     }
 
+    /** 循环是否仍在运行；退出钩子用它断言 `stop()` 已生效。 */
+    public func isRunning(): Bool {
+        running.load()
+    }
+
     /** 已完成的 tick 数。 */
     public func tickCount(): Int64 {
         ticks.load()
