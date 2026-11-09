@@ -40,6 +40,7 @@ public class TuiGallery_test {
             Directory.create(directory, recursive: true)
         }
         File.writeTo(Path("charts/${name}.tui.txt"), plain.toArray())
+        File.writeTo(Path("charts/${name}.tui.color.txt"), output.toArray())
     }
 
     /** M1 柱状图。 */
