@@ -42,8 +42,8 @@ public class SseHub {
 ```cangjie
 class SseStream <: InputStream {
     // queue: ArrayDeque<Array<Byte>>，容量 256
-    public func read(buffer: Array<Byte>): Int64   // 阻塞；队列空且有订阅时返回心跳行
-    public func close(): Unit                      // 置 closed，read 返回 -1
+    public func read(buffer: Array<Byte>): Int64   // 阻塞；空队列等心跳周期后返回注释帧；关闭后返回 0
+    public func close(): Unit                      // 置 closed，read 返回 0（std.io 的 EOF 约定是 0，不是 -1）
 }
 ```
 

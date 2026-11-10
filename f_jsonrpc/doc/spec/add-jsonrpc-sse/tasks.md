@@ -4,10 +4,10 @@
 
 ## 1. 服务端核心（不依赖 HTTP）
 
-- [ ] 1.1 `SseStream`：写入后 `read` 能读到；`close` 后 `read` 返回 -1；空闲返回心跳行。验证：3 条用例。
-- [ ] 1.2 `SseHub.publish/subscribe`：id 单调递增、`topic` 隔离、`taskId` 过滤。验证：3 条用例。
-- [ ] 1.3 缓冲溢出：发布 300 条 → 订阅者后续能读、`dropped` 置位、只 warn 一次。验证：1 条用例。
-- [ ] 1.4 补发：`lastEventId=2` → 只补发 id>2；早于最旧 → 从最旧开始。验证：2 条用例。
+- [x] 1.1 `SseStream`：写入后 `read` 能读到；`close` 后 `read` 返回 -1；空闲返回心跳行。验证：3 条用例。
+- [x] 1.2 `SseHub.publish/subscribe`：id 单调递增、`topic` 隔离、`taskId` 过滤。验证：3 条用例。
+- [x] 1.3 缓冲溢出：发布 300 条 → 订阅者后续能读、`dropped` 置位、只 warn 一次。验证：1 条用例。
+- [x] 1.4 补发：`lastEventId=2` → 只补发 id>2；早于最旧 → 从最旧开始。验证：2 条用例。
 
 ## 2. HTTP 端点
 
