@@ -20,67 +20,56 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_data.*
+import fountain::f_httpclient.sse.*
 import fountain::f_jsonrpc.base.*
 
-/** 假连接：按脚本吐块，吐完即结束 */
+/** 假连接：按脚本吐事件，吐完即结束 */
 class FakeSseConnection <: SseConnection {
-    private var chunks: ArrayList<String>
+    private var events: ArrayList<SseEvent>
 
-    FakeSseConnection(chunks: ArrayList<String>) {
-        this.chunks = chunks
+    FakeSseConnection(events: ArrayList<SseEvent>) {
+        this.events = events
     }
 
-    public func readChunk(): ?String {
-        if (chunks.isEmpty()) {
+    public func next(): ?SseEvent {
+        if (events.isEmpty()) {
             return None
         }
-        let first = chunks[0]
-        let _ = chunks.remove(at: 0)
-        first
+        let first = events[0]
+        let _ = events.remove(at: 0)
+        Some(first)
     }
 
     public func close(): Unit {
     }
 }
 
-private func frameText(id: Int64, method: String): String {
-    'id: ${id}\nevent: message\ndata: {"jsonrpc":"2.0","method":"${method}"}\n\n'
+private func notification(id: String, method: String): SseEvent {
+    SseEvent('message', '{"jsonrpc":"2.0","method":"${method}"}', id, 0)
 }
 
 @Test
 class SseClient_test {
-    /** 分块边界可以落在任意位置：半个帧、跨两帧都要能拼对 */
-    @TestCase
-    func testParserHandlesArbitraryChunkBoundary(): Unit {
-        let parser = SseFrameParser()
-        let text = frameText(1, 'a2a.task.status')
-        let first = parser.feed(text[..7])
-        @Expect(first.size, 0)
-        let second = parser.feed(text[7..20])
-        @Expect(second.size, 0)
-        let third = parser.feed(text[20..])
-        @Expect(third.size, 1)
-        @Expect(third[0].id, 1)
-        @Expect(third[0].data.contains('a2a.task.status'), true)
-    }
-
-    /** 注释帧与空帧不产出事件 */
-    @TestCase
-    func testParserIgnoresComments(): Unit {
-        let parser = SseFrameParser()
-        @Expect(parser.feed(': ping\n\n').size, 0)
-        @Expect(parser.feed('\n\n').size, 0)
-    }
-
-    /** 正常取一条通知后关闭 */
+    /** 正常取一条通知 */
     @TestCase
     func testClientReturnsNotification(): Unit {
-        let chunks = ArrayList<String>()
-        chunks.add(frameText(1, 'a2a.task.status'))
-        let client = JsonRpcSseClient({ _ => Some(FakeSseConnection(chunks)) }, retry: 1)
+        let events = ArrayList<SseEvent>()
+        events.add(notification('1', 'a2a.task.status'))
+        let client = JsonRpcSseClient({ _ => Some(FakeSseConnection(events)) }, retry: 1)
         let value = client.next().getOrThrow()
-        let method = value.asObject()['method'].asString().value
-        @Expect(method, 'a2a.task.status')
+        @Expect(value.asObject()['method'].asString().value, 'a2a.task.status')
+        client.close()
+    }
+
+    /** 坏帧跳过，不影响后续事件 */
+    @TestCase
+    func testBadFrameIsSkipped(): Unit {
+        let events = ArrayList<SseEvent>()
+        events.add(SseEvent('message', 'not json', '1', 0))
+        events.add(notification('2', 'good.event'))
+        let client = JsonRpcSseClient({ _ => Some(FakeSseConnection(events)) }, retry: 1)
+        let value = client.next().getOrThrow()
+        @Expect(value.asObject()['method'].asString().value, 'good.event')
         client.close()
     }
 
@@ -113,7 +102,8 @@ class SseClient_test {
         @Expect(message.contains('reconnect'), true)
     }
 }
-/// 重连脚本：第一次给 id=5 的帧，第二次给 id=6 的帧，并记录每次的请求头
+
+/// 重连脚本：第一次给 id=5 的事件，第二次给 id=6 的事件，并记录每次的请求头
 class ReconnectScript {
     var received = ArrayList<HashMap<String, String>>()
     private var round: Int64 = 0
@@ -121,13 +111,13 @@ class ReconnectScript {
     func next(extra: HashMap<String, String>): ?SseConnection {
         received.add(extra)
         round++
-        let chunks = ArrayList<String>()
+        let events = ArrayList<SseEvent>()
         if (round == 1) {
-            chunks.add('id: 5\nevent: message\ndata: {"jsonrpc":"2.0","method":"first.event"}\n\n')
+            events.add(notification('5', 'first.event'))
         } else {
-            chunks.add('id: 6\nevent: message\ndata: {"jsonrpc":"2.0","method":"second.event"}\n\n')
+            events.add(notification('6', 'second.event'))
         }
-        Some(FakeSseConnection(chunks))
+        Some(FakeSseConnection(events))
     }
 
     func lastEventIdOf(index: Int64): String {

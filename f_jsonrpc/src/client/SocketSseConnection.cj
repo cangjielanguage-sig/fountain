@@ -25,8 +25,7 @@ import fountain::f_jsonrpc.base.*
  *
  * - 建连与读响应体：`HttpClient(url).get()`（响应体本身就是流）；
  * - 分帧：`f_httpclient.sse.SseReader`（注释丢弃、空行分隔、`data` 多行拼接）；
- * - 本类只把 `SseEvent` 转成
- *   [`SseConnection.readChunk`] 需要的原文，交给 `SseFrameParser` 统一解析。
+ * - 本类只做「取下一个事件」，不解析 JSON、不管重连（那是 `JsonRpcSseClient` 的事）。
  *
  * `Last-Event-ID` 走查询参数 `cursor`：`HttpClient` 没有暴露请求头入口，
  * 而服务端两种方式都支持，语义等价。
@@ -64,22 +63,8 @@ public class SocketSseConnection <: SseConnection {
     }
 
     /** 取一个事件；连接结束时返回 `None` */
-    public func readChunk(): ?String {
-        match (reader.next()) {
-            case Some(event) =>
-                let id = if (event.id.isEmpty()) {
-                    ''
-                } else {
-                    'id: ${event.id}\n'
-                }
-                let kind = if (event.event.isEmpty()) {
-                    ''
-                } else {
-                    'event: ${event.event}\n'
-                }
-                Some('${id}${kind}data: ${event.data}\n\n')
-            case None => None
-        }
+    public func next(): ?SseEvent {
+        reader.next()
     }
 
     public func close(): Unit {

@@ -16,19 +16,19 @@ limitations under the License.
 package fountain::f_jsonrpc.client
 
 import std.collection.*
-import std.convert.*
 
 import fountain::f_data.*
+import fountain::f_httpclient.sse.*
 import fountain::f_jsonrpc.base.*
 
-/** 一条 SSE 连接：`readChunk` 返回一块数据，`None` 表示连接结束 */
+/** 一条 SSE 连接：`next` 返回一个事件，`None` 表示连接结束 */
 public interface SseConnection {
-    func readChunk(): ?String
+    func next(): ?SseEvent
     func close(): Unit
 }
 
 /**
- * SSE 客户端：把服务端推送的帧解析成 JSON-RPC 通知。
+ * SSE 客户端：把服务端推送的事件解析成 JSON-RPC 通知。
  *
  * 与 `JsonRpcClient` 并列而不合并：一个是「发一问收一答」，一个是长连接流，
  * 生命周期与重连语义完全不同，混在一个类里会互相污染状态。
@@ -40,8 +40,6 @@ public class JsonRpcSseClient {
     private let connect: (HashMap<String, String>) -> ?SseConnection
     private let retry: Int64
     private let headers: HashMap<String, String>
-    private let parser = SseFrameParser()
-    private let pending = ArrayList<SseFrame>()
     private var connection: ?SseConnection = None
     private var lastEventId: Int64 = 0
     private var closed: Bool = false
@@ -66,23 +64,22 @@ public class JsonRpcSseClient {
     /** 取下一条通知；连接正常结束返回 `None` */
     public func next(): ?JsonValue {
         while (true) {
-            if (!pending.isEmpty()) {
-                let frame = pending[0]
-                let _ = pending.remove(at: 0)
-                if (frame.id > lastEventId) {
-                    lastEventId = frame.id
-                }
-                return parseOf(frame)
-            }
-            if (closed) {
-                return None
-            }
             match (connection) {
-                case Some(current) => match (current.readChunk()) {
-                    case Some(chunk) =>
-                        let frames = parser.feed(chunk)
-                        for (frame in frames) {
-                            pending.add(frame)
+                case Some(current) => match (current.next()) {
+                    case Some(event) =>
+                        if (!event.id.isEmpty()) {
+                            match (Int64.tryParse(event.id.trimAscii())) {
+                                case Some(value) =>
+                                    if (value > lastEventId) {
+                                        lastEventId = value
+                                    }
+                                case None => ()
+                            }
+                        }
+                        match (parseOf(event.data)) {
+                            case Some(value) => return Some(value)
+                            // 坏帧不掐断整条流：跳过它，继续等下一条
+                            case None => ()
                         }
                     case None =>
                         current.close()
@@ -109,7 +106,7 @@ public class JsonRpcSseClient {
         connection = None
     }
 
-    /** 重连一次；用尽重试次数返回 false */
+    /** 重连一次；用尽重试次数抛错（不静默返回 None） */
     private func reconnect(): Bool {
         if (closed) {
             return false
@@ -126,8 +123,6 @@ public class JsonRpcSseClient {
             }
             match (connect(extra)) {
                 case Some(value) =>
-                    // 重连成功：解析器里可能残留上一次的半帧，清掉避免拼错
-                    parser.reset()
                     connection = Some(value)
                     return true
                 case None => ()
@@ -139,11 +134,22 @@ public class JsonRpcSseClient {
         throw JsonRpcConnectException('sse reconnect failed after ${retry} attempts')
     }
 
-    private func parseOf(frame: SseFrame): ?JsonValue {
-        try {
-            JsonValue.fromStr(frame.data)
+    /**
+     * 只接受 JSON-RPC 通知（对象）。
+     *
+     * 注意：`JsonValue.fromStr` 对 `not json` 这类输入**不抛异常**，会退化成 `JsonNull`，
+     * 所以还得校验「是对象」——否则脏帧会让调用方拿到一个 `JsonNull` 并在 `asObject()` 处炸掉。
+     */
+    private static func parseOf(data: String): ?JsonValue {
+        let value = try {
+            JsonValue.fromStr(data)
         } catch (e: Exception) {
-            // 坏帧不掐断整条流：跳过它，继续等下一条
+            return None
+        }
+        try {
+            let _ = value.asObject()
+            Some(value)
+        } catch (e: Exception) {
             None
         }
     }
