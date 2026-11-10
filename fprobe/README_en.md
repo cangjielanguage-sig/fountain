@@ -347,14 +347,94 @@ Disabled by default; enable with `probe_llmAgent=true`.
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `probe_llmAgent` | `false` | Master switch |
-| `probe_llmName` | `deepseek-flash` | Model name |
+| `probe_llmName` | `deepseek-flash` | Logical model name |
 | `probe_llmTrigger` | `alarm` | `alarm` / `interval` / `both` |
 | `probe_llmIntervalMs` | `300000` | Interval-analysis period |
 | `probe_llmReplyPollMs` | `30000` | Reply polling period |
 | `probe_llmMuteSeconds` | `600` | Default mute duration for the `mute` action |
 | `probe_replyStateFile` | `./data/reply-state.json` | Processed-reply dedup file |
 
-Flow:
+### Model endpoint and auth key
+
+fprobe has no endpoint or key settings of its own: `probe_llmName` is only a **logical model
+name**. Provider, URL and credentials come from a `f_llm` `LLMConf`
+(`LLM.chatByName(probe_llmName, ...)`), so `probe_llmName` must match some `LLMConf.llmName`.
+
+| `LLMConf` field | Meaning |
+| --- | --- |
+| `provider` | Dialect: `deepseek` / `zhipu` / `volcengine` / `aliyun` / `siliconflow`; anything else falls back to standard OpenAI |
+| `llmName` | Logical name, matched against `probe_llmName` |
+| `actualLlmName` | The `model` sent in the request body; `probe_llmName` is never sent |
+| `url` | Base URL up to the version root; `/chat/completions` is appended by default, override with `conf.chatPath` |
+| `auth` | Sent verbatim as `Authorization: Bearer <auth>`; plaintext only, `secretRef:` is not resolved |
+| `weight` / `enabled` | Needs `weight > 0` and `enabled = true` to become a candidate; several rows with the same `llmName` share traffic by weight |
+
+Inline JSON (containers or a quick trial):
+
+```bash
+./fprobe.sh resident \
+  --probe_llmAgent=true \
+  --probe_llmName=deepseek-flash \
+  --probe_llmTrigger=interval \
+  --llm_metaStore=legacy \
+  --llm_confSource=env \
+  --llm_confs='[{"provider":"deepseek","llmName":"deepseek-flash","actualLlmName":"deepseek-flash","url":"https://api.deepseek.com","auth":"sk-xxx"}]'
+```
+
+Local JSON file (recommended; keeps the key out of `ps`):
+
+```bash
+./fprobe.sh resident --probe_llmAgent=true --llm_metaStore=legacy \
+  --llm_confSource=file:/etc/fprobe/llm.json
+```
+
+The file is an array of objects whose field names match `LLMConf` members; `conf` is a string
+map:
+
+```json
+[
+  {
+    "provider": "deepseek",
+    "llmName": "deepseek-flash",
+    "actualLlmName": "deepseek-flash",
+    "url": "https://api.deepseek.com",
+    "auth": "sk-xxx",
+    "temperature": -1,
+    "enabled": true,
+    "weight": 1
+  }
+]
+```
+
+`llm_confSource` accepts `database` (default) / `env` / `file:<path>`; any other value throws.
+
+### Configuration source: `llm_metaStore` wins
+
+Since `f_llm` 1.3, `LLMConfs.holder()` looks at `llm_metaStore` first: for `f_store` (the
+default) / `postgres` / `mysql` the configs are always read from the meta store (default
+`<executable dir>/data/f_llm-meta`) and `llm_confSource` / `llm_confs` are ignored entirely;
+the legacy source is only used when that branch fails to construct.
+
+fprobe is a standalone process with no bean container or ORM wiring, so `database` is unusable;
+the `f_store` branch needs no bean and creates its directory on demand, which means a plain
+`env` / `file` setup is **silently ignored** — the symptom is one log line per analysis:
+`no available llm conf for: deepseek-flash, available: []`.
+To actually use `env` / `file`, set `llm_metaStore` to a placeholder outside those three values
+(`legacy` in the examples above) so the meta branch is skipped.
+
+### Troubleshooting
+
+| Symptom | Action |
+| --- | --- |
+| The advisor never replies | Check `probe_llmAgent=true`, that `probe_llmTrigger` fires, and that `probe_llmName` equals `LLMConf.llmName` exactly |
+| Log shows `llm conf refreshed, ... source: store` | Configs come from the meta store; `llm_confSource` is not in effect, adjust `llm_metaStore` per the previous section |
+| Log shows `llm conf: N record(s) dropped` | Rows with empty `provider` / `actualLlmName` / `url` are dropped |
+| Want to verify the chain quickly | Use `--probe_llmTrigger=interval --probe_llmIntervalMs=60000` to shorten the loop; failures are logged only and never stop collection or alarms, and the reply loop additionally needs `probe_channel_email_replyAccount` |
+
+`probe_llmMaxTokens` only appears in `doc/configuration.md` and the launcher comments; it is not
+wired up yet.
+
+### Flow
 
 1. On an alarm or an interval tick, node states, alarm events and history points are turned
    into a prompt;
@@ -461,4 +541,4 @@ fprobe/
 | `hardware` reports `available=false` | Install `ipmitool` / `smartctl` or grant permissions; other metrics are unaffected |
 | No mail is delivered | Check `probe_channel_email_smtpHost` and recipients; without smtpHost the channel is not built |
 | No report is generated | An empty `probe_reportCron` disables reports; an invalid CRON fails startup |
-| The advisor never replies | Verify `probe_llmAgent=true`, the model settings and `probe_llmTrigger` |
+| The advisor never replies | Check `probe_llmAgent=true` and `probe_llmTrigger`; for endpoint and key see [Model endpoint and auth key](#model-endpoint-and-auth-key) |

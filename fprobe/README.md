@@ -326,14 +326,90 @@ sparkline。CPU/内存/网络/服务/健康为折线，磁盘为柱状，拓扑�
 | 配置 | 默认 | 说明 |
 | --- | --- | --- |
 | `probe_llmAgent` | `false` | 总开关 |
-| `probe_llmName` | `deepseek-flash` | 模型名 |
+| `probe_llmName` | `deepseek-flash` | 逻辑模型名 |
 | `probe_llmTrigger` | `alarm` | `alarm` / `interval` / `both` |
 | `probe_llmIntervalMs` | `300000` | 周期分析间隔 |
 | `probe_llmReplyPollMs` | `30000` | 回复轮询间隔 |
 | `probe_llmMuteSeconds` | `600` | `mute` 动作的默认静音时长 |
 | `probe_replyStateFile` | `./data/reply-state.json` | 已处理回复去重文件 |
 
-工作流程：
+### 模型端点与鉴权 KEY
+
+fprobe 没有端点与 KEY 的独立配置项：`probe_llmName` 只是**逻辑模型名**，
+平台、地址与密钥来自 `f_llm` 的 `LLMConf`（`LLM.chatByName(probe_llmName, ...)`）。
+因此 `probe_llmName` 必须等于某条 `LLMConf` 的 `llmName`。
+
+| `LLMConf` 字段 | 作用 |
+| --- | --- |
+| `provider` | 平台方言：`deepseek` / `zhipu` / `volcengine` / `aliyun` / `siliconflow`，其它值回退标准 OpenAI |
+| `llmName` | 逻辑名，与 `probe_llmName` 对应 |
+| `actualLlmName` | 写进报文的 `model`；`probe_llmName` 不参与报文 |
+| `url` | base URL，只到版本根；默认追加 `/chat/completions`，可用 `conf.chatPath` 覆盖 |
+| `auth` | 原样作为 `Authorization: Bearer <auth>`；只认明文 KEY，不解析 `secretRef:` |
+| `weight` / `enabled` | `weight > 0` 且 `enabled = true` 才进候选；同 `llmName` 多条按权重分流 |
+
+内联 JSON（容器或临时验证）：
+
+```bash
+./fprobe.sh resident \
+  --probe_llmAgent=true \
+  --probe_llmName=deepseek-flash \
+  --probe_llmTrigger=interval \
+  --llm_metaStore=legacy \
+  --llm_confSource=env \
+  --llm_confs='[{"provider":"deepseek","llmName":"deepseek-flash","actualLlmName":"deepseek-flash","url":"https://api.deepseek.com","auth":"sk-xxx"}]'
+```
+
+本地 JSON 文件（推荐，KEY 不出现在 `ps` 里）：
+
+```bash
+./fprobe.sh resident --probe_llmAgent=true --llm_metaStore=legacy \
+  --llm_confSource=file:/etc/fprobe/llm.json
+```
+
+文件内容是对象数组，字段名与 `LLMConf` 成员同名，`conf` 是字符串键值对象：
+
+```json
+[
+  {
+    "provider": "deepseek",
+    "llmName": "deepseek-flash",
+    "actualLlmName": "deepseek-flash",
+    "url": "https://api.deepseek.com",
+    "auth": "sk-xxx",
+    "temperature": -1,
+    "enabled": true,
+    "weight": 1
+  }
+]
+```
+
+`llm_confSource` 取 `database`（默认）/ `env` / `file:<path>`，未知值抛错。
+
+### 配置来源：`llm_metaStore` 优先
+
+`f_llm` 1.3 起，`LLMConfs.holder()` 先看 `llm_metaStore`：取值为 `f_store`（默认）/
+`postgres` / `mysql` 时，配置一律从元数据存储读（默认 `<可执行文件目录>/data/f_llm-meta`），
+`llm_confSource` / `llm_confs` 完全不参与；只有该分支构造失败才回退到 `llm_confSource`。
+
+fprobe 是独立进程，不初始化 bean 容器与 ORM，`database` 源不可用；`f_store` 分支不依赖 bean，
+默认能建目录，所以**直接配 `env` / `file` 会被静默忽略**，现象是每次分析只记一行
+`no available llm conf for: deepseek-flash, available: []`。
+要真正走 `env` / `file`，把 `llm_metaStore` 设为这三个取值之外的占位值（示例中的 `legacy`），
+让元数据分支被跳过。
+
+### 排查
+
+| 现象 | 处理 |
+| --- | --- |
+| 智能体不回复 | 确认 `probe_llmAgent=true`、`probe_llmTrigger` 会触发、以及 `probe_llmName` 与 `LLMConf.llmName` 完全一致 |
+| 日志 `llm conf refreshed, ... source: store` | 走的是元数据存储，`llm_confSource` 未生效，按上一节调整 `llm_metaStore` |
+| 日志 `llm conf: N record(s) dropped` | 该条配置 `provider` / `actualLlmName` / `url` 有空值，被丢弃 |
+| 想快速确认链路 | `--probe_llmTrigger=interval --probe_llmIntervalMs=60000`，失败只记日志、不影响采集与告警；回复闭环另需邮件渠道的 `probe_channel_email_replyAccount` |
+
+`probe_llmMaxTokens` 目前只在 `doc/configuration.md` 与启动脚本注释中出现，当前版本未接线。
+
+### 工作流程
 
 1. 告警触发或周期到达时，把节点状态、告警事件与历史点组装成提示词；
 2. 模型返回问题摘要、可能原因与处置建议，作为一条消息通过告警渠道发出；
@@ -431,4 +507,4 @@ fprobe/
 | `hardware` 项 `available=false` | 安装 `ipmitool` / `smartctl`，或补齐权限；不影响其他监控项 |
 | 邮件没有发出 | 检查 `probe_channel_email_smtpHost` 与收件人；未配置 smtpHost 时该渠道不构建 |
 | 报告没有生成 | `probe_reportCron` 为空表示关闭；非法 CRON 会让启动直接失败 |
-| 智能体不回复 | 确认 `probe_llmAgent=true`、模型配置与 `probe_llmTrigger` |
+| 智能体不回复 | 确认 `probe_llmAgent=true`、`probe_llmTrigger` 会触发；端点与 KEY 见[模型端点与鉴权 KEY](#模型端点与鉴权-key) |
