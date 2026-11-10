@@ -76,6 +76,12 @@ WantedBy=multi-user.target
 
 控制台模式直接在前台运行 `fprobe supervisor`，适合临时排查。
 
+## 报告邮件
+
+`probe_reportCron` 非空时，报告 HTML 正文直接内联 SVG 图表与拓扑图，不再生成附件，
+因此不需要为报告准备可写临时目录。升级前产生的 `./data/fprobe-report` 旧批次目录不会
+被自动访问或删除，确认无用后可手工清理。
+
 ## 权限
 
 | 采集项 | 需要的权限 |

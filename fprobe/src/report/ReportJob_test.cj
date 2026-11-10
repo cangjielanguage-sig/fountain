@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::fprobe.report
 
 import std.collection.ArrayList
-import std.fs.{exists, Path}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_probe.{ProbeErrorCode, ProbeException}
@@ -52,19 +51,17 @@ private class FakeSender <: ReportSender {
     }
 }
 
-private func draftWith(dir: String): ReportDraft {
-    let store = AttachmentStore(dir)
-    let attachment = store.write("web1", "cpu.usagePercent", FIXED_SVG)
-    ReportDraft("fprobe 报告", "文本摘要", "<html>摘要</html>", [attachment], dir)
+private func draftWith(): ReportDraft {
+    ReportDraft("fprobe 报告", "文本摘要", "<html>摘要</html>")
 }
 
-/** 15.5：CRON 为空不注册、非法 CRON 启动失败、runOnce 发送并清理。 */
+/** 15.5：CRON 为空不注册、非法 CRON 启动失败、runOnce 只发送正文。 */
 @Test
 public class ReportJob_test {
     @TestCase
     public func emptyCronDoesNotRegister(): Unit {
         let scheduler = FakeScheduler()
-        let job = ReportJob({=> draftWith(reportTempDir())}, FakeSender(), scheduler,
+        let job = ReportJob({=> draftWith()}, FakeSender(), scheduler,
             "   ", receivers: ["ops@example.com"])
 
         @Assert(!job.register())
@@ -74,7 +71,7 @@ public class ReportJob_test {
     @TestCase
     public func invalidCronFailsAtStartup(): Unit {
         let scheduler = FakeScheduler()
-        let job = ReportJob({=> draftWith(reportTempDir())}, FakeSender(), scheduler,
+        let job = ReportJob({=> draftWith()}, FakeSender(), scheduler,
             "bogus cron", receivers: ["ops@example.com"])
         var caught = false
         try {
@@ -91,7 +88,7 @@ public class ReportJob_test {
     @TestCase
     public func registerSchedulesCronOnce(): Unit {
         let scheduler = FakeScheduler()
-        let job = ReportJob({=> draftWith(reportTempDir())}, FakeSender(), scheduler,
+        let job = ReportJob({=> draftWith()}, FakeSender(), scheduler,
             "0 0 2 * * * *", receivers: ["ops@example.com"])
 
         @Assert(job.register())
@@ -101,29 +98,26 @@ public class ReportJob_test {
     }
 
     @TestCase
-    public func runOnceSendsReportAndCleansTemporaryFiles(): Unit {
-        let dir = reportTempDir()
+    public func runOnceSendsReportWithoutAttachments(): Unit {
         let sender = FakeSender()
-        let job = ReportJob({=> draftWith(dir)}, sender, FakeScheduler(),
+        let job = ReportJob({=> draftWith()}, sender, FakeScheduler(),
             "0 0 2 * * * *", receivers: ["ops@example.com"])
 
-        @Assert(exists(Path(dir)))
         job.runOnce()
 
         @Assert(sender.messages.size, 1)
         @Assert(sender.messages[0], "文本摘要")
         @Assert(sender.htmls[0], "<html>摘要</html>")
-        @Assert(sender.attachments[0].size, 1)
-        @Assert(!exists(Path(dir)))
+        @Assert(sender.attachments.size, 1)
+        @Assert(sender.attachments[0].size, 0)
     }
 
     @TestCase
-    public func senderFailureStillCleansTemporaryFiles(): Unit {
-        let dir = reportTempDir()
+    public func senderFailureIsLogged(): Unit {
         let sender = FakeSender()
         sender.fail = true
         let errors = ArrayList<String>()
-        let job = ReportJob({=> draftWith(dir)}, sender, FakeScheduler(),
+        let job = ReportJob({=> draftWith()}, sender, FakeScheduler(),
             "0 0 2 * * * *", receivers: ["ops@example.com"],
             logError: {message => errors.add(message)})
 
@@ -131,6 +125,5 @@ public class ReportJob_test {
 
         @Assert(errors.size, 1)
         @Assert(errors[0].contains("smtp down"))
-        @Assert(!exists(Path(dir)))
     }
 }

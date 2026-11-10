@@ -57,7 +57,7 @@ public class TicktockJobScheduler <: JobScheduler {
  * 周期报告任务（spec「周期报告」）。
  *
  * CRON 为空表示关闭，不注册；非法 CRON 在启动期失败而不是静默关闭。发送失败
- * 只记录 ERROR，临时附件仍会清理，下一周期继续尝试。
+ * 只记录 ERROR，下一周期继续尝试。
  */
 public class ReportJob {
     public static let TASK_NAME = "fprobe-report"
@@ -99,18 +99,15 @@ public class ReportJob {
         true
     }
 
-    /** 立即生成并发送一次报告；无论发送成败都清理临时附件。 */
+    /** 立即生成并发送一次报告；图表已在正文内联，不携带附件。 */
     public func runOnce(): Unit {
         let draft = builder()
         try {
-            let files = Array<String>(draft.attachments.size) {i => draft.attachments[i].path}
-            sender.sendRich(draft.text, draft.html, files, receivers)
+            sender.sendRich(draft.text, draft.html, [], receivers)
         } catch (e: Exception) {
             logError('报告发送失败: ${e.message}')
         } catch (e: Error) {
             logError('报告发送失败: ${e.message}')
-        } finally {
-            draft.cleanup()
         }
     }
 }

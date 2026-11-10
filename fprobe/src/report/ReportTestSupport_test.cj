@@ -16,17 +16,10 @@ limitations under the License.
 package fountain::fprobe.report
 
 import std.collection.{ArrayList, HashMap}
-import std.env.getTempDirectory
-import std.fs.Directory
 import fountain::f_chart.Chart
 import fountain::f_data.*
 import fountain::f_data.json.JsonObject
 import fountain::fprobe.tui.HistorySource
-
-/** 用例共享的临时目录；调用方负责删除。 */
-func reportTempDir(): String {
-    Directory.createTemp(getTempDirectory()).toString()
-}
 
 /** 只按 `node|metric` 返回预设历史点的替身。 */
 class FakeHistory <: HistorySource {
@@ -62,4 +55,15 @@ class FixedChart <: Chart {
     }
 }
 
+/** 渲染即失败的替身，用于覆盖单图失败不影响其余图表的分支。 */
+class ThrowingChart <: Chart {
+    public func draw(data: JsonObject): String {
+        let _ = data
+        throw Exception("boom")
+    }
+}
+
 let FIXED_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle cx="5" cy="5" r="4"/></svg>'
+
+/** 与 `f_chart` 输出一致、带 XML 声明的固定 SVG。 */
+let XML_SVG = '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>'

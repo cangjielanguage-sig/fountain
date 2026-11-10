@@ -16,62 +16,50 @@ limitations under the License.
 package fountain::fprobe.report
 
 import std.collection.ArrayList
-import fountain::f_io.removeIfExists
 import fountain::fprobe.alarm.{AlarmEvent, AlarmEventType}
 import fountain::fprobe.collect.Clock
 import fountain::fprobe.collect.topology.TopologySample
 import fountain::fprobe.supervisor.{NodeState, NodeStatus}
 import fountain::fprobe.tui.{HistorySource, ProjectionCatalog}
 
-/** 一次报告的完整内容；附件目录由 `tempDir` 标识。 */
+/** 一次报告的完整内容；图表已内联进 `html`。 */
 public class ReportDraft {
     public let subject: String
     public let text: String
     public let html: String
-    public let attachments: Array<Attachment>
-    public let tempDir: String
 
-    public init(subject: String, text: String, html: String, attachments: Array<Attachment>,
-        tempDir: String) {
+    public init(subject: String, text: String, html: String) {
         this.subject = subject
         this.text = text
         this.html = html
-        this.attachments = attachments
-        this.tempDir = tempDir
-    }
-
-    /** 删除本批次的临时附件目录。 */
-    public func cleanup(): Unit {
-        if (!tempDir.isEmpty()) {
-            removeIfExists(tempDir, recursive: true)
-        }
     }
 }
 
 /**
- * 报告内容生成器（spec「报告内容与附件」）。
+ * 报告内容生成器（spec「报告内容与内联图表」）。
  *
  * 摘要永远包含每个节点的在线状态与关键指标；从未成功拉取的节点写「无数据」，
- * 拓扑缺失写「拓扑不可用」。图表按指标历史生成，单图失败只记录 WARN，
- * 不阻断其余图表。
+ * 拓扑缺失写「拓扑不可用」。图表按指标历史生成并内联到正文，单图失败只记录
+ * WARN，退化为纯文本行，不阻断其余图表。
  */
 public class ReportBuilder {
     private let selector: ChartSelector
     private let renderer: ChartRenderer
-    private let store: AttachmentStore
     private let clock: Clock
     private let logInfo: (String) -> Unit
     private let logWarning: (String) -> Unit
+    private let topologyRender: (TopologySample) -> ?String
 
-    public init(selector: ChartSelector, renderer: ChartRenderer, store: AttachmentStore, clock: Clock,
+    public init(selector: ChartSelector, renderer: ChartRenderer, clock: Clock,
         logInfo!: (String) -> Unit = {message => println(message)},
-        logWarning!: (String) -> Unit = {message => eprintln(message)}) {
+        logWarning!: (String) -> Unit = {message => eprintln(message)},
+        topologyRender!: (TopologySample) -> ?String = {sample => TopologyRenderer.render(sample)}) {
         this.selector = selector
         this.renderer = renderer
-        this.store = store
         this.clock = clock
         this.logInfo = logInfo
         this.logWarning = logWarning
+        this.topologyRender = topologyRender
     }
 
     public func build(states: Array<NodeState>, history: HistorySource, alarms: Array<AlarmEvent>,
@@ -79,7 +67,7 @@ public class ReportBuilder {
         let now = clock.nowMs()
         let html = ArrayList<String>()
         let text = ArrayList<String>()
-        let attachments = ArrayList<Attachment>()
+        var chartCount = 0
 
         html.add("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>fprobe 周期报告</title></head><body>")
         html.add("<h1>fprobe 周期报告</h1>")
@@ -110,6 +98,7 @@ public class ReportBuilder {
                 let key = spec.projection.key()
                 let values = history.values(state.node, key)
                 if (values.isEmpty()) {
+                    logInfo('跳过 ${state.node} ${key}: 无历史数据')
                     continue
                 }
                 hasMetric = true
@@ -121,18 +110,20 @@ public class ReportBuilder {
                     '${current} ${unit}'
                 }
                 let label = '${spec.label} (${key})'
-                html.add("<p>${escape(label)}: ${escape(valueText)}</p>")
                 text.add('  ${label}: ${valueText}')
 
                 try {
                     let chartSpec = ChartSpec.fromValues(selector.select(key), '${state.node} ${spec.label}', values)
                     let svg = renderer.render(chartSpec)
-                    let attachment = store.write(state.node, key, svg)
-                    attachments.add(attachment)
+                    html.add('<div class="fprobe-chart"><h4>${escape(state.node)} ' +
+                        '${escape(label)}：${escape(valueText)}</h4>${inlineSvg(svg)}</div>')
+                    chartCount += 1
                 } catch (e: Exception) {
                     logWarning('图表生成失败 ${state.node} ${key}: ${e.message}')
+                    html.add("<p>${escape(label)}: ${escape(valueText)}</p>")
                 } catch (e: Error) {
                     logWarning('图表生成失败 ${state.node} ${key}: ${e.message}')
+                    html.add("<p>${escape(label)}: ${escape(valueText)}</p>")
                 }
             }
             if (!hasMetric) {
@@ -150,17 +141,27 @@ public class ReportBuilder {
             text.add('  ${event.message}')
         }
 
-        match (topology) {
+        html.add("<h2>拓扑</h2>")
+        let topologySvg: ?String = match (topology) {
             case Some(sample) =>
-                match (TopologyRenderer.render(sample)) {
-                    case Some(svg) =>
-                        let attachment = store.writeRaw("topology.svg", svg)
-                        attachments.add(attachment)
-                        html.add("<p>拓扑附件: ${attachment.name}</p>")
-                        text.add('拓扑附件: ${attachment.name}')
-                    case None =>
-                        html.add("<p>拓扑不可用</p>")
-                        text.add("拓扑不可用")
+                try {
+                    topologyRender(sample)
+                } catch (e: Exception) {
+                    logWarning('拓扑渲染失败: ${e.message}')
+                    None<String>
+                } catch (e: Error) {
+                    logWarning('拓扑渲染失败: ${e.message}')
+                    None<String>
+                }
+            case None => None<String>
+        }
+        match (topologySvg) {
+            case Some(svg) =>
+                html.add('<div class="fprobe-topology">${inlineSvg(svg)}</div>')
+                match (topology) {
+                    case Some(sample) =>
+                        text.add('拓扑: 已内联（${sample.devices.size} 个设备 / ${sample.links.size} 条链路）')
+                    case None => text.add("拓扑不可用")
                 }
             case None =>
                 html.add("<p>拓扑不可用</p>")
@@ -168,9 +169,21 @@ public class ReportBuilder {
         }
 
         html.add("</body></html>")
-        logInfo('报告批次 ${store.dir} 生成 ${attachments.size} 个附件')
-        ReportDraft("fprobe 周期报告", joinLines(text, "\n"), joinLines(html, ""),
-            attachments.toArray(), store.dir)
+        let htmlText = joinLines(html, "")
+        logInfo('报告生成 ${chartCount} 张图表，HTML ${htmlText.toArray().size} 字节')
+        ReportDraft("fprobe 周期报告", joinLines(text, "\n"), htmlText)
+    }
+
+    /** 去掉 SVG 的 XML 前导声明；只处理开头，不碰正文。 */
+    private static func inlineSvg(svg: String): String {
+        let text = svg.trimAscii()
+        if (!text.startsWith("<?xml")) {
+            return text
+        }
+        match (text.indexOf("?>")) {
+            case Some(end) => text[end + 2..].trimAscii()
+            case None => text
+        }
     }
 
     private static func countAlarms(alarms: Array<AlarmEvent>): Array<Int64> {

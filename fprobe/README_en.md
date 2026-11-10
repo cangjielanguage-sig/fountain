@@ -28,8 +28,8 @@ implementations, registries and process assembly.
 - **Multi-channel delivery**: the built-in email channel renders prominent HTML banners with
   a plain-text fallback; extensions can add WeCom, Feishu, DingTalk and other channels.
 - **Charts and periodic reports**: the TUI draws multi-line/bar charts with `f_chart.tui`;
-  periodic reports are triggered by `f_ticktock` CRON and email an HTML summary with SVG
-  chart attachments.
+  periodic reports are triggered by `f_ticktock` CRON and email an HTML summary with inline
+  SVG charts and topology.
 - **Optional LLM advisor**: analyses metrics and alarms, proposes causes and remediation,
   and only executes whitelisted actions (`ack` / `mute` / `report` / `none`) from replies.
 - **Dynamic extensions**: shared libraries under `custom/` are loaded at startup via
@@ -328,11 +328,11 @@ systemd/journald. See [`doc/tui.md`](doc/tui.md) for layout and terminal interna
 - **Periodic reports** are registered through `f_ticktock` when `probe_reportCron` is
   non-empty. CRON has six fields: `second minute hour day month weekday`; for example
   `0 0/5 * * * *` means every five minutes.
-- **Report content**: node status, alarm list, key metric charts (SVG) and topology; the same
-  content is rendered as HTML and plain text.
-- **Recipients and staging**: `probe_reportReceivers` sets recipients, while
-  `probe_reportTmpDir` sets the attachment staging directory (default
-  `./data/fprobe-report`).
+- **Report content**: node status, alarm list, key metric charts and topology; the SVG is
+  inlined in the HTML body and the mail carries no attachments. The same content is rendered
+  as HTML and plain text.
+- **Recipients**: `probe_reportReceivers` sets recipients; `probe_reportTmpDir` is deprecated
+  and kept only for old configurations — reports no longer write files.
 - **Delivery** reuses the enabled alarm channels; one failing channel only logs an error and
   does not affect the others.
 
@@ -530,6 +530,7 @@ fprobe/
 | [`doc/rpc.md`](doc/rpc.md) | RPC contract and minimal client |
 | [`doc/spec/add-fprobe/`](doc/spec/add-fprobe/) | OpenSpec proposal, design, specs, tasks |
 | [`doc/spec/add-fprobe-tui-charts/`](doc/spec/add-fprobe-tui-charts/) | TUI chart change artifacts |
+| [`doc/spec/inline-report-charts/`](doc/spec/inline-report-charts/) | Inline report chart artifacts |
 
 ## Troubleshooting
 

@@ -149,7 +149,7 @@ fprobe_supervisor() {
         # CRON 为 6 段：秒 分 时 日 月 周；下面表示每 5 分钟一次
         # "--probe_reportCron=0 0/5 * * * *"
         # "--probe_reportReceivers=ops@example.com"
-        # "--probe_reportTmpDir=./data/fprobe-report"
+        # "--probe_reportTmpDir=./data/fprobe-report"  # 已废弃：保留兼容，报告不再读取
         # 文档保留项，当前版本未接线
         # "--probe_reportChannels=email"
 
@@ -217,7 +217,7 @@ fprobe_resident() {
         # CRON 为 6 段：秒 分 时 日 月 周；下面表示每 5 分钟一次
         # "--probe_reportCron=0 0/5 * * * *"
         # "--probe_reportReceivers=ops@example.com"
-        # "--probe_reportTmpDir=./data/fprobe-report"
+        # "--probe_reportTmpDir=./data/fprobe-report"  # 已废弃：保留兼容，报告不再读取
         # 文档保留项，当前版本未接线
         # "--probe_reportChannels=email"
 

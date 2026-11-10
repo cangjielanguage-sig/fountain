@@ -73,7 +73,7 @@
 | `probe_reportCron` | 空 | 报告 CRON；为空表示关闭 |
 | `probe_reportReceivers` | 空 | 报告收件人 |
 | `probe_reportChannels` | `email` | 报告渠道 |
-| `probe_reportTmpDir` | `./data/fprobe-report` | 图表附件临时目录 |
+| `probe_reportTmpDir` | `./data/fprobe-report` | 已废弃：保留兼容旧配置，报告改为内联图表、不再落盘 |
 
 `probe_chart_*` 的默认值：`cpu`、`memory`、`network` 为 `line`，`disk` 为 `bar`，
 `topology` 为 `topology`，未配置的监控项回退到 `line`。
