@@ -56,10 +56,10 @@ f_rule
 f_probe
 f_tui
 f_llm
+fboot
 fmq
 fdbm
 fprobe
-fboot
 .
 
 [exclude]
