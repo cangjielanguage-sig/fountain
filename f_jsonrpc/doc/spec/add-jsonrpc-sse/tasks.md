@@ -11,9 +11,9 @@
 
 ## 2. HTTP 端点
 
-- [ ] 2.1 `@SseMapping` 注解（`RequestMapping` 子类，固定 GET + text/event-stream）。
-- [ ] 2.2 `SseController`：`GET /rpc/stream` 解析 `topic/taskId/cursor`，返回 `SseStream` 并设置响应头。
-- [ ] 2.3 冒烟：起 `MvcStarter` → 连 `/rpc/stream` → 发布一条 → 客户端在 2s 内收到（验证 `InputStream` 真流式）。
+- [x] 2.1 `@SseMapping` 注解（`RequestMapping` 子类，固定 GET + text/event-stream）。
+- [x] 2.2 `SseController`：`GET /rpc/stream` 解析 `topic/taskId/cursor`，返回 `SseStream` 并设置响应头。
+- [x] 2.3 冒烟：起 `MvcStarter` → 连 `/rpc/stream` → 发布一条 → 客户端在 2s 内收到（验证 `InputStream` 真流式）。
 
 ## 3. 客户端
 
