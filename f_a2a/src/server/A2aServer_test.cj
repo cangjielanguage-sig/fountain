@@ -177,7 +177,7 @@ class A2aServer_test {
         let server = A2aServer(card(), FixedExecutor(A2aExecutionResult.done('x')))
         server.register()
         server.register()
-        @Expect(server.registrationCount(), 3)
+        @Expect(server.registrationCount(), A2aServer.METHOD_COUNT)
     }
 
     /** 存储返回副本：改返回值不影响库里的任务 */

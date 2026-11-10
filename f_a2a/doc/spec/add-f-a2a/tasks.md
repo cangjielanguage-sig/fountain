@@ -45,8 +45,8 @@
 
 ## 7. 流式与扩展能力（依赖 `add-jsonrpc-sse`）
 
-- [ ] 7.1 `message/stream`：建任务 + 执行 + 通过 `SseHub.publish` 推 `a2a.task.status` / `a2a.task.artifact`；验证：`working` → `completed` 两条事件、id 递增。
-- [ ] 7.2 `tasks/resubscribe`：按 `taskId` 重订阅、透传 `Last-Event-ID`；已终结任务立即补终态后结束；验证：1 条用例。
-- [ ] 7.3 push notification：`pushConfig.set/get/delete` + 终态回调（`f_httpclient` POST，失败只 warn）；验证：3 条用例。
-- [ ] 7.4 非文本 `Part`：`file`（url + mimeType）/ `data`（JSON 字符串）/ 未知 kind → `-32023`；验证：3 条用例。
-- [ ] 7.5 扩展卡片 `a2a.agent.extendedCard`：基础卡片 + `x-a2a-extensions`；验证：2 条用例。
+- [x] 7.1 `message/stream`：建任务 + 执行 + 通过 `SseHub.publish` 推 `a2a.task.status` / `a2a.task.artifact`；验证：`working` → `completed` 两条事件、id 递增。
+- [x] 7.2 `tasks/resubscribe`：按 `taskId` 重订阅、透传 `Last-Event-ID`；已终结任务立即补终态后结束；验证：1 条用例。
+- [x] 7.3 push notification：`pushConfig.set/get/delete` + 终态回调（`f_httpclient` POST，失败只 warn）；验证：3 条用例。
+- [x] 7.4 非文本 `Part`：`file`（url + mimeType）/ `data`（JSON 字符串）/ 未知 kind → `-32023`；验证：3 条用例。
+- [x] 7.5 扩展卡片 `a2a.agent.extendedCard`：基础卡片 + `x-a2a-extensions`；验证：2 条用例。

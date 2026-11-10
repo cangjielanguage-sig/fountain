@@ -1,6 +1,7 @@
 [dependencies]
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_httpclient" = {path = "../f_httpclient"}
   "fountain::f_jsonrpc" = {path = "../f_jsonrpc"}
   "fountain::f_log" = {path = "../f_log"}
 
