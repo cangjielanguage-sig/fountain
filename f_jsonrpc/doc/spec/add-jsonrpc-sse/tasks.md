@@ -17,14 +17,14 @@
 
 ## 3. 客户端
 
-- [ ] 3.1 `JsonRpcSseClient`：连上、逐帧解析、`next()` 产出 `JsonValue`；流结束返回 `None`。验证：2 条用例。
-- [ ] 3.2 重连：断开后用 `Last-Event-ID` 重连，只产出新事件；3 次失败后抛错。验证：2 条用例。
+- [x] 3.1 `JsonRpcSseClient`：连上、逐帧解析、`next()` 产出 `JsonValue`；流结束返回 `None`。验证：2 条用例。
+- [x] 3.2 重连：断开后用 `Last-Event-ID` 重连，只产出新事件；3 次失败后抛错。验证：2 条用例。
 
 ## 4. 集成与回归
 
-- [ ] 4.1 `f_jsonrpc` 全量 `cjpm test` 全绿（既有用例不退化）。
+- [x] 4.1 `f_jsonrpc` 全量 `cjpm test` 全绿（既有用例不退化）。
 - [ ] 4.2 `f_a2a` 的 `message/stream` / `resubscribe` 改用它（在 `add-f-a2a` 里落地）。
-- [ ] 4.3 `known-limitations.md` 记「进程内广播、多实例需外部总线」。
+- [x] 4.3 `known-limitations.md` 记「进程内广播、多实例需外部总线」。
 
 ## Workflow follow-up
 
