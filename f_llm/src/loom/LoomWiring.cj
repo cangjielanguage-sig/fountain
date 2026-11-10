@@ -113,6 +113,8 @@ public class LoomWiring {
             }
         }
         LoomServices.installHost(chosenHost)
+        // A2A 服务：默认关闭；开启时把 Supervisor 暴露成智能体（幂等，只注册一次）
+        let _ = LoomA2a.startIfEnabled()
         // 第三方平台通道：按 llm_channels 装配（未配置时什么都不做）
         let _ = ChannelBootstrap.installFromConfig()
         // Supervisor：开关打开时用已编译流程播种路由表（重启后恢复的流程也在这里进来）

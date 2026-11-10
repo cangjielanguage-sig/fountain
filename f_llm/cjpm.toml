@@ -19,6 +19,7 @@
   repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/f_llm"
 
 [dependencies]
+  "fountain::f_a2a" = {path = "../f_a2a"}
   "fountain::f_aspect" = {path = "../f_aspect"}
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_bean" = {path = "../f_bean"}
