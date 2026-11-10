@@ -437,7 +437,8 @@ ratatui base packages, never on `crossterm` / `ratatui_backend` / `ratatui_termi
 ### `fountain::fprobe`
 Server-monitoring executable (`fprobe agent` / `fprobe supervisor`): the node agent periodically
 collects host metrics and exposes them over RPC; the supervisor aggregates multiple nodes and
-provides alarms, charts, periodic reports and `custom/` dynamic-library extensions.
+provides TUI and resident modes, alarms, terminal charts, periodic reports with inline SVG,
+an optional LLM advisor and `custom/` dynamic-library extensions.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/fprobe/README_en.md>
 

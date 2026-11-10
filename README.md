@@ -411,7 +411,8 @@ Unix 终端后端：POSIX `termios` raw mode、终端尺寸、按键解码、ANS
 
 ### `fountain::fprobe`
 服务器监控可执行程序（`fprobe agent` / `fprobe supervisor`）：节点侧周期采集主机指标并通过 RPC
-暴露，监督端汇聚多节点数据，提供告警、图表、周期报告与 `custom/` 动态库扩展。
+暴露；监督端汇聚多节点数据，提供 TUI 与 resident 两种运行模式、告警、终端图表、SVG 内联的
+周期报告、可选 LLM 智能体与 `custom/` 动态库扩展。
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/fprobe/README.md>
 
