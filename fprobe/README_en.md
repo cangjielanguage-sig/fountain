@@ -335,6 +335,9 @@ systemd/journald. See [`doc/tui.md`](doc/tui.md) for layout and terminal interna
   and kept only for old configurations — reports no longer write files.
 - **Delivery** reuses the enabled alarm channels; one failing channel only logs an error and
   does not affect the others.
+- **Rendering fallbacks**: a chart that fails to render degrades to one "metric: current value"
+  line without affecting other charts or the body; missing or broken topology shows
+  "topology unavailable"; a metric with no history only logs at INFO and produces no empty chart.
 
 An empty `probe_reportCron` disables reports; an invalid CRON fails startup instead of being
 silently skipped. Chart types can be overridden with `probe_chart_<metric>`; otherwise
