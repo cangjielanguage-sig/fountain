@@ -23,7 +23,7 @@
 ## 4. 集成与回归
 
 - [x] 4.1 `f_jsonrpc` 全量 `cjpm test` 全绿（既有用例不退化）。
-- [ ] 4.2 `f_a2a` 的 `message/stream` / `resubscribe` 改用它（在 `add-f-a2a` 里落地）。
+- [x] 4.2 `f_a2a` 的 `message/stream` / `resubscribe` 改用它（在 `add-f-a2a` 里落地）。
 - [x] 4.3 `known-limitations.md` 记「进程内广播、多实例需外部总线」。
 
 ## Workflow follow-up
