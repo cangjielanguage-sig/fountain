@@ -13,6 +13,8 @@
 - [x] 1.5 拓扑改为独立 `<h2>拓扑</h2>` 小节加 `<div class="fprobe-topology">` 内联 SVG，纯文本写 `拓扑: 已内联（N 个设备 / M 条链路）`；验证：新增用例用 `TopologySample` 断言 div 与 `<svg` 出现、纯文本含设备数与链路数、全文不含 `topology.svg`；另保留 `None` 输入用例断言「拓扑不可用」
 - [x] 1.6 转义边界用例：节点名取 `web1<img src=x onerror=alert(1)>`，验证：断言该字符串在 HTML 中以 `&lt;img` 形式出现、原文标记不出现，且 `<div class="fprobe-chart">` 计数不受影响
 - [x] 1.7 结尾日志改为 `'报告生成 ${chartCount} 张图表，HTML ${htmlBytes} 字节'`（`chartCount` 在 `build` 内累加、`htmlBytes` 取拼接结果的 UTF-8 字节数），验证：用例注入 `logInfo` 收集器，断言日志含正确图表数，且不再含批次目录路径
+- [x] 1.8 增加 `ReportBuilder` 的 `topologyRender` 注入点（默认 `TopologyRenderer.render`），用会抛异常的替身写红灯用例，断言 HTML 与纯文本都写「拓扑不可用」且报告不中断；实现外包 `try/catch`，跑绿后勾选。
+- [x] 1.9 历史点为空的分支补 `logInfo`（说明跳过该指标的原因），先写收集 `logInfo` 的失败用例，再实现并跑绿。
 
 ## 2. 收缩 ReportDraft 并删除附件基础设施
 

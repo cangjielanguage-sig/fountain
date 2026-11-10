@@ -48,15 +48,18 @@ public class ReportBuilder {
     private let clock: Clock
     private let logInfo: (String) -> Unit
     private let logWarning: (String) -> Unit
+    private let topologyRender: (TopologySample) -> ?String
 
     public init(selector: ChartSelector, renderer: ChartRenderer, clock: Clock,
         logInfo!: (String) -> Unit = {message => println(message)},
-        logWarning!: (String) -> Unit = {message => eprintln(message)}) {
+        logWarning!: (String) -> Unit = {message => eprintln(message)},
+        topologyRender!: (TopologySample) -> ?String = {sample => TopologyRenderer.render(sample)}) {
         this.selector = selector
         this.renderer = renderer
         this.clock = clock
         this.logInfo = logInfo
         this.logWarning = logWarning
+        this.topologyRender = topologyRender
     }
 
     public func build(states: Array<NodeState>, history: HistorySource, alarms: Array<AlarmEvent>,
@@ -95,6 +98,7 @@ public class ReportBuilder {
                 let key = spec.projection.key()
                 let values = history.values(state.node, key)
                 if (values.isEmpty()) {
+                    logInfo('跳过 ${state.node} ${key}: 无历史数据')
                     continue
                 }
                 hasMetric = true
@@ -138,15 +142,26 @@ public class ReportBuilder {
         }
 
         html.add("<h2>拓扑</h2>")
-        match (topology) {
+        let topologySvg: ?String = match (topology) {
             case Some(sample) =>
-                match (TopologyRenderer.render(sample)) {
-                    case Some(svg) =>
-                        html.add('<div class="fprobe-topology">${inlineSvg(svg)}</div>')
+                try {
+                    topologyRender(sample)
+                } catch (e: Exception) {
+                    logWarning('拓扑渲染失败: ${e.message}')
+                    None<String>
+                } catch (e: Error) {
+                    logWarning('拓扑渲染失败: ${e.message}')
+                    None<String>
+                }
+            case None => None<String>
+        }
+        match (topologySvg) {
+            case Some(svg) =>
+                html.add('<div class="fprobe-topology">${inlineSvg(svg)}</div>')
+                match (topology) {
+                    case Some(sample) =>
                         text.add('拓扑: 已内联（${sample.devices.size} 个设备 / ${sample.links.size} 条链路）')
-                    case None =>
-                        html.add("<p>拓扑不可用</p>")
-                        text.add("拓扑不可用")
+                    case None => text.add("拓扑不可用")
                 }
             case None =>
                 html.add("<p>拓扑不可用</p>")

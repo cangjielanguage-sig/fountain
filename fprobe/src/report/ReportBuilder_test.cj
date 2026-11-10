@@ -287,11 +287,17 @@ public class ReportBuilder_test {
                 [ProbeAgentData("cpu", "", "{\"usagePercent\":95.0}", 900, "")])))
         ], history, [], None<TopologySample>)
 
-        @Assert(logs.size, 1)
-        @Assert(logs[0].startsWith("报告生成 2 张图表，HTML "))
-        @Assert(logs[0].contains(" 字节"))
-        @Assert(!logs[0].contains("fprobe-report"))
-        @Assert(!logs[0].contains("报告批次"))
+        var summary = ""
+        for (message in logs) {
+            if (message.startsWith("报告生成 ")) {
+                summary = message
+            }
+        }
+        @Assert(!summary.isEmpty())
+        @Assert(summary.startsWith("报告生成 2 张图表，HTML "))
+        @Assert(summary.contains(" 字节"))
+        @Assert(!summary.contains("fprobe-report"))
+        @Assert(!summary.contains("报告批次"))
     }
 
     /** 5.2：真实 ChartRenderer 与拓扑渲染器产出的 SVG 都内联进 HTML，且无附件名。 */
@@ -315,5 +321,45 @@ public class ReportBuilder_test {
         @Assert(draft.html.contains("<div class=\"fprobe-topology\">"))
         @Assert(!draft.html.contains("<?xml"))
         @Assert(!draft.html.contains(".svg"))
+    }
+
+    /** 1.8：拓扑渲染抛异常按不可用处理，报告不中断。 */
+    @TestCase
+    public func topologyRenderFailureDoesNotAbortReport(): Unit {
+        let history = FakeHistory()
+        history.set("web1", "cpu.usagePercent", [10.0])
+        let builder = ReportBuilder(plainSelector(), fixedRenderer(FIXED_SVG, ArrayList<String>()),
+            FakeClock(1000), topologyRender: {_ => throw Exception("topology boom")})
+        let sample = TopologySample([TopologyDevice("sw1", "10.0.0.1", ["Gi0/1"])], [], "")
+
+        let draft = builder.build([
+            stateOf("web1", true, Some(ProbeSnapshot("web1", "host1", 900,
+                [ProbeAgentData("cpu", "", "{\"usagePercent\":10.0}", 900, "")])))
+        ], history, [], Some(sample))
+
+        @Assert(draft.html.contains("<p>拓扑不可用</p>"))
+        @Assert(draft.text.contains("拓扑不可用"))
+        @Assert(draft.html.contains("<div class=\"fprobe-chart\">"))
+    }
+
+    /** 1.9：历史为空时记录跳过原因。 */
+    @TestCase
+    public func emptyHistoryLogsSkipReason(): Unit {
+        let logs = ArrayList<String>()
+        let builder = ReportBuilder(plainSelector(), fixedRenderer(FIXED_SVG, ArrayList<String>()),
+            FakeClock(1000), logInfo: {message => logs.add(message)})
+
+        let _ = builder.build([
+            stateOf("web1", true, Some(ProbeSnapshot("web1", "host1", 900,
+                [ProbeAgentData("cpu", "", "{\"usagePercent\":10.0}", 900, "")])))
+        ], FakeHistory(), [], None<TopologySample>)
+
+        var found = false
+        for (message in logs) {
+            if (message.contains("无历史数据")) {
+                found = true
+            }
+        }
+        @Assert(found)
     }
 }

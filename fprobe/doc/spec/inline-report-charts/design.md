@@ -120,7 +120,7 @@ public init(selector: ChartSelector, renderer: ChartRenderer, clock: Clock,
 
 纯文本对应一行 `拓扑: 已内联（<设备数> 个设备 / <链路数> 条链路）`，不再出现 `topology.svg`。`TopologyRenderer.render` 返回 `None`、或 `topology` 为 `None` 时，HTML 写 `<p>拓扑不可用</p>`、纯文本写 `拓扑不可用`（与改造前一致）。
 
-**为什么保留 `TopologyRenderer.render` 的 `?String`**：`None` 的语义是「设备列表为空」，这是渲染器的输入契约，不该由 `ReportBuilder` 再判一次；改动它会把边界判断分散到两处。
+**为什么保留 `TopologyRenderer.render` 的 `?String`**：`None` 的语义是「设备列表为空」，这是渲染器的输入契约，不该由 `ReportBuilder` 再判一次；改动它会把边界判断分散到两处。渲染器抛异常时由 `ReportBuilder` 捕获并按 `None` 处理，同样写「拓扑不可用」，避免一份坏拓扑中断整封报告。
 
 **为什么统计设备/链路数**：内联后拓扑图没有文件名可供辨认，纯文本摘要需要一点可核对的量纲；数量直接取自 `TopologySample`，不额外计算。
 
