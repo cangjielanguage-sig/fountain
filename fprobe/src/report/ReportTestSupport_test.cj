@@ -16,17 +16,10 @@ limitations under the License.
 package fountain::fprobe.report
 
 import std.collection.{ArrayList, HashMap}
-import std.env.getTempDirectory
-import std.fs.Directory
 import fountain::f_chart.Chart
 import fountain::f_data.*
 import fountain::f_data.json.JsonObject
 import fountain::fprobe.tui.HistorySource
-
-/** 用例共享的临时目录；调用方负责删除。 */
-func reportTempDir(): String {
-    Directory.createTemp(getTempDirectory()).toString()
-}
 
 /** 只按 `node|metric` 返回预设历史点的替身。 */
 class FakeHistory <: HistorySource {

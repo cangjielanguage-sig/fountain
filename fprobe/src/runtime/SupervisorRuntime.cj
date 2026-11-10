@@ -27,7 +27,7 @@ import fountain::fprobe.collect.topology.TopologySample
 import fountain::fprobe.config.SupervisorSettings
 import fountain::fprobe.llm.{ActionWhitelist, FLlmClient, LlmAdvice, LlmTrigger, ProbeAdvisor, ReplyDecision,
     ReplyMonitor, ReplyStateStore, WhitelistResult}
-import fountain::fprobe.report.{AttachmentStore, ChannelReportSender, ChartRenderer, ChartSelector, ReportBuilder,
+import fountain::fprobe.report.{ChannelReportSender, ChartRenderer, ChartSelector, ReportBuilder,
     ReportJob, TicktockJobScheduler}
 import fountain::fprobe.rpc.{NodeEndpoint, NodeRpcTransport}
 import fountain::fprobe.snapshot.ProbeSnapshot
@@ -304,8 +304,7 @@ public class SupervisorRuntime <: SupervisorComponents {
             return None<ReportJob>
         }
         let receivers = Config.getStringArray("probe_reportReceivers")
-        let builder = ReportBuilder(ChartSelector(), ChartRenderer(),
-            AttachmentStore(Config.getString("probe_reportTmpDir") ?? "./data/fprobe-report"), SystemClock())
+        let builder = ReportBuilder(ChartSelector(), ChartRenderer(), SystemClock())
         Some(ReportJob(
             {=>
                 builder.build(store.all(), history, SupervisorRuntime.snapshotEvents(lock, events),

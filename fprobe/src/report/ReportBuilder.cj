@@ -16,35 +16,22 @@ limitations under the License.
 package fountain::fprobe.report
 
 import std.collection.ArrayList
-import fountain::f_io.removeIfExists
 import fountain::fprobe.alarm.{AlarmEvent, AlarmEventType}
 import fountain::fprobe.collect.Clock
 import fountain::fprobe.collect.topology.TopologySample
 import fountain::fprobe.supervisor.{NodeState, NodeStatus}
 import fountain::fprobe.tui.{HistorySource, ProjectionCatalog}
 
-/** 一次报告的完整内容；附件目录由 `tempDir` 标识。 */
+/** 一次报告的完整内容；图表已内联进 `html`。 */
 public class ReportDraft {
     public let subject: String
     public let text: String
     public let html: String
-    public let attachments: Array<Attachment>
-    public let tempDir: String
 
-    public init(subject: String, text: String, html: String, attachments: Array<Attachment>,
-        tempDir: String) {
+    public init(subject: String, text: String, html: String) {
         this.subject = subject
         this.text = text
         this.html = html
-        this.attachments = attachments
-        this.tempDir = tempDir
-    }
-
-    /** 删除本批次的临时附件目录。 */
-    public func cleanup(): Unit {
-        if (!tempDir.isEmpty()) {
-            removeIfExists(tempDir, recursive: true)
-        }
     }
 }
 
@@ -58,17 +45,15 @@ public class ReportDraft {
 public class ReportBuilder {
     private let selector: ChartSelector
     private let renderer: ChartRenderer
-    private let store: AttachmentStore
     private let clock: Clock
     private let logInfo: (String) -> Unit
     private let logWarning: (String) -> Unit
 
-    public init(selector: ChartSelector, renderer: ChartRenderer, store: AttachmentStore, clock: Clock,
+    public init(selector: ChartSelector, renderer: ChartRenderer, clock: Clock,
         logInfo!: (String) -> Unit = {message => println(message)},
         logWarning!: (String) -> Unit = {message => eprintln(message)}) {
         this.selector = selector
         this.renderer = renderer
-        this.store = store
         this.clock = clock
         this.logInfo = logInfo
         this.logWarning = logWarning
@@ -79,7 +64,6 @@ public class ReportBuilder {
         let now = clock.nowMs()
         let html = ArrayList<String>()
         let text = ArrayList<String>()
-        let attachments = ArrayList<Attachment>()
         var chartCount = 0
 
         html.add("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>fprobe 周期报告</title></head><body>")
@@ -127,8 +111,6 @@ public class ReportBuilder {
                 try {
                     let chartSpec = ChartSpec.fromValues(selector.select(key), '${state.node} ${spec.label}', values)
                     let svg = renderer.render(chartSpec)
-                    let attachment = store.write(state.node, key, svg)
-                    attachments.add(attachment)
                     html.add('<div class="fprobe-chart"><h4>${escape(state.node)} ' +
                         '${escape(label)}：${escape(valueText)}</h4>${inlineSvg(svg)}</div>')
                     chartCount += 1
@@ -160,8 +142,6 @@ public class ReportBuilder {
             case Some(sample) =>
                 match (TopologyRenderer.render(sample)) {
                     case Some(svg) =>
-                        let attachment = store.writeRaw("topology.svg", svg)
-                        attachments.add(attachment)
                         html.add('<div class="fprobe-topology">${inlineSvg(svg)}</div>')
                         text.add('拓扑: 已内联（${sample.devices.size} 个设备 / ${sample.links.size} 条链路）')
                     case None =>
@@ -176,8 +156,7 @@ public class ReportBuilder {
         html.add("</body></html>")
         let htmlText = joinLines(html, "")
         logInfo('报告生成 ${chartCount} 张图表，HTML ${htmlText.toArray().size} 字节')
-        ReportDraft("fprobe 周期报告", joinLines(text, "\n"), htmlText,
-            attachments.toArray(), store.dir)
+        ReportDraft("fprobe 周期报告", joinLines(text, "\n"), htmlText)
     }
 
     /** 去掉 SVG 的 XML 前导声明；只处理开头，不碰正文。 */
