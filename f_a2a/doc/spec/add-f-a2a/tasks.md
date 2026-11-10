@@ -4,14 +4,14 @@
 
 ## 1. 模块骨架
 
-- [ ] 1.1 `f_a2a/src/model` 建包 + `imports.cj` 门面；验证：`cd f_a2a && cjpm build` 通过。
+- [x] 1.1 `f_a2a/src/model` 建包 + `imports.cj` 门面；验证：`cd f_a2a && cjpm build` 通过。
 - [ ] 1.2 `.modules` 已登记 `f_a2a`（已完成）；验证：`grep -x f_a2a .modules` 命中。
 
 ## 2. 数据模型
 
 - [ ] 2.1 `A2aPart` / `A2aMessage` / `A2aArtifact` 定义与 JSON 往返；验证：往返用例（含空 `parts` 的错误分支）。
-- [ ] 2.2 `A2aTask` + `A2aTaskState` + `isTerminal()`；验证：`input-required` 非终态、其余终态（表驱动）。
-- [ ] 2.3 `A2aAgentCard` / `A2aCapabilities` / `A2aSkill` 序列化；验证：`capabilities.streaming=false`、`defaultInputModes=["text/plain"]`。
+- [x] 2.2 `A2aTask` + `A2aTaskState` + `isTerminal()`；验证：`input-required` 非终态、其余终态（表驱动）。
+- [x] 2.3 `A2aAgentCard` / `A2aCapabilities` / `A2aSkill` 序列化；验证：`capabilities.streaming=false`、`defaultInputModes=["text/plain"]`。
 
 ## 3. 服务端
 
