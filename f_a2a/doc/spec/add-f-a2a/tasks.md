@@ -9,19 +9,19 @@
 
 ## 2. 数据模型
 
-- [ ] 2.1 `A2aPart` / `A2aMessage` / `A2aArtifact` 定义与 JSON 往返；验证：往返用例（含空 `parts` 的错误分支）。
+- [x] 2.1 `A2aPart` / `A2aMessage` / `A2aArtifact` 定义与 JSON 往返；验证：往返用例（含空 `parts` 的错误分支）。
 - [x] 2.2 `A2aTask` + `A2aTaskState` + `isTerminal()`；验证：`input-required` 非终态、其余终态（表驱动）。
 - [x] 2.3 `A2aAgentCard` / `A2aCapabilities` / `A2aSkill` 序列化；验证：`capabilities.streaming=false`、`defaultInputModes=["text/plain"]`。
 
 ## 3. 服务端
 
-- [ ] 3.1 `A2aTaskStore` 接口 + `InMemoryA2aTaskStore`（`Mutex`、返回副本）；验证：save→get 相等但非同一对象（改副本不影响存储）。
-- [ ] 3.2 `A2aExecutionResult` 三态 + `A2aExecutor` 接口。
-- [ ] 3.3 `A2aServer.register()` 幂等注册三个方法；验证：连续两次注册后方法名集合不变。
-- [ ] 3.4 `message.send` 三条终态路径（completed / input-required / failed）；验证：3 条用例。
-- [ ] 3.5 非文本 `Part` → `-32023`；验证：抛 `JsonRpcException` 且码匹配。
-- [ ] 3.6 `tasks.get` / `tasks.cancel`：未知 id → `-32020`，终态取消 → `-32021`，working 取消 → `canceled`；验证：3 条用例。
-- [ ] 3.7 执行器抛异常 → `failed` + `statusMessage` 带原因、日志 warn；验证：1 条用例。
+- [x] 3.1 `A2aTaskStore` 接口 + `InMemoryA2aTaskStore`（`Mutex`、返回副本）；验证：save→get 相等但非同一对象（改副本不影响存储）。
+- [x] 3.2 `A2aExecutionResult` 三态 + `A2aExecutor` 接口。
+- [x] 3.3 `A2aServer.register()` 幂等注册三个方法；验证：连续两次注册后方法名集合不变。
+- [x] 3.4 `message.send` 三条终态路径（completed / input-required / failed）；验证：3 条用例。
+- [x] 3.5 非文本 `Part` → `-32023`；验证：抛 `JsonRpcException` 且码匹配。
+- [x] 3.6 `tasks.get` / `tasks.cancel`：未知 id → `-32020`，终态取消 → `-32021`，working 取消 → `canceled`；验证：3 条用例。
+- [x] 3.7 执行器抛异常 → `failed` + `statusMessage` 带原因、日志 warn；验证：1 条用例。
 
 ## 4. 客户端
 
