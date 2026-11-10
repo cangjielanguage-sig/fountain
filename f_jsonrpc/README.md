@@ -37,6 +37,7 @@
 [dependencies]
   "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_httpclient" = {path = "../f_httpclient"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_mvc" = {path = "../f_mvc"}

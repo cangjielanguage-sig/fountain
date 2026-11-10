@@ -31,7 +31,7 @@ import fountain::f_mvc.{MVCConfig, MVCStarter}
  * 这里按 `MVCInitializer` 的方式启动一次 `MVCStarter`，让 `@Controller`
  * 注册好的路由与 `respond(JsonValue)` 都参与进来。
  */
-private class MvcProbe {
+class MvcProbe {
     static let lock = Mutex()
     static var port: UInt16 = 0
 
