@@ -40,7 +40,7 @@
   package-configuration = {}
   category = ["Data Monitoring", "Operations"]
   license = ["Apache-2.0"]
-  include = ["src", "doc"]
+  include = ["src", "doc", "fprobe.sh"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
   repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/fprobe"
