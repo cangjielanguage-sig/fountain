@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
+import std.fs.*
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -23,12 +24,40 @@ import fountain::f_store.Store
 
 private var confDirSeq: Int64 = 0
 
+private let META_PATH = '/tmp/fllm-meta-test'
+
+/**
+ * 固定路径 + 用例前置清理。
+ *
+ * 这套用例共用一个写死的目录，跨运行、跨 worktree 都不自动清理；不清的话
+ * 计数类断言（`candidates(...).size`）会被上一次的残留污染。
+ */
+private func metaPath(): String {
+    try {
+        remove(Path(META_PATH), recursive: true)
+    } catch (e: Exception) {
+        ()
+    }
+    META_PATH
+}
+
+/** 计数命名的目录同样是固定前缀：用前先清，避免上一轮残留 */
+private func confPath(seq: Int64, tag!: String = ''): String {
+    let path = '/tmp/fllm-conf-${tag}${seq}'
+    try {
+        remove(Path(path), recursive: true)
+    } catch (e: Exception) {
+        ()
+    }
+    path
+}
+
 @Test
 public class FStoreMetaStoreTest {
 
     @TestCase
     func testCharacterSurvivesRestart(): Unit {
-        let path = '/tmp/fllm-meta-test'
+        let path = metaPath()
         let first = FStoreMetaStore(path)
         first.characters.set(Character(42, 'whimsical', '鬼灵精怪'))
 
@@ -42,7 +71,7 @@ public class FStoreMetaStoreTest {
 
     @TestCase
     func testResetRemovesCharacter(): Unit {
-        let path = '/tmp/fllm-meta-test'
+        let path = metaPath()
         let meta = FStoreMetaStore(path)
         meta.characters.set(Character(7, 'default', ''))
         meta.characters.reset(7)
@@ -51,7 +80,7 @@ public class FStoreMetaStoreTest {
 
     @TestCase
     func testPredefinedKeysAccepted(): Unit {
-        let meta = FStoreMetaStore('/tmp/fllm-meta-test')
+        let meta = FStoreMetaStore(metaPath())
         @Expect(PredefinedCharacters.keys().size, 13)
         for(key in PredefinedCharacters.keys()){
             meta.characters.set(Character(100, key, ''))
@@ -60,7 +89,7 @@ public class FStoreMetaStoreTest {
 
     @TestCase
     func testUnknownKeyRejected(): Unit {
-        let meta = FStoreMetaStore('/tmp/fllm-meta-test')
+        let meta = FStoreMetaStore(metaPath())
         var thrown = false
         try{
             meta.characters.set(Character(101, 'not-exist', ''))
@@ -72,7 +101,7 @@ public class FStoreMetaStoreTest {
 
     @TestCase
     func testCustomPromptsPreserved(): Unit {
-        let meta = FStoreMetaStore('/tmp/fllm-meta-test')
+        let meta = FStoreMetaStore(metaPath())
         meta.characters.set(Character(102, 'custom', '你是猫娘'))
         @Expect(meta.characters.get(102).getOrThrow().prompts, '你是猫娘')
     }
@@ -81,7 +110,7 @@ public class FStoreMetaStoreTest {
     func testConfPutAndFilter(): Unit {
         // 每次跑用独立目录，避免上一轮的残留配置把候选数抬高
         confDirSeq++
-        let meta = FStoreMetaStore('/tmp/fllm-conf-${confDirSeq}')
+        let meta = FStoreMetaStore(confPath(confDirSeq))
         meta.confs.put(LLMConfView('p1', 'chat-pro', 'pro', 10, true))
         meta.confs.put(LLMConfView('p2', 'chat-pro', 'off', 10, false))
         meta.confs.put(LLMConfView('p3', 'chat-pro', 'zero', 0, true))
@@ -111,7 +140,7 @@ public class FStoreMetaStoreTest {
     @TestCase
     func testRepairRebuildsMissingIndex(): Unit {
         confDirSeq++
-        let path = '/tmp/fllm-conf-repair-${confDirSeq}'
+        let path = confPath(confDirSeq, tag: 'repair-')
         // 同一个 Store 实例内模拟半写：写主体 → 删掉索引 → repair 补回
         let store = Store(path)
         let confs = FStoreLLMConfStore(store)
