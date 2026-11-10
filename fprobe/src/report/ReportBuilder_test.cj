@@ -293,4 +293,27 @@ public class ReportBuilder_test {
         @Assert(!logs[0].contains("fprobe-report"))
         @Assert(!logs[0].contains("报告批次"))
     }
+
+    /** 5.2：真实 ChartRenderer 与拓扑渲染器产出的 SVG 都内联进 HTML，且无附件名。 */
+    @TestCase
+    public func realRenderersProduceInlineHtml(): Unit {
+        let history = FakeHistory()
+        history.set("web1", "cpu.usagePercent", [10.0, 20.0, 30.0])
+        let builder = ReportBuilder(plainSelector(), ChartRenderer(), FakeClock(1000))
+
+        let topology = TopologySample(
+            [TopologyDevice("sw1", "10.0.0.1", ["Gi0/1"]),
+             TopologyDevice("sw2", "10.0.0.2", ["Gi0/2"])],
+            [TopologyLink("sw1", "sw2", "Gi0/1", "Gi0/2")], "")
+        let draft = builder.build([
+            stateOf("web1", true, Some(ProbeSnapshot("web1", "host1", 900,
+                [ProbeAgentData("cpu", "", "{\"usagePercent\":30.0}", 900, "")])))
+        ], history, [], Some(topology))
+
+        @Assert(draft.html.contains("<div class=\"fprobe-chart\">"))
+        @Assert(draft.html.contains("<svg"))
+        @Assert(draft.html.contains("<div class=\"fprobe-topology\">"))
+        @Assert(!draft.html.contains("<?xml"))
+        @Assert(!draft.html.contains(".svg"))
+    }
 }
