@@ -30,14 +30,14 @@
 
 ## 5. 文档
 
-- [ ] 5.1 `f_a2a/README.md` / `README_en.md` 与最终 API 同步（签名、错误码表）。
-- [ ] 5.2 `f_a2a/doc/a2a-protocol.md` 与实现核对：任何偏差回写文档。
+- [x] 5.1 `f_a2a/README.md` / `README_en.md` 与最终 API 同步（签名、错误码表）。
+- [x] 5.2 `f_a2a/doc/a2a-protocol.md` 与实现核对：任何偏差回写文档。
 
 ## 6. 集成
 
-- [ ] 6.1 `cd f_a2a && cjpm test` 全绿（覆盖设计文档 §8 的 12 条矩阵）。
-- [ ] 6.2 回归：`cd f_jsonrpc && cjpm test` 不受影响（新增模块不改既有 API）。
-- [ ] 6.3 `openspec validate add-f-a2a --strict` 通过。
+- [x] 6.1 `cd f_a2a && cjpm test` 全绿（覆盖设计文档 §8 的 12 条矩阵）。
+- [x] 6.2 回归：`cd f_jsonrpc && cjpm test` 不受影响（新增模块不改既有 API）。
+- [x] 6.3 `openspec validate add-f-a2a --strict` 通过。
 
 ## Workflow follow-up
 
