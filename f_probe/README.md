@@ -45,3 +45,13 @@ public interface AlarmMessageChannel {
 
 - 契约说明：[`doc/contract.md`](doc/contract.md)
 - 扩展开发指南：[`doc/extension-guide.md`](doc/extension-guide.md)
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- `AlarmChannelRegistry`：`channel`（func）、`channels`（func）、`clear`（func）、`registerChannel`（func）
+- `ProbeException`：`code`（let）
+- `ProbeRegistry`：`clear`（func）

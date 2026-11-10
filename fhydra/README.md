@@ -67,3 +67,25 @@ Config.set<String>([
 ```
 
 进程内默认是 `f_hydra`（`llm_hydraPath`），两者共用同一份仓库/知识实现，只换传输层。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`public class BuildIndexParam`、`public class CollectionParam`、`public class ExportParam`、`public class GetParam`、`public class HitDto`、`public class HitsDto`、`HydraAuth`（class）、`public class HydraRpc`、`public class IdsDto`、`public class IdsParam`、`public class RecordDto`、`public class RemoveParam`、`public class RerankParam`、`public class SearchParam`、`public class SparseParam`、`public class TtlParam`、`public class UpsertParam`
+- `BuildIndexParam`：`var clusters: Int64 = 0`、`var collection: String =`
+- `CollectionParam`：`var collection: String =`
+- `ExportParam`：`var collection: String =`、`var targetCollection: String =`
+- `GetParam`：`var collection: String =`
+- `HitDto`：`var score: Float64 = 0.0`
+- `HydraAuth`：`require`（func）
+- `HydraRpc`：`configure`（func）
+- `IdsParam`：`var collection: String =`、`filters`（var）、`var limit: Int64 = 100`、`var offset: Int64 = 0`
+- `RemoveParam`：`var collection: String =`
+- `RerankParam`：`var collection: String =`
+- `SearchParam`：`var collection: String =`、`field`（var）、`var kind: String =`、`var limit: Int64 = 10`、`var saveDay: String =`、`var tags: String =`
+- `SparseParam`：`var collection: String =`、`var kind: String =`、`var limit: Int64 = 10`、`var saveDay: String =`、`var tags: String =`
+- `TtlParam`：`var collection: String =`、`var seconds: Int64 = 0`
+- `UpsertParam`：`var collection: String =`、`var kind: String =`、`var saveDay: String =`、`var tags: String =`

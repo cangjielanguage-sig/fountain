@@ -111,3 +111,16 @@ store.rebuildFilterEntries('u1:global')                  // backfill the index f
 | v0.6 | scheme C: multiple named dense vectors per record + saveTime ordering |
 | v0.6.1 | configurable filter whitelist (`setFilterFields` / `rebuildFilterEntries`), meta keeps all filters |
 | v0.6.2 | automatic rebuild on whitelist change (`applyFilterFields`), control-character separators, collection registry `hc:` |
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `FStoreVectorStore` (class), `SparseQuery` (class), `VectorCodec` (class), `VectorHit` (class), `VectorMath` (class), `VectorQuery` (class)
+- `FStoreVectorStore`: `DEFAULT_FILTER_FIELDS` (let), `close` (func), `collections` (func), `idsFiltered` (func), `rebuildAllFilterEntries` (func), `storedFilterFields` (func)
+- `SparseQuery`: `let tokens: HashMap<Int64, Float64>`
+- `VectorCodec`: `decodeColbert` (func), `decodeDense` (func), `encodeColbert` (func), `encodeColbertParts` (func), `encodeDense` (func)
+- `VectorHit`: `let score: Float64`
+- `VectorMath`: `cosine` (func)

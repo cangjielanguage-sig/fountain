@@ -103,6 +103,31 @@ let svg = chart.draw(data)
 | M37 | Pareto chart `ParetoChart` (sorted bars, cumulative line) | Done |
 | M2–M106 | Chart implementations (one OpenSpec change + TDD per chart) | In progress |
 
+## Chart inventory
+
+Every chart is one source file under `src/` behind the same `Chart` interface. The complete list (M38–M106 included):
+
+`AlluvialChart` `ArcChart` `AreaChart` `BarChart` `BlandAltmanChart` `BoxPlotChart`
+`BoxScatterChart` `BubbleChart` `BulletChart` `CalendarHeatmapChart` `CalibrationChart`
+`CandlestickChart` `CartogramChart` `ChordChart` `ChoroplethChart` `CirclePackingChart`
+`ComboChart` `ConfusionMatrixChart` `ContourChart` `ControlChart` `CorrelationMatrixChart`
+`DecisionTreeChart` `DensityChart` `DifferentialFlameChart` `DonutChart` `DotChart`
+`DotDensityMapChart` `DotStripChart` `DumbbellChart` `EcdfChart` `ErrorBarChart` `FlameChart`
+`FlowMapChart` `Flowchart` `ForestChart` `FunnelChart` `GainChart` `GanttChart` `GaugeChart`
+`GroupedBarChart` `HeatFlameChart` `HeatmapChart` `Histogram2DChart` `HistogramChart` `HiveChart`
+`HorizontalBarChart` `IcicleChart` `InfluenceChart` `LassoPathChart` `LearningCurveChart`
+`LiftChart` `LineChart` `LollipopChart` `ManhattanChart` `MosaicChart` `NetworkHeatmapChart`
+`NodeLinkChart` `NomogramChart` `OfflineFlameChart` `OrgChart` `PairedLineChart`
+`ParallelCoordinatesChart` `ParetoChart` `PdpChart` `PercentBarChart` `PercentStackedBarChart`
+`PictogramChart` `PieChart` `PrChart` `ProbabilityChart` `QQChart` `RadarChart` `RaincloudChart`
+`ResidualChart` `RidgeChart` `RocChart` `RoseChart` `SankeyChart` `ScatterChart`
+`ScatterMatrixChart` `SequenceChart` `ShapChart` `SlopeChart` `SpiralChart` `StackedAreaChart`
+`StackedBarChart` `StemLeafChart` `StreamgraphChart` `SunburstChart` `SurvivalChart` `SwarmChart`
+`SwimlaneChart` `TimelineChart` `TreemapChart` `ViolinBoxChart` `ViolinChart` `VolcanoChart`
+`WaffleChart` `WaterfallChart` `WordCloudChart` `WordNetworkChart`
+
+The TUI subpackage adds `TuiBarChart`, `TuiLineChart` and `TuiCellChart` on top of the same interface.
+
 ## TUI subpackage (fountain::f_chart.tui)
 
 For terminal/SSH output, the TUI subpackage renders the same JSON into ANSI character art. It has no third-party dependencies and implements the same `Chart` interface:
@@ -126,3 +151,11 @@ Supported classes: `TuiBarChart` (`bar`), `TuiGroupedBarChart` (`grouped-bar`), 
 ## Error semantics
 
 `draw` returns a string only on success; every structural or numeric problem is raised as `ChartException`. The `path` field looks like `series[0].data[2]` and is prefixed to the message when non-empty.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `ChartErrorKind` (enum)

@@ -210,3 +210,16 @@ cd .. && ./scripts/mq_e2e.sh    # 3-node e2e, prints E2E_OK
 For a minimal single-node walkthrough see [`fmqdemo`](../fmqdemo): both the publisher and the
 consumer are fboot-loaded dynamic libraries, and `bash fmqdemo/run-demo.sh` runs the whole
 "start fmq → register topic/group → publish → consume & ack → verify" flow in one command.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `MQManager` (class), `MQManagerArgs` (struct), `MQManagerOutput` (class), `MQUsage` (class), `MetaApplyResult` (enum), `QueueCorruptionException` (class), `backupCursors` (func), `backupStates` (func), `execute` (func), `installExitHooks` (func), `isAlive` (func), `isClosed` (func), `isKnownDead` (func), `next` (func), `pendingCount` (prop), `selfIndex` (prop), `send` (func), `successors` (func)
+- `MQManager`: `deleteSubscribeGroup` (func), `deleteTopic` (func), `registerSubscriber` (func)
+- `MQManagerArgs`: `let command: String`, `helpText` (func), `let operands: Array<String>`, `parse` (func)
+- `MQManagerOutput`: `EMPTY` (let), `ERROR_PREFIX` (let), `STATS_HEADER` (let), `assignments` (func), `error` (func), `registeredTopic` (func), `table` (func), `topicList` (func), `width` (func)
+- `MQServer`: `isClosed` (func)
+- `MQUsage`: `managerHelp` (func), `root` (func), `serverHelp` (func)

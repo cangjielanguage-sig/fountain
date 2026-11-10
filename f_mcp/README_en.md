@@ -826,3 +826,19 @@ cd fmcpdemo
 ```
 
 The client covers `server/discover`, `tools/list`, `tools/call`, `resources/read` and `prompts/get` over HTTP, then subscribes to `/mcp/sse` and triggers a `notifications/tools/list_changed` event. At startup the server also builds two `McpServer` instances sharing one `RateLimitBackend` and asserts the 4th call returns `-32050`.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `LeakingBucketRateLimitBackend` (class), `public class McpController`, `McpResourceContext` (class), `McpSseStream` (class), `SlidingWindowRateLimitBackend` (class), `TokenBucketRateLimitBackend` (class), `UnlimitedRateLimitBackend` (class)
+- `ConcurrencyGate`: `sweepNow` (func)
+- `McpController`: `func handle(@RequestBody raw: Array<Byte>): Any`
+- `McpConvert`: `promptMessages` (func), `resourceContents` (func), `toolResult` (func)
+- `McpRegistry`: `registerPromptMeta` (func), `registerResourceMeta` (func), `registerToolMeta` (func)
+- `McpResourceBuilder`: `validateUri` (func)
+- `McpSseStream`: `poll` (func)
+- `RateLimitPolicy`: `overlay` (func)
+- `ToolResultStore`: `newToken` (func)

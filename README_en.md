@@ -99,6 +99,12 @@ The skill always takes its API facts **from this repository's code and READMEs**
 Usage: copy `skills/fountain-developer` into your coding agent's skills directory (e.g. CodeBuddy's `~/.codebuddy/skills/`, Claude Code's `~/.claude/skills/`, or a project-local skills directory); agents without a skill mechanism can simply read `skills/fountain-developer/SKILL.md`.
 
 ## Detailed documentation of each module
+### `fountain::f_a2a`
+Agent-to-Agent (A2A) protocol dynamic library: task model, state machine, server and client; transport and protocol reuse `f_jsonrpc`
+(JSON-RPC 2.0 over HTTP, streaming over SSE).
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_a2a/README_en.md>
+
 ### `fountain::f_app`
 Application process management module; this module can load application projects developed with fountain as dynamic libraries.
 You can also use the same-named APIs of this module through the `fountain::fountain.app` package.
@@ -129,6 +135,12 @@ Heap cache
 You can also use the same-named APIs of this module through the `fountain::fountain.cache` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_cache/README_en.md>
+
+### `fountain::f_chart`
+JSON-driven SVG charts: callers describe data and styling in JSON; at runtime `f_svg` turns it into SVG.
+One chart per source file, all behind the same `Chart` interface.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_chart/README_en.md>
 
 ### `fountain::f_cmd`
 Command line tools
@@ -179,6 +191,11 @@ Database connection pool built on f_pool, providing a Datasource connection pool
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_dbpool/README_en.md>
 
+### `fountain::f_excel`
+Excel (xlsx / OOXML) reader and writer: streaming parse, streaming generate, date detection and merged cells.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_excel/README_en.md>
+
 ### `fountain::f_exception`
 Exception module
 You can also use the same-named APIs of this module through the `fountain::fountain.exception` package.
@@ -197,11 +214,21 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_httpclient/README_en.md>
 
+### `fountain::f_hydra`
+In-process vector store: `collection → record → three-way vectors`, persisted through `f_store`, no database required.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_hydra/README_en.md>
+
 ### `fountain::f_io`
 IO
 You can also use the same-named APIs of this module through the `fountain::fountain.io` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_io/README_en.md>
+
+### `fountain::f_jsonrpc`
+JSON-RPC 2.0 over HTTP server and client on top of `f_mvc`: the JSON-RPC message model, a runtime method table and the error model.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jsonrpc/README_en.md>
 
 ### `fountain::f_jwt`
 JWT
@@ -220,6 +247,12 @@ Macro utility API
 You can also use the same-named APIs of this module through the `fountain::fountain.macros` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_macros/README_en.md>
+
+### `fountain::f_mcp`
+MCP (Model Context Protocol) client / server SDK: the message layer is `f_jsonrpc`; MCP semantics cover version and capabilities,
+tools, resources, prompts, subscriptions and rate limiting.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_mcp/README_en.md>
 
 ### `fountain::f_mockdb`
 mock database
@@ -273,6 +306,11 @@ Regular expression extensions, regex cache, regex DSL
 You can also use the same-named APIs of this module through the `fountain::fountain.regex` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_regex/README_en.md>
+
+### `fountain::f_rule`
+Rule engine: fact bases, a Rete network, an agenda, decision tables and decision flows, built on `f_egraph` and `f_jit`.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_rule/README_en.md>
 
 ### `fountain::f_rx`
 Reactive programming API
