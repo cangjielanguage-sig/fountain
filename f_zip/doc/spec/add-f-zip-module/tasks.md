@@ -54,7 +54,7 @@
   > UTF-8 严格校验自己写：`charset4cj` 的 UTF-8 解码器遇到非法序列会替换成 U+FFFD 而不报错，那样"回退到 GBK"永远不会触发。
 - [x] 3.9 红：`ZipReader_test.cj` —— `entries()` 顺序等于中央目录顺序；同名条目全部保留；每次返回独立列表
 - [x] 3.10 绿：`ZipReader.cj` —— `init(input)`、`entries()`、`contains()`、`close()`（幂等、关闭后调用报错）
-- [x] 3.11 验收：用 `docs/f_zip模块设计.md §9` 的外部样本（Linux `zip` 产出）列出全部条目
+- [x] 3.11 验收：用 `f_zip/doc/f_zip模块设计.md §9` 的外部样本（Linux `zip` 产出）列出全部条目
   > `ExternalCompat_test.readInfoZipSample` 用 `zip` CLI 现造样本再读，避免往仓库塞二进制。
 
 > **门禁**：能列出外部 ZIP 的全部条目，才进入解压。
@@ -334,7 +334,7 @@ F_ZIP_RESOURCE=1 cjpm test --filter 'ResourceZipTree_test' --show-all-output
 
 > **动机**：`9.7b`（单条目 > 4 GB）跑不完，卡点不是 ZIP64 逻辑，而是 `CrcEngine.update` 的逐字节循环
 > （实测 ~4.2 MB/s）。`design.md` D16 与 `specs/f-util-crc/spec.md` 是本节的契约。
-> **红线**：所有变体的检查值与寄存器值逐位不变；`Crc32` / `crc32*` 公开签名不动；不引 FFI / 硬件指令。
+> **红线**：所有变体的检查值与寄存器值逐位不变；`Crc32` / `crc32*` 公开签名不动；不引 C / FFI / native 链接（硬件加速走 `f_util` 的生成式机器码，见 `crc32-hw-cfunc` 与 `f_util/doc/spec/accelerate-f-util-crc/`）。
 > **位置**：用例放 `f_util` 模块（与 `crc_check_test.cj` 同一套自检口径），不放在 `f_zip`。
 > **门控**：吞吐用例用 `F_UTIL_PERF=1`，默认 SKIP 并打印原因（与 `F_ZIP_RESOURCE` / `F_ZIP_SLOW` 一致）。
 

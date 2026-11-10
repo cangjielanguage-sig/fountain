@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60">
+  <defs>
+    <image id="swatch" width="12" height="8"
+           href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAJUlEQVR42mM4o6T0HxvWzfLHihkGoQal0DP/seFPz05gxYNQAwBhg+v5YGCflgAAAABJRU5ErkJggg=="/>
+  </defs>
+  <rect width="100" height="60" fill="#ffffff"/>
+  <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAJUlEQVR42mM4o6T0HxvWzfLHihkGoQal0DP/seFPz05gxYNQAwBhg+v5YGCflgAAAABJRU5ErkJggg=="
+         x="5" y="5" width="40" height="50" preserveAspectRatio="xMidYMid meet"/>
+  <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAJUlEQVR42mM4o6T0HxvWzfLHihkGoQal0DP/seFPz05gxYNQAwBhg+v5YGCflgAAAABJRU5ErkJggg=="
+         x="55" y="5" width="40" height="50" preserveAspectRatio="xMidYMid slice"
+         image-rendering="pixelated"/>
+</svg>

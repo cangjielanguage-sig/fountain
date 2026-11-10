@@ -148,12 +148,41 @@ public class ProtocolTest {
         @Assert(id1.hashCode() == id2.hashCode())
     }
 
+    /**
+     * `hostId` 参与身份：`(pid, tid, 时间戳)` 只在单机内唯一，跨机器 pid/tid 会重复
+     * （容器里都是 1），集群维度的区分只能靠 hostId。
+     */
+    @TestCase
+    public func messageIdIdentityIncludesHostId(): Unit {
+        let moment = DateTime.fromUnixTimeStamp(Duration.second * 1000)
+        let onHost1 = MessageID(time: moment, pid: 1, tid: 1, hostId: 1)
+        let onHost2 = MessageID(time: moment, pid: 1, tid: 1, hostId: 2)
+        @Assert(onHost1 != onHost2)
+        @Assert(onHost1.hashCode() != onHost2.hashCode())
+        // 同一 hostId 的同一时刻仍必须相等（身份没有变得过严）
+        @Assert(onHost1 == MessageID(time: moment, pid: 1, tid: 1, hostId: 1))
+    }
+
+    /** `hostId` 必填：0 表示「没配集群编号」，不能静默降级成单机唯一。 */
+    @TestCase
+    public func messageIdRejectsZeroHostId(): Unit {
+        var threw = false
+        try {
+            MessageID(hostId: 0)
+        } catch (_: IllegalArgumentException) {
+            threw = true
+        }
+        @Assert(threw)
+        // 显式给非 0 才能构造
+        @Assert(MessageID(hostId: 7).hostId == 7)
+    }
+
     @TestCase
     public func messageIdSurvivesFrameRoundTrip(): Unit {
         // 帧往返后消息id必须与发出时一致（相等与hash都要成立）：id一旦漂移（例如本地时间被当成绝对时刻，
         // 服务端日志里会看到8小时时间差），响应就再也对不上请求，调用方会一直等到超时（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）
         let time = DateTime.now()
-        let id = MessageID(time: time, pid: 1234, tid: 5678, hostId: 0)
+        let id = MessageID(time: time, pid: 1234, tid: 5678, hostId: 3)
         let msg = Message.build(Command.REGISTER, id, DataNone.INSTANCE)
         let buf = ByteBuffer()
         msg.encode().copy(to: buf, closeToOnEnd: false)

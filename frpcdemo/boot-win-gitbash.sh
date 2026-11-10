@@ -43,6 +43,9 @@ exports(){
     run_args+=("--logger_appender_FRPCDemoFile_rotateDuration=DAY")
     run_args+=("--logger_asyncWaitTimeout=5ms") # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
     run_args+=("--rpcServer_baseAddresses=$3")
+    # 【必填】本机在集群内的唯一主机号：MessageID 拒绝 hostId=0，
+    # (pid, tid, 时间戳) 跨机器会重复，集群维度只能靠它区分。
+    run_args+=("--protocol_hostId=${protocol_hostId:-1}")
     # 把自建库目录前置进 PATH（boot.sh 里对应的是把自建库目录前置进 LD_LIBRARY_PATH）；
     # stdx 的动态库不在产物目录里，得靠 CANGJIE_STDX_DYNAMIC_PATH 指过去
     # （git-bash 里它可能是 /d/... 形式，转成 MSYS 形式后 MSYS 会再转成 Windows 形式交给子进程）。

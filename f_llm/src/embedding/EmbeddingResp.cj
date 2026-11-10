@@ -20,5 +20,13 @@ import fountain::f_data.macros.*
 @DataAssist[props fields]
 public class EmbeddingResp {
     private var embedding: Array<Float64> = []
-    private let usage: TokenUsage = TokenUsage()
+    private var usage: TokenUsage = TokenUsage()
+
+    public init(){
+    }
+
+    public init(embedding!: Array<Float64>, usage!: TokenUsage){
+        this.embedding = embedding
+        this.usage = usage
+    }
 }

@@ -30,8 +30,11 @@ bash fmq.sh restart   # 先 stop 再 start
 默认的 `mqServer_segmentedLogDir` / `mqServer_deadMsgDir` 在 `/var/log/fmq` 下，普通用户请先改成可写目录。
 
 `mqClient_hosts` 既是客户端节点表，也是服务端的集群节点表。服务端按 `mqServer_port` 在表中
-匹配本机下标；端口不在表中或重复出现会在启动时报错退出。多节点部署还应给每台机器设置唯一的
-`protocol_hostId`，否则 `MessageID` 无法区分节点。
+匹配本机下标；端口不在表中或重复出现会在启动时报错退出。
+
+`protocol_hostId`（f_protocol 的配置，脚本里已默认导出 `1`）**必填且每台机器唯一**：
+`MessageID` 的相等/哈希包含它，配 0 或漏配会在构造 `MessageID` 时抛 `IllegalArgumentException`
+（`(pid, tid, 时间戳)` 跨机器会重复，集群维度只能靠它区分）。
 
 配置项（均可用环境变量或命令行参数覆盖）：
 

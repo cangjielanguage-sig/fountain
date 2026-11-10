@@ -1,3 +1,46 @@
+2026-11-08
+    feat(f_svg): M7 生成 API——新增作者侧 SvgBuilder（SvgAuthoringBuilder.cj）、
+      十种形状与引用元素、样式呈现属性、类型化 animate / animateTransform /
+      animateMotion / set、SvgBegin 表达式与四个生成枚举；document / toSvgString /
+      save 三种输出；不修改 SvgTag / SvgTimeline / SvgParser / SvgWriter
+    docs(f_svg): README / README_en 增补 M7 生成章节、链式示例与已知限制
+2026-11-07
+    feat(f_svg): M6 P1 静态交互——pointer-events 11 值、cursor 关键字白名单、
+      :hover / :focus 静态求值、SvgHitTest 设备坐标命中与 maxElements 上限
+    feat(f_svg): M6 P2 文档与嵌入——baseProfile / version / zoomAndPan、
+      foreignObject 注入接口、外部文档 provider（深度/字节上限、循环停止）、
+      initialView 视口覆盖、discard 元素模型
+    feat(f_svg): M6 P3 渲染提示与颜色——shape/text/color-rendering、
+      color-interpolation linearRGB、@color-profile（sRGB 回退）
+    feat(f_svg): M6 P4 字体与文本细节——font-stretch 匹配与合成、small-caps、
+      font-size-adjust（OS/2 sxHeight）、font-feature-settings / variant-ligatures、
+      装饰长属性、pathLength 校准
+    feat(f_svg): M6 P6 动画控制——currentTime / pause / unpause、begin / end / fireEvent、
+      attributeType CSS 内联样式、min / max、discard 快照移除
+    feat(f_svg): M6 P7 DOM API——工厂方法、SvgViewState、insertBefore / removeChild、
+      变更监听（32 上限、异常隔离）、四个命中查询
+    feat(f_svg): M6 P8 SVG 2 收尾——vector-effect 扩展、miter-clip / arcs、width/height auto
+    test(f_svg): 1186 条用例全绿；M1–M5 既有 25 张快照逐字节一致
+2026-11-06
+    feat(f_svg): M5 P1 CSS 扩展——属性选择器 / 结构伪类 / :not / 兄弟组合器与 256 上限；
+      @media（screen/all、min/max-width、and、逗号列表）、@font-face 别名（不加载文件）、
+      CSS 变量（8 层、循环检测）与 calc()（16 层、单位约束）；新增 8 个计算属性
+    feat(f_svg): M5 P2 SVG 2 渲染——paint-order 命令重排、mix-blend-mode 12 值 +
+      isolation 隔离组、feDropShadow（复用 blur/offset/flood/merge）、
+      transform-origin / transform-box、context-fill / context-stroke
+    feat(f_svg): M5 P3 文本整形——kern format 0 与 GPOS PairPos 1/2（GPOS 优先、65536 上限）、
+      GSUB liga（4 字形输入上限）、UAX#9 子集双向重排与 direction / unicode-bidi / font-kerning；
+      advance 语义与未整形字体输出不变
+    feat(f_svg): M5 P4 元素级 API——getBBox / getCTM / getScreenCTM /
+      getElementsByClassName / querySelectorAll 与 SvgPath 长度薄封装；不缓存、不改文档
+    test(f_svg): 941 条用例全绿；17 张 M1–M4 快照逐字节一致，新增 8 张 m5-* 场景快照
+    docs(f_svg): README / README_en 增补 M5 能力与上限，perf-baseline 记录快照哈希与新基准
+2026-10-30
+    feat(f_excel): 新增 f_excel 模块（M1）：整文档读写、流式读（ExcelSheetStream）、
+      流式写（ExcelWriter）、日期识别与合并单元格；86 用例全绿，openpyxl 回读通过
+    feat(f_zip): ZipWriter.openEntry 推模式流式条目、ZipReader.openEntry，按 f_excel 需要补齐
+    feat(f_xml): XmlWriter 增量接口（startElement/text/endElement/emptyElement），保留前缀不重复声明
+    docs(f_excel): 设计 v0.10（流式解析/输出、实施差异与实测）与 doc/spec/implement-f-excel-m1
 2026-10-25
     feat(f_mcp): 新增 @Mcp 宏与三个元数据注解，入参与返回值按 f_data 规则转换
     feat(f_mcp): 5 种 RateLimitBackend 与 mcp_rateLimitBackend 配置，支持静态注册自定义算法

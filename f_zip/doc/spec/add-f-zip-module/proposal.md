@@ -3,7 +3,7 @@
 ## Why
 
 1. **fountain 目前没有任何 ZIP 能力。** `f_excel` 的 OOXML 包（xlsx 本质是 ZIP）已把 `fountain::f_zip` 写成硬前置（`docs/f_excel模块设计.md:6`、`:2404` 的 P-1），`f_zip` 不落地，`f_excel` 就无从开工；向量知识库等场景也需要"打包/解包"这一层。
-2. **设计已冻结，可直接施工。** `docs/f_zip模块设计.md` v0.7 已把 21 项决策全部拍板（`§12.1`），无阻塞项（`§12.2`），逐节给出 API、字节布局、实施顺序（P0–P6）与验收口径。本次变更就是把这 21 条落成代码。
+2. **设计已冻结，可直接施工。** `f_zip/doc/f_zip模块设计.md` v0.7 已把 21 项决策全部拍板（`§12.1`），无阻塞项（`§12.2`），逐节给出 API、字节布局、实施顺序（P0–P6）与验收口径。本次变更就是把这 21 条落成代码。
 3. **容器层必须自己写，且这是长期约束。** v0.7 `§1` 明确：ZIP 容器（local header / 中央目录 / EOCD / ZIP64 / CRC 编排）永久不引入第三方 ZIP 实现；deflate 数据流复用 `stdx.compress.zlib`（`WrapType.DeflateFormat`）是有意为之，不算例外。理由是边角行为（中文名编码、ZIP64 覆盖范围、descriptor 有无、目录属性位）必须由本项目决定，且避免给底层模块引入 FFI/native 依赖传导风险。
 4. **现有实现路径已被验证可行。** `stdx.compress.zlib` 在仓库内已有使用（`f_log/src/output/RotatableFile.cj:25`），`f_util.crc32` 已有（`f_util/src/crc32.cj:114`），`f_io.ByteBuffer` 的 `seekReading` / `bytes()` 正合随机访问需要（`f_io/src/ByteBuffer.cj:22`）——没有新的外部前置任务。
 5. **`9.7b` 的卡点不在 `f_zip`，在 `f_util` 的 CRC 吞吐，且它正在堵住本变更的验收。** 融合侧实测 `f_util.crc32` 约 **4.2 MB/s**（`CrcEngine.update` 用 `for (b in data)` 逐字节查表；同机 C 版表驱动 175 MB/s）：4.4 GB 单条目一次往返要算两遍 CRC ≈ 35 分钟，超出本机单条命令 10 分钟的上限；写 100 MB 条目光 CRC 就要 ~25 s，两个资源用例（509 s / 551 s）的耗时也几乎全在这一处。多线程/换机器只是缓解，`9.7b` 会长期挂着。用户已决定**在本变更内修**，不另开 change。

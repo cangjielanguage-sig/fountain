@@ -42,7 +42,7 @@ class MQBlobTest {
         let codec = DefaultCodec()
         try {
             codec.encode(value.toData())
-            codec.finish().asBytes().getOrThrow()
+            codec.finish().asBytes().getOrThrow().clone()
         } finally {
             codec.release()
         }

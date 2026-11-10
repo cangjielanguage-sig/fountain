@@ -34,6 +34,7 @@ package fountain::f_uring.base
  * 通过 FFI 调用 GCC 内置原子操作
  * 这些函数对应 C 的 __atomic_load_n 和 __atomic_store_n
  */
+ @FastNative
 @When[os == "Linux"]
 foreign {
     /**

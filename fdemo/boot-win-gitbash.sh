@@ -77,11 +77,11 @@ exports(){
 }
 run(){
     exports
-    fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' $args
+    fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl)|postgres_driver)' $args
 }
 perfRecord(){
     exports
-    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
+    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl)|postgres_driver)'
 
 }
 perfReport(){

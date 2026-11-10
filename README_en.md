@@ -311,6 +311,24 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README_en.md>
 
+### `fountain::f_email`
+Email client: SMTP / POP3 / IMAP4rev1 + MIME parsing and generation, a unified `Email`
+facade (send / list / body / attachments / delete), streaming attachments, TLS and
+credential redaction.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_email/README_en.md>
+
+### `fountain::f_xml`
+Generic XML 1.0 parser and generator: streaming events (push / pull), DOM, namespaces,
+DTD internal entities, security limits.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_xml/README_en.md>
+
+### `fountain::f_svg`
+SVG 1.1 static documents: value types, typed DOM, parser and writer, lossless preservation of unknown content, security filtering and size limits
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_svg/README_en.md>
+
 ### `fountain::f_zip`
 ZIP container reader/writer: ZIP64 in both directions, streaming writes (24-byte ZIP64 descriptor),
 large-entry spilling, Zip Slip / symlink / bomb protection.
@@ -400,6 +418,29 @@ host classes, functions and closures through `JitFunction.call<T>`. The interpre
 authority; native code is Linux-only and other platforms fall back to the interpreter.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jit/README_en.md>
+
+### `fountain::f_probe`
+Extension contract for server monitoring: probe agents (`ProbeAgent`), alarm message channels
+(`AlarmMessageChannel`), thread-safe registries and stable error codes. A third-party extension
+depends only on this module to build a dynamic library, without RPC, mail or TUI dependencies.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_probe/README_en.md>
+
+### `fountain::f_tui`
+Unix terminal backend: POSIX `termios` raw mode, terminal size, key decoding, ANSI differential
+rendering, and a `ratatui_buffer.Buffer → ANSI` renderer. It depends only on `f_base` and the
+ratatui base packages, never on `crossterm` / `ratatui_backend` / `ratatui_terminal` /
+`ratatui_widgets`.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_tui/README_en.md>
+
+### `fountain::fprobe`
+Server-monitoring executable (`fprobe agent` / `fprobe supervisor`): the node agent periodically
+collects host metrics and exposes them over RPC; the supervisor aggregates multiple nodes and
+provides TUI and resident modes, alarms, terminal charts, periodic reports with inline SVG,
+an optional LLM advisor and `custom/` dynamic-library extensions.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/fprobe/README_en.md>
 
 ### `fountain::fboot`
 Application project launcher depending on fountain

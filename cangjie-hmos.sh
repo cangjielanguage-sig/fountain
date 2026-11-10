@@ -62,8 +62,9 @@ cangjie_env(){
   local platform
   platform=$( ls "$stdx_dir" | grep -E 'cjnative|static' | head -1 )
   export CANGJIE_STDX_PATH=$stdx_dir/$platform
-  export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
-  export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
+  export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/
+  export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/
+  export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
   export CANGJIE_HOME=$bin_root/sdk/$1/cangjie
   # 鸿蒙PC没有 /usr/local/openssl，若自编译了 openssl 可放开下一行

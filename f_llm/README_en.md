@@ -1,1529 +1,837 @@
 # f_llm
 
+A large-model engineering library for Cangjie, part of the [fountain](../) repository. Six capabilities:
 
-## STDX dependency
+| Capability | Entry point |
+|---|---|
+| Model access (multi-provider, candidates, circuit breaking, streaming) | `fountain::f_llm.llm.LLM` |
+| Storage (content / metadata / evolution families) | `fountain::f_llm.store.Stores` |
+| Memory, knowledge, skills, personas, prompts | `MemoryStore` / `KnowledgeStore` / `MetaStore` |
+| loom orchestration (text → flow → execution) | `fountain::f_llm.loom.LoomWiring` |
+| Flow routing (a description → the flow that handles it) | `fountain::f_llm.loom.Supervisor` |
+| Third-party channels (email send/receive, IM-ready) | `fountain::f_llm.channel.ChannelMediator` |
+| Skill evolution (experience → skill, with A/B gate) | `fountain::f_llm.loom.SkillEvolutionJob` |
+| Retrieval quality evaluation | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
-Configure the environment variable: `export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+- Version: `1.3.17`, `output-type = "dynamic"`
+- Dependencies: `f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util`, all modules in the same repository
 
-Large model API
-Developers only need to care about the organization culture, the agents, the skill descriptions and FunctionCalling, plus the event definitions and
-orchestration.
-Every time, the large model must return one function call, and every function call must return one piece of event data and an event name; the agent
-builds a new event from the return value of the function call and sends it to the framework.
-Before accessing the large model an agent may trim or compress the context according to the given context strategy.
+---
 
-## Constant definitions
+## Layout
 
-### Large model types
-`public type LLMType = String`
-Values of LLMType:
-text embedding tokenizer rerank code video audio image prune
-These values are not the same as the types defined by large model platforms; these strings are what the framework-defined large model configuration
-is used for
-```cj
-public type LLMType = String 
-//text embedding tokenizer rerank code video audio image prune
-public const LLM_TYPE_TEXT = 'text'
-public const LLM_TYPE_EMBEDDING = 'embedding'
-public const LLM_TYPE_TOKENIZER = 'tokenizer'
-public const LLM_TYPE_RERANK = 'rerank'
-public const LLM_TYPE_CODE = 'code'
-public const LLM_TYPE_VIDEO = 'video'
-public const LLM_TYPE_AUDIO = 'audio'
-public const LLM_TYPE_IMAGE = 'image'
-//search is a kind of tool interface; Zhipu provides it at present, and since it also depends on the Zhipu auth KEY it is treated as a large model configuration
-public const LLM_TYPE_SEARCH = 'search'
+```
+src/
+├── llm/            model access: LLM facade, LLMConf loading, dialects, pruners, streaming, token counting
+├── llm/openai/     OpenAI-compatible request/response mapping
+├── embedding/      BGE-M3 embeddings: Embedding facade, HTTP transports, three-way encoding
+├── store/          store contracts and implementations (f_store / f_hydra / fhydra / postgres / mysql / inMemory)
+├── dao/            SQL statements (postgres / mysql)
+├── loom/           flow orchestration, Supervisor routing, store gateway, skill evolution, retrieval evaluation
+├── memory/         memory summaries and extraction (FaithfulMemory / ExperienceExtractor / IndividualityExtractor)
+├── search/         web search providers
+├── tool/           function-calling framework and built-in tools
+├── finder/         query facades (skills, knowledge, memory, organization, events, token usage)
+├── model/          data models (LLMConf, Skill, Knowledge, Agent, MemorySummary, TokenUsage…)
+├── agents/         agent events and event data
+├── balance/        provider balance queries and signing
+├── service/        LLM conf sources (static / file / env / database / meta store)
+├── config/         environment keys and defaults
+├── constant/       constants (model names, roles, pruner names, todo status, knowledge kinds…)
+├── wiring/         startup wiring (StoreWiring)
+├── exception/      exception types
+├── util/           Redactor (sensitive-data masking)
+├── mcp/            MCP client
+└── macros/         annotation macro entry
 ```
 
-### Roles
-```cj
-public type Role = String
-public const ROLE_SYSTEM = "system"
-public const ROLE_USER = "user"
-public const ROLE_ASSISTANT = "assistant"
-public const ROLE_TOOL = "tool"
+---
+
+## Quick start
+
+### 1. Configuration (environment variables, read once at startup)
+
+```bash
+export llm_memoryStore=f_hydra                      # content family (default)
+export llm_metaStore=f_store                        # metadata family (default)
+export llm_metaStorePath=./data/f_llm-meta          # f_store directory
+export llm_embeddingUrl=http://127.0.0.1:8000/v1/embeddings
 ```
 
-### Skill types
-Primary skills are loaded completely together with the agent, while auxiliary skills use progressive disclosure: the metadata list of the auxiliary
-skills follows the agent, and the concrete skills are then loaded as needed.
-system always comes first, and auxiliary skills loaded during a session are also inserted before assistant/user/tool messages and after the other system messages.
-```cj
-public type SkillType = String
-public const SKILL_TYPE_PRIMARY = 'primary'
-public const SKILL_TYPE_AUXILIARY = 'auxiliary'
-```
+**Configuration is read only once at startup**; runtime changes are not supported (see `doc/known-limitations.md`).
 
-### Thinking switch
-```cj
-public type ThinkingSwitch = String
-public const THINGKING_ENABLED = 'enabled'
-public const THINGKING_DISABLED = 'disabled'
-```
+### 2. Wire storage
 
-### Context pruner names
-```cj
-public type ContextPrunerName = String
-/**
- * Retain everything
- */
-public const CONTEXT_PRUNER_RETAIN = "Retain"
-/**
- * Keep the most recent
- */
-public const CONTEXT_PRUNER_LAST_N = "LastN"
-/**
- * Summary
- */
-public const CONTEXT_PRUNER_SUMMARY = "Summary"
-/**
- * Keyword extraction
- */
-public const CONTEXT_PRUNER_KEYWORDS = "Keywords"
-/**
- * system gets its own strategy and assistant+user+tool get another one
- */
-public const CONTEXT_PRUNER_DRC = "DRC"
-/**
- * Apply a given strategy once the context is saturated
- */
-public const CONTEXT_PRUNER_SATURATION = "Saturation"
-```
+```cangjie
+import fountain::f_llm.wiring.StoreWiring
 
-
-## Data definitions: `fountain::f_llm.model.po`
-
-### Token usage data definition
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: llm_token_usage]
-public class TokenUsage {
-    @ORMField['llm_id']
-    private var llmId: Int64 = 0
-    @ORMField['agent_id']
-    private var agentId: Int64 = 0
-    @ORMField['session']
-    private var session: String = ""
-    @ORMField['prompt_tokens']
-    private var prompt: Int64 = 0
-    @ORMField['completion_tokens']
-    private var completion: Int64 = 0
-    @ORMField['total_tokens']
-    private var total: Int64 = 0
-    @ORMField['cached_tokens']
-    private var cached: Int64 = 0
-    @ORMField['usage_time']
-    private var usageTime: Int64 = {=>
-        let now = DateTime.now()
-        now.year * 100000000 + now.month.toInteger() * 1000000 + now.dayOfMonth * 10000 + now.hour * 100 + now.minute
-    }()
+main(): Int64 {
+    // Registers implementations, validates configuration, creates tables, seeds memory kinds
+    StoreWiring.wire()
+    0
 }
 ```
 
-### Large model definition
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: llm_conf]
-public class LLMConf {
-    @ORMField[true 'id']
-    private var id: Int64 = 0
-    @ORMField['llm_name']
-    private var name: String = ''
-    @ORMField['llm_type']
-    private var llmType: String = ''
-    @ORMField['llm_url']
-    private var url: String = ''
-    @ORMField['conf']
-    private var conf: String = ''
-    @ORMField['threshold']
-    private var threshold: Int64 = 0
+### 3. Call a model
+
+```cangjie
+import std.collection.ArrayList
+
+import fountain::f_llm.llm.*
+
+main(): Int64 {
+    let messages = ArrayList<ChatMessage>()
+    messages.add(UserMessage(content: 'Explain circuit breaking in one sentence'))
+    let resp = LLM.chatByName('deepseek-flash',
+                              LLMParams(model: 'deepseek-flash', messages: messages))
+    println(resp.messages[0].content)
+    0
 }
 ```
 
-### Agent definition
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: agents]
-public class Agent {
-    @ORMField[id column: 'id']
-    private var id: Int64 = 0
-    @ORMField['agent_name']
-    private var name: String = ''
-    @ORMField['agent']
-    private var agent: String = ''
-    @ORMField['acceptable']
-    private var acceptable: String = ''
-    @ORMField['category']
-    private var category: String = ''
-    @ORMField['tag']
-    private var tag: String = ''
-    @ORMField['llm_type']
-    private var llmType: String = ''
-    @ORMField['llm_name']
-    private var llmName: String = ''
-    @ORMField['pruner']
-    private var pruner: String = ''
+| Method | Behaviour |
+|---|---|
+| `chat(candidates, params, hooks?)` | Try candidates in order, failover + circuit breaking |
+| `chatByName(llmName, params)` | Resolve candidates from the configuration snapshot |
+| `respond` / `respondByName` | Responses-style API |
+| `chatStream` / `respondStream` | Streaming with per-chunk callbacks |
+| `setTransport` / `setStreamTransport` | Replace the transport (test injection) |
 
-    public prop acceptableEvents: Array<String> {
-        get(){
-            acceptable.split(',')
-        }
-    }
-}
+### 4. Orchestrate
+
+```cangjie
+import fountain::f_llm.loom.*
+
+let service = LoomWiring.wire(plannerModel: 'deepseek-flash')
+let preview = service.execute(LoomRequest(
+    name: 'daily-report',
+    description: 'Summarise yesterday commits and issues into a daily report'))
 ```
 
-### Skill definition
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: skills]
-public class Skill {
-    @ORMField[id column: 'id']
-    private var id: Int64 = 0
-    @ORMField['agent_id']
-    private var agentId: Int64 = 0
-    @ORMField['accepted_event']
-    private var acceptedEvent: String = ""
-    @ORMField['returned_event']
-    private var returnedEvent: String = ""
-    @ORMField['title']
-    private var title: String = ""
-    @ORMField['metadata']
-    private var metadata: String = ""
-    @ORMField['details']
-    private var details: String = ""
-    @ORMField['functions']
-    private var functions: String = ""
-    @ORMField['skill_type']
-    private var skillType: String = ""
+See "loom orchestration" below.
 
-    @DataExclude[field]
-    public prop functionNames: Iterator<String> {
-        get(){
-            functions.lazySplit(',', removeEmpty: true).map{f => f.trimAscii()}
-        }
-    }
-}
+---
+
+## API cheat sheet
+
+Find the entry point by task; details live in the section named on the right.
+
+| Task | Entry point | Section |
+|---|---|---|
+| One model call | `LLM.chatByName(llmName, LLMParams(model:, messages:))` | Model access |
+| Streaming | `LLM.chatStream(candidates, params, onDelta)` | Model access |
+| Failover across providers | `LLM.chat(candidates, params)` + `LLMConfs` | Model access |
+| Embed text | `Embedding.embed(llmName, EmbeddingParam(agentId: 0, session: '', input: '…'))` | Storage · Embeddings |
+| Write / query memories | `Stores.content().memory` → `add` / `get` / `list` / `search` | Storage · Contracts |
+| Write / query knowledge | `Stores.content().knowledge` → `upsert` / `get` / `search` / `docIds` | Storage · Contracts |
+| Skills / prompts / personas | `Stores.meta().skills` / `.prompts` / `.characters` | Storage · Contracts |
+| Add a tool | `@Bean` + `FunctionCalling<T>`, picked up by `FunctionMediator` | Model access · Tool calling |
+| Plan and run a flow from one sentence | `LoomWiring.wire(...)` → `execute` → `confirmFlow` → `executeNow` | loom orchestration |
+| Run a hand-written DAG | `LoomRunner().run(plan, host, start)` | loom · Hand-written flows |
+| Route a description to the best flow | `Supervisor.current().getOrThrow().dispatch(text)` | loom · Flow routing |
+| Send mail / IM message | `ChannelMediator.send(platform, account, msg)` or the `channelSend` tool | loom · Third-party channels |
+| Evaluate retrieval quality | `RetrievalEvalRunner.run(...)` | Retrieval evaluation |
+| Debug: is skill search really using vectors | `SkillCatalog.embedFailureDetail()` | loom · Skill injection |
+| Debug: did startup restore flows | `LoomBootstrap.startup(registry).restoreFailed` | loom · Flow routing |
+
+Three shortest working snippets (full examples in their sections):
+
+```cangjie
+// 1) call a model
+let resp = LLM.chatByName('deepseek-flash',
+    LLMParams(model: 'deepseek-flash', messages: messages))
+
+// 2) embed (endpoint defaults to http://127.0.0.1:8000/v1/embeddings)
+let vectors = Embedding.embed('bge-m3', EmbeddingParam(agentId: 0, session: '', input: 'text to embed'))
+
+// 3) hand a description to the right flow: routing + execution in one call
+let outcome = Supervisor.current().getOrThrow().dispatch('summarise today's commits')
 ```
 
-### Memory summary definition
-```cj
-@DataAssist[fields]
-@QueryMappersGenerator[table: memory_summaries]
-public class MemorySummary {
-    @ORMField[id column: 'id']
-    private var id: Int64 = 0
-    @ORMField['kind']
-    private var kind: String = ''
-    @ORMField['content']
-    private var content: String = ''
-}
-```
+---
 
+## Model access
 
-## Extracting memory
+### Configuration loading
 
-Every piece of session context is faithfully saved to disk; at midnight every day, memory is summarized with session as the context boundary,
-according to the memory and the configuration items:
-- Summarizing lessons and experience
-  - The configuration item is export llm_summarisingActionKind=experience
-  - Operations approved by the user are regarded as successful experience.
-  - Operations that failed once inside a session and later succeeded with the large model are regarded as lessons from failure
-- Summarizing user individuality
-  - The configuration item is export llm_summarisingIndividualityKind=individuality
-  - User individuality includes the user's preferences about certain things and matters, and their habits in doing things and wording
-- Other cases of the configuration item export llm_summarisingActionKind
-  - When it is an empty string no summarization is done
-  - When it is not an empty string, the value of the configuration item is used as the name prefix of the objects managed by `fountain::f_bean`
-    to fetch the implementations of the two interfaces `fountain::f_llm.memory.MemoryExtractor` and `fountain::f_llm.finder.MemorySummaryFinder`
-    respectively; if nothing is found, an exception is thrown
-```cj
-public abstract class MemoryExtractor {
-    /**
-     * json is the JSON object of the JSON returned by the large model
-     * The optional first-level keys of json are lesson, experience and individuality; developers may extend this class to define their own keys
-     * overiwter is used to overwrite the saved historical memory extraction results; memories with high similarity are overwritten
-     */
-    public func extract(json: JsonObject, overwriter: (String, String) -> Unit): Unit
-    /**
-     * json is the second level of the json returned by the large model, and key is a key in the current json.
-     * The implementation of this function builds a string from the JSON as the result of the memory summary; markdown format is recommended
-     */
-    public func extract(json: JsonObject, key: String): String
-    protected func extract(key: String, jsonobj: JsonObject, overwriter: (String, String) -> Unit): Unit
-    protected func extractString(jsonobj: JsonObject, key: String): String
-    protected func extractArray(jsonobj: JsonObject, key: String): String
-    /**
-     * The system prompt for summarizing memory, explaining the purpose of the current memory extractor
-     */
-    public prop systemPrompts: String
-    /**
-     * The user prompt prefix for summarizing memory; the concrete content sent to the large model is as follows:
-     * ${extractor.userPrompts}
-     * ## Context
-     * ${context}
-     * 
-     * context is a string built from an ArrayList<ChatMessage>
-     */
-    public prop userPrompts: String
-}
-/** 
- * Experience and lesson extractor
- */
-public class ExperienceExtractor <: MemoryExtractor
-/**
- * Individuality extractor
- */
-public class IndividualityExtractor <: MemoryExecutor
-```
+| Component | Purpose |
+|---|---|
+| `LLMConf` | One provider config: provider, url, auth, actual model name, capability flags |
+| `LLMConfs` | Candidate set: weighted pick, failover, circuit state |
+| `LLMConfService` | Refresh / distribution / persistence of configs |
+| `LLMConfSource` | `StaticConfSource` / `FileConfSource` / `EnvConfSource` / `DatabaseConfSource` / `StoreMetaConfSource` |
+| `LLMCandidateProvider` | Candidate provider (by name or weight) |
+| `CircuitBreaker` | Failure counting and cooldown window |
 
+The source is chosen by `llm_confSource`; `llm_confs` can inline a set of configs for static deployments.
 
-## Data query interfaces: `fountain::f_llm.finder`
+### Provider dialects
 
-The implementation of every finder interface must be a class decorated with `fountain::f_bean.macros.Bean`
-### Querying agents
-```cj
-public interface AgentsFinder {
-    func listAgents(): ArrayList<Agent>
-    func queryAgent(id: Int64): Agent
-}
-```
+| Dialect | Applies to |
+|---|---|
+| `StandardDialect` | OpenAI-compatible endpoints (most aggregators) |
+| `DeepSeekDialect` | DeepSeek-specific fields |
+| `ZhipuDialect` / `VolcengineDialect` / `AliyunDialect` / `SiliconFlowDialect` | Provider-specific parameters |
 
-### Knowledge query interface
-```cj
-public interface KnowledgeFinder {
-    func search(param: KnowledgeParam): ArrayList<String>
-    func saveKnowledge(knowledge: Knowledge): Unit
-    func findKnowledge(kind: KnowledgeKind, title: String): ?String
-}
-```
+`DialectRegistry` picks the dialect by provider. Model name normalisation (`ModelNames.normalize`) is only used for capability checks and logs — the outgoing `model` field always carries the configured text.
 
-### Large model query interface
-All large model configuration is loaded at process startup
-```cj
-public interface LLMFinder {
-    func listConfs(llmTypes: Array<String>): ArrayList<LLMConf>
-}
-```
+### Context pruning
 
-### Organization query interface
-```cj
-public interface OrganizationFinder {
-    func queryOrgCulture(agentId: Int64): String
-}
-```
+`ContextPrunerMediator` selects a pruner by name; `llm_prunerLlmName` sets the model used by model-dependent pruners.
 
-### Skill query interface
-```cj
-public interface SkillsFinder {
-    func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkills(title: ArrayList<String>): ArrayList<Skill>
-    func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference>
-}
-```
+| Name | Implementation | Behaviour |
+|---|---|---|
+| `Retain` | `RetainContextPruner` | Keep everything |
+| `LastN` | `LastNContextPruner` | Keep the most recent N messages |
+| `RetainLastUser` | `RetainLastUserPruner` | Keep the last user message |
+| `RetainLastRound` | `RetainLastNRoundPruner` | Keep the most recent N rounds |
+| `TokenBudget` | `TokenBudgetContextPruner` | Prune to a token budget |
+| `Saturation` | `SaturationContextPruner` | Saturation-based pruning |
+| `DRC` | `DRCContextPruner` | Dynamic relevance pruning |
+| `Summary` / `Keywords` | model-dependent | Summary / keyword compression |
 
-### Token data saving interface
-```cj
-public interface TokenUsageSaver {
-    func saveTokenUsage(usage: TokenUsage): Unit
-}
-```
+Pruning runs through `ContextPrunerMediator.prune(...)`; every strategy keeps the leading system message (see `doc/f_llm-memory-design.md` §6.5 for where persona and skills are injected).
 
+### Tool calling
 
-## Embedding model interface
+| Component | Purpose |
+|---|---|
+| `FunctionDefinition` | Function signature (name, description, parameter schema) |
+| `FunctionCalling<T>` / `CommonFunctionCalling` | Single-function wrapper |
+| `WrappedFunctionCalling<T>` | Wrap an existing function |
+| `FunctionMediator` | Registry and call entry (`FunctionMediator.call(name, args)`) |
+| `LLMToolLoop` | Multi-round "model asks for a tool → execute → feed back" loop |
 
-```cj
-/**
- * Parameters
- */
-public class EmbeddingParam {
-    public EmbeddingParam(
-        public let agentId!: Int64,
-        public let session!: String,
-        public let input!: String,
-        public let dimension!: Int64 = 1024
-    ){}
-}
-/**
- * Response
- */
-@DataAssist[props fields]
-public class EmbeddingResp {
-    private var embedding: Array<Float64> = []
-    private let usage: TokenUsage = TokenUsage()
-}
-/**
- * The abstract class developers need to implement; the GLM embedding model is already provided
- */
-public abstract class AbstractEmbeddingContext {
-    public AbstractEmbeddingContext(
-        protected let id: Int64,
-        protected let name: String,
-        protected let url: String,
-        protected let conf: String
-    ){}
-    public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.url, conf.conf)
-    }
-    public func access(param: EmbeddingParam): EmbeddingResp
-}
-```
+Built-in tools:
 
-### Embedding model mediator
-```cj
-public class EmbeddingContextMediator {
-    /**
-     * Register an embedding model
-     * @param model Model name
-     * @param creator The function creating the embedding model instance
-     */
-    public static func register(model: String, creator: (LLMConf) -> AbstractEmbeddingContext)
-    public static prop instance: EmbeddingContextMediator 
+| Tool | Purpose |
+|---|---|
+| `FileReadingFunction` / `FileWritingFunction` / `FileReplacngFunction` | File read/write/replace, bounded by `llm_fileSandboxPath` |
+| `CommandFunction` | Run shell commands |
+| `ConsoleFunction` | Console read/write |
+| `WebSearchFunction` / `WebFetchFunction` | Web search and fetch (with `SsrfGuard`) |
+| `SkillLoadingFunction` / `SkillReferenceLoadingFunction` | Load skills and skill references |
+| `MemoriesLoadingFunction` | Load experience, lessons and user individuality |
+| `TodoFunction` | Todo CRUD |
+| `CurrentTimeFunction` | Current time |
+| `AnswerFunction` | Structured answers |
 
-    /**
-     * Access the embedding model
-     * @param model Model name
-     * @param param Parameters
-     */
-    public func access(model: String, param: EmbeddingParam): EmbeddingResp 
-}
-```
+---
 
-### Forgetting queries/summaries
-```cj
-public interface MemorySummaryFinder {
-    func overwrite(kind: String, content: String): Unit
-    func query(keywords: String): ArrayList<Experience>
-}
-public interface ExperienceFinder <: MemorySummaryFinder {}
-public interface IndividualityFinder <: MemorySummaryFinder {}
+## Storage
+
+### Three families
+
+| Family | Stores | Implementations | Config key |
+|---|---|---|---|
+| Content | memories, experience, knowledge, documents | `f_hydra` (default) / `fhydra` / `postgres` / `mysql` / `inMemory` | `llm_memoryStore` |
+| Metadata | characters, skills, prompts, model configs | `postgres` / `mysql` / `f_store` (default) | `llm_metaStore` |
+| Evolution | reports, state, consumed knowledge, daily lease | reports/state follow the metadata family; the lease follows the content family | same keys |
+
+- An unknown value **fails startup** with the list of available implementations; there is no silent fallback.
+- Custom implementations register with `Stores.registerContent(name, factory)` / `Stores.registerMeta(name, factory)`.
+- `Stores.content()` / `Stores.meta()` return the configured implementation.
+
+### Contracts
+
+| Contract | Purpose |
+|---|---|
+| `ContentStore` | Content-family container: `prop memory: MemoryStore` + `prop knowledge: KnowledgeStore` |
+| `MetaStore` | Metadata-family container: `characters` / `skills` / `prompts` / `confs` |
+| `MemoryStore` | Memory and experience: `add / get / remove / list / search / listByKind` |
+| `KnowledgeStore` | Knowledge and chunks: `upsert / get / remove / search / docIds` |
+| `CharacterStore` | One persona per user: `get / set / reset` |
+| `SkillStore` | Skills: `upsert / get / list / remove` |
+| `PromptStore` | Prompts: `put / get(name,version) / latest / remove` |
+| `LLMConfStore` | Model configs: `names / candidates / put` |
+
+Models (`store/StoreModels.cj`):
+
+| Type | Key fields |
+|---|---|
+| `MemoryRecord` | `id / userId / namespace / title / content / kind / saveTime` |
+| `MemoryHit` | `record / score` (returned by `search`, includes content) |
+| `KnowledgeDoc` | `docId / title / content` |
+| `Character` | `userId / characterKey / prompts` |
+| `Skill` | `id / title / details / functions / version` |
+| `PromptEntry` | `name / version / content` |
+| `EvolutionEntry` | `id / skillTitle / action / detail / at` |
+
+### On-disk layout
+
+**f_store** (no database):
 
 ```
-
-
-## Context strategies: `fountain::f_llm.llm.ContextPrunerName`
-
-They trim, compress and so on the context
-```cj
-/**
- * For all strategies it is enough to decorate the class implementing this interface with `fountain::f_bean.macros.Bean`.
- * Alternatively use `fountain::f_bean.macros.Bean` to decorate a function that initializes and returns a context strategy instance.
- */
-public interface ContextPruner {
-    /**
-     * Strategy name
-     */
-    prop name: String
-    /**
-     * The implementation of the strategy
-     * @param agentId Agent ID
-     * @param session Session identifier; every execution of a session flow needs a new identifier
-     */
-    func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### Retain everything
-```cj
-@Bean
-public class RetainContext <: ContextPruner {
-    public prop name: String{
-        get(){
-            CONTEXT_PRUNER_RETAIN
-        }
-    }
-    public func prune(_: Int64, _: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### Keep the most recent
-```cj
-public class LastNContext <: ContextPruner {
-    public LastNContext(
-        private let n!: Int64 = 1
-    ){}
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_LAST_N}_${n}'
-        }
-    }
-    public func prune(_: Int64, _: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### Strategies that depend on a large model
-```cj
-public abstract class ContextLLMPruner <: ContextPruner {
-    /**
-     * @param llmType The type of the large model executing this strategy
-     * @param model The name of the large model executing this strategy
-     * @param promptsGenerator The prompt generator of this strategy
-     */
-    public ContextLLMPruner(
-        protected let llmType!: LLMType,
-        protected let model!: ModelName,
-        private let promptsGenerator!: (ArrayList<ChatMessage>) -> String
-    ){}
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### Context summary strategy
-```cj
-public class ContextSummaryPruner <: ContextLLMPruner {
-    public init(
-        llmType!: LLMType = LLM_TYPE_TEXT,
-        model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
-        promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
-- 总结下面的JSON所描述的内容，从中提取内容**要点**、**关键**内容，并以MARKDOWN格式返回。
-```json
-${JsonValue.tryFromData(messages.toData())}
-```'''}
-    ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
-    }
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_SUMMARY}_BY_${llmType}_${model}'
-        }
-    }
-}
-```
-### Context keyword strategy
-```cj
-public class ContextKeywordsPruner <: ContextLLMPruner {
-    public init(
-        llmType!: LLMType = LLM_TYPE_TEXT,
-        model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
-        promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
-- 从下面的JSON所描述的内容中提取**关键词**，关键词之间以逗号分隔。
-```json
-${JsonValue.tryFromData(messages.toData())}
-```'''}
-    ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
-    }
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_KEYWORDS}_BY_${llmType}_${model}'
-        }
-    }
-}
-```
-### DRC
-system and assist/user/tool and similar messages use different strategies
-```cj
-public class DRCContextPruner <: ContextPruner {
-    /**
-     * @param systemPruner The strategy for system messages
-     * @param othersPruner The strategy for the other messages
-    public DRCContextPruner(
-        private let systemPruner!: ContextPruner,
-        private let othersPruner!: ContextPruner
-    ){}
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_DRC}_${systemPruner.name}_${othersPruner.name}'
-        }
-    }
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### Saturation strategy
-```cj
-public class SaturationContextPruner <: ContextPruner {
-    /**
-     * @param pruner The strategy executed when the tokens are saturated
-    public SaturationContextPruner(
-        private let pruner!: ContextPruner
-    ){}
-    public prop name: String{
-        get(){
-            '${CONTEXT_PRUNER_SATURATION}_${pruner.name}'
-        }
-    }
-    /**
-     * Use agentId to query the llmType and the large model name used by the agent, and thereby find the saturation token count of the
-     * large model
-     */
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
-```
-### Keeping the last user message
-```cj
-public class RetainLastUserPruner <: ContextPruner {
-    public RetainLastUserPruner(
-        private let pruner!: ContextPruner
-    ){}
-    public prop name: String {
-        get(){
-            '${CONTEXT_PRUNER_RETAIN_LAST_USER}_${pruner.name}'
-        }
-    }
-    /**
-     * let msgs = this.pruner.prune(agentId, session, messages)
-     * If messages has no user message, return msgs
-     * If the last user message contained in the return value of this.pruner.prune(agentId, session, messages) is the same as the last user
-     * message of messages, return msgs as well
-     * Otherwise append the last user message contained in messages to the end of msgs and return msgs.
-     */
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
-}
+f_llm:meta:character:{userId}                        → persona (key + prompts)
+f_llm:meta:skill:{id}                                → skill
+f_llm:meta:prompt:{name}:{version}                   → prompt
+f_llm:evolution:data:{id}                            → evolution report
+f_llm:evolution:idx:{titleLen}:{title}:{padAt}:{padId} → report index (bySkill)
+f_llm:evolution:time:{padAt}:{padId}                  → report index (list)
+f_llm:evo-state:run                                 → evolution watermark
+f_llm:evo-state:skill:{title}                       → per-skill cooldown and gate result
+f_llm:evo-state:kn:{docId}                          → consumed knowledge
 ```
 
+**SQL**: DDL lives in `tables-pg.sql` / `tables-mysql.sql` at the module root. `StoreWiring.wire()` creates tables and indexes idempotently at startup (PG also gets the report index `(skill_title, at_time DESC)`).
 
-## Large model access parameters and responses
+### Embeddings (BGE-M3)
 
-```cj
-@DataAssist[props fields]
-public open class LLMParams {
-    public LLMParams(
-        private let model!: String = '',
-        private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    ){}
-    private let thinking: Thinking = Thinking()
-    //Camel case cannot be used together with the @FieldAlias['response_format'] annotation, because instances of this class are converted into
-    //JSON and that naming would produce redundant JSON fields
-    private var response_format: ResponseFormat = ResponseFormat.json
-    private var temperature: Float64 = 1.0
-    private var max_tokens: Int64 = 65536
-}
+| Component | Purpose |
+|---|---|
+| `Embedding` | Facade: `embed(llmName, EmbeddingParam)` with config snapshot and circuit breaking |
+| `HttpEmbedder` | OpenAI-compatible `/v1/embeddings` client |
+| `BgeM3Transport` / `BgeM3Codec` | BGE-M3 three-way encoding (dense / sparse / colbert) |
+| `DefaultEmbedder` | Production `Embedder`, reads `llm_embeddingUrl` |
 
-@DataAssist[props fields]
-public open class LLMToolParams <: LLMParams {
-    public init(
-        model!: String = '',
-        messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    ){
-        super(model: model, messages: messages)
-    }
-    protected let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
-    
-    @DataExclude[prop field]
-    private let fnNames = HashSet<String>()
-    public func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall> {
-        for (function in functions where !fnNames.contains(function.function.name)) {
-            this.functions.add(function)
-            fnNames.add(function.function.name)
-        }
-    }
-}
+The endpoint defaults to `http://127.0.0.1:8000/v1/embeddings`; `deploy_bge_m3.sh` starts a local service.
 
-@DataAssist[props fields]
-public class Thinking {
-    public Thinking(
-        private var `type`!: ThinkingSwitch = THINGKING_ENABLED,
-        private var clear_thinking!: Bool = false
-    ){}
-}
+### Knowledge retrieval
 
-@DataAssist[props fields]
-public class ResponseFormat {
-    public static let json: ResponseFormat = ResponseFormat('json_object')
-    public static let text: ResponseFormat = ResponseFormat('text')
-    public init(){}
-    public init(t: String){
-        this.`type` = t
-    }
-    private var `type`: String = 'json_object'
-}
+- `KnowledgeChunker`: chunking with length and overlap;
+- `KnowledgeSearch`: vector recall at chunk level, returns `KnowledgeHit`;
+- `KnowledgeIndexRebuilder` / `MemoryIndexRebuilder`: rebuild at startup when `llm_rebuildIndexOnStart` is on.
 
-@DataAssist[props fields]
-public class FunctionCall {
-    public let `type`: String = 'function'
-    public let function: Function = Function()
-}
+---
 
-@DataAssist[props fields]
-public class Function {
-    public Function(
-        private var name!: String = '',
-        private var description!: String = '',
-        private var parameters!: Parameters = Parameters(),
-    ){}
-}
+## loom orchestration
 
-@DataAssist[props fields]
-public class Parameters { 
-    public Parameters(
-        private var `type`!: String = 'object'
-    ){}
-    private var properties: HashMap<String, Property> = HashMap<String, Property>()
-    private var required: ArrayList<String> = ArrayList<String>()
-
-    public func addRequired(name: String) {
-        this.required.add(name)
-    }
-    public func addProperty(name!: String, `type`!: String, description!: String) {
-        this.properties.add(name, Property(`type`: `type`, description: description))
-    }
-    public func addProperty(name: String, property: Property){
-        this.properties.add(name, property)
-    }
-}
-
-@DataAssist[props fields]
-public class Property {
-    public Property(
-        private var `type`!: String = '',
-        private var description!: String = ''
-    ){}
-}
 ```
-```cj
-@DataAssist[props fields]
-public class LLMResp {
-    private let usage: TokenUsage = TokenUsage()
-    private let messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-}
-```
-```cj
-@DataAssist[fields]
-public class TokenizerParams{
-    public TokenizerParams(
-        public let model!: String = '',
-        public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    ){}
-}
-```
-```cj
-@DataAssist[props fields]
-public open class ChatMessage {
-    public ChatMessage(
-        private var role: Role,
-        private var content: String) {}
-    public init(){
-        this('', '')
-    }
-}
-
-@DataAssist[props fields]
-public class SystemMessage <: ChatMessage {
-    public init(){
-        super(ROLE_SYSTEM, '')
-    }
-    public init(content: String){
-        super(ROLE_SYSTEM, content)
-    }
-}
-
-@DataAssist[props fields]
-public open class AssistantMessage <: ChatMessage {
-    @FieldAlias['reasoning_content']
-    private var reasoningContent: String = ""
-    public init(){
-        super(ROLE_ASSISTANT, '')
-    }
-    public init(content: String){
-        super(ROLE_ASSISTANT, content)
-    }
-}
-
-@DataAssist[props fields]
-public class UserMessage <: ChatMessage {
-    public init(){
-        super(ROLE_USER, '')
-    }
-    public init(content: String){
-        super(ROLE_USER, content)
-    }
-}
-
-@DataAssist[props fields]
-public class ToolCallFunction {
-    public ToolCallFunction(
-        private var name: String,
-        private var arguments: String
-    ){}
-    public init(){
-        this("", "")
-    }
-}
-
-@DataAssist[props fields]
-public class ToolCallMessage <: AssistantMessage {
-    @FieldAlias['tool_calls']
-    private let toolCalls: ArrayList<ToolCall> = ArrayList<ToolCall>()
-
-    public func addToolCall(call: ToolCall){
-        toolCalls.add(call)
-    }
-    public func addFunctionCall(id!: String, toolType!: ToolType, name!: String, arguments!: String){
-        addToolCall(ToolCall(id, toolType, ToolCallFunction(name, arguments)))
-    }
-}
-
-@DataAssist[props fields]
-public class ToolCall {
-    public ToolCall(
-        private var id: String,
-        @FieldAlias['type']
-        private var toolType: ToolType,
-        private var function: ToolCallFunction
-    ){}
-
-    public init(){
-        this('', '', ToolCallFunction())
-    }
-}
-
-@DataAssist[props fields]
-public class ToolMessage <: ChatMessage {
-    private var tool_call_id: String = ""
-    public init(){
-        super(ROLE_TOOL, '')
-    }
-}
+natural language
+→ Planner (LLM returns a JSON plan, or clarification questions)
+→ CodeGen (plan → step sources + flow source, no compilation)
+→ LoomRegistry / LoomStore (persist sources and status)
+→ LoomCompiler (compile step closures)
+→ LoomRunner (topological execution, emits events)
 ```
 
+State machine: `clarifying → pending → compiled`; a failed recompile marks that flow `failed` without affecting others.
 
-## Accessing large models
+### Five-minute quickstart
 
-```cj
-/**
- * Abstract large model access context; a Zhipu implementation is already provided.
- * Developers only need to provide an implementation of AbstractLLMContext and decorate it with `fountain::f_bean.macros.Bean`.
- */
-public sealed abstract class AbstractLLMContext {
-    private AbstractLLMContext(
-        protected let id: Int64,
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
-    }
-    /**
-     * Access the large model
-     * @param agentId Agent ID
-     * @param session Session identifier; every execution of a session flow needs a new identifier
-     * @param params The parameters for accessing the large model
-     */
-    public func access(agentId: Int64, session: String, params: LLMParams): LLMResp
-    /**
-     * Get the number of tokens the large model produces for the received messages
-     */
-    public func tokenize(model: String, messages: ArrayList<ChatMessage>): Int64
-}
+```cangjie
+import fountain::f_egraph.base.*
+import fountain::f_llm.loom.*
+
+// 1) Wire once: store gateway, host, memory policy, skill catalog, evolution tables/state/lease
+let chat = { model: String, system: String, input: String => yourLlmCall(model, system, input) }
+let service = LoomWiring.wire(chat, plannerModel: 'deepseek-flash')
+
+// 2) Preview: Planner + CodeGen, stored as pending, not compiled
+let preview = service.execute(LoomRequest(
+    name: 'daily-report',
+    description: 'Summarise yesterday commits and issues into a daily report'))
+println(preview.status)          // pending | clarifying
+println(preview.flowSource)      // generated flow source (readable, editable)
+println(preview.stepSources)     // per-step source
+
+// 3) Confirm: compile the step closures, status becomes compiled
+let _ = service.confirmFlow('daily-report')
+
+// 4) Execute: needs a host (model channel + tool channel)
+let host = DefaultLoomHost(chat)
+let _ = service.executeNow('daily-report', host,
+    StartEvent(category: 'loom', tag: 'daily-report', name: 'start', data: '{}'))
+
+// 5) Other entry points
+service.status('daily-report')
+service.delete('daily-report')
 ```
 
-### Large model mediator
-```cj
-public class LLMContextMediator {
-    /**
-     * Register a large model
-     * @param llmType Large model type
-     * @param model Large model name
-     * @param creator The large model creator
-    public static func register(llmType: LLMType, model: String, creator: (LLMConf) -> AbstractLLMContext)
-    
-    public static prop instance: LLMContextMediator 
-    /**
-     * Access the given large model
-     * @param agentId Agent ID
-     * @param session Session identifier; every execution of a session flow needs a new identifier
-     * @param llmType Large model type
-     * @param params The parameters for accessing the large model
-    public func access(agentId: Int64, session: String, llmType: LLMType, params: LLMParams): LLMResp 
-    /**
-     * Get the saturation token count of the given large model
-     */
-    public func getTokenThreshold(llmType: LLMType, model: String): Int64 
-    /**
-     * Get the number of tokens of the given large model for the given messages
-     */
-    public func tokenize(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Int64 
-    /**
-     * Determine whether the given context is saturated for the given large model
-     */
-    public func saturated(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Bool 
-}
+| Stage | What happens | On failure |
+|---|---|---|
+| `execute(confirm=false)` | Planner → plan, CodeGen → sources, stored as `pending` | ambiguous description → `clarifying` with `questions` |
+| `confirmFlow(name)` | compile step closures | stays `pending` and throws (sources remain readable) |
+| `executeNow(name, …)` | requires `compiled` | throws when not compiled |
+
+Without a `chat` argument use `LoomWiring.wire(plannerModel: '…')`, which uses `LoomDefaults.chat` (requires configured `LLMConf`).
+
+### Hand-written flows
+
+```cangjie
+let plan = FlowPlan('weekly-report')
+let fetch = StepPlan('fetch', 'tool')
+fetch.tool = 'webSearch'
+fetch.args = '{"query":"release notes this week"}'
+let sum = StepPlan('sum', 'llm')
+sum.model = 'deepseek-flash'
+sum.system = 'You are a technical editor'
+sum.input = 'This week: {fetch.output}'      // reference an upstream step output
+plan.steps.add(fetch)
+plan.steps.add(sum)
+plan.edges.add(EdgePlan('fetch', 'sum'))
+
+let _ = LoomRunner().run(plan, host,
+    StartEvent(category: 'loom', tag: 'weekly-report', name: 'start', data: ''))
 ```
 
+| kind | Purpose | Key fields |
+|---|---|---|
+| `tool` | call a registered tool | `tool`, `args` |
+| `mcp` | call an MCP tool | `tool`, `args` |
+| `llm` | call the model | `model`, `system`, `input` |
+| `jit` | arbitrary Cangjie snippet, may call `loomStore` | `input` is source; must produce `let <id>_result = …` |
 
-## Search
+`http` is a reserved kind; `plan.validate()` rejects it explicitly rather than silently treating it as `llm`.
 
-- Search (the former `doc/搜索.md` has been deleted; see the interfaces in `src/**`)
+| Rule | Notes |
+|---|---|
+| Order | topological over `edges`; steps without incoming edges run first |
+| Placeholders | `{stepId.output}` is replaced with that step's output; `{start.output}` is the incoming event data |
+| JIT scope | each JIT step compiles on its own — pass values with `{id.output}` |
+| Parallelism | synchronous by default; `StepPlan.async` or `run(parallel: true)` (or plan `parallel`) enables it |
+| Validation | `plan.validate()` rejects duplicate ids, dangling edges and missing kinds |
 
-## Function calling
+### Tools exposed to the model
 
-### `fountain::f_llm.FunctionCalling`
-```cj
-/**
- * The result of a function call; this module is an auxiliary module of fcoder, and fcoder depends on the events and flows defined by f_egraph
- */
-public struct FunctionResult {
-    /**
-     * The result of the function call
-     * @param event The name of the event into which the result of this function is wrapped
-     * @param result The result of the function call, either a simple string or markdown text
-     */
-    public FunctionResult(
-        public prop event!: String,
-        public prop result!: String
-    ){}
-}
-public interface CommonFunctionCalling {
-    /**
-     * The large model function definition described in JSON SCHEMA form
-     */
-    prop definition: JsonObject
-    /**
-     * Function name
-     */
-    prop name: String
-    /**
-     * Function description
-     */
-    prop description: String 
-    /**
-     * Function call; this function is called by the agent, and the developer only needs to implement `func call(params: T): FunctionResult`
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    func call(json: JsonObject): FunctionResult
-}
-/**
- * An implementation of this interface must be a class decorated with fountain::f_bean.macros.Bean; decorating the implementation of this
- * interface with `@Bean` is enough to complete the registration of the function
- */
-public interface FunctionCalling<T> <: CommonFunctionCalling where T <: DataFields<T> {
-    /**
-     * The large model function definition described in JSON SCHEMA form
-     * The default implementation calls the JsonObject.toJsonSchema<T>() extension of fountain::f_data.json to obtain the parameter definition,
-     * and combines the name and description properties of this interface with the Json converted from the generic argument into the large model
-     * function definition
-     */
-    prop definition: JsonObject 
-    /**
-     * Function name
-     */
-    prop name: String
-    /**
-     * Function description
-     */
-    prop description: String
-    /**
-     * Function call. The default implementation only throws FunctionCallingException
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    func call(params: T): FunctionResult
-    /**
-     * Function call; this function is called by the agent, and the developer only needs to implement `func call(params: T): FunctionResult`
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    func call(json: JsonValue): FunctionResult {
-        DataObject<T>.populate(json.toData()).getOrThrow() |> call
-    }
-}
-```
-### The parser function for large model replies
-This function does nothing; it merely parses the JSON returned by the large model into an Answer object
-```cj
-@DataAssist[props fields]
-public class Answer {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'Your reply, which will be used as the argument of the next event of the flow']
-    private var answer: String = ''
-}
+| Tool | Key params | Behaviour |
+|---|---|---|
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, execute?, parallel?` | `confirm=false` returns the plan only; `confirm=true` compiles; `execute=true` also runs it |
+| `loomDelete` | `name` | Remove from registry and store |
+| `memoryCall` | `op`(search/add/remove) + `payload` | Same gateway as `loomStore("memory", …)` |
+| `knowledgeIngest` | `docId, title, content` | Write a knowledge document |
+| `loomStoreCall` | `kind, op, payload` | Generic read/write entry on the same gateway as `loomStore` (read knowledge/experience, load skills) |
+| `listTools` / `searchTools` | `offset, limit` / `query, topK` | List tools, keyword-search tools |
+| `skillImport` | `path` | Import a skill package; idempotent by title |
+| `scheduleCreate` / `scheduleDelete` | `name, cron, payload?` / `name` | Register / cancel a scheduled flow |
 
-@Bean
-public class AnswerFunction <: FunctionCalling<Answer> {
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'answer'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '如果需要直接输出回复，而不依赖其它函数的结果，务必使用此函数传递回复'
-        }
-    }
-    /**
-     * Used to parse the reply of the large model
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: Answer): FunctionResult {
-        FunctionResult(event: params.event, result: params.answer)
-    }
-}
+### JIT entry points inside a flow
+
+```cangjie
+loomCallTool(name, argsJson)          // registered tool or MCP tool
+loomCallLlm(model, system, input)     // model call
+loomStore(kind, op, payload)          // read/write the six stores
 ```
 
-### Skill loading function
-```cj
-@DataAssist[props fields]
-public class SkillLoading {
-    @JsonStringSchema[description:'The event name of the current step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'Skill title, which is unique']
-    private var title: String = ''
-}
+| kind | ops | Notes |
+|---|---|---|
+| `memory` | `add` / `get` / `list` / `search` / `remove` | `search` returns `{id,title,content,kind,score}`; `list` accepts `kind` |
+| `experience` | same as `memory` | Alias that forces `kind=experience` |
+| `knowledge` | `get` / `docIds` / `search` / `upsert` / `remove` | `search` returns matched chunks with content |
+| `skill` | `load` / `get` / `list` / `upsert` / `count` / `remove` | `load` fetches details by title |
+| `prompt` | `latest` / `get` / `put` / `remove` | `put` with `version<=0` appends after the latest |
+| `character` | `get` / `set` / `reset` | `characterKey` must be predefined (or `custom`) |
+| `evolution` | `list` / `by_skill` | **Read-only**: reports are written by the background job |
 
-@Bean
-public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
-    private let skillsFinder = lookup<SkillsFinder>()
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'loadSkill'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '加载技能详细描述'
-        }
-    }
-    /**
-     * Used to load the detailed description of a skill
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: SkillLoading): FunctionResult {
-        FunctionResult(event: params.event, result: skillsFinder.loadSkill(params.title), resultType: ResultType.Skill)
-    }
-}
+Payloads are JSON strings:
+
+```cangjie
+let mem  = loomStore("memory", "list",
+    "{\"userId\":7,\"namespace\":\"work\",\"kind\":\"note\",\"offset\":0,\"limit\":20}")
+let hits = loomStore("memory", "search",
+    "{\"userId\":7,\"namespace\":\"work\",\"text\":\"release process\",\"topK\":5}")
+let one  = loomStore("memory", "get", "{\"userId\":7,\"id\":42}")
+let id   = loomStore("memory", "add",
+    "{\"userId\":7,\"namespace\":\"work\",\"title\":\"release decision\",\"content\":\"canary 5% first\",\"kind\":\"note\"}")
+
+let exp  = loomStore("experience", "search",
+    "{\"userId\":7,\"namespace\":\"work\",\"text\":\"canary\",\"topK\":5}")
+
+loomStore("knowledge", "upsert", "{\"docId\":\"k1\",\"title\":\"release policy\",\"content\":\"canary 5% first\"}")
+let doc  = loomStore("knowledge", "get", "{\"docId\":\"k1\"}")
+let docs = loomStore("knowledge", "search", "{\"text\":\"canary\",\"limit\":5}")
+
+let skill = loomStore("skill", "load", "{\"title\":\"daily-report-helper\"}")
+let all   = loomStore("skill", "list", "{}")
+let prm   = loomStore("prompt", "get", "{\"name\":\"reviewer\",\"version\":1}")
+let ch    = loomStore("character", "get", "{\"userId\":7}")
+
+let history = loomStore("evolution", "by_skill", "{\"skill\":\"daily-report-helper\",\"limit\":5}")
 ```
 
-### Skill reference loading function
-```cj
+Reference them in the next LLM step:
 
-@DataAssist[props fields]
-public class SkillReferenceLoading {
-    @JsonStringSchema[description:'The event name of the current step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'The list of skill titles to load; titles are unique']
-    private var references: ArrayList<SkillReferenceParam> = ArrayList<SkillReferenceParam>()
-}
-
-
-@Bean
-public class SkillReferenceLoadingFunction <: FunctionCalling<SkillReferenceLoading> {
-    private let skillsFinder = lookup<SkillsFinder>()
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'loadSkillReferences'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '加载技能详细描述'
-        }
-    }
-    /**
-     * Used to load the detailed description of a skill
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: SkillReferenceLoading): FunctionResult 
-}
+```cangjie
+let ask = StepPlan('ask', 'llm')
+ask.model = 'deepseek-flash'
+ask.system = 'BASE'
+ask.input = 'Reference: {mem.output}\nQuestion: {start.output}'   // multiple references
 ```
 
-### Memory loading function for experience, lessons, user individuality, etc.
-```cj
-@DataAssist[props fields]
-public class MemoryLoading {
-    @JsonStringSchema[description:'The event name of the current step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'Query the experience most relevant to this argument']
-    private var query: String = ''
-}
+### Persona and character
 
-@Bean
-public class MemoriesLoadingFunction <: FunctionCalling<MemoryLoading> {
-    private let finder = lookup<MemorySummaryFinder>()
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'loadMemories'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '加载经验、教训、用户个性等的详细内容，这些内容来自过往会话的记忆总结'
-        }
-    }
-    /**
-     * Used to load the detailed description of an experience
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: MemoryLoading): FunctionResult
-}
+`FlowPlan.persona` and the user's `character` both end up as the system prefix, resolved in three levels:
+
+```
+1. prompt store: prompt.latest(name) hit → use its content
+2. built-in persona body: PredefinedCharacters.bodyOf(name) (13 predefined personas, text in code)
+3. literal text: neither matched → treat the argument itself as the body
 ```
 
-### Command line execution function
-```cj
+```cangjie
+// 1) Prompt-store entry (highest priority)
+loomStore("prompt", "put", "{\"name\":\"reviewer\",\"content\":\"You are a strict reviewer\"}")
+plan.persona = 'reviewer'
 
-@DataAssist[props fields]
-public class Command {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'A complete operating system console command']
-    private var command: String = ''
-}
+// 2) Predefined persona key
+plan.persona = 'rigorous'        // default/rigorous/friendly/blunt/…
 
-@Bean
-public class CommandFunction <: FunctionCalling<Command> {
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'command'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '执行操作系统控制台命令'
-        }
-    }
-    /**
-     * @param params Command parameters
-     * @return The result of the function call
-     */
-    public func call(params: Command): FunctionResult 
-}
+// 3) Literal text
+plan.persona = 'Point out mistakes only, no praise'
+
+// 4) Omit it: fall back to the user's character record
+loomStore("character", "set",
+    "{\"userId\":7,\"characterKey\":\"rigorous\",\"prompts\":\"Answer in at most 300 characters\"}")
+plan.persona = ''
 ```
 
-### Console read/write function
-When the user presses CTRL+D on Linux or CTRL+Z on Windows, the input ends.
-```cj
-@DataAssist[props fields]
-public class ConsoleOutput {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'The content the large model outputs to the console']
-    private var content: String = ''
-}
+`custom` is special: the body comes only from `character.prompts`; when both are empty no persona is injected.
+`character.prompts` is appended as user-level extra instructions (language, length, …).
+The character record is resolved by `LoomMemoryPolicy.userId` (skipped when `userId <= 0`).
 
-@Bean
-public class ConsoleFunction <: FunctionCalling<ConsoleOutput> {
-    private let writer = ConsoleWriter()
-    private let reader = ConsoleReader()
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'console'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '控制台读写，大模型向控制台输出一段内容，用户通过控制台向大模型指示下一步行动'
-        }
-    }
-    /**
-     * Console read/write: outputs to the console the content the large model wants the user to see, and waits for the user to reply or confirm
-     * the next action.
-     */
-    public func call(params: ConsoleOutput): FunctionResult 
-}
+### Skill injection
+
+| Mode | Usage | Notes |
+|---|---|---|
+| Explicit | `LoomRunner().run(plan, host, start, skills: ['daily-report-helper'])` | Loaded by title, fixed order |
+| Automatic | omit `skills` with `autoSkills=true` (default) | Search using plan notes + start input, take `skillTopK` (default 3) |
+
+`SkillCatalog` runs in two modes: vector cosine when an encoder is installed (vectors cached by `title#version`), otherwise keyword fallback (substring, character-overlap ratio, title coverage). **Encoder failures degrade silently**, so check `SkillCatalog.embedFailureDetail()` → `(query-side failures, skill-side failures)`.
+
+### Extraction at flow end
+
+`LoomRunner` does this in `finally` (both success and failure):
+
+| Output | kind | Condition |
+|---|---|---|
+| Context digest | `note` | `policy.enabled` (default true) and at least one model call |
+| Experience | `experience` (`experience_failed` on failure) | same as above |
+| Knowledge document | `loom:<flow>:<seq>` | requires `writeKnowledge` |
+
+With `summarize=true` the model returns `{"memory":"…","experience":"…"}`; invalid JSON falls back to rule-based extraction.
+
+Switches in `LoomMemoryPolicy`:
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `enabled` | `true` | When false, not even the transient context is recorded |
+| `userId` / `namespace` | `0` / `'loom'` | Where to write; also selects the character record |
+| `maxTurns` | `20` | How many recent turns the digest keeps |
+| `summarize` / `model` | `false` / `''` | Model-based extraction |
+| `writeKnowledge` | `false` | Also write a knowledge document |
+| `autoSkills` / `skillTopK` / `skillMinScore` | `true` / `3` / `0.2` | Automatic skill selection |
+
+### Scheduling
+
+Flows registered by `scheduleCreate` run through `LoomScheduler` (`TicktockScheduler`, backed by `f_ticktock`); JIT steps inside a scheduled run are handled by `JitTicktockTask`. When `LoomSchedules` is not installed, both registration and firing are skipped.
+
+### Third-party channels (email)
+
+Flows go through `channel` instead of calling `f_email` directly:
+
+```bash
+export llm_channels='[{"platform":"email","account":"work","from":"bot@example.com",
+  "user":"bot@example.com","password":"***","smtpHost":"smtp.example.com","smtpPort":465,
+  "imapHost":"imap.example.com","imapPort":993}]'
 ```
 
-### File reading function
-```cj
-@DataAssist[props fields]
-public class FileReadingParams {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'''
-A UNIX-style file path.
-This function is part of an application; this path is resolved relative to the configured available path, so even if the argument returned by
-the large model is an absolute path it will not access the file system of the whole operating system.''']
-    private var path: String = ''
-    @JsonStringSchema[description:'Used together with mode; only text lines satisfying the condition are returned']
-    private var condition: String = ''
-    @JsonStringSchema[description: '''
-The mode for reading the file, used together with condition.
-### Possible values
-- entire: the default; returns the whole file, and condition has no effect in this case
-- regex: only text lines matching the regular expression represented by condition are returned
-- tail: condition must then be an integer; returns the given number of lines at the end of the file, the number being the integer represented by condition
-- head: condition must then be an integer; returns the given number of lines at the beginning of the file, the number being the integer represented by condition
-- random: condition must then be an integer; uses the reservoir algorithm to choose the given number of lines at random from the file, the number
-  being the integer represented by condition
-''']
-    private var mode: String = 'entire'
-}
-
-@Bean
-public class FileReadingFunction <: AbstractFileFunction<FileReadingParams> {
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'readFile'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '读文件'
-        }
-    }
-    /**
-     * The operation of reading a file
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: FileReadingParams): FunctionResult
-}
+```cangjie
+// inside a flow step (JIT or tool loop)
+loomCallTool("channelSend",
+    '{"platform":"email","account":"work","to":"a@b.c","subject":"report","text":"body",' +
+    '"attachments":[{"filename":"report.pdf","path":"/tmp/report.pdf"}]}')
+loomCallTool("channelInbox", '{"platform":"email","account":"work","downloadDir":"/tmp/inbox"}')
 ```
 
-### File content replacement function
-```cj
+| Capability | Notes |
+|---|---|
+| Platform / account | Addressed as `(platform, account)`; several accounts per platform; blank account falls back only when the platform has exactly one |
+| Adding a platform | Implement `Channel` plus one top-level `let _ = ChannelMediator.registerProvider('xxx', …)` |
+| Implemented | `email` (SMTP send / IMAP receive, attachments included); `wechat` / `wecom` / `dingtalk` / `feishu` are reserved names only |
+| Attachments | Send takes local paths that must sit under an allowed root (otherwise the whole send fails); receive saves only with `downloadDir`, keeps the last path segment only, conflicts get `-2`, nothing is overwritten |
 
-@DataAssist[props fields]
-public class FileReplacingParams {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'''
-A UNIX-style file path.
-This function is part of an application; this path is resolved relative to the configured available path, so even if the argument returned by
-the large model is an absolute path it will not access the file system of the whole operating system.''']
-    private var path: String = ''
-    @JsonStringSchema[description:'The content to replace with']
-    private var replacement: String = ''
-    @JsonStringSchema[description: 'Only text lines matching this regular expression are replaced; an empty string returns an error']
-    private var regex: String = ''
-}
+### Flow routing (Supervisor)
 
-@Bean
-public class FileReplacngFunction <: AbstractFileFunction<FileReplacingParams> {
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'replaceFile'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '逐行替换文件内容，替换成功返回OK，否则返回错误原因，如果文件不存在会立即返回"文件不存在"'
-        }
-    }
-    /**
-     * The operation of reading a file
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: FileReplacingParams): FunctionResult 
-}
+Once there are many flows, callers no longer need to remember which one handles what: turn on `llm_supervisor` and every flow that compiles becomes a routing target, with a model deciding which flow a description belongs to.
+
+```bash
+export llm_supervisor=true        # enable routing; each flow maps to a unique event sv/<flow-name>
+export llm_loomOnNoUsable=true    # optional: auto-build and run a new flow when none fits (default off)
 ```
 
-### File writing function
-```cj
+```cangjie
+// LoomWiring.wire assembles it when the switch is on: routes seeded from compiled flows, rebuilt from the store on restart
+let service = LoomWiring.wire(chat, plannerModel: 'deepseek-flash')
 
-@DataAssist[props fields]
-public class FileWritingParams {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var event: String = ''
-    @JsonStringSchema[description:'''
-A UNIX-style file path.
-This function is part of an application; this path is resolved relative to the configured available path, so even if the argument returned by
-the large model is an absolute path it will not access the file system of the whole operating system.''']
-    private var path: String = ''
-    @JsonStringSchema[description:'The file content to write']
-    private var content: String = ''
-    @JsonStringSchema[description: '''
-File writing mode; the default is append and the possible values are append and truncate.
-If content is an empty string and truncate is given, the file is emptied.
-If the file does not exist a new file is created automatically.''']
-    private var mode: String = 'append'
-}
-
-@Bean
-public class FileWritingFunction <: AbstractFileFunction<FileWritingParams> {
-    /**
-     * Function name
-     */
-    public prop name: String {
-        get(){
-            'writeFile'
-        }
-    }
-    /**
-     * Function description
-     */
-    public prop description: String {
-        get(){
-            '写文件，写成功返回OK，否则返回错误原因'
-        }
-    }
-    /**
-     * The operation of reading a file
-     * @param params Function parameters
-     * @return The result of the function call
-     */
-    public func call(params: FileWritingParams): FunctionResult 
-}
+// dispatch: description → routing → execution (the description is the start event data, reaching the first step as {start.output})
+let supervisor = Supervisor.current().getOrThrow()
+let outcome = supervisor.dispatch('summarise today's commits')
+println(outcome.kind)     // dispatched | created | noUsableFlow | clarifying
+println(outcome.flow)     // chosen flow (for created: the generated auto-<seconds>)
+println(outcome.event)    // the Supervisor event actually used: sv/<flow-name>
+println(outcome.message)  // fixed message when nothing can handle it
 ```
 
+| `outcome.kind` | Meaning | `result` |
+|---|---|---|
+| `dispatched` | An existing flow matched and finished | `Some(Event)` |
+| `created` | A new flow was built, registered and finished | `Some(Event)` |
+| `clarifying` | The auto-built flow needs more information | `None` (questions are stored) |
+| `noUsableFlow` | Nothing usable (including unusable routing output) | `None` |
 
-## Definition of an agent
+The route table can be changed at runtime:
 
-1. Query the skills with the event name + agent.id
-   - An agent may have several primary skills and several auxiliary skills, or none at all
-2. Combine agent.agent + skill.details into the complete prompt template
-   The skills include primary and auxiliary skills; the organization culture, the agent description, the primary skill descriptions and the
-   auxiliary skill metadata are concatenated as one system message
-   ```md
-   Organization culture
-   ===
-   ${culture}
+```cangjie
+supervisor.routes()          // every route: name / description / event / status
+supervisor.routable()        // only compiled ones, i.e. what routing may pick
+supervisor.eventOf('daily')  // Some("sv/daily")
 
-   > **Important note**: content marked with ⚠️ is a special reminder that needs particular attention; do not ignore it.
-
-   Agent description
-   ===
-   ${agent.agent}
-   ___
-
-   Skill list
-   ===
-   # Primary skills
-   ## Skill title: ${skill.title}
-   ${skill.details}
-   ___
-
-   # Auxiliary skill metadata
-   ## Skill title: ${skill.title}
-   ${skill.metadata}
-   ___
-   ```
-3. Convert the e.data of exec(e: Event) as follows: ((e.data as ToData)?.toData()).getOrThrow() as SimpleDataObject,
-   and use the converted instance as the template arguments replacing the {{...}} placeholders in the prompt template
-4. Query the large model with agent.llmType and agent.llmName
-5. Access the large model with the replaced prompt + the function list
-6. Access functions with the result returned by the large model
-7. Build an event from the result returned by the function as the return value of the agent
-8. The interface of the context length control strategies and several implementations
-     #### Context strategies (subtypes of fountain::f_llm.llm.ContextPruner):
-     - A: Retain (RetainContext): retain the whole context
-     - B: LastN (LastNContext): the concrete number N is given by an initialization argument
-       - The name of this strategy is 'LastN_${n}', where n is the concrete number given at initialization
-     - B: Summary (ContextSummaryPruner): summarize the whole context
-       - The name of this strategy is 'Summary_BY_${llmType}_${model}', where llmType and model are initialization arguments
-       - llmType is what the large model can do; the possible values are text code image video audio embedding rerank tokenizer.
-       - model is the name of the large model
-     - D: Keywords (ContextKeywordsPruner): extract keywords from the whole context
-       - The name of this strategy is 'Keywords_BY_${llmType}_${model}'; llmType is what the large model can do and the possible values are text code image video audio embedding rerank tokenizer.
-       - model is the name of the large model
-     - E: DRC (DRCContextPruner): apply different context strategies to system and to the other messages
-       - The name of this strategy is 'DRC_BY_${systemPruner.name}_${otherPruner.name}'.
-     - F: Saturated context (SaturationContextPruner):
-       - The name of this strategy is 'Saturation_${pruner.name}'
-       - It applies the given strategy when the context is saturated,
-       - The saturation token count is specified in the large model configuration,
-       - agentId can be used to find the large model used by the agent and thereby determine the saturation token count in the large model configuration
-         - Different large models may have different saturation token counts,
-           - A large model that supports a 1M context usually produces severe hallucinations once the context reaches 10%~15%,
-           - A large model that supports a 200K context produces severe hallucinations at 80K.
-           - The Keywords and Summary strategies depend on a large model; be careful that the context sent to the large model executing the
-             strategy does not exceed its saturation token count
-
-
-## todo
-
-```cj
-package fountain::f_llm.finder
-public interface TodoFinder {
-    /**
-     * Save todos
-     * @param task The name of the todo task
-     * @param todos The todo list of the current task
-     */
-    func save(task: String, todos: ArrayList<Todo>): Unit
-    /**
-     * List todos
-     * @param task The name of the todo task
-     * @return The todo list
-     */
-    func list(task: String): ArrayList<Todo>
-    /**
-     * Update the status of a todo
-     * @param task The name of the todo task
-     * @param id The todo ID
-     * @param status The todo status
-     * @return The number of updated todos; a value other than 1 means the arguments were wrong or the todo does not exist
-     */
-    func updateStatus(task: String, id: Int64, status: String): Int64
-}
+let _ = supervisor.register('adhoc', 'temporary flow', status: LoomStatus.COMPILED)
+let _ = supervisor.unregister('adhoc')
 ```
 
-```cj
-package fountain::f_llm.tool
-@DataAssist[props fields]
-public class TodoSavingParam {
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'Task name']
-    private var task: String = ''
-    @JsonArraySchema[description:'Todo list']
-    private var todos: ArrayList<TodoSaving> = ArrayList<TodoSaving>()
-}
-@DataAssist[props fields]
-public class TodoSaving {
-    @JsonStringSchema[description:'Todo title']
-    private var title: String = ''
-    @JsonStringSchema[description:'Todo details']
-    private var content: String = ''
-    @JsonStringSchema[description:'Todo status']
-    private var status: String = TODO_STATUS_PENDING
-    @JsonArraySchema[description:'List of predecessor todo IDs']
-    private var predecessor: ArrayList<Int64> = ArrayList<Int64>()
-}
-@DataAssist[props fields]
-public class TodoListParam{
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'Task name']
-    private var task: String = ''
-}
-@DataAssist[props fields]
-public class TodoStatusParam{
-    @JsonStringSchema[description:'The event name of the next step of the flow']
-    private var nextEvent: String = ''
-    @JsonStringSchema[description:'Task name']
-    private var task: String = ''
-    @JsonStringSchema[description:'Todo ID']
-    private var id: Int64 = 0
-    @JsonStringSchema[description:'The new todo status']
-    private var status: String = ''
-}
+| Behaviour | Notes |
+|---|---|
+| Registration | `execute` / `confirmFlow` register on commit; `delete` unregisters; `clarifying` is skipped (no source, cannot run) |
+| Routing | Only `compiled` flows (name/description/event) go to the model; non-JSON, blank or unknown names count as "no usable flow" |
+| Event name | `sv/<flow-name>`, kept apart from the internal tag `loom/<name>#<seq>` |
+| No usable flow | `llm_loomOnNoUsable=false` → returns "没有可完成此工作的流程"; `true` → plan, register and run a new flow |
+| Store unavailable | Startup continues: `LoomBootstrap.startup(...)` reports `restoreFailed=true`, routes are empty but the flow service still works |
+| Disabled | Zero overhead: no registration, no routing, no extra model calls |
+
+---
+
+## Experience → skill evolution
+
+Flow end only writes experience; **every skill change goes through `SkillEvolutionJob`**:
+
+```
+trigger → read materials newer than the watermark (experience + knowledge)
+  → SkillMatcher: assign to existing skills / cluster into new-skill candidates
+  → evolve existing skills first: Policy → model rewrites details → SkillGate A/B → version + 1
+  → then create new skills: cluster large enough → SkillNamer (must return samples) → version 1
+  → SkillEvolutionLedger records the report → advance the watermark
 ```
 
-```cj
-package fountain::f_llm.tool
-@ToolCall
-public class TodoFunction {
-    @FunctionDefinition[
-        name: 'addTodo',
-        description: '添加待办'
-    ]
-    public func addTodo(param: TodoSavingParam): FunctionResult 
+| Component | Default policy |
+|---|---|
+| `SkillEvolutionPolicy` | ≥ 3 samples, success rate ≥ 0.8, 1-day cooldown; **2 days after a failed gate** |
+| `SkillGate` | Runs the skill's own `samples` against old/new details; new must be ≥ old and reach `minScore` |
+| `SkillNamer` | Title ≤ 24 chars, **at least one sample required** — otherwise the skill cannot self-evolve |
+| Knowledge dedupe | `processedAmong(docIds)` membership check, so a batch is not re-clustered every run |
 
-    @FunctionDefinition[
-        name: 'todoList',
-        description: '查询全部待办'
-    ]
-    public func todoList(param: TodoListParam): FunctionResult 
-    @FunctionDefinition[
-        name: 'updateTodoStatus',
-        description: '更新待办状态'
-    ]
-    public func updateStatus(param: TodoStatusParam): FunctionResult 
-}
+Register at startup:
+
+```cangjie
+LoomWiring.wire(chat, plannerModel: 'chat-pro',
+                evolutionCron: '0 0 3 * * * *',      // empty = disabled
+                evolutionUserId: 7,
+                evolutionNamespace: 'work',
+                evolutionNameCandidates: true,
+                skillEmbedder: SkillCatalog.embeddingEncoder('bge-m3'))
 ```
 
+### Multi-process exclusion: daily lease
 
-## tool call function definition
+The job runs once a day; a time-based UUID plus a date-level optimistic lock ensures only one process runs it:
 
-Several tool call functions may be defined in one class
-```cj
-/**
- * Used to decorate public instance functions of a class; that class must be decorated with the @ToolCall macro
- */
-@Annotation[target: [MemberFunction]]
-public class FunctionDefinition {
-    public const FunctionDefinition(
-        public let name!: String,
-        public let description!: String
-    ){}
-}
+| Vector store (`llm_memoryStore`) | Lease location | Exclusion |
+|---|---|---|
+| `mysql` / `postgres` | single-row table `llm_evolution_lease` | `UPDATE … WHERE lease_value = old`, a real CAS |
+| `f_hydra` | payload of a local all-zero vector record | local storage, single process |
+| `fhydra` | payload of a remote all-zero vector record | write-then-read verification |
+| others | f_store / in-memory | single process |
+
+An all-zero vector is used because a lease must never surface in semantic search (cosine is 0 with any query).
+
+```
+startup → EvolutionLeases.bootstrap(): write a UUID if absent
+daily trigger → acquire(now)
+  ├─ same day as the lease → empty string → give up
+  └─ older than today → new UUID + CAS on the old value
+       ├─ success → acquired
+       └─ failure (someone changed it first) → give up
 ```
 
-```cj
-macro package fountain::f_llm.macros
-/**
- * The macro used to define tool call functions; it decorates a class, the decorated class is registered with fountain::f_bean,
- * and the public instance functions of the decorated class are registered as tool call functions.
- * Only functions decorated with @FunctionDefinition are registered as tool call functions; otherwise an exception is thrown.
- */
-public macro ToolCall(input: Tokens): Tokens 
-/**
- * Used to decorate a class; the decorated class is registered with fountain::f_bean, and the public instance functions of the decorated class
- * are registered as tool call functions.
- * Only functions decorated with @FunctionDefinition are registered as tool call functions; otherwise an exception is thrown.
- * The difference is that the public instance functions of the class decorated with this macro also have matching aspects weaved into them.
- */
-public macro WeavedToolCall(input: Tokens): Tokens 
+---
+
+## Retrieval evaluation
+
+Unit tests only verify ranking logic; semantic quality needs the real model (see `doc/retrieval-eval.md`):
+
+| Path | Content |
+|---|---|
+| `eval/retrieval_corpus.tsv` | 50 documents (10 topics × 5) |
+| `eval/retrieval_queries.tsv` | 612 positives (300 templated + 300 hard + 12 multi-label) + 10 negatives |
+| `eval/run_eval.sh` | One-shot real-embedding run with a printed report |
+
+```bash
+eval/run_eval.sh                          # bge-m3 at 127.0.0.1:8000 by default
+fllm_evalMinScore=0.5 eval/run_eval.sh    # adjust the threshold
 ```
 
+Metrics: `recall@1` / `recall@5` / `MRR` / `nDCG@5` (rank-sensitive, normalised by the ideal ordering for multi-label cases) plus the negative pass rate.
+Measured with bge-m3 at `minScore=0.5`: templated ~100%, **hard set recall@1 39.66% / nDCG@5 54.76%**, negatives 90%; character overlap scores only 22% on the same hard set.
 
-## Configuration items
+Cangjie entry point:
 
-All configuration items are environment variables
-```cj
-public static const LLM = 'llm'
-/**
- * String
- * The path the large model may operate on; the large model can only manipulate files under this path
- */
-public static const FILE_SANDBOX_PATH = LLM + '_fileSandboxPath'
-/**
- * Positive integer
- * Number of retries when accessing the large model fails; Int64.Max by default
- */
-public static const LLM_ACCESS_TRYING_COUNT = LLM + '_accessTryingCount'
-/**
- * Positive integer
- * The retry time for accessing the large model: from the start of each attempt to interact with the large model, retrying is allowed for this
- * long, until the access succeeds or the time is up
- * The unit is seconds; Int64.Max by default
- */
-public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_accessTryingElapsed'
-/**
- * String
- * Faithful memory storage path
- */
-public static const LLM_FAITHFUL_MEMORY_PATH = LLM + '_faithfulMemoryPath'
-/**
- * Bool
- * Whether to save memory; only when memory is saved can experience be produced
- */
-public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
-/**
- * String
- * The model used to summarize experience; glm-4.7-flash by default
- */
-public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
+```cangjie
+let outcome = RetrievalEvalRunner.run(InMemoryMetaStore(), './eval', 'bge-m3', minScore: 0.5f64)
+println(outcome.report)
+// outcome.embedFailures must be 0; otherwise the run measured keywords, not vectors
 ```
+
+---
+
+## Bundled script and DDL
+
+### `deploy_bge_m3.sh`: local BGE-M3 embedding service
+
+Installs BGE-M3 as an OpenAI-compatible `/v1/embeddings` endpoint (dense + sparse + colbert), which is exactly what `llm_embeddingUrl` points at by default.
+
+```bash
+sudo ./deploy_bge_m3.sh                    # install or update (idempotent)
+sudo ./deploy_bge_m3.sh status             # service / model / port
+sudo ./deploy_bge_m3.sh smoke              # one embedding round-trip
+sudo ./deploy_bge_m3.sh restart
+sudo ./deploy_bge_m3.sh uninstall          # stop service, remove unit (keep model)
+sudo ./deploy_bge_m3.sh uninstall --purge  # also delete /opt/bge-m3
+```
+
+What it does: system deps + dedicated venv (`/opt/bge-m3/venv`) → install torch(CPU)+transformers+fastapi+uvicorn →
+fetch weights from ModelScope (including the `sparse_linear.pt` / `colbert_linear.pt` projections) → serve `/v1/embeddings` →
+register a systemd unit and run a health check.
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `BGE_HOME` | `/opt/bge-m3` | Install root (venv / model / server.py) |
+| `BGE_PORT` | `8000` | Listen port, matching `llm_embeddingUrl` |
+| `BGE_THREADS` | `8` | torch thread count |
+| `BGE_PIP_INDEX` / `BGE_PIP_EXTRA` | Tsinghua mirror / empty | pip index and extra index |
+| `BGE_MODEL_BASE` | ModelScope `BAAI/bge-m3` | Weight source |
+| `BGE_FORCE_DOWNLOAD` | `0` | Set `1` to re-download weights |
+
+Dense-only still works: point `llm_embeddingUrl` at any OpenAI-compatible endpoint, but missing sparse/colbert marks results
+`degraded` and disables reranking (see `doc/known-limitations.md` §2).
+
+### `tables-pg.sql` / `tables-mysql.sql`: schema
+
+The two files mirror each other column by column — only types, identity and index syntax may differ, so **they must be changed together**. 20 tables:
+
+| Group | Tables |
+|---|---|
+| Model config | `llm_conf` |
+| Memory and knowledge | `llm_memory` / `llm_memory_kind` / `llm_memory_event` / `llm_memory_vector` / `llm_memory_token` / `llm_document` / `llm_document_chunk` |
+| Metadata | `llm_character` / `llm_character_binding` / `llm_channel_binding` / `llm_prompt` / `skills` / `skill_references` / `llm_skill_version` / `agents` / `memory_summaries` / `agent_todo` |
+| Orchestration and usage | `llm_loom_flow` / `llm_token_usage` |
+
+```bash
+# PostgreSQL (needs pgvector >= 0.7, extension name "vector")
+psql "postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test" \
+     -c 'CREATE EXTENSION IF NOT EXISTS vector'
+psql "postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test" -f tables-pg.sql
+
+# MySQL (plain tables 8.0+; VECTOR columns and HNSW indexes need 9.2+)
+mysql -h127.0.0.1 -ufllm_test -p fllm_test < tables-mysql.sql
+```
+
+| Note | Detail |
+|---|---|
+| The 4 evolution tables are not here | `llm_skill_evolution` / `llm_skill_evolution_state` / `llm_skill_evolution_knowledge` / `llm_evolution_lease` are created idempotently at startup by `EvolutionStores` / `EvolutionStateStores` / `EvolutionLeases.bootstrap()` |
+| Existing tables are not altered | `CREATE TABLE IF NOT EXISTS` only creates; adding a column requires your own `ALTER TABLE` (and keeping both files in sync) |
+| Old MySQL / MariaDB | Drop the trailing vector-index statements (and the vector columns for MariaDB); retrieval degrades to "fetch candidates + compute in the app" — same results, just slower |
+| Keep in sync with code | Change `tables-pg.sql` first, then `tables-mysql.sql` and the fields in `src/model/po` |
+
+---
+
+## Configuration
+
+All environment variables, read once at startup.
+
+### Storage and embeddings
+
+| Key | Default | Purpose |
+|---|---|---|
+| `llm_memoryStore` | `f_hydra` | Content family + lease: `f_hydra`/`fhydra`/`postgres`/`mysql`/`inMemory` |
+| `llm_metaStore` | `f_store` | Metadata family + evolution report/state |
+| `llm_metaStorePath` | `./data/f_llm-meta` | f_store directory |
+| `llm_contentStoreUrl` | empty | Remote content store URL (fhydra) |
+| `llm_hydraPath` / `llm_hydraUrl` / `llm_hydraSecret` | `./data/f_hydra` / `http://127.0.0.1:18081/rpc` / empty | f_hydra path, remote URL, shared secret |
+| `llm_embeddingUrl` | `http://127.0.0.1:8000/v1/embeddings` | BGE-M3 endpoint |
+| `llm_embeddingTimeoutMs` / `llm_embeddingRetries` | `3000` / `2` | Timeout and retries |
+| `llm_rebuildIndexOnStart` / `llm_rebuildIndexUserId` / `llm_rebuildIndexNamespace` | off / 0 / empty | Rebuild vector indexes at startup |
+| `llm_memoryUserId` | 0 | Default memory owner |
+
+### Model access
+
+| Key | Default | Purpose |
+|---|---|---|
+| `llm_confSource` | empty | Config source: `static` / `file` / `env` / `database` / `store` |
+| `llm_confs` | empty | Inline configs (JSON array) |
+| `llm_confRefreshSeconds` | none | Config refresh interval |
+| `llm_loadBalanceAlgo` | none | Candidate selection algorithm |
+| `llm_failureThreshold` / `llm_cooldownSeconds` | none | Circuit-breaker threshold and cooldown |
+| `llm_accessTryingCount` / `llm_accessTryingElapsed` | none | Retry count / total retry window |
+| `llm_streamIdleTimeout` / `llm_streamMaxLineBytes` | none | Streaming idle timeout and line limit |
+| `llm_toolResultMaxBytes` / `llm_fetchMaxBytes` | none | Tool result / fetch size limits |
+| `llm_prunerLlmName` / `llm_summarisingLlmName` | none | Model for model-dependent pruners / extraction |
+| `llm_balanceLowThreshold` | none | Balance warning threshold |
+| `llm_supervisor` | `false` | Enable flow routing (Supervisor): compiled flows auto-register and can be dispatched by description |
+| `llm_loomOnNoUsable` | `false` | Auto-build a new flow when Supervisor finds no usable one; effective only with `llm_supervisor=true` |
+| `llm_channels` | empty | Third-party accounts (JSON array, one per account; invalid entries are skipped with a warning) |
+| `llm_channelSendRoots` | empty | Allowed roots for outgoing attachments (comma separated); falls back to `llm_fileSandboxPath`, otherwise attachments are disabled |
+
+### Others
+
+| Key | Default | Purpose |
+|---|---|---|
+| `llm_fileSandboxPath` | none | File tools are confined to this directory |
+| `llm_faithfulMemoryPath` | none | Faithful memory path |
+| `llm_makingMemory` | none | Whether to persist memory (required for experience) |
+| `llm_summarisingModel` / `llm_summarisingActionKind` | `glm-4.7-flash` / none | Extraction model and action kind |
+| `llm_db` | none | Database connection (SQL deployments) |
+| `hydra_filterFields` | `kind,save_day,tags` | Server-side inverted-index allowlist (rebuilt on restart when changed) |
+| `fllm_runEval` / `fllm_evalModel` / `fllm_evalMinScore` / `fllm_evalDir` | unset / `bge-m3` / `0.2` / `./eval` | Retrieval evaluation |
+
+Legacy keys `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` / `llm_contentStore` are recognised but ignored, with a warning per key at startup.
+
+---
+
+## Tests
+
+```bash
+cjpm test                 # unit tests, no external services
+cjpm test                 # DB-backed cases run when reachable, otherwise print SKIP
+```
+
+Integration tests probe connectivity and skip themselves when the database is unreachable.
+
+---
+
+## Documentation
+
+| File | Content |
+|---|---|
+| `doc/f_llm.md` | Design doc: layering, contracts, data layout, key flows, failure handling, test strategy |
+| `doc/f_llm-memory-design.md` | Memory, knowledge, skill and persona design with prompts |
+| `doc/loom.md` | loom orchestration, store gateway, persona, skill evolution, report table |
+| `doc/retrieval-eval.md` | Retrieval evaluation: data format, metrics, baselines, thresholds |
+| `doc/content-store.md` | Content-store contract |
+| `doc/known-limitations.md` | Known limitations |
+| `doc/dev-env.md` | Development environment |
+| `doc/todo.md` | Open items |
+| `doc/spec/add-loom-supervisor/` | Spec copies for flow routing (proposal / spec / design / tasks) |
+
+---
+
+## Known limitations (summary)
+
+| Item | Note |
+|---|---|
+| Configuration is read-only | Read once at startup; switching stores or endpoints requires a restart |
+| Encoder failures degrade silently | `SkillCatalog` falls back to keywords; use `embedFailureDetail()` to see which path ran |
+| Rebuild is a full scan | Rebuilding the inverted index is O(records); prefer off-peak |
+| `processedKnowledge` is capped | Only for operations/diagnostics; dedupe uses `processedAmong`, which is unbounded in history |
+| Scheduling is per process | `SkillEvolutionJob.schedule` registers in-process; cross-process exclusion relies on the daily lease |
+
+## A2A (Agent-to-Agent)
+
+Disabled by default. With `llm_a2aEnabled=true`, wiring exposes `loom.Supervisor` as an A2A agent:
+
+| Direction | Usage |
+|---|---|
+| Outside → loom | A2A clients call `a2a.message.send`; the text goes to `Supervisor.dispatch` and the outcome becomes the task state |
+| loom → outside | `LoomA2aClient().ask(url, text)`, or the in-flow tool `a2aCall{url, text}` |
+
+Mapping: `dispatched` / `created` → `completed`, `clarifying` → `input-required`, everything else → `failed`.
+`dispatch` is synchronous, so long flows make the A2A request wait; use `a2a.message.stream` (SSE) when you need progress events.

@@ -10,7 +10,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
                         \/          \/        \/
 ```
 
-![fountain](.assets/README/fountain.jpg)
+![fountain](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/fountain.jpg)
 
 # fountain
 
@@ -66,13 +66,13 @@ fboot help # 显示fboot的其他功能
 
 下图是 fountain 各模块之间的依赖关系（箭头 `A → B` 表示 A 依赖 B；基础层为不依赖任何模块的模块，蓝框为被依赖次数最多的模块；只画「`cjpm.toml` 声明了、且源码里真的 import 了对方 API」的依赖，每个模块**调用次数前三**的依赖画彩色实线、其余依赖画灰色虚线；图中不含 `fdemo`、`fcoder`、`frpcdemo` 等示例应用）：
 
-![fountain 模块依赖关系](.assets/README/module-dependencies.svg)
+![fountain 模块依赖关系](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/module-dependencies.svg)
 
 下面这张矩阵图是同一份数据的另一种读法，适合按模块查「它依赖了谁 / 谁依赖了它」（行 = 依赖方，列 = 被依赖方，两轴按同一顺序排列，格子颜色 = 依赖方的颜色、深浅 = 该模块对该依赖的 API 调用次数；每行调用次数前三的依赖为彩色格，其余为浅灰格）：
 
-![fountain 模块依赖矩阵](.assets/README/module-dependency-matrix.svg)
+![fountain 模块依赖矩阵](https://raw.gitcode.com/Cangjie-TPC/fountain/raw/master/.assets/README/module-dependency-matrix.svg)
 
-依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](docs/模块依赖图/README.md)。
+依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](https://gitcode.com/Cangjie-TPC/fountain/blob/master/docs/%E6%A8%A1%E5%9D%97%E4%BE%9D%E8%B5%96%E5%9B%BE/README.md)。
 
 ## `fountain-developer`
 
@@ -298,6 +298,21 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README.md>
 
+### `fountain::f_email`
+邮件客户端：SMTP / POP3 / IMAP4rev1 + MIME 解析与生成，统一 `Email` 门面（发信/列信/读正文/取附件/删信），流式附件、TLS 与凭据脱敏
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_email/README.md>
+
+### `fountain::f_xml`
+通用 XML 1.0 解析与生成：流式事件（推 / 拉）、DOM、命名空间、DTD 内部实体、安全上限
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_xml/README.md>
+
+### `fountain::f_svg`
+SVG 1.1 静态文档：值类型、类型化 DOM、解析与生成、未知内容无损保留、安全过滤与规模上限
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_svg/README.md>
+
 ### `fountain::f_zip`
 ZIP 容器读写：ZIP64 双向、流式写入（24 字节 ZIP64 descriptor）、大条目落盘、Zip Slip / 符号链接 / 炸弹防护
 
@@ -380,6 +395,26 @@ x86_64 / aarch64 机器码后端执行，并以 `JitFunction.call<T>` 与宿主�
 语义以解释器为准，机器码仅支持 Linux，其余平台自动走解释器。
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jit/README.md>
+
+### `fountain::f_probe`
+服务器监控扩展契约：监控项 `ProbeAgent`、告警渠道 `AlarmMessageChannel`、线程安全注册表与
+稳定错误码。第三方扩展只需依赖本模块即可编译动态库，无需引入 RPC、邮件或 TUI 依赖。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_probe/README.md>
+
+### `fountain::f_tui`
+Unix 终端后端：POSIX `termios` raw mode、终端尺寸、按键解码、ANSI 差分渲染，以及
+`ratatui_buffer.Buffer → ANSI` 渲染器。只依赖 `f_base` 与 ratatui 基础包，
+不引入 `crossterm` / `ratatui_backend` / `ratatui_terminal` / `ratatui_widgets`。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_tui/README.md>
+
+### `fountain::fprobe`
+服务器监控可执行程序（`fprobe agent` / `fprobe supervisor`）：节点侧周期采集主机指标并通过 RPC
+暴露；监督端汇聚多节点数据，提供 TUI 与 resident 两种运行模式、告警、终端图表、SVG 内联的
+周期报告、可选 LLM 智能体与 `custom/` 动态库扩展。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/fprobe/README.md>
 
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序

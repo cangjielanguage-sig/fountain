@@ -44,18 +44,26 @@ f_jit
 f_mq
 f_dbd
 f_dbm
+f_email
 f_jsonrpc
 f_mcp
+f_xml
+f_svg
+f_chart
 f_zip
+f_excel
+f_rule
+f_probe
+f_tui
+f_llm
+fboot
 fmq
 fdbm
-fjsonrpcdemo
-fmcpdemo
-fboot
+fprobe
 .
 
 [exclude]
 
 [detention]
-f_llm
 fleet
+f_a2a

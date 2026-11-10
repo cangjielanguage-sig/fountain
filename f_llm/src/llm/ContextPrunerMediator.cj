@@ -21,22 +21,52 @@ public class ContextPrunerMediator {
     private let pruners = ConcurrentHashMap<String, ContextPruner>()
 
     private let mutex = Mutex()
-    private func load(name: String){
-        if(let Some(x) <- pruners.get(name)){
-            return x
-        }
+
+    private var loaded = false
+
+    /** 扫描 @Bean；只扫一次，之后走注册表 */
+    private func ensureLoaded(){
         synchronized(mutex){
-            if(let Some(x) <- pruners.get(name)){
-                return x
+            if(loaded){
+                return
             }
             for(pruner in lookupList<ContextPruner>()){
                 pruners[pruner.name] = pruner
             }
-            pruners[name]
+            loaded = true
         }
     }
 
+    /**
+     * 显式注册（新增算法走这里，或让自己的类带 @Bean）。
+     *
+     * 同名直接失败：策略名就是 `agent.conf['pruner']` 里的字符串，
+     * 两个实现抢同一个名字时，裁出来的上下文取决于扫描顺序，这种不确定性比启动失败更难查。
+     */
+    public func register(pruner: ContextPruner): Unit {
+        ensureLoaded()
+        synchronized(mutex){
+            if(pruners.contains(pruner.name)){
+                throw IllegalArgumentException('context pruner already registered: ${pruner.name}')
+            }
+            pruners[pruner.name] = pruner
+        }
+    }
+
+    public func names(): ArrayList<String> {
+        ensureLoaded()
+        let result = ArrayList<String>()
+        for((name, _) in pruners){
+            result.add(name)
+        }
+        result
+    }
+
     public func prune(name: String, agentId!: Int64, session!: String, messages!: ArrayList<ChatMessage>): ArrayList<ChatMessage> {
-        load(name).prune(agentId, session, messages)
+        ensureLoaded()
+        if(let Some(pruner) <- pruners.get(name)){
+            return pruner.prune(agentId, session, messages)
+        }
+        throw IllegalArgumentException('unknown context pruner: ${name}, available: ${names()}')
     }
 }

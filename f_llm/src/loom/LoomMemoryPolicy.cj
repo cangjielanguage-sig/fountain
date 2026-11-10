@@ -1,0 +1,254 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+package fountain::f_llm.loom
+
+import std.collection.*
+import std.sync.*
+import std.time.*
+import fountain::f_data.*
+import fountain::f_log.*
+import fountain::f_llm.util.TextClip
+
+/** `synchronized` 块是 Unit 语义，序号用持有者带出 */
+/** `synchronized` 块是 Unit 语义，策略用持有者带出 */
+class PolicyBox {
+    public var value: LoomMemoryPolicy = LoomMemoryPolicy()
+}
+
+class DocSeqBox {
+    public var value: Int64 = 0
+}
+
+/**
+ * 流程结束后从临时上下文提炼记忆与经验的策略。
+ *
+ * - `enabled=false`：完全关闭（连临时上下文都不记）；
+ * - `summarize=false`（默认）：规则提炼——原文摘要写记忆，执行概况写经验，不发额外模型请求；
+ * - `summarize=true`：让模型读摘要，返回 `{"memory":"…","experience":"…"}`；
+ *   解析失败时回落到规则提炼，不会因为模型胡说就丢数据。
+ */
+public class LoomMemoryPolicy {
+    public let enabled: Bool
+    public let userId: Int64
+    public let namespace: String
+    public let maxTurns: Int64
+    public let summarize: Bool
+    public let model: String
+    /** 是否把提炼结果同时写进知识库（默认只写记忆与经验） */
+    public let writeKnowledge: Bool
+    /** 未显式指定技能时，是否按任务描述自动挑选（走 [SkillCatalog]） */
+    public let autoSkills: Bool
+    /** 自动挑选的条数上限 */
+    public let skillTopK: Int64
+    /** 自动挑选的最低相关度 */
+    public let skillMinScore: Float64
+
+    public init(enabled!: Bool = true, userId!: Int64 = 0, namespace!: String = 'loom', maxTurns!: Int64 = 20,
+        summarize!: Bool = false, model!: String = '', writeKnowledge!: Bool = false, autoSkills!: Bool = true,
+        skillTopK!: Int64 = 3, skillMinScore!: Float64 = 0.2) {
+        this.enabled = enabled
+        this.userId = userId
+        this.namespace = namespace
+        this.maxTurns = maxTurns
+        this.summarize = summarize
+        this.model = model
+        this.writeKnowledge = writeKnowledge
+        this.autoSkills = autoSkills
+        this.skillTopK = skillTopK
+        this.skillMinScore = skillMinScore
+    }
+
+    private static let policyMutex = Mutex()
+    private static var current = LoomMemoryPolicy()
+
+    public static func install(policy: LoomMemoryPolicy): Unit {
+        synchronized(policyMutex) {
+            current = policy
+        }
+    }
+
+    public static func reset(): Unit {
+        synchronized(policyMutex) {
+            current = LoomMemoryPolicy()
+        }
+    }
+
+    public static func effective(): LoomMemoryPolicy {
+        let box = PolicyBox()
+        synchronized(policyMutex) {
+            box.value = current
+        }
+        box.value
+    }
+}
+
+/** 从临时上下文提炼并写入记忆（`kind=note`）与经验（`kind=experience`） */
+public class LoomMemoryExtractor {
+    private init() {
+    }
+
+    /**
+     * @param flowName 流程名，用于记录标题
+     * @param turns 本次执行的模型交互快照
+     * @param host 宿主；仅 `summarize=true` 时用它发一次总结请求
+     * @return 写入条数（0~2）
+     */
+    public static func extract(flowName: String, turns: ArrayList<LlmTurn>, host: LoomHost, policy: LoomMemoryPolicy,
+        outcome!: String = 'success'): Int64 {
+        if (turns.isEmpty()) {
+            return 0
+        }
+        let digest = digestOf(turns, policy.maxTurns)
+        let verdict = if (outcome == 'success') {
+            'success'
+        } else {
+            outcome
+        }
+        var memory = '结果：${verdict}\n流程 ${flowName} 的上下文摘要：\n${digest}'
+        var experience = '结果：${verdict}\n流程 ${flowName} 执行了 ${turns.size} 次模型交互，'
+            + '最后一次输出：\n${truncate(turns[turns.size - 1].output, 600)}'
+
+        if (policy.summarize && !policy.model.isEmpty()) {
+            let prompt = '以下是流程「${flowName}」执行过程的模型交互摘要：\n${digest}\n\n'
+                + '提炼两条内容，只输出 JSON：\n'
+                +
+                '{"memory":"这次任务用到了哪些事实与结论","experience":"下次可复用的做法或踩过的坑"}'
+            let text = Planner.stripFence(host.callLlm(policy.model, '', prompt))
+            let parsed = parse(text)
+            // 按字段独立回落：模型只给一半时，另一半用规则提炼结果补齐
+            if (!parsed[0].trimAscii().isEmpty()) {
+                memory = parsed[0]
+            }
+            if (!parsed[1].trimAscii().isEmpty()) {
+                experience = parsed[1]
+            }
+        }
+
+        var written: Int64 = 0
+        if (LoomMemoryExtractor.write(policy, memory, '流程 ${flowName} 记忆', 'note')) {
+            written++
+        }
+        // 失败经验单独用一个 kind：后续统计成功率、筛演进样本时可以直接按 kind 查
+        let experienceKind = if (verdict == 'success') {
+            'experience'
+        } else {
+            'experience_failed'
+        }
+        if (LoomMemoryExtractor.write(policy, experience, '流程 ${flowName} 经验', experienceKind)) {
+            written++
+        }
+        if (policy.writeKnowledge && !memory.trimAscii().isEmpty()) {
+            // 归属写进 id：跨进程/跨租户不会撞号，演进侧也能按前缀只取自己的知识
+            let stamp = DateTime.now().toUnixTimeStamp().toSeconds()
+            let docId = 'loom:${policy.userId}:${policy.namespace}:${flowName}:${stamp}-${nextDocSeq()}'
+            let payload = '{\"docId\":${FlowPlan.jsonQuote(docId)},'
+                + '\"title\":${FlowPlan.jsonQuote('流程 ${flowName} 记忆')},'
+                + '\"content\":${FlowPlan.jsonQuote(memory)}}'
+            try {
+                LoomHostApi.callStore('knowledge', 'upsert', payload)
+                written++
+            } catch (error: Exception) {
+                ()
+            }
+        }
+        written
+    }
+
+    private static let seqMutex = Mutex()
+    private static var seq: Int64 = 0
+
+    /** 知识文档 id 后缀：流程可重复执行，用递增序号避免互相覆盖 */
+    private static func nextDocSeq(): Int64 {
+        let box = DocSeqBox()
+        synchronized(seqMutex) {
+            seq++
+            box.value = seq
+        }
+        box.value
+    }
+
+    private static func write(policy: LoomMemoryPolicy, content: String, title: String, kind: String): Bool {
+        if (content.trimAscii().isEmpty()) {
+            return false
+        }
+        let payload = '{\"userId\":${policy.userId},'
+            + '\"namespace\":${FlowPlan.jsonQuote(policy.namespace)},'
+            + '\"title\":${FlowPlan.jsonQuote(title)},'
+            + '\"content\":${FlowPlan.jsonQuote(content)},'
+            + '\"kind\":${FlowPlan.jsonQuote(kind)}}'
+        try {
+            LoomHostApi.callStore('memory', 'add', payload)
+            true
+        } catch (error: Exception) {
+            // 存储未装配时不影响流程结果
+            false
+        }
+    }
+
+    private static func digestOf(turns: ArrayList<LlmTurn>, maxTurns: Int64): String {
+        var text = ''
+        let limit = if (maxTurns > 0 && Int64(turns.size) > maxTurns) {
+            Int64(turns.size) - maxTurns
+        } else {
+            0
+        }
+        var index = limit
+        while (index < Int64(turns.size)) {
+            let turn = turns[index]
+            text += '[${index + 1}] model=${turn.model}\n'
+            if (!turn.system.isEmpty()) {
+                text += 'system: ${truncate(turn.system, 300)}\n'
+            }
+            text += 'input: ${truncate(turn.input, 400)}\n'
+            text += 'output: ${truncate(turn.output, 400)}\n'
+            index++
+        }
+        text
+    }
+
+    /** JSON 解析失败时返回空串，调用方回落到规则提炼 */
+    private static func parse(text: String): Array<String> {
+        let fallback = ['', '']
+        let trimmed = text.trimAscii()
+        if (!trimmed.startsWith('{')) {
+            return fallback
+        }
+        match (JsonValue.fromStr(trimmed) as JsonObject) {
+            case Some(json) =>
+                let memory = fieldOf(json, 'memory')
+                let experience = fieldOf(json, 'experience')
+                if (memory.isEmpty() && experience.isEmpty()) {
+                    return fallback
+                }
+                [memory, experience]
+            case None => fallback
+        }
+    }
+
+    private static func fieldOf(json: JsonObject, key: String): String {
+        match (json.get(key)) {
+            case Some(value) => match (value as JsonString) {
+                case Some(text) => text.value
+                case None => ''
+            }
+            case None => ''
+        }
+    }
+
+    private static func truncate(text: String, limit: Int64): String {
+        TextClip.clip(text, limit)
+    }
+}

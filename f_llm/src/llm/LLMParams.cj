@@ -24,7 +24,8 @@ public open class LLMParams {
         private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
     private let thinking: Thinking = Thinking()
-    private var response_format: ResponseFormat = ResponseFormat.json
+    // 默认「文本」：多数平台不接受无 json 关键词却要 json_object 的请求（DeepSeek 直接 400）
+    private var response_format: ResponseFormat = ResponseFormat.text
     //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
     private var temperature: Float64 = 1.0
     private var max_tokens: Int64 = 65536
