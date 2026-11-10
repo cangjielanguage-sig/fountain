@@ -834,3 +834,15 @@ cjpm test                 # 真库用例连得上就跑，连不上打印 SKIP �
 | 演进重建是全量扫描 | 白名单变更时重建倒排，O(记录数)，建议低峰期操作 |
 | `processedKnowledge` 有上限 | 只用于运维查看；去重走 `processedAmong`，无上限 |
 | 单进程定时任务 | `SkillEvolutionJob.schedule` 注册在服务内，跨进程依靠每日租约 |
+
+## A2A（Agent-to-Agent）
+
+默认关闭。设 `llm_a2aEnabled=true` 后，装配时把 `loom.Supervisor` 暴露成 A2A 智能体：
+
+| 方向 | 用法 |
+|---|---|
+| 外部 → loom | A2A 客户端调 `a2a.message.send`，正文交给 `Supervisor.dispatch`，结果作为任务终态返回 |
+| loom → 外部 | `LoomA2aClient().ask(url, text)`；流程内可用工具 `a2aCall{url, text}` |
+
+结果映射：`dispatched` / `created` → `completed`，`clarifying` → `input-required`，其余 → `failed`。
+`dispatch` 是同步的，长流程会让 A2A 请求等待；需要边跑边推时用 `f_a2a` 的 `a2a.message.stream`（SSE）。

@@ -662,3 +662,10 @@ f_llm:loom:data:{name}:s     → stepSources（同上编码）
 | `confirm` 后自动执行 | 需要显式调用 `LoomService.executeNow`，`loomExecute` 不自动执行 |
 | 真实宿主 | `DefaultLoomHost` 的工具通道接 `FunctionMediator`，模型通道由装配方注入；没有内置 LLM 客户端 |
 | `step_sources` 编码 | 存 `id\u0001source`、`\u0002` 分隔（不是 JSON）：避免源码引号/换行的转义问题 |
+
+### A2A 桥
+
+- 开关：`llm_a2aEnabled`（默认 false，见 `LLMConfig.a2aEnabled()`）；关闭时不注册任何 A2A 方法；
+- 服务端：`SupervisorAgent <: A2aExecutor` 把 `dispatch(prompt)` 的结果映射成任务终态；
+- 客户端：`LoomA2aClient.ask(url, text)`；工具 `a2aCall` 供流程调用外部代理；
+- 装配：`LoomWiring.wire` 末尾 `LoomA2a.startIfEnabled()`，幂等（重复调用不会换掉任务存储）。

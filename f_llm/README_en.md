@@ -823,3 +823,15 @@ Integration tests probe connectivity and skip themselves when the database is un
 | Rebuild is a full scan | Rebuilding the inverted index is O(records); prefer off-peak |
 | `processedKnowledge` is capped | Only for operations/diagnostics; dedupe uses `processedAmong`, which is unbounded in history |
 | Scheduling is per process | `SkillEvolutionJob.schedule` registers in-process; cross-process exclusion relies on the daily lease |
+
+## A2A (Agent-to-Agent)
+
+Disabled by default. With `llm_a2aEnabled=true`, wiring exposes `loom.Supervisor` as an A2A agent:
+
+| Direction | Usage |
+|---|---|
+| Outside → loom | A2A clients call `a2a.message.send`; the text goes to `Supervisor.dispatch` and the outcome becomes the task state |
+| loom → outside | `LoomA2aClient().ask(url, text)`, or the in-flow tool `a2aCall{url, text}` |
+
+Mapping: `dispatched` / `created` → `completed`, `clarifying` → `input-required`, everything else → `failed`.
+`dispatch` is synchronous, so long flows make the A2A request wait; use `a2a.message.stream` (SSE) when you need progress events.
