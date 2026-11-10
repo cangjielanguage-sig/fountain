@@ -420,6 +420,7 @@ fprobe/
 | [`doc/rpc.md`](doc/rpc.md) | RPC 契约与最小客户端 |
 | [`doc/spec/add-fprobe/`](doc/spec/add-fprobe/) | OpenSpec 提案、设计、规格与任务 |
 | [`doc/spec/add-fprobe-tui-charts/`](doc/spec/add-fprobe-tui-charts/) | TUI 图表改造的提案、设计与任务 |
+| [`doc/spec/inline-report-charts/`](doc/spec/inline-report-charts/) | 报告图表内联的提案、设计与任务 |
 
 ## 故障排查
 

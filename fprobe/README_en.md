@@ -450,6 +450,7 @@ fprobe/
 | [`doc/rpc.md`](doc/rpc.md) | RPC contract and minimal client |
 | [`doc/spec/add-fprobe/`](doc/spec/add-fprobe/) | OpenSpec proposal, design, specs, tasks |
 | [`doc/spec/add-fprobe-tui-charts/`](doc/spec/add-fprobe-tui-charts/) | TUI chart change artifacts |
+| [`doc/spec/inline-report-charts/`](doc/spec/inline-report-charts/) | Inline report chart artifacts |
 
 ## Troubleshooting
 
