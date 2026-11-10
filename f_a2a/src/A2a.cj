@@ -18,3 +18,4 @@ package fountain::f_a2a
 /** 门面包：`import fountain::f_a2a.*` 即可拿到模型、服务端与客户端 */
 public import fountain::f_a2a.model.*
 public import fountain::f_a2a.server.*
+public import fountain::f_a2a.client.*

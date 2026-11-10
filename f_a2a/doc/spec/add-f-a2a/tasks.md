@@ -25,8 +25,8 @@
 
 ## 4. 客户端
 
-- [ ] 4.1 `A2aClient.send/get/cancel/close`；验证：对着进程内 `A2aServer` 走一轮真 HTTP（或 `JsonRpcClient` 桩）完成 send→get→cancel。
-- [ ] 4.2 错误透传：服务端 `-32020` → 客户端同码；验证：1 条用例。
+- [x] 4.1 `A2aClient.send/get/cancel/close`；验证：对着进程内 `A2aServer` 走一轮真 HTTP（或 `JsonRpcClient` 桩）完成 send→get→cancel。
+- [x] 4.2 错误透传：服务端 `-32020` → 客户端同码；验证：1 条用例。
 
 ## 5. 文档
 
