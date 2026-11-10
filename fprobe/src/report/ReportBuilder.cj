@@ -49,11 +49,11 @@ public class ReportDraft {
 }
 
 /**
- * 报告内容生成器（spec「报告内容与附件」）。
+ * 报告内容生成器（spec「报告内容与内联图表」）。
  *
  * 摘要永远包含每个节点的在线状态与关键指标；从未成功拉取的节点写「无数据」，
- * 拓扑缺失写「拓扑不可用」。图表按指标历史生成，单图失败只记录 WARN，
- * 不阻断其余图表。
+ * 拓扑缺失写「拓扑不可用」。图表按指标历史生成并内联到正文，单图失败只记录
+ * WARN，退化为纯文本行，不阻断其余图表。
  */
 public class ReportBuilder {
     private let selector: ChartSelector
@@ -80,6 +80,7 @@ public class ReportBuilder {
         let html = ArrayList<String>()
         let text = ArrayList<String>()
         let attachments = ArrayList<Attachment>()
+        var chartCount = 0
 
         html.add("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>fprobe 周期报告</title></head><body>")
         html.add("<h1>fprobe 周期报告</h1>")
@@ -121,7 +122,6 @@ public class ReportBuilder {
                     '${current} ${unit}'
                 }
                 let label = '${spec.label} (${key})'
-                html.add("<p>${escape(label)}: ${escape(valueText)}</p>")
                 text.add('  ${label}: ${valueText}')
 
                 try {
@@ -129,10 +129,15 @@ public class ReportBuilder {
                     let svg = renderer.render(chartSpec)
                     let attachment = store.write(state.node, key, svg)
                     attachments.add(attachment)
+                    html.add('<div class="fprobe-chart"><h4>${escape(state.node)} ' +
+                        '${escape(label)}：${escape(valueText)}</h4>${inlineSvg(svg)}</div>')
+                    chartCount += 1
                 } catch (e: Exception) {
                     logWarning('图表生成失败 ${state.node} ${key}: ${e.message}')
+                    html.add("<p>${escape(label)}: ${escape(valueText)}</p>")
                 } catch (e: Error) {
                     logWarning('图表生成失败 ${state.node} ${key}: ${e.message}')
+                    html.add("<p>${escape(label)}: ${escape(valueText)}</p>")
                 }
             }
             if (!hasMetric) {
@@ -150,14 +155,15 @@ public class ReportBuilder {
             text.add('  ${event.message}')
         }
 
+        html.add("<h2>拓扑</h2>")
         match (topology) {
             case Some(sample) =>
                 match (TopologyRenderer.render(sample)) {
                     case Some(svg) =>
                         let attachment = store.writeRaw("topology.svg", svg)
                         attachments.add(attachment)
-                        html.add("<p>拓扑附件: ${attachment.name}</p>")
-                        text.add('拓扑附件: ${attachment.name}')
+                        html.add('<div class="fprobe-topology">${inlineSvg(svg)}</div>')
+                        text.add('拓扑: 已内联（${sample.devices.size} 个设备 / ${sample.links.size} 条链路）')
                     case None =>
                         html.add("<p>拓扑不可用</p>")
                         text.add("拓扑不可用")
@@ -168,9 +174,22 @@ public class ReportBuilder {
         }
 
         html.add("</body></html>")
-        logInfo('报告批次 ${store.dir} 生成 ${attachments.size} 个附件')
-        ReportDraft("fprobe 周期报告", joinLines(text, "\n"), joinLines(html, ""),
+        let htmlText = joinLines(html, "")
+        logInfo('报告生成 ${chartCount} 张图表，HTML ${htmlText.toArray().size} 字节')
+        ReportDraft("fprobe 周期报告", joinLines(text, "\n"), htmlText,
             attachments.toArray(), store.dir)
+    }
+
+    /** 去掉 SVG 的 XML 前导声明；只处理开头，不碰正文。 */
+    private static func inlineSvg(svg: String): String {
+        let text = svg.trimAscii()
+        if (!text.startsWith("<?xml")) {
+            return text
+        }
+        match (text.indexOf("?>")) {
+            case Some(end) => text[end + 2..].trimAscii()
+            case None => text
+        }
     }
 
     private static func countAlarms(alarms: Array<AlarmEvent>): Array<Int64> {
