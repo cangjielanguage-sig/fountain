@@ -24,14 +24,14 @@ f_svg
 └── f_base    BaseException / StringGenerator
 ```
 
-The module follows the fountain repository version (currently `1.3.17`):
+The module follows the fountain repository version (currently `1.3.18`):
 
 ```toml
 [dependencies]
   "fountain::f_svg" = { path = "../fountain/f_svg" }
 ```
 
-With a central repository configured, `"fountain::f_svg" = "1.3.17"` also works.
+With a central repository configured, `"fountain::f_svg" = "1.3.18"` also works.
 Register `f_svg` in the repository root `.modules` file.
 
 ## Quick start

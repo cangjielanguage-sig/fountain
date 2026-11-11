@@ -13,7 +13,7 @@
 | 技能演进（经验 → 技能，带 A/B 门禁） | `fountain::f_llm.loom.SkillEvolutionJob` |
 | 检索质量评测 | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
-- 版本：`1.3.17`，`output-type = "dynamic"`
+- 版本：`1.3.18`，`output-type = "dynamic"`
 - 依赖：`f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util` 等，全部是同仓模块
 
 ---
