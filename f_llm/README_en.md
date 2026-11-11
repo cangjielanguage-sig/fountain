@@ -167,6 +167,8 @@ The source is chosen by `llm_confSource`; `llm_confs` can inline a set of config
 
 ### Provider dialects
 
+`ProviderDialect` turns the unified request body into each provider's format:
+
 | Dialect | Applies to |
 |---|---|
 | `StandardDialect` | OpenAI-compatible endpoints (most aggregators) |
@@ -202,7 +204,7 @@ Pruning runs through `ContextPrunerMediator.prune(...)`; every strategy keeps th
 | `FunctionMediator` | Registry and call entry (`FunctionMediator.call(name, args)`) |
 | `LLMToolLoop` | Multi-round "model asks for a tool → execute → feed back" loop |
 
-Built-in tools:
+Built-in tools (`ToolName` holds the constants):
 
 | Tool | Purpose |
 |---|---|
