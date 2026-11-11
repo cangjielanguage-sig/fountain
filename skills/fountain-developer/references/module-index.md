@@ -74,13 +74,13 @@
 | 名称 | 描述 | 形态 |
 | --- | --- | --- |
 | `fboot` | 应用启动器（构建 / 运行 / 测试 / 发布） | 可执行工具 |
-| `fcoder` | 命令行 AI 编程工具 | 可执行工具 |
 | `fdbm` | 数据库中间件服务端：一个逻辑库对内做分库路由、读写分离、全局表广播、ID 生成 | 可执行模块（`[include]` 已登记） |
 | `fmq` | MQ 服务端：`fmq server` / `fmq manager`（多节点队列、消费组游标、超时重投、死信） | 可执行模块（`[include]` 已登记） |
 | `fdemo` | 全链路示例（boot + user 两模块） | workspace |
 | `frpcdemo` | RPC 示例 | workspace |
 | `fmqdemo` | MQ 两端示例（`fmqpub` 发布端 / `fmqsub` 消费端，均为 fboot 加载的动态库） | workspace |
 | `fdbmdemo` | 数据库中间件示例（客户端 + 自定义扩展动态库） | workspace |
+| `fhydra` | 向量库 f_hydra 的 JSON-RPC 服务（可执行文件，HTTP 层用 f_jsonrpc） | 可执行模块 |
 | `fjsonrpcdemo` | JSON-RPC 端到端示例（一个进程跑服务端，另一个跑客户端） | workspace |
 | `fmcpdemo` | MCP 端到端示例（server / client 两个动态模块） | workspace |
 | `fprobe` | 服务器监控可执行程序：`fprobe agent` 采集 + `fprobe supervisor` 聚合（TUI、告警、内联 SVG 报表、可选 LLM 参谋） | 可执行工具 |
