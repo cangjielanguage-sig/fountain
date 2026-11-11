@@ -13,7 +13,7 @@ A large-model engineering library for Cangjie, part of the [fountain](../) repos
 | Skill evolution (experience → skill, with A/B gate) | `fountain::f_llm.loom.SkillEvolutionJob` |
 | Retrieval quality evaluation | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
-- Version: `1.3.17`, `output-type = "dynamic"`
+- Version: `1.3.18`, `output-type = "dynamic"`
 - Dependencies: `f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util`, all modules in the same repository
 
 ---
