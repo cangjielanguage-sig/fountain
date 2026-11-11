@@ -1,3 +1,39 @@
+2026-11-11
+    chore(release): 所有模块 cjpm.toml（含 fdemo / frpcdemo / fmqdemo / fdbmdemo / fmcpdemo /
+      fjsonrpcdemo / scripts 工作区）与 f_version/src/FountainVersion.cj 由 1.3.17 升到 1.3.18
+    docs(README): 根 README（中英）补齐 f_a2a / f_chart / f_excel / f_hydra / f_jsonrpc / f_mcp /
+      f_rule 模块条目；各模块 README 按最新代码补「其他公开 API」小节（中英同构）
+    docs(依赖图): 按最新依赖重生成依赖图与矩阵图——64 个库模块、336 条真实依赖；示例应用排除名单
+      补 fhydra / fjsonrpcdemo / fmcpdemo，节点数与根 README 模块清单一致
+    docs(skills): fountain-developer 按最新代码同步——模块索引补 13 个模块与对应选型项、新增
+      JSON-RPC / MCP 服务端写法（@Mcp、mcp_* 配置）、移植映射补 Excel / XML / ZIP / 图表 / 邮件 /
+      规则 / 向量库
+2026-11-10
+    feat(f_a2a): 新增 A2A 动态库——模型层（状态机、错误码、Part / Message / Artifact / Task /
+      AgentCard 的 JSON 往返）、任务存储与执行器、A2aServer（send / get / cancel / stream /
+      resubscribe / pushConfig / card）、A2aClient、非文本 Part 透传与扩展卡片
+    feat(f_jsonrpc.sse): 服务端推送内核——SseStream（阻塞读 / 心跳 / 有界丢弃）与 SseHub
+      （发布订阅 / 过滤 / 断线补发）
+    refactor(f_jsonrpc.sse): 客户端 SseConnection 改为事件级 next(): ?SseEvent——删掉
+      SseFrameParser / SseFrame 与二次拼装，复用 f_httpclient 建流 + SseReader 分帧，去掉手写的
+      HTTP / chunked 解析；坏帧校验补「必须是对象」
+    fix(f_mvc,f_jsonrpc): InputStream 响应体补 Transfer-Encoding: chunked（此前该分支实测 500）；
+      新增 SseMapping / SseController 与 SSE 流式冒烟用例
+    feat(f_llm.loom): A2A 双向桥——llm_a2aEnabled 开关（默认关）、SupervisorAgent 适配器、
+      LoomA2a 幂等装配、LoomA2aClient 与 a2aCall 工具
+    feat(fprobe): 报表图内联进 HTML body，报告拓扑与空历史路径加固
+    docs(f_hydra): 补英文 README，与中文逐节对应
+    chore: .modules 顺序调整（fboot 前移至 fmq 之前、fprobe 登记并移除示例模块）；f_llm doc 与
+      fmq / fprobe 启动脚本纳入打包范围
+2026-11-09
+    feat(f_tui): 新增自包含 Unix 终端后端——POSIX termios raw mode、终端尺寸、按键解码、
+      ANSI 差分渲染，仅依赖 f_base 与 ratatui 基础包
+    feat(f_chart.tui): 新增 TUI 子包（M1–M7）——柱族按系列配色与符号、真彩色、TuiCellChart
+      单元矩阵，火焰图 TUI 与 charts/*.tui.txt 字符画样例
+    feat(f_probe): 新增服务器监控扩展契约——监控项 ProbeAgent、告警渠道 AlarmMessageChannel
+      与线程安全注册表
+    feat(fprobe): 新增服务器监控可执行程序——CPU / 内存 / 磁盘 / 系统 / 网络 / 健康 / 服务 /
+      拓扑采集、告警引擎与邮件渠道、自定义扩展加载、TUI 视图与常驻运行时、定向 RPC 传输、LLM 参谋
 2026-11-08
     feat(f_svg): M7 生成 API——新增作者侧 SvgBuilder（SvgAuthoringBuilder.cj）、
       十种形状与引用元素、样式呈现属性、类型化 animate / animateTransform /
