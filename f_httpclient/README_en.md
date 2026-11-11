@@ -210,5 +210,52 @@ extend HttpResponse <: ExtendHttpResponse
 The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
 
 - `HttpClient`: `func enablePush(enable: Bool): This`, `func headerTableSize(size: UInt32): This`, `func httpProxy(addr: String): This`, `func httpsProxy(addr: String): This`, `func initialWindowSize(size: UInt32): This`, `func logger(logger: Logger): This`, `func maxConcurrentStreams(size: UInt32): This`, `func maxFrameSize(size: UInt32): This`, `func maxHeaderListSize(size: UInt32): This`, `func noProxy(): This`
-- `HttpResponse`: `func readEntire(): String`, `func readJson(): JsonValue`, `func readToEnd(): Array<Byte>`, `func reader(): StringReader<InputStream>`, `func tryParse<T>(): ?T where T <: DataFields<T>`
+- `HttpResponse`: `func readEntire(): String`, `func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader`, `func readJson(): JsonValue`, `func readToEnd(): Array<Byte>`, `func reader(): StringReader<InputStream>`, `func tryParse<T>(): ?T where T <: DataFields<T>`
 - Module level: `SseException` (class)
+
+---
+
+## SSE client
+
+Parsing `text/event-stream` lives in this module, so business modules (such as `f_llm`) only consume events and no longer each carry their own line parser.
+
+```cj
+public struct SseEvent {
+    public SseEvent(public let event: String, public let data: String, public let id: String, public let retry: Int64){}
+}
+
+public class SseReader <: Resource {
+    public init(body: InputStream, maxLineBytes!: Int64 = 1024 * 1024, idleTimeout!: Duration = Duration.second * 120)
+    public func next(): ?SseEvent      // returns None when the stream ends normally
+    public func close(): Unit
+}
+
+extend HttpResponse <: ExtendHttpResponse {
+    public func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader
+}
+```
+
+Usage:
+
+```cj
+resource(response.sseReader(maxLineBytes: 1 << 20, idleTimeout: Duration.second * 120)){reader =>
+    while(let Some(event) <- reader.next()){
+        // event.data is the raw text; business semantics such as `[DONE]` are up to the caller
+    }
+}
+```
+
+Implementation requirements (each one has a unit test):
+
+| # | Rule |
+|---|---|
+| 1 | Read `response.body` byte by byte (8 KiB buffer loop) — never `readToEnd()` first, or "streaming" is a lie |
+| 2 | Lines are separated by `\n`, with a trailing `\r` tolerated |
+| 3 | Lines starting with `:` are comments / heartbeats and are dropped without producing an event |
+| 4 | An empty line ends an event; only `event` / `data` / `id` / `retry` are recognized, all other fields are dropped |
+| 5 | Multi-line `data` is joined with `\n`; one leading space is stripped from field values |
+| 6 | A single line longer than `maxLineBytes` raises `SseLineTooLongException` |
+| 7 | No byte read within `idleTimeout` raises `SseTimeoutException` (distinct from a connect timeout) |
+| 8 | **Returns the raw `data`** — it does not interpret `[DONE]` and does not parse JSON |
+| 9 | `close()` closes the underlying stream (only if it can be closed); `Resource` makes `resource(...)` work |
+| 10 | No automatic reconnect and `Last-Event-ID` is not consumed (a broken LLM stream can only be re-requested) |

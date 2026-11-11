@@ -252,7 +252,7 @@ The server side of the [f_dbd](../f_dbd) contract:
 
 - `CONSUME(SqlPayload)` → `RESP(QueryResultServerPayload | UpdateResultPayload)`.
 - Queries **never prefetch**: the first packet carries column metadata only; every
-  `NEXT_ROW` advances the physical cursor once and rebuilds the per-row cell buffer.
+  `NEXT_ROW` advances the physical cursor once (`next()`) and rebuilds the per-row cell buffer.
 - Column reads are served from that buffer (stream handles are cached and opened once
   per row/column); `bufSize <= 0` uses the default chunk size.
 - Close is `UNSUBSCRIBE(QueryResultClosePayload(qid))` → `ACK`. A wrong qid, a missing
