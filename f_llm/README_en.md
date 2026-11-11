@@ -13,7 +13,7 @@ A large-model engineering library for Cangjie, part of the [fountain](../) repos
 | Skill evolution (experience → skill, with A/B gate) | `fountain::f_llm.loom.SkillEvolutionJob` |
 | Retrieval quality evaluation | `fountain::f_llm.loom.RetrievalEvalRunner` |
 
-- Version: `1.3.17`, `output-type = "dynamic"`
+- Version: `1.3.18`, `output-type = "dynamic"`
 - Dependencies: `f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util`, all modules in the same repository
 
 ---
@@ -167,6 +167,8 @@ The source is chosen by `llm_confSource`; `llm_confs` can inline a set of config
 
 ### Provider dialects
 
+`ProviderDialect` turns the unified request body into each provider's format:
+
 | Dialect | Applies to |
 |---|---|
 | `StandardDialect` | OpenAI-compatible endpoints (most aggregators) |
@@ -202,7 +204,7 @@ Pruning runs through `ContextPrunerMediator.prune(...)`; every strategy keeps th
 | `FunctionMediator` | Registry and call entry (`FunctionMediator.call(name, args)`) |
 | `LLMToolLoop` | Multi-round "model asks for a tool → execute → feed back" loop |
 
-Built-in tools:
+Built-in tools (`ToolName` holds the constants):
 
 | Tool | Purpose |
 |---|---|
@@ -835,3 +837,217 @@ Disabled by default. With `llm_a2aEnabled=true`, wiring exposes `loom.Supervisor
 
 Mapping: `dispatched` / `created` → `completed`, `clarifying` → `input-required`, everything else → `failed`.
 `dispatch` is synchronous, so long flows make the A2A request wait; use `a2a.message.stream` (SSE) when you need progress events.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `public class A2aCallFunction <: FunctionCalling<A2aCallParam>`, `public class A2aCallParam`, `AbstractFileFunction` (class), `public class Agent`, `AgentEvent` (class), `AgentEventData` (class), `AgentTask` (class), `AgentsFinder` (interface), `public class AliyunBalanceQuerier <: BalanceQuerier`, `public class Answer`, `public open class AssistantMessage <: ChatMessage`, `public class AssumptionDto`, `AttachmentSink` (class), `BalanceMediator` (class), `BalancePoster` (type), `BalanceQuerier` (interface), `public class BalanceSnapshot`, `BalanceUnits` (struct), `BalanceUnsupportedException` (class), `CallLog` (struct), `ChannelAccountConf` (class), `public class ChannelAttachmentParam`, `ChannelBootstrap` (class), `ChannelException` (class), `public class ChannelInboxFunction <: FunctionCalling<ChannelInboxParam>`, `public class ChannelInboxParam`, `ChannelInstallReport` (class), `ChannelPlatforms` (struct), `public class ChannelSendFunction <: FunctionCalling<ChannelSendParam>`, `public class ChannelSendParam`, `ChatCompletionsMapper` (struct), `public open class ChatMessage`, `ChatStreamAccumulator` (class), `ClarifyQuestion` (class), `Code` (class), `CodeFinder` (interface), `CodeParam` (class), `ColbertCodec` (class), `ColbertVectors` (class), `public class Command`, `public class ConsoleOutput`, `public class ContentPart`, `public abstract class ContextLLMPruner <: ContextPruner`, `ContextPruner` (interface), `ContextPrunerName` (type), `public open class ContextSummaryPruner <: ContextLLMPruner`, `public class CurrentTimeParams`, `public class DeepSeekBalanceQuerier <: BalanceQuerier`, `public class DeepSeekSearchProvider <: SearchProvider`, `DefaultHttpTransport` (class), `DefaultStreamTransport` (class), `DeployPaths` (class), `public interface DoSample`, `public struct DummyTokenUsageSaver <: TokenUsageSaver`, `EmailChannel` (class), `EmailTransport` (interface), `EmbeddingException` (class), `public class EmbeddingResp`, `EmbeddingResponse` (class), `EmbeddingTransport` (interface), `EvalCase` (class), `EvalDoc` (class), `EvalOutcome` (class), `EvalReport` (class), `EventFinder` (interface), `EvolutionDecision` (class), `EvolutionInput` (class), `EvolutionLease` (interface), `EvolutionSkillState` (class), `EvolutionStateStore` (interface), `EvolutionStore` (interface), `public class ExperienceExtractor <: MemoryExtractor`, `public interface ExperienceFinder <: MemorySummaryFinder`, `ExperienceItem` (class), `FEmailTransport` (class), `FStoreEvolutionLease` (class), `FStoreEvolutionStateStore` (class), `FStoreEvolutionStore` (class), `FStoreLoomStore` (class), `FStoreMetaStore` (class), `FaithfulMemory` (interface), `FetchRejectedException` (class), `public class FetchedPage`, `FhydraContentStore` (class), `public class FileReadingParams`, `public class FileReplacingParams`, `public class FileWritingParams`, `FrequencyPenalty` (interface), `public class Function`, `public class FunctionCall <: Hashable & Equatable<FunctionCall>`, `FunctionCallingException` (class), `FunctionMeta` (struct), `FunctionNotFoundException` (class), `FunctionResult` (struct), `GeneratedFlow` (class), `HeuristicTokenCounter` (class), `HydraContentStore` (class), `HydraEvolutionLease` (class), `HydraMemoryRepository` (class), `IllegalPathException` (class), `InMemoryContentStore` (class), `InMemoryEvolutionLease` (class), `InMemoryEvolutionStateStore` (class), `InMemoryEvolutionStore` (class), `InMemoryKnowledgeStore` (class), `public class InMemoryMemoryStore <: MemoryStore`, `InboundAttachment` (class), `InboundMessage` (class), `public class IndividualityExtractor <: MemoryExtractor`, `public interface IndividualityFinder <: MemorySummaryFinder`, `KindPersistence` (interface), `Knowledge` (class), `KnowledgeChunk` (class), `KnowledgeEntity` (class), `KnowledgeFinder` (interface), `public class KnowledgeIngestFunction <: FunctionCalling<KnowledgeIngestParam>`, `public class KnowledgeIngestParam`, `KnowledgeKind` (type), `KnowledgeParam` (class), `KnowledgeQuery` (class), `LLMApiKind` (enum), `LLMConfCodec` (struct), `public interface LLMConfDAO <: RootDAO`, `public class LLMConfServiceImpl <: LLMConfService`, `LLMConfView` (class), `LLMConfig` (struct), `LLMConfsHolder` (class), `LLMConfsSnapshot` (class), `LLMDelta` (class), `LLMDeltaKind` (enum), `LLMErrorClassifier` (struct), `LLMException` (class), `LLMHooks` (class), `LLMHttpResponse` (class), `public class LLMResp`, `LLMStreamTransport` (interface), `public open class LLMToolParams <: LLMParams`, `LLMTransport` (interface), `LLMType` (type), `public class ListToolsFunction <: FunctionCalling<ListToolsParam>`, `public class ListToolsParam`, `LlmEmbeddingTransport` (class), `LlmTurn` (class), `LoomA2a` (class), `LoomAgent` (class), `LoomCharacterScope` (class), `LoomContextLog` (class), `public class LoomDeleteFunction <: FunctionCalling<LoomDeleteParam>`, `public class LoomDeleteParam`, `LoomException` (class), `public class LoomExecuteFunction <: FunctionCalling<LoomExecuteParam>`, `public class LoomExecuteParam`, `LoomFlow` (class), `LoomHost` (interface), `LoomHostApi` (class), `LoomJitBridge` (class), `LoomMemoryExtractor` (class), `LoomProgram` (class), `LoomRegistry` (class), `LoomResult` (class), `LoomService` (class), `LoomServices` (class), `LoomStatus` (struct), `LoomStoreGateway` (class), `LoomTimeout` (class), `McpClientAdapter` (class), `McpFunctionCalling` (class), `McpToolClient` (interface), `McpToolSource` (class), `Memory` (struct), `public class MemoryCallFunction <: FunctionCalling<MemoryCallParam>`, `public class MemoryCallParam`, `MemoryExtractor` (class), `MemoryKinds` (class), `public class MemoryLoading`, `MemoryLoomStore` (class), `MemoryQuery` (class), `MemoryRecorderTask` (class), `MemoryRepository` (interface), `MemoryRepositoryAdapter` (class), `MemoryStoreAdapter` (class), `public class MemorySummary`, `MemorySummaryFinder` (interface), `MemoryWrite` (class), `MetaStoreAdapter` (class), `ModelCapabilities` (struct), `ModelName` (type), `MySqlContentStore` (class), `public interface MySqlEvolutionDAO <: RootDAO`, `MySqlEvolutionLease` (class), `public interface MySqlEvolutionLeaseDAO <: RootDAO`, `public interface MySqlEvolutionStateDAO <: RootDAO`, `MySqlEvolutionStateStore` (class), `MySqlEvolutionStore` (class), `public interface MySqlKindDAO <: RootDAO`, `MySqlKindPersistence` (class), `public interface MySqlKnowledgeDAO <: RootDAO`, `MySqlKnowledgeStore` (class), `public interface MySqlLoomDAO <: RootDAO`, `MySqlLoomStore` (class), `public interface MySqlMemoryDAO <: RootDAO`, `public class MySqlMemoryRepository <: MemoryRepository & RootService`, `public interface MySqlMetaDAO <: RootDAO`, `public class MySqlMetaStore <: MetaStore & RootService`, `public interface MySqlTokenUsageDAO <: RootDAO`, `public class MySqlTokenUsageSaver <: TokenUsageSaver & RootService`, `public class OptionDto`, `OrganizationFinder` (interface), `OutboundAttachment` (class), `OutboundMessage` (class), `public class Parameters`, `public class PlanDto`, `PlannerResult` (class), `PostgresContentStore` (class), `public interface PostgresEvolutionDAO <: RootDAO`, `PostgresEvolutionLease` (class), `public interface PostgresEvolutionLeaseDAO <: RootDAO`, `public interface PostgresEvolutionStateDAO <: RootDAO`, `PostgresEvolutionStateStore` (class), `PostgresEvolutionStore` (class), `public interface PostgresKindDAO <: RootDAO`, `PostgresKindPersistence` (class), `public interface PostgresKnowledgeDAO <: RootDAO`, `PostgresKnowledgeStore` (class), `public interface PostgresLoomDAO <: RootDAO`, `PostgresLoomStore` (class), `public interface PostgresMemoryDAO <: RootDAO`, `public class PostgresMemoryRepository <: MemoryRepository & RootService`, `public interface PostgresMetaDAO <: RootDAO`, `public class PostgresMetaStore <: MetaStore & RootService`, `public interface PostgresTokenUsageDAO <: RootDAO`, `public class PostgresTokenUsageSaver <: TokenUsageSaver & RootService`, `PredefinedCharacters` (class), `PromptCapabilities` (class), `Prompts` (struct), `public class Property`, `public class QuestionDto`, `ReceivedAttachment` (class), `ReceivedMail` (class), `ReloadResult` (class), `RemoteTokenCounter` (class), `public class ResponseFormat`, `ResponsesMapper` (struct), `ResponsesStreamAccumulator` (class), `ResultType` (enum), `RetrievalEval` (class), `RetrievalScoring` (class), `Role` (type), `RoleException` (class), `public class ScheduleCreateFunction <: FunctionCalling<ScheduleCreateParam>`, `public class ScheduleCreateParam`, `public class ScheduleDeleteFunction <: FunctionCalling<ScheduleDeleteParam>`, `public class ScheduleDeleteParam`, `SearchHttpException` (class), `SearchPoster` (type), `SearchProvider` (interface), `SearchProviderRegistry` (class), `public class SearchResult`, `public class SearchResultItem`, `public class SearchToolsFunction <: FunctionCalling<SearchToolsParam>`, `public class SearchToolsParam`, `SearchUnavailableException` (class), `SendReceipt` (class), `SignUtil` (struct), `public class SiliconFlowBalanceQuerier <: BalanceQuerier`, `SkillAssignment` (class), `SkillCandidate` (class), `SkillDraft` (class), `SkillEntry` (class), `SkillEvolutionLedger` (class), `SkillEvolutionReport` (class), `SkillEvolutionTask` (class), `SkillGateResult` (class), `public class SkillImportFunction <: FunctionCalling<SkillImportParam>`, `public class SkillImportParam`, `SkillImporter` (class), `public class SkillLoading`, `SkillMatchResult` (class), `SkillNotFoundException` (class), `SkillPackage` (class), `public class SkillReference`, `public class SkillReferenceLoading`, `public class SkillReferenceParam`, `SkillSample` (class), `SkillSamples` (class), `SkillType` (type), `SkillsFinder` (interface), `SpecKind` (type), `SpecialAgentId` (type), `Specification` (class), `SpecificationFinder` (interface), `public class SqlMemoryStore <: MemoryStore`, `public class StepDto`, `public class StoreCallFunction <: FunctionCalling<StoreCallParam>`, `public class StoreCallParam`, `StoreSettings` (class), `SummaryActionKind` (type), `SupervisorAgent` (class), `SupervisorOutcome` (class), `SupervisorRoute` (class), `public class SystemMessage <: ChatMessage`, `public class TencentCloudBalanceQuerier <: BalanceQuerier`, `TencentSigner` (struct), `TextClip` (class), `public class Thinking`, `public interface ThinkingBudget`, `ThinkingMode` (enum), `ThinkingPolicy` (struct), `ThinkingSwitch` (type), `TimeUuid` (class), `public class Todo`, `TodoFinder` (interface), `public class TodoListParam`, `public class TodoSaving`, `public class TodoSavingParam`, `TodoStatus` (type), `public class TodoStatusParam`, `TokenCounter` (interface), `public class TokenUsage`, `TokenUsageSaver` (interface), `public class TokenizerParams`, `public class ToolCall`, `public class ToolCallFunction`, `public class ToolCallMessage <: AssistantMessage`, `ToolCatalog` (class), `ToolEntry` (class), `public class ToolMessage <: ChatMessage`, `ToolScope` (class), `ToolType` (type), `TopicStat` (class), `VectorMath` (class), `VolcSigner` (struct), `public class VolcengineBalanceQuerier <: BalanceQuerier`, `public macro WeavedToolCall(input: Tokens): Tokens`, `public class WebFetchParams`, `public class WebSearchParams`, `public class ZhipuBalanceQuerier <: BalanceQuerier`, `createConfSource` (func), `emptySkills` (func), `parseConfJson` (func), `parseDeepSeekBalance` (func), `parseDeepSeekFetch` (func), `parseDeepSeekSearch` (func), `parseTencentBalance` (func), `parseVolcengineBalance` (func), `renderPage` (func), `sanitizeSchema` (func)
+- `Agent`: `acceptableEvents` (prop), `prop producingEvents: Array<String>`
+- `AgentEventData`: `addFunctions` (func), `let memorySummaries!: ArrayList<MemorySummary> = ArrayList<MemorySummary>()`, `let skillDetails!: ArrayList<(String, String)> = ArrayList<(String, String)>()`
+- `AgentTask`: `prop acceptableEvents: Array<String>`, `open func exec(e: Event): Event`, `prop producingEvents: Array<String>`
+- `AliyunBalanceQuerier`: `prop provider: String`
+- `AliyunDialect`: `decorate` (func), `endpoint` (func), `headers` (func), `prop provider: String`
+- `AssumptionDto`: `var field: String =`, `var reason: String =`, `var value: String =`
+- `AttachmentSink`: `bareName` (func), `freeName` (func), `save` (func)
+- `BalanceMediator`: `static let instance = BalanceMediator()`, `queryAll` (func)
+- `BalanceUnits`: `format` (func), `parse` (func), `toYuan` (func), `unitOf` (func)
+- `BgeM3Codec`: `static func parse(body: String): EmbeddingResponse`
+- `CallLog`: `info` (func), `summary` (func)
+- `ChannelAccountConf`: `let extra: HashMap<String, String>`, `let from: String`, `let imapHost: String`, `let imapPort: UInt16`, `let password: String`, `let smtpHost: String`, `let smtpPort: UInt16`, `let tls: String`, `let user: String`
+- `ChannelBootstrap`: `install` (func), `installFromConfig` (func)
+- `ChannelInstallReport`: `var errors: ArrayList<String> = ArrayList<String>()`, `var installed: Int64 = 0`, `var skipped: Int64 = 0`, `summary` (func)
+- `ChannelMediator`: `accounts` (func), `closeAll` (func), `create` (func), `platforms` (func), `providerPlatforms` (func), `receive` (func), `resetAll` (func)
+- `ChannelPlatforms`: `isReserved` (func)
+- `ChatCompletionsMapper`: `build` (func), `parse` (func)
+- `ChatMessage`: `addImage` (func), `addText` (func), `multimodal` (prop)
+- `ChatStreamAccumulator`: `feed` (func), `finished` (prop), `isDone` (func)
+- `CircuitBreaker`: `cleanup` (func), `isOpen` (func), `recordRetryableFailure` (func), `recordSuccess` (func), `size` (func)
+- `ClarifyQuestion`: `let blocking: Bool`, `let defaultValue: String`, `let options: ArrayList<String>`, `let question: String`, `let why: String`
+- `Code`: `let code!: String`, `let codeLang!: String`, `let filePath!: String`, `let moduleName!: String`, `let packageName!: String`, `let projectId!: Int64`
+- `CodeGen`: `generate` (func), `hasAsync` (func), `stepSource` (func)
+- `CodeParam`: `let code!: String =`, `let confidence!: Float64 = 0.0`, `let moduleName!: String =`, `let packageName!: String =`, `let projectId!: Int64 = 0`, `let weight!: Float64 = 0.0`
+- `ColbertCodec`: `decode` (func), `encode` (func)
+- `ContentPart`: `imageOf` (func), `textOf` (func)
+- `ContextPrunerMediator`: `static let instance = ContextPrunerMediator()`
+- `ContextSummaryPruner`: `open class ContextKeywordsPruner <: ContextLLMPruner`
+- `DeepSeekBalanceQuerier`: `provider` (prop)
+- `DeepSeekDialect`: `decorate` (func), `endpoint` (func), `headers` (func), `prop provider: String`
+- `DeepSeekSearchProvider`: `fetchEndpoint` (prop), `provider` (prop), `searchEndpoint` (prop)
+- `DefaultEmbedder`: `embedColbert` (func), `tokenize` (func)
+- `DefaultHttpTransport`: `func post(url: String, headers: HashMap<String, String>, body: String): LLMHttpResponse`
+- `DefaultLoomHost`: `callLlm` (func), `callTool` (func), `render` (func)
+- `DeployPaths`: `resolve` (func), `root` (func)
+- `DialectRegistry`: `providers` (func), `resolve` (func)
+- `DummyTokenUsageSaver`: `static let instance = DummyTokenUsageSaver()`, `func saveTokenUsage(usage: TokenUsage): Unit`
+- `EdgePlan`: `let from: String`, `let to: String`
+- `EmailChannel`: `close` (func), `receive` (func)
+- `Embedding`: `getTransport` (func), `parse` (func)
+- `EmbeddingParam`: `let dimension!: Int64 = 1024`
+- `EmbeddingResponse`: `let colbert: Array<Array<Float64>>`, `let dense: Array<Float64>`, `let sparse: HashMap<Int64, Float64>`
+- `EvalCase`: `let expected: ArrayList<String>`, `isNegative` (func), `let topic: String`
+- `EvalReport`: `let hitAt1: Int64`, `let hitAtK: Int64`, `let misses: ArrayList<String>`, `mrr` (func), `ndcg` (func), `let ndcgSum: Float64`, `let negativePassed: Int64`, `negativeRate` (func), `let negativeTotal: Int64`, `recallAt1` (func), `recallAtK` (func), `let reciprocalSum: Float64`, `render` (func), `let topics: ArrayList<TopicStat>`, `let total: Int64`
+- `EvolutionDecision`: `let reason: String`, `let shouldEvolve: Bool`
+- `EvolutionInput`: `let successes: ArrayList<ExperienceItem>`
+- `EvolutionLeases`: `byName` (func)
+- `EvolutionSkillState`: `lastEvolvedAt` (let), `lastGatePassed` (let)
+- `EvolutionStateStores`: `byName` (func)
+- `EvolutionStores`: `byName` (func)
+- `ExperienceExtractor`: `func extract(jsonobj: JsonObject, overwriter: (String, String) -> Unit): Unit`, `prop systemPrompts: String`, `prop userPrompts: String`
+- `FEmailTransport`: `close` (func), `receive` (func)
+- `FStoreEvolutionLease`: `ensure` (func)
+- `FStoreEvolutionStateStore`: `lastRunAt` (func), `markKnowledge` (func), `markRun` (func), `save` (func)
+- `FStoreEvolutionStore`: `bySkill` (func), `save` (func)
+- `FStoreLoomStore`: `save` (func)
+- `FlowPlan`: `var notes: String =`, `round` (var), `toJson` (func)
+- `FunctionCall`: `let function: Function = Function()`, `hashCode` (func)
+- `FunctionMediator`: `definition` (func), `getDefinitions` (func)
+- `FunctionMeta`: `let callee: (JsonObject) -> FunctionResult`, `let definition: JsonObject`
+- `FunctionResult`: `let eventType!: EventType = EventType.Task`, `let resultType!: ResultType = ResultType.Text`
+- `GeneratedFlow`: `let planJson: String`
+- `HttpEmbedder`: `embedColbert` (func), `tokenize` (func)
+- `HydraEvolutionLease`: `ensure` (func), `remote` (func)
+- `HydraMemoryRepository`: `colbert` (func), `searchDense` (func), `searchSparse` (func), `upsertColbert` (func), `upsertSparse` (func)
+- `InMemoryEvolutionLease`: `ensure` (func)
+- `InMemoryEvolutionStateStore`: `lastRunAt` (func), `markKnowledge` (func), `markRun` (func), `save` (func)
+- `InMemoryEvolutionStore`: `bySkill` (func), `save` (func)
+- `InboundAttachment`: `let error: String`, `let filename: String`, `let saved: Bool`, `let size: Int64`
+- `InboundMessage`: `let attachments: ArrayList<InboundAttachment>`, `let from: String`, `let receivedAt: String`, `let subject: String`, `let unread: Bool`
+- `IndividualityExtractor`: `func extract(jsonobj: JsonObject, overwriter: (String, String) -> Unit)`, `prop systemPrompts: String`, `prop userPrompts: String`
+- `JitTicktockTask`: `create` (func)
+- `Knowledge`: `let codeLang!: String =`, `let embedding!: Array<Float64>`, `let entire!: Bool = false`, `let md5!: String =`
+- `KnowledgeChunker`: `split` (func)
+- `KnowledgeEntity`: `queryConf` (func), `func save(knowledgeSaver!: (Knowledge) -> Unit): ArrayList<String>`
+- `KnowledgeIndexRebuilder`: `rebuild` (func), `rebuildAll` (func)
+- `KnowledgeParam`: `let embeddingWeight!: Float64 = 0.7`, `let keywords!: String`, `let maxResults!: Int64 = 10`, `let minConfidence!: Float64 = 0.8`
+- `KnowledgeSearch`: `occurrences` (func), `rank` (func), `terms` (func)
+- `LLM`: `getStreamTransport` (func), `getTransport` (func)
+- `LLMCandidateProvider`: `setSupplier` (func)
+- `LLMConf`: `prop conf: HashMap<String, String>`, `prop isPlaceholder: Bool`, `option` (func), `optionBool` (func), `optionInt` (func), `setConf` (func), `prop streamable: Bool`, `prop tokenThreshold: Int64`
+- `LLMConfCodec`: `fromColumn` (func), `toColumn` (func)
+- `LLMConfServiceImpl`: `clear` (func), `findById` (func), `func listEnabled(): ArrayList<LLMConf>`, `save` (func)
+- `LLMConfView`: `let actualLlmName: String`, `let alwaysThinking: Bool`, `let auth: String`, `llmUrl` (let), `let provider: String`, `let temperature: Float64`, `let weight: Int64`
+- `LLMConfig`: `a2aEnabled` (func), `channelSendRoots` (func), `channelsJson` (func), `getBalanceLowThreshold` (func), `getConfRefreshInterval` (func), `getConfSource` (func), `getCooldownDuration` (func), `getEmbeddingRetries` (func), `getEmbeddingTimeoutMs` (func), `getEmbeddingUrl` (func), `getFailureThreshold` (func), `static func getFaithfulMemoryPath(): Path`, `getFetchMaxBytes` (func), `static func getFileSandboxPath(): Path`, `getIndexRebuildNamespace` (func), `getIndexRebuildUserId` (func), `static func getLLMAccessTryingCount(): Int64`, `static func getLLMAccessTryingElapsed(): Duration`, `getLoadBalanceAlgo` (func), `static func getMakingMemory(): Bool`, `getMemoryUserId` (func), `getPrunerLlmName` (func), `getStreamIdleTimeout` (func), `getStreamMaxLineBytes` (func), `static func getSummarisingActionKind(): String`, `getSummarisingLlmName` (func), `static func getSummarisingModel(): String`, `getToolResultMaxBytes` (func), `isAuto` (func), `isDatabaseEnabled` (func), `isIndexRebuildEnabled` (func), `loomOnNoUsable` (func), `supervisorEnabled` (func)
+- `LLMConfs`: `holder` (func), `isConfigured` (func), `setHolder` (func)
+- `LLMConfsHolder`: `ensureFresh` (func), `getTokenThreshold` (func), `isCircuitOpen` (func), `peekNext` (func), `recordRetryableFailure` (func), `recordSuccess` (func), `refreshNow` (func), `saturated` (func)
+- `LLMConfsSnapshot`: `let byId: HashMap<Int64, LLMConf>`, `let byName: HashMap<String, ArrayList<LLMConf>>`, `let loadedAt: MonoTime`
+- `LLMErrorClassifier`: `isFatal` (func), `isRetryable` (func)
+- `LLMHooks`: `let onRetryableFailure: (Int64) -> Unit`, `let onSuccess: (Int64) -> Unit`
+- `LLMToolParams`: `func addFunction(function: FunctionCall): Unit`, `addFunctions` (func)
+- `LoomA2a`: `defaultCard` (func), `server` (func), `startIfEnabled` (func)
+- `LoomAgent`: `compile` (func)
+- `LoomBootstrap`: `storeFor` (func)
+- `LoomCharacterScope`: `install` (func)
+- `LoomCompiler`: `compileStep` (func), `compileSteps` (func), `jitSourceOf` (func), `llmSourceOf` (func), `toolSourceOf` (func)
+- `LoomContextLog`: `MAX_TURNS` (let), `begin` (func), `clear` (func), `isActive` (func), `snapshot` (func)
+- `LoomFlow`: `mark` (func), `var planJson: String =`, `var questionsJson: String =`, `var round: Int64 = 0`
+- `LoomHostApi`: `bind` (func), `callLlm` (func), `callStore` (func), `callTool` (func), `clearPersona` (func), `clearSkills` (func), `currentPersonaText` (func), `currentSkillsText` (func), `installStore` (func), `render` (func), `resetStore` (func), `setPersona` (func), `setSkills` (func), `taskEvent` (func), `unbind` (func), `valueOf` (func)
+- `LoomJitBridge`: `install` (func)
+- `LoomMemoryExtractor`: `extract` (func)
+- `LoomMemoryPolicy`: `effective` (func), `install` (func)
+- `LoomProgram`: `stepCount` (prop)
+- `LoomRegistry`: `compiledFlows` (func), `restore` (func), `size` (func)
+- `LoomRequest`: `answers` (let), `let dryRun: Bool`, `onUnresolved` (let)
+- `LoomResult`: `needsClarification` (prop), `let planJson: String`
+- `LoomRunner`: `runCompiled` (func), `topologicalOrder` (func)
+- `LoomSchedules`: `install` (func)
+- `LoomServices`: `currentHost` (func), `install` (func), `installHost` (func)
+- `LoomStatus`: `valid` (func)
+- `LoomWiring`: `evolutionOwner` (func), `lastReload` (func)
+- `McpClientAdapter`: `callTool` (func), `listAllTools` (func)
+- `McpFunctionCalling`: `definition` (prop)
+- `Memory`: `remember` (func)
+- `MemoryExtractor`: `func extract(json: JsonObject, overwriter: (String, String) -> Unit): Unit`, `prop systemPrompts: String`, `prop userPrompts: String`
+- `MemoryIndexRebuilder`: `rebuild` (func), `rebuildIfConfigured` (func)
+- `MemoryKinds`: `static let DOC =`, `EXPERIENCE` (let), `EXPERIENCE_FAILED` (let), `static let FACT =`, `static let KNOWLEDGE =`, `static let NOTE =`, `static let PREFERENCE =`, `static let SESSION =`, `static let TASK =`, `attach` (func), `predefined` (func), `resetForTest` (func), `seed` (func), `weightOf` (func)
+- `MemoryLoomStore`: `save` (func)
+- `MemoryQuery`: `let kinds: Array<String>`, `let namespaces: Array<String>`, `rerank` (let)
+- `MemoryRecorderTask`: `recordWithTimeout` (func)
+- `MemoryRepositoryAdapter`: `colbert` (func), `searchDense` (func), `searchSparse` (func), `upsertColbert` (func), `upsertSparse` (func)
+- `ModelCapabilities`: `blocksTemperature` (func), `resolve` (func)
+- `ModelNames`: `isFlash` (func)
+- `MySqlEvolutionLease`: `ensure` (func), `ensureSchema` (func)
+- `MySqlEvolutionStateStore`: `ensureSchema` (func), `lastRunAt` (func), `markKnowledge` (func), `markRun` (func), `save` (func)
+- `MySqlEvolutionStore`: `bySkill` (func), `ensureSchema` (func), `save` (func)
+- `MySqlKindPersistence`: `allCustom` (func), `deleteCustom` (func), `has` (func), `insert` (func), `insertCustom` (func)
+- `MySqlLoomStore`: `save` (func)
+- `MySqlMemoryRepository`: `colbert` (func), `searchDense` (func), `searchSparse` (func), `upsertColbert` (func), `upsertSparse` (func)
+- `MySqlTokenUsageSaver`: `saveTokenUsage` (func)
+- `OptionDto`: `var label: String =`, `var value: String =`
+- `OutboundAttachment`: `let filename: String`
+- `OutboundMessage`: `let attachments: ArrayList<OutboundAttachment>`, `let html: String`, `let subject: String`, `let to: String`
+- `Parameters`: `func addProperty(name!: String, `type`!: String, description!: String): Unit`, `addRequired` (func)
+- `PlanDto`: `var assumptions: ArrayList<AssumptionDto> = ArrayList<AssumptionDto>()`, `var notes: String =`, `var round: Int64 = 0`
+- `Planner`: `parse` (func)
+- `PlannerResult`: `let assumptions: ArrayList<String>`, `isPlanned` (prop), `let round: Int64`
+- `PostgresEvolutionLease`: `ensure` (func), `ensureSchema` (func)
+- `PostgresEvolutionStateStore`: `ensureSchema` (func), `lastRunAt` (func), `markKnowledge` (func), `markRun` (func), `save` (func)
+- `PostgresEvolutionStore`: `bySkill` (func), `ensureSchema` (func), `save` (func)
+- `PostgresKindPersistence`: `allCustom` (func), `deleteCustom` (func), `has` (func), `insert` (func), `insertCustom` (func)
+- `PostgresLoomStore`: `save` (func)
+- `PostgresMemoryRepository`: `colbert` (func), `searchDense` (func), `searchSparse` (func), `upsertColbert` (func), `upsertSparse` (func)
+- `PostgresTokenUsageSaver`: `saveTokenUsage` (func)
+- `PredefinedCharacters`: `isKnown` (func), `static func keys(): ArrayList<String>`
+- `PromptCapabilities`: `render` (func)
+- `QuestionDto`: `var blocking: Bool = true`, `var defaultValue: String =`, `var options: ArrayList<OptionDto> = ArrayList<OptionDto>()`, `var question: String =`, `var why: String =`
+- `ReceivedAttachment`: `let filename: String`, `let read: () -> Array<Byte>`, `let size: Int64`
+- `ReceivedMail`: `let attachments: ArrayList<ReceivedAttachment>`, `let from: String`, `let receivedAt: String`, `let subject: String`, `let unread: Bool`
+- `Redactor`: `defaultKeys` (func), `mask` (func), `redactJson` (func)
+- `ReloadResult`: `var restored: Int64 = 0`, `toString` (func)
+- `ResponseFormat`: `static let json: ResponseFormat = ResponseFormat(             )`
+- `ResponsesMapper`: `build` (func), `parse` (func)
+- `ResponsesStreamAccumulator`: `feed` (func), `finished` (prop), `isDone` (func)
+- `RetrievalEval`: `defaultDir` (func), `evaluate` (func), `readCases` (func), `readCorpus` (func)
+- `RetrievalEvalRunner`: `loadCorpus` (func), `titleToId` (func)
+- `RetrievalScoring`: `LEXICAL_CAP` (let), `LEXICAL_WEIGHT` (let), `MEMORY_DENSE_WEIGHT` (let), `MEMORY_SPARSE_WEIGHT` (let), `RERANK_CONTENT_WEIGHT` (let), `RERANK_TITLE_WEIGHT` (let), `fuseKnowledge` (func), `fuseMemory` (func), `rerank` (func)
+- `SendReceipt`: `let error: String`, `let messageId: String`, `let ok: Bool`, `success` (func)
+- `SignUtil`: `hmacSha256` (func), `hmacSha256Hex` (func), `sha256Hex` (func), `utcDate` (func), `utcDateTime` (func)
+- `SiliconFlowBalanceQuerier`: `prop provider: String`
+- `SiliconFlowDialect`: `decorate` (func), `endpoint` (func), `headers` (func), `prop provider: String`
+- `Skill`: `prop functionNames: Iterator<String>`
+- `SkillAssignment`: `let experiences: ArrayList<ExperienceItem>`
+- `SkillCandidate`: `let experiences: ArrayList<ExperienceItem>`
+- `SkillCatalog`: `install` (func), `isVectorized` (func)
+- `SkillEvolutionJob`: `installSink` (func), `ownedBy` (func), `resetSink` (func)
+- `SkillEvolutionLedger`: `write` (func)
+- `SkillEvolutionPolicy`: `let cooldownSeconds: Int64`, `decide` (func), `let failedCooldownSeconds: Int64`, `let minSamples: Int64`, `let minSuccessRate: Float64`
+- `SkillEvolutionReport`: `let candidateClusters: Int64`, `let evolved: ArrayList<String>`, `materials` (let), `let rejected: ArrayList<String>`, `let skipped: ArrayList<String>`
+- `SkillEvolutionTask`: `evolve` (func)
+- `SkillGate`: `evaluate` (func)
+- `SkillGateResult`: `let newScore: Float64`, `let oldScore: Float64`, `let passed: Bool`, `let reason: String`
+- `SkillImporter`: `importInto` (func), `parse` (func)
+- `SkillMatchResult`: `assignedCount` (prop), `let assignments: ArrayList<SkillAssignment>`
+- `SkillMatcher`: `assign` (func)
+- `SkillNamer`: `propose` (func)
+- `SkillReferenceParam`: `var reference: ArrayList<String> = ArrayList<String>()`
+- `SkillSample`: `let expect: String`
+- `SkillSamples`: `of` (func)
+- `Specification`: `let codeLang!: String =`, `let projectId!: Int64`
+- `SsrfGuard`: `blocked` (func), `check` (func), `hostOf` (func)
+- `StandardDialect`: `decorate` (func), `endpoint` (func), `headers` (func), `prop provider: String`
+- `StepDto`: `var external: Bool = false`
+- `StepPlan`: `var external: Bool = false`, `func toJson(): String`
+- `StoreSettings`: `let contentStoreUrl: String`, `deprecated` (let), `memoryStore` (let), `let metaStore: String`, `let metaStorePath: String`
+- `Stores`: `containsContent` (func), `containsMeta` (func), `resetForTest` (func)
+- `Supervisor`: `eventName` (func), `install` (func), `tap` (func), `untap` (func)
+- `SupervisorAgent`: `map` (func)
+- `TencentCloudBalanceQuerier`: `provider` (prop)
+- `TencentSigner`: `headers` (func)
+- `TextClip`: `clip` (func)
+- `ThinkingPolicy`: `apply` (func)
+- `TicktockScheduler`: `cancel` (func)
+- `TimeUuid`: `create` (func), `dayOf` (func), `timestampOf` (func)
+- `Todo`: `predecessor` (func)
+- `TodoFunction`: `func addTodo(param: TodoSavingParam): FunctionResult`, `func todoList(param: TodoListParam): FunctionResult`, `func updateStatus(param: TodoStatusParam): FunctionResult`
+- `ToolCallMessage`: `func addFunctionCall(id!: String, toolType!: ToolType, name!: String, arguments!: String)`, `addToolCall` (func)
+- `ToolCatalog`: `entries` (func)
+- `ToolScope`: `check` (func), `verifyPlan` (func)
+- `TopicStat`: `let hitAt1: Int64`, `let hitAtK: Int64`, `mrr` (func), `ndcg` (func), `let ndcgSum: Float64`, `recallAt1` (func), `recallAtK` (func), `let reciprocalSum: Float64`, `let topic: String`, `let total: Int64`
+- `VectorMath`: `cosine` (func)
+- `VolcSigner`: `headers` (func)
+- `VolcengineBalanceQuerier`: `provider` (prop)
+- `VolcengineDialect`: `decorate` (func), `endpoint` (func), `headers` (func), `prop provider: String`
+- `ZhipuBalanceQuerier`: `prop provider: String`
+- `ZhipuDialect`: `decorate` (func), `endpoint` (func), `headers` (func), `prop provider: String`

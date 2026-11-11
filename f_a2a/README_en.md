@@ -131,3 +131,25 @@ cd f_a2a
 cjpm build
 cjpm test        # 32/32
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `A2aCapabilities` (class), `A2aError` (class), `A2aEvents` (class), `A2aExecutionResult` (class), `A2aJson` (class), `A2aSkill` (class), `A2aStates` (class), `InMemoryA2aTaskStore` (class)
+- `A2aAgentCard`: `var capabilities: A2aCapabilities = A2aCapabilities()`, `var skills: ArrayList<A2aSkill> = ArrayList<A2aSkill>()`, `var version: String =`
+- `A2aArtifact`: `var artifactId: String =`, `textOf` (func)
+- `A2aCapabilities`: `var pushNotifications: Bool = false`, `var streaming: Bool = true`
+- `A2aError`: `static let CONTENT_TYPE_UNSUPPORTED: Int64 = -32023`, `static let TASK_NOT_CANCELABLE: Int64 = -32021`, `static let TASK_NOT_FOUND: Int64 = -32020`, `static let TASK_REJECTED: Int64 = -32024`, `static let UNSUPPORTED: Int64 = -32022`
+- `A2aEvents`: `static let METHOD_ARTIFACT =`, `METHOD_STATUS` (let), `TOPIC` (let), `notify` (func), `publish` (func), `pushBody` (func), `statusParams` (func)
+- `A2aExecutionResult`: `let needsInput: Bool`, `reject` (func), `let rejected: Bool`
+- `A2aJson`: `arrayOf` (func), `artifactOf` (func), `artifactsOf` (func), `copyOf` (func), `intOf` (func), `messageOf` (func), `messagesOf` (func), `partOf` (func), `partsOf` (func), `strOf` (func), `taskOf` (func)
+- `A2aMessage`: `var messageId: String =`, `var role: String =`
+- `A2aPart`: `isSupported` (func)
+- `A2aServer`: `static let METHOD_CANCEL =`, `static let METHOD_CARD =`, `METHOD_COUNT` (let), `static let METHOD_GET =`, `static let METHOD_PUSH_DELETE =`, `static let METHOD_PUSH_GET =`, `static let METHOD_PUSH_SET =`, `static let METHOD_RESUBSCRIBE =`, `METHOD_SEND` (let), `static let METHOD_STREAM =`, `cancelTask` (func), `getTask` (func), `pushDelete` (func), `pushGet` (func), `pushSet` (func), `registrationCount` (func)
+- `A2aSkill`: `var tags: ArrayList<String> = ArrayList<String>()`
+- `A2aStates`: `static let CANCELED =`, `static let COMPLETED =`, `static let FAILED =`, `static let INPUT_REQUIRED =`, `static let SUBMITTED =`, `static let WORKING =`, `isTerminal` (func), `isValid` (func)
+- `A2aTask`: `var artifacts: ArrayList<A2aArtifact> = ArrayList<A2aArtifact>()`, `var createdAt: Int64 = 0`, `var history: ArrayList<A2aMessage> = ArrayList<A2aMessage>()`, `isTerminal` (func), `var statusMessage: ?A2aMessage = None`, `var updatedAt: Int64 = 0`
+- `InMemoryA2aTaskStore`: `count` (func), `list` (func), `save` (func)

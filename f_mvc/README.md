@@ -1335,3 +1335,4 @@ public func download(data: Array<File>): Unit
 - `RequestMethod`：`func compare(other: RequestMethod): Ordering`、`hashCode`（func）、`static func parse(value: String): RequestMethod`、`static func tryParse(value: String): ?RequestMethod`
 - `WSCloseFrame`：`let reason: String`
 - `WSMeta`：`static func close(ws: WebSocket, status!: ?UInt16 = None, reason!: String =   ): Unit`、`generate`（func）、`setHandle`（func）、`upgrade`（func）、`static func writeBinary<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T>`、`static func writeText<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T>`
+- `CurrentHttpContext`：`scoped`（func）

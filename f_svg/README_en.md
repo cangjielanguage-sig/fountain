@@ -24,14 +24,14 @@ f_svg
 └── f_base    BaseException / StringGenerator
 ```
 
-The module follows the fountain repository version (currently `1.3.17`):
+The module follows the fountain repository version (currently `1.3.18`):
 
 ```toml
 [dependencies]
   "fountain::f_svg" = { path = "../fountain/f_svg" }
 ```
 
-With a central repository configured, `"fountain::f_svg" = "1.3.17"` also works.
+With a central repository configured, `"fountain::f_svg" = "1.3.18"` also works.
 Register `f_svg` in the repository root `.modules` file.
 
 ## Quick start
@@ -552,3 +552,107 @@ All 1230 tests pass and `f_svg` builds with 0 warnings. Performance notes:
 - Per-milestone specs and verification reports: `doc/spec/`
 - OpenSpec specs: `openspec/specs/svg-*`
 - Authoring API design: [`doc/f_svg-M7设计.md`](doc/f_svg-M7设计.md) (Chinese)
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `CssAttributeOperator` (enum), `CssAttributeSelector` (struct), `CssColorProfileRule` (class), `CssCombinator` (enum), `CssDeclaration` (struct), `CssFontFaceRule` (class), `CssLexer` (class), `CssMediaFeature` (struct), `CssMediaQuery` (class), `CssMediaQueryItem` (class), `CssPseudoClass` (enum), `CssRule` (class), `CssSelector` (class), `CssSelectorPart` (struct), `CssSimpleSelector` (struct), `CssSimpleSelectorKind` (enum), `CssSpecificity` (struct), `CssStyleSource` (enum), `CssToken` (struct), `CssTokenKind` (enum), `SvgAlignmentBaseline` (enum), `SvgAnchorInfo` (class), `SvgAnimationInfo` (class), `SvgAnimationKind` (enum), `SvgAntiAliasMode` (enum), `SvgArcParams` (struct), `SvgAttribute` (struct), `SvgAutoSize` (class), `SvgAutoSizeSize` (struct), `SvgBaselineShift` (enum), `SvgBidiClass` (enum), `SvgBitmap` (class), `SvgBlendMode` (enum), `SvgBounds` (struct), `SvgCalcMode` (enum), `SvgChannelSelector` (enum), `SvgCircle` (class), `SvgClipCoverage` (class), `SvgClipPathMasker` (class), `SvgClipProperty` (class), `SvgClipRect` (struct), `SvgClock` (interface), `SvgColorInterpolation` (enum), `SvgColorMatrixType` (enum), `SvgColorRendering` (enum), `SvgCompositeOperator` (enum), `SvgComputedStyle` (class), `SvgComputedStyleTree` (class), `SvgContainer` (class), `SvgContainerKind` (enum), `SvgCoordinateUnits` (enum), `SvgCoverageMask` (class), `SvgCrc32` (class), `SvgCursor` (struct), `SvgDirection` (enum), `SvgDisplayCommand` (class), `SvgDisplayCommandKind` (enum), `SvgDisplayList` (class), `SvgDocument` (class), `SvgDominantBaseline` (enum), `SvgEdgeMode` (class), `SvgElement` (class), `SvgEllipse` (class), `SvgErrorKind` (enum), `SvgFeBlend` (class), `SvgFeColorMatrix` (class), `SvgFeComponentTransfer` (class), `SvgFeComposite` (class), `SvgFeConvolveMatrix` (class), `SvgFeDiffuseLighting` (class), `SvgFeDisplacementMap` (class), `SvgFeDistantLight` (class), `SvgFeDropShadow` (class), `SvgFeFlood` (class), `SvgFeFunc` (class), `SvgFeFuncA` (class), `SvgFeFuncB` (class), `SvgFeFuncG` (class), `SvgFeFuncR` (class), `SvgFeGaussianBlur` (class), `SvgFeImage` (class), `SvgFeMerge` (class), `SvgFeMergeNode` (class), `SvgFeMorphology` (class), `SvgFeOffset` (class), `SvgFePointLight` (class), `SvgFeSpecularLighting` (class), `SvgFeSpotLight` (class), `SvgFeTile` (class), `SvgFeTurbulence` (class), `SvgFillRule` (enum), `SvgFilter` (class), `SvgFilterBuffer` (class), `SvgFilterPrimitive` (class), `SvgFilterRenderer` (class), `SvgFont` (interface), `SvgFontFeatures` (class), `SvgFontKerning` (enum), `SvgFontRegistry` (class), `SvgFontStretch` (enum), `SvgGeometry` (class), `SvgGradient` (class), `SvgGradientSampler` (class), `SvgGroupCompositor` (class), `SvgGzip` (class), `SvgHersheyFont` (class), `SvgImage` (class), `SvgImageRendering` (enum), `SvgInteractionState` (class), `SvgInterpolator` (class), `SvgLengthAdjust` (enum), `SvgLengthAxis` (enum), `SvgLengthContext` (struct), `SvgLengthUnit` (enum), `SvgLightingPrimitive` (class), `SvgLine` (class), `SvgLineCap` (enum), `SvgLineJoin` (enum), `SvgLinearGradient` (class), `SvgListSeparator` (enum), `SvgManualClock` (class), `SvgMarker` (class), `SvgMarkerExpander` (class), `SvgMarkerInstance` (class), `SvgMarkerOrient` (enum), `SvgMarkerUnits` (enum), `SvgMasker` (class), `SvgMixBlendMode` (enum), `SvgMorphologyOperator` (enum), `SvgMutationEvent` (class), `SvgMutationKind` (enum), `SvgMutationListener` (class), `SvgNamespaces` (class), `SvgNode` (enum), `SvgNumberList` (struct), `SvgOverflow` (enum), `SvgPaintKind` (enum), `SvgPaintLayer` (enum), `SvgPaintOrder` (class), `SvgPathCommand` (struct), `SvgPathCommandKind` (enum), `SvgPathLength` (class), `SvgPattern` (class), `SvgPatternSampler` (class), `SvgPngDecoder` (class), `SvgPngEncoder` (class), `SvgPointList` (struct), `SvgPointerEvents` (enum), `SvgPolygon` (class), `SvgPolyline` (class), `SvgPreserveAspectRatio` (struct), `SvgRadialGradient` (class), `SvgRasterizer` (class), `SvgRect` (class), `SvgRenderTreeBuilder` (class), `SvgRgba` (struct), `SvgRoot` (class), `SvgShape` (class), `SvgShapeRendering` (enum), `SvgSpreadMethod` (enum), `SvgStop` (class), `SvgStrokeOutliner` (class), `SvgStrokeStyle` (struct), `SvgSwitch` (class), `SvgTag` (class), `SvgText` (class), `SvgTextAnchor` (enum), `SvgTextBaseline` (class), `SvgTextDecoration` (struct), `SvgTextDecorationGeometry` (class), `SvgTextDecorationSpec` (class), `SvgTextDecorationStyle` (enum), `SvgTextElement` (class), `SvgTextGlyph` (class), `SvgTextLayout` (class), `SvgTextPath` (class), `SvgTextPathLayout` (class), `SvgTextPathMethod` (enum), `SvgTextPathSide` (enum), `SvgTextPathSpacing` (enum), `SvgTextPlacement` (class), `SvgTextRenderer` (class), `SvgTextRendering` (enum), `SvgTextUnderlinePosition` (enum), `SvgTransferFunctionType` (enum), `SvgTransformBox` (enum), `SvgTransformOp` (enum), `SvgTrueTypeFont` (class), `SvgTspan` (class), `SvgTurbulenceType` (enum), `SvgUnicodeBidi` (enum), `SvgUnsafePolicy` (enum), `SvgUse` (class), `SvgVectorEffect2` (class), `SvgView` (class), `SvgViewport` (struct), `SvgViewportTransform` (struct), `SvgWritingMode` (enum), `SvgZoomAndPan` (enum), `public static func count(): Int64`, `formatSvgNumber` (func), `renderToPng` (func), `public static func reset(): Unit`, `svgBidiClass` (func), `svgMirrorBidiCodePoint` (func), `svgSetInlineStyleProperty` (func), `table` (func)
+- `CssAttributeSelector`: `let caseInsensitive: Bool`, `let op: CssAttributeOperator`, `let value: ?String`
+- `CssDeclaration`: `let value: String`
+- `CssFontFaceRule`: `let family: String`, `let srcPresent: Bool`, `let weight: ?String`
+- `CssLexer`: `tokenize` (func)
+- `CssMediaFeature`: `let isMinWidth: Bool`
+- `CssMediaQuery`: `let items: Array<CssMediaQueryItem>`
+- `CssMediaQueryItem`: `let features: Array<CssMediaFeature>`, `mediaType` (let)
+- `CssRule`: `let declarations: Array<CssDeclaration>`, `let selectors: Array<CssSelector>`, `specificity` (func)
+- `CssSelector`: `let combinators: Array<CssCombinator>`, `let parts: Array<CssSelectorPart>`, `let specificity: CssSpecificity`
+- `CssSelectorPart`: `let classes: Array<String>`, `let combinator: ?CssCombinator`, `simples` (let), `let typeName: ?String`
+- `CssSpecificity`: `let classes: Int64`, `compareTo` (func), `let ids: Int64`, `plus` (func), `let types: Int64`, `zero` (let)
+- `CssStyleSheet`: `colorProfiles` (let), `fontFaces` (let), `let rules: Array<CssRule>`
+- `SvgAnchorInfo`: `let element: SvgElement`, `let target: String`
+- `SvgAnimationInfo`: `let attributeName: String`, `let targetId: ?String`
+- `SvgArcParams`: `let largeArc: Bool`, `let sweep: Bool`, `let xAxisRotation: Float64`
+- `SvgAttribute`: `let value: String`
+- `SvgAutoSize`: `static func rootSize(`
+- `SvgBBoxOptions`: `clipped` (let)
+- `SvgBitmap`: `pixel` (func), `let pixels: Array<Byte>`, `setPixel` (func), `writePng` (func)
+- `SvgBounds`: `inflate` (func), `intersect` (func), `isEmpty` (func), `union` (func)
+- `SvgBuilder`: `className` (func), `fillOpacity` (func), `strokeOpacity` (func), `strokeWidth` (func)
+- `SvgClipRect`: `let bottom: ?Float64`, `let left: ?Float64`, `let right: ?Float64`, `let top: ?Float64`
+- `SvgColor`: `Black` (let), `static let Transparent = SvgColor(0, 0, 0, alpha: 0.0)`, `let alpha: Float64`, `let blue: UInt8`, `let green: UInt8`
+- `SvgComputedStyle`: `alignmentBaseline` (func), `baselineShift` (func), `clipRect` (func), `clipRule` (func), `colorInterpolation` (func), `colorProfile` (func), `colorRendering` (func), `direction` (func), `dominantBaseline` (func), `fillOpacity` (func), `fillRule` (func), `fontFamily` (func), `fontFeatures` (func), `fontKerning` (func), `fontSize` (func), `fontSizeAdjust` (func), `fontStretch` (func), `fontStyle` (func), `fontVariantCaps` (func), `fontVariantLigatures` (func), `fontWeight` (func), `imageRendering` (func), `isolationIsolate` (func), `letterSpacing` (func), `mixBlendMode` (func), `overflowMode` (func), `paintOrder` (func), `pathLengthValue` (func), `pointerEvents` (func), `shapeRendering` (func), `let source: CssStyleSource`, `sourceOf` (func), `stopColor` (func), `stopOpacity` (func), `strokeDashArray` (func), `strokeDashOffset` (func), `strokeLineCap` (func), `strokeLineJoin` (func), `strokeMiterLimit` (func), `strokeOpacity` (func), `strokeWidth` (func), `textAnchor` (func), `textDecoration` (func), `textDecorationColor` (func), `textDecorationSpec` (func), `textDecorationStyle` (func), `textDecorationThickness` (func), `textRendering` (func), `textUnderlinePosition` (func), `transformBox` (func), `unicodeBidi` (func), `vectorEffect` (func), `vectorEffects` (func), `wordSpacing` (func), `writingMode` (func)
+- `SvgCoverageMask`: `applyTo` (func), `let coverage: Array<Byte>`, `coverageAt` (func)
+- `SvgCrc32`: `static func checksum(bytes: Array<Byte>): Int64`, `update` (func)
+- `SvgDisplayCommand`: `aspect` (let), `blendMode` (let), `bounds` (let), `clipBounds` (let), `clipQuads` (let), `let clipRect: ?SvgBounds`, `filter` (let), `isolated` (let), `nonScalingStroke` (let), `paintOverride` (let), `let tag: String`, `let textElement: ?SvgTextElement`
+- `SvgDisplayList`: `let commands: Array<SvgDisplayCommand>`, `let logicalHeight: Float64`, `let logicalWidth: Float64`
+- `SvgDocument`: `var declaration: ?XmlDeclaration = None`, `var doctype: ?DocTypeInfo = None`, `let epilog = ArrayList<SvgNode>()`, `parseOptions` (var), `let prolog = ArrayList<SvgNode>()`
+- `SvgEdgeMode`: `Duplicate` (let), `static let NoEdge = SvgEdgeMode(2)`, `static let Wrap = SvgEdgeMode(1)`
+- `SvgElement`: `appendElement` (func), `appendText` (func), `childrenOf` (func), `let namespace: String`, `let tag: String`
+- `SvgException`: `let column: Int64`
+- `SvgFeComponentTransfer`: `functionFor` (func)
+- `SvgFeMerge`: `inputs` (prop)
+- `SvgFilter`: `primitives` (prop)
+- `SvgFilterBuffer`: `let pixels: Array<Byte>`
+- `SvgFilterRenderer`: `apply` (func), `region` (func)
+- `SvgFontFeatures`: `static let MAX_ENTRIES: Int64 = 64`, `enabled` (func)
+- `SvgFontRegistry`: `defaultRegistry` (func), `derived` (func), `register` (func), `resolve` (func)
+- `SvgFontStretch`: `percentage` (func)
+- `SvgGeometry`: `bounds` (func), `screenCTM` (func), `strokeBounds` (func)
+- `SvgGroupCompositor`: `composite` (func), `createLayer` (func)
+- `SvgGzip`: `compress` (func), `decompress` (func)
+- `SvgHersheyFont`: `advance` (func), `ascent` (func), `descent` (func), `glyphBounds` (func), `glyphPath` (func)
+- `SvgInterpolator`: `static func numeric(from: Float64, to: Float64, t: Float64, mode!: SvgCalcMode = SvgCalcMode.Linear): Float64`, `numericList` (func), `splineValue` (func), `stringValue` (func)
+- `SvgLength`: `isAbsolute` (func), `let value: Float64`
+- `SvgLengthContext`: `let dpi: Float64`, `let fontSize: Float64`, `let viewportHeight: Float64`, `let viewportWidth: Float64`
+- `SvgLightingPrimitive`: `lightSource` (func), `lightSources` (func)
+- `SvgLineJoin`: `attrName` (func)
+- `SvgManualClock`: `now` (func), `stop` (func)
+- `SvgMarkerExpander`: `expand` (func)
+- `SvgMarkerInstance`: `let viewportHeight: Float64`, `viewportMatrix` (let), `let viewportWidth: Float64`
+- `SvgMatrix`: `apply` (func), `let b: Float64`, `let c: Float64`, `let d: Float64`, `determinant` (func), `let e: Float64`, `let f: Float64`, `identity` (let), `invert` (func), `rotateAround` (func)
+- `SvgMutationEvent`: `let attributeName: ?String`, `let element: SvgElement`, `let newValue: ?String`, `let oldValue: ?String`
+- `SvgMutationListener`: `func onMutation(event: SvgMutationEvent): Unit`
+- `SvgNamespaces`: `static let SVG: String =`, `static let XLINK: String =`, `static let XML: String =`
+- `SvgOverflow`: `clips` (func)
+- `SvgPaint`: `static let CurrentColor = make(SvgPaintKind.CurrentColor)`, `let reference: ?String`
+- `SvgPaintOrder`: `defaultOrder` (func), `let layers: Array<SvgPaintLayer>`
+- `SvgParseOptions`: `xml` (let)
+- `SvgPathCommand`: `let relative: Bool`
+- `SvgPathData`: `let commands: Array<SvgPathCommand>`, `pointAtLength` (func), `totalLength` (func)
+- `SvgPathLength`: `static func ratio(element: SvgElement, actualLength: Float64): Float64`
+- `SvgPngDecoder`: `static func decode(bytes: Array<Byte>): SvgBitmap`
+- `SvgPngEncoder`: `static func encode(bitmap: SvgBitmap): Array<Byte>`
+- `SvgPointList`: `let points: Array<SvgPoint>`
+- `SvgPreserveAspectRatio`: `Default` (let), `let align: SvgAspectAlign`, `let slice: Bool`
+- `SvgRasterizer`: `fillGradient` (func), `strokeGradient` (func)
+- `SvgRenderOptions`: `validatePixels` (func)
+- `SvgRenderTreeBuilder`: `build` (func), `buildElement` (func)
+- `SvgRenderer`: `renderToPng` (func)
+- `SvgRgba`: `let alpha: Float64`, `let blue: Float64`, `let green: Float64`, `over` (func), `transparent` (let)
+- `SvgStrokeOutliner`: `outlineContours` (func), `outlineElement` (func), `outlinePolyline` (func)
+- `SvgStrokeStyle`: `let dashArray: Array<Float64>`, `let dashOffset: Float64`, `let lineCap: SvgLineCap`, `let lineJoin: SvgLineJoin`, `let miterLimit: Float64`
+- `SvgStyleResolver`: `computeElement` (func), `fontFaces` (let)
+- `SvgSwitch`: `select` (func)
+- `SvgTag`: `isKnown` (func)
+- `SvgTextDecoration`: `isNone` (func), `let lineThrough: Bool`
+- `SvgTextDecorationGeometry`: `lineThroughOffset` (func), `overlineOffset` (func), `thickness` (func), `underlineOffset` (func)
+- `SvgTextDecorationSpec`: `let lines: SvgTextDecoration`, `let thickness: ?SvgLength`, `let underlinePosition: SvgTextUnderlinePosition`
+- `SvgTextGlyph`: `let advance: Float64`, `angle` (let), `ascent` (let), `let codePoint: Int64`, `descent` (let), `let fontSize: Float64`
+- `SvgTextLayout`: `let advance: Float64`, `let bounds: ?SvgBounds`, `let glyphs: Array<SvgTextGlyph>`
+- `SvgTextPathLayout`: `place` (func)
+- `SvgTextPlacement`: `angle` (let), `originX` (let), `let originY: Float64`
+- `SvgTextRenderer`: `decorationOutline` (func), `layout` (func), `outline` (func)
+- `SvgTimeline`: `animations` (func), `duration` (func)
+- `SvgTransform`: `identity` (let), `let operations: Array<SvgTransformOp>`
+- `SvgTrueTypeFont`: `advance` (func), `ascent` (func), `descent` (func), `glyphBounds` (func), `glyphPath` (func), `load` (func)
+- `SvgUnknownElement`: `let rawName: QName`
+- `SvgVectorEffect`: `static prop FixedPosition: SvgVectorEffect`, `static prop NonRotation: SvgVectorEffect`, `static prop NonScalingSize: SvgVectorEffect`, `static prop NonScalingStroke: SvgVectorEffect`, `strokeScale` (func)
+- `SvgVectorEffect2`: `apply` (func)
+- `SvgViewBox`: `let minX: Float64`, `let minY: Float64`
+- `SvgViewport`: `forView` (func), `nestedTransform` (func), `nestedViewport` (func)
+- `SvgWriteOptions`: `let cdata: CdataMode`, `let charset: Charset`, `let trailingNewline: Bool`, `let xmlDeclaration: Bool`
+- `SvgWriter`: `close` (func), `flush` (func)
+- `SvgWritingMode`: `isVertical` (func)

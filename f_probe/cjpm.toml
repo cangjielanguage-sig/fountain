@@ -13,7 +13,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.3.17"
+  version = "1.3.18"
   package-configuration = {}
   category = ["Data Monitoring"]
   license = ["Apache-2.0"]

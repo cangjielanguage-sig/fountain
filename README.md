@@ -89,6 +89,11 @@ fboot help # 显示fboot的其他功能
 使用方式：把 `skills/fountain-developer` 放进你所用编程智能体的技能目录（如 CodeBuddy 的 `~/.codebuddy/skills/`、Claude Code 的 `~/.claude/skills/`，或项目内的技能目录）；不支持技能机制的智能体，直接让它阅读 `skills/fountain-developer/SKILL.md` 即可。
 
 ## 各模块详细文档
+### `fountain::f_a2a`
+Agent-to-Agent（A2A）协议动态库：任务模型、状态机、服务端与客户端，传输与协议复用 `f_jsonrpc`（JSON-RPC 2.0 over HTTP，流式走 SSE）。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_a2a/README.md>
+
 ### `fountain::f_app`
 应用进程管理模块，可以用本模块加载使用fountain开发的应用项目动态链接库。
 也可以使用`fountain::fountain.app`包使用本模块的同名API。
@@ -118,6 +123,11 @@ IOC
 也可以使用`fountain::fountain.cache`包使用本模块的同名API。
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_cache/README.md>
+
+### `fountain::f_chart`
+JSON 驱动的 SVG 图表：调用方用一份 JSON 描述数据与样式，运行期由 `f_svg` 生成 SVG；一个图一个源文件，统一实现 `Chart` 接口。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_chart/README.md>
 
 ### `fountain::f_cmd`
 命令行工具
@@ -167,6 +177,11 @@ IOC
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_dbpool/README.md>
 
+### `fountain::f_excel`
+Excel（xlsx / OOXML）读写：流式解析、流式生成、日期识别、合并单元格。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_excel/README.md>
+
 ### `fountain::f_exception`
 异常模块
 也可以使用`fountain::fountain.exception`包使用本模块的同名API。
@@ -185,11 +200,21 @@ HTTP客户端
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_httpclient/README.md>
 
+### `fountain::f_hydra`
+进程内向量存储：`collection → record → 三路向量`，基于 `f_store` 落盘，不依赖任何数据库。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_hydra/README.md>
+
 ### `fountain::f_io`
 IO
 也可以使用`fountain::fountain.io`包使用本模块的同名API。
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_io/README.md>
+
+### `fountain::f_jsonrpc`
+在 `f_mvc` 之上提供 JSON-RPC 2.0 over HTTP 的服务端与客户端：JSON-RPC 消息模型、运行期方法表与错误码。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jsonrpc/README.md>
 
 ### `fountain::f_jwt`
 JWT
@@ -208,6 +233,11 @@ JWT
 也可以使用`fountain::fountain.macros`包使用本模块的同名API。
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_macros/README.md>
+
+### `fountain::f_mcp`
+MCP（Model Context Protocol）客户端 / 服务端 SDK：消息层复用 `f_jsonrpc`，实现版本与能力、工具、资源、提示词、订阅与限流。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_mcp/README.md>
 
 ### `fountain::f_mockdb`
 mock database
@@ -261,6 +291,11 @@ ORM
 也可以使用`fountain::fountain.regex`包使用本模块的同名API。
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_regex/README.md>
+
+### `fountain::f_rule`
+规则引擎：事实库、Rete 网络、议程、决策表与决策流，建立在 `f_egraph` 与 `f_jit` 之上。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_rule/README.md>
 
 ### `fountain::f_rx`
 反应式编程API

@@ -271,3 +271,11 @@ paths and limit violations all use it.
 - `doc/api.md` — the nine public names and their constraints (per-instance limits, non-thread-safe
   writer, `spilling` semantics)
 - `doc/兼容性例外.md` — registry of real-world samples that deviate from APPNOTE (initially empty)
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `allocate` (func), `allocateDirectory` (func), `candidates` (func), `public let cdOffset: Int64`, `public let cdSize: Int64`, `checksum` (func), `closeQuietly` (func), `public var comment: Array<Byte> = Array<Byte>()`, `public var crc: UInt32 = 0`, `createFile` (func), `createIn` (func), `dataOffset` (var), `public let diskStart: Option<Int64>`, `public var dosDate: UInt16 = 0`, `public var dosTime: UInt16 = 0`, `empty` (func), `public let entryCount: Int64`, `public let eocd64Offset: Option<Int64>`, `public let eocdOffset: Int64`, `public var externalAttributes: UInt32 = 0`, `fallbackDirectory` (func), `public var flags: UInt16 = 0`, `insertSuffix` (func), `public var internalAttributes: UInt16 = 0`, `left` (prop), `public var nameBytes: Array<Byte> = Array<Byte>()`, `openRange` (func), `public let originalSize: Option<Int64>`, `readAt` (func), `size` (func), `streaming` (var), `public var versionMadeBy: UInt16 = ZipLayout.VERSION_MADE_BY_UNIX`, `public var versionNeeded: UInt16 = ZipLayout.VERSION_DEFAULT`

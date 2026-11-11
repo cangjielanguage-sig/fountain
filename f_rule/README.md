@@ -779,3 +779,104 @@ cjpm test --include-tags=perf --no-capture-output
 ## 许可
 
 Apache-2.0
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`ActionRunner`（interface）、`ActivationSink`（interface）、`AlphaMemory`（class）、`AlphaNode`（class）、`AlphaSignature`（class）、`BetaLeft`（enum）、`BetaMemory`（class）、`BetaNode`（class）、`BetaProductions`（class）、`Bindings`（class）、`CellParser`（class）、`ClosureAction`（class）、`Column`（class）、`ColumnKind`（enum）、`ColumnTrace`（class）、`CompiledCondition`（class）、`CompiledOutput`（class）、`CompiledRow`（class）、`CompiledTable`（class）、`ConditionCell`（class）、`ConflictKey`（class）、`DefaultConflictResolver`（class）、`EvalFailureKind`（enum）、`EvalOutcome`（class）、`ExprColumn`（class）、`FactArchiver`（interface）、`FactBaseViewStore`（class）、`FactHandle`（class）、`FactPropagation`（interface）、`FifoResolver`（class）、`FireRecord`（class）、`FireResult`（class）、`FiredRule`（class）、`FlowContext`（class）、`HostFact`（interface）、`IdentifiedFact`（interface）、`IndexCoverage`（class）、`InterpreterProgram`（class）、`JoinPlan`（enum）、`JoinSignature`（class）、`LeftConsumer`（class）、`LifoResolver`（class）、`MatcherMode`（enum）、`NaiveActivation`（class）、`NaiveActivationFn`（type）、`NaiveMatcher`（class）、`NetworkBuilder`（class）、`NoopPropagation`（class）、`NoopRunner`（class）、`OperatorEvaluator`（class）、`OutputCell`（class）、`OutputSource`（enum）、`PerfFixture`（class）、`PerfGate`（class）、`PerfStats`（class）、`PerfSupport`（class）、`PropertyGen`（class）、`RangeKey`（class）、`Reachability`（class）、`RecordingSink`（class）、`Release`（enum）、`ReteNetwork`（class）、`ReteNode`（interface）、`ReteSession`（interface）、`RightSink`（interface）、`RootNode`（class）、`RuleAction`（interface）、`RuleFailureGuard`（class）、`RuleIdResolver`（class）、`RuleOrderResolver`（class）、`SalienceResolver`（class）、`ScriptAction`（class）、`SessionActionContext`（class）、`SessionNetwork`（class）、`SessionRuntime`（class）、`ShardedNetwork`（class）、`SpecificityResolver`（class）、`TableAction`（class）、`TableHit`（class）、`TableMode`（enum）、`TableRow`（class）、`TableRowSource`（interface）、`TableSource`（interface）、`TerminalNode`（class）、`Token`（class）、`TokenSink`（interface）、`TypeDescriptor`（class）、`TypedClause`（class）、`Validator`（class）、`ValueDomain`（enum）、`ValueKey`（class）
+- `Activation`：`let bindings: Bindings`、`hashCode`（func）、`sortKey`（func）、`specificityOf`（func）
+- `Agenda`：`add`（func）、`invalidateGroup`（func）
+- `AlphaMemory`：`add`（func）、`all`（func）、`probe`（func）、`range`（func）、`select`（func）
+- `AlphaNode`：`addChild`（func）、`addLeftConsumer`（func）、`addRightConsumer`（func）、`addRule`（func）、`children`（func）、`leftConsumers`（func）、`propagate`（func）、`rightConsumers`（func）、`ruleIds`（func）、`let signature: AlphaSignature`
+- `AlphaSignature`：`hashCode`（func）、`let negated: Bool`、`let opName: String`、`parentKey`（let）、`typeOnly`（func）
+- `BetaMemory`：`add`（func）、`probe`（func）、`probeByJoin`（func）、`select`（func）、`tokens`（func）
+- `BetaNode`：`addConsumer`（func）、`addRule`（func）、`choosePlan`（func）、`consumers`（func）、`leftActivate`（func）、`leftRetract`（func）、`let leftSource: BetaLeft`、`let plan: JoinPlan`、`rightActivate`（func）、`let rightAlphaId: Int64`、`rightRetract`（func）、`ruleIds`（func）
+- `BetaProductions`：`forget`（func）、`record`（func）、`takeByHandle`（func）、`takeByParent`（func）
+- `Bindings`：`adopt`（func）、`empty`（func）、`isEmpty`（func）、`merged`（func）、`of`（func）、`ofFacts`（func）、`resolve`（func）、`sortKey`（func）
+- `CellParser`：`parseCondition`（func）、`parseValue`（func）
+- `ClosureAction`：`execute`（func）
+- `Column`：`let kind: ColumnKind`
+- `CompiledCondition`：`let expression: ?JitExpression`、`isEmpty`（prop）
+- `CompiledOutput`：`let cell: OutputCell`
+- `CompiledRow`：`let conditions: Array<CompiledCondition>`
+- `CompiledTable`：`warnings`（let）
+- `CompositeResolver`：`compare`（func）
+- `ConditionExpr`：`depth`（func）、`eval`（func）、`expand`（func）、`validate`（func）
+- `Constraint`：`eval`（func）、`let negated: Bool`、`let right: Operand`、`validate`（func）
+- `CycleDetector`：`record`（func）、`reset`（func）、`threshold`（prop）
+- `DecisionTable`：`columnTypeAt`（func）、`columnTypes`（let）、`columnsOf`（func）、`compileInto`（func）
+- `DefaultConflictResolver`：`compare`（func）
+- `DynamicFact`：`frozen`（prop）、`identity`（prop）
+- `EvalOutcome`：`let detail: String`、`evaluated`（func）、`failed`（func）、`isFailure`（func）、`let kind: EvalFailureKind`
+- `FactBaseViewStore`：`view`（func）
+- `FactHandle`：`hashCode`（func）
+- `FactSchema`：`hostSimpleName`（prop）、`hostTypeName`（prop）、`lookup`（func）
+- `FactSpace`：`descriptor`（func）、`fieldNames`（func）、`fieldTypes`（func）、`frozen`（prop）、`hasType`（func）、`register`（func）、`registerDynamic`（func）、`typeTags`（func）
+- `FactSpaceRegistry`：`declare`（func）、`frozen`（prop）、`ids`（func）、`spaces`（func）
+- `FieldType`：`hashCode`（func）
+- `FifoResolver`：`compare`（func）
+- `FireResult`：`let fired: Array<FiredRule>`
+- `FlowContext`：`attach`（func）、`bind`（func）、`configure`（func）、`create`（func）、`current`（func）、`detach`（func）、`setArchiver`（func）、`spaces`（func）、`unbind`（func）
+- `HitAggregator`：`aggregate`（func）
+- `IndexCoverage`：`coverage`（prop）、`let indexed: Int64`、`let suggestions: Array<(String, String)>`、`let total: Int64`
+- `InterpreterProgram`：`eval`（func）、`evalOutcome`（func）、`isWhitelisted`（func）
+- `JitExpression`：`eval`（func）、`evalDetailed`（func）、`forRule`（func）、`interpretationWarningCount`（func）、`interpreted`（func）、`interpretedOf`（func）、`of`（func）、`ofExpression`（func）、`parameters`（prop）、`requireBindings`（func）、`usesJit`（prop）
+- `JoinConstraint`：`eval`（func）、`evalWith`（func）
+- `JoinSignature`：`hashCode`（func）、`joinKey`（func）、`let joinKeys: Array<String>`、`let leftRef: String`、`let rightAlphaId: Int64`、`sortJoins`（func）
+- `JoinTask`：`acceptableEvents`（prop）、`exec`（func）、`producingEvents`（prop）、`timeoutEnabled`（prop）
+- `LeftConsumer`：`let sink: TokenSink`
+- `LifoResolver`：`compare`（func）
+- `NaiveActivation`：`let bindings: Bindings`、`sortKey`（func）
+- `NetworkBuilder`：`DEFAULT_INDEX_COVERAGE_THRESHOLD`（let）、`coverageOf`（func）、`indexCoverageWarningCount`（func）
+- `NoopPropagation`：`onAssert`（func）、`onRetract`（func）、`onUpdate`（func）
+- `NoopRunner`：`run`（func）
+- `Operand`：`isBind`（func）、`resolve`（func）
+- `Operator`：`hashCode`（func）、`indexable`（prop）、`ordering`（prop）
+- `OperatorEvaluator`：`apply`（func）
+- `OutputCell`：`resolve`（func）
+- `Pattern`：`constraints`（prop）、`eval`（func）、`requireUniqueBindings`（func）、`validate`（func）
+- `PerfFixture`：`static let CODES: Int64 = 100`、`static let FIELDS: Array<String> = [         ,         ,        ,       ,        ]`、`static let GROUPS: Int64 = 100`、`static let TYPE: String =`、`expectedActivations`（func）、`group`（func）、`pairOfFact`（func）、`pairOfRule`（func）、`rulePairs`（func）
+- `PerfGate`：`static let B01_BUILD_NANOS: Int64 = 500_000_000`、`static let B01_NODE_LIMIT: Int64 = 3000`、`static let B02_INSERT_NANOS: Int64 = 2_000_000_000`、`static let B03_INSERT_P95_NANOS: Int64 = 1_000_000`、`static let B04_RETRACT_NANOS: Int64 = 500_000_000`、`static let B05_RSS_BYTES: Int64 = 512 * 1024 * 1024`、`static let B06_REBUILD_NANOS: Int64 = 50_000_000`、`static let B07_TABLE_NANOS: Int64 = 300_000_000`
+- `PerfStats`：`count`（func）、`max`（func）、`mean`（func）、`min`（func）、`p50`（func）、`p95`（func）、`percentile`（func）、`raw`（func）、`warmups`（func）
+- `PerfSupport`：`measure`（func）、`millis`（func）、`report`（func）、`requireAtMost`（func）、`requireBelow`（func）、`rssBytes`（func）、`sortedKeys`（func）
+- `PropertyGen`：`next`（func）、`randomFacts`（func）、`randomRules`（func）
+- `RangeKey`：`compare`（func）、`func hashCode(): Int64`、`let ownerId: Int64`
+- `Reachability`：`validate`（func）、`validateJoinBranches`（func）
+- `RecordingSink`：`activations`（func）、`add`（func）
+- `ResolveTask`：`acceptableEvents`（prop）、`exec`（func）、`producingEvents`（prop）
+- `ReteNetwork`：`alphaNodeCount`（func）、`alphaNodes`（func）、`betaNodeCount`（func）、`betaNodes`（func）、`frozen`（func）、`generation`（let）、`indexCoverage`（prop）、`indexCoverageSuggestions`（prop）、`nodeCount`（func）、`open`（func）、`rootNode`（func）、`terminalCount`（func）、`terminals`（func）
+- `RootNode`：`addHead`（func）、`heads`（func）、`propagate`（func）、`typeTags`（func）
+- `RowTrace`：`let line: Int64`
+- `Rule`：`let actions: Array<RuleAction>`、`conditionType`（let）、`explicitSpace`（let）、`withOrder`（func）
+- `RuleEnvelope`：`traceId`（let）
+- `RuleErrorCode`：`hashCode`（func）
+- `RuleFailureGuard`：`DEFAULT_THRESHOLD`（let）、`failureCount`（func）、`isDisabled`（func）、`keyOf`（func）、`recordFailure`（func）、`recordSuccess`（func）、`setExpressionTimeout`（func）、`threshold`（prop）
+- `RuleIdResolver`：`compare`（func）
+- `RuleInitializer`：`dependencies`（prop）
+- `RuleOrderResolver`：`compare`（func）
+- `RuleRuntime`：`lazyWarningCount`（func）、`resetForTest`（func）
+- `RuleSet`：`cycleDetection`（prop）、`cycleThreshold`（prop）、`cycleWindow`（prop）、`failureGuard`（let）、`markInvalid`（func）
+- `RuleTask`：`acceptableEvents`（prop）、`exec`（func）、`producingEvents`（prop）
+- `SalienceResolver`：`compare`（func）
+- `ScriptAction`：`execute`（func）
+- `SessionNetwork`：`alphaHits`（func）、`alphaMemory`（func）、`alphaSize`（func）、`betaMemory`（func）、`betaMemoryCount`（func）、`betaProductions`（func）、`clearMemories`（func）、`failureGuard`（prop）、`forgetAlphaHits`（func）、`network`（func）、`recordAlphaHits`（func）、`sink`（prop）、`tokenCount`（func）
+- `SessionRuntime`：`activations`（func）、`alphaSize`（func）、`shard`（func）、`tokenCount`（func）
+- `ShardedNetwork`：`naiveEvaluator`（func）、`network`（func）、`rebuild`（func）、`shared`（func）、`spaces`（func）
+- `SpecificityResolver`：`compare`（func）
+- `TableAction`：`execute`（func）
+- `TableCompiler`：`compileCount`（func）
+- `TableExecutor`：`execute`（func）
+- `TableRow`：`let line: Int64`
+- `TerminalNode`：`activate`（func）、`leftActivate`（func）、`leftRetract`（func）
+- `Token`：`bindings`（func）、`child`（func）、`func hashCode(): Int64`、`isReleased`（func）、`refCount`（prop）、`retain`（func）、`root`（func）
+- `Truth`：`and`（func）、`isTrue`（func）、`or`（func）
+- `TypeDescriptor`：`fieldNames`（func）、`fieldTypes`（func）、`hostSimpleName`（let）、`let hostTypeName: String`
+- `TypeTag`：`DEFAULT_SPACE`（prop）、`DYNAMIC_FACT`（prop）
+- `TypedClause`：`typeTags`（func）
+- `TypedFact`：`hostObject`（func）、`identity`（prop）
+- `Validator`：`compatible`（func）、`validate`（func）
+- `ValueDomain`：`hashCode`（func）、`rank`（func）
+- `ValueKey`：`compare`（func）、`domain`（prop）、`encode`（func）、`hashCode`（func）、`of`（func）、`strictCompare`（func）

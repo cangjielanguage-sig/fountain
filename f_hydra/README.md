@@ -111,3 +111,16 @@ store.rebuildFilterEntries('u1:global')                  // 给已有记录补�
 | v0.6 | 方案 C：一条记录多命名 dense + saveTime 排序 |
 | v0.6.1 | 过滤字段白名单可配置（`setFilterFields` / `rebuildFilterEntries`），meta 保存全部 filters |
 | v0.6.2 | 白名单变更启动自动重建（`applyFilterFields`）、meta 分隔符统一为控制字符、集合登记 `hc:` |
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`FStoreVectorStore`（class）、`SparseQuery`（class）、`VectorCodec`（class）、`VectorHit`（class）、`VectorMath`（class）、`VectorQuery`（class）
+- `FStoreVectorStore`：`DEFAULT_FILTER_FIELDS`（let）、`close`（func）、`collections`（func）、`idsFiltered`（func）、`rebuildAllFilterEntries`（func）、`storedFilterFields`（func）
+- `SparseQuery`：`let tokens: HashMap<Int64, Float64>`
+- `VectorCodec`：`decodeColbert`（func）、`decodeDense`（func）、`encodeColbert`（func）、`encodeColbertParts`（func）、`encodeDense`（func）
+- `VectorHit`：`let score: Float64`
+- `VectorMath`：`cosine`（func）

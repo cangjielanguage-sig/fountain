@@ -546,3 +546,103 @@ fprobe/
 | No mail is delivered | Check `probe_channel_email_smtpHost` and recipients; without smtpHost the channel is not built |
 | No report is generated | An empty `probe_reportCron` disables reports; an invalid CRON fails startup |
 | The advisor never replies | Check `probe_llmAgent=true` and `probe_llmTrigger`; for endpoint and key see [Model endpoint and auth key](#model-endpoint-and-auth-key) |
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `AdviceParser` (class), `AgentRuntime` (class), `AgentSettings` (class), `Aggregation` (enum), `AlarmEngine` (class), `AlarmEvent` (class), `AlarmEventType` (enum), `AlarmOp` (enum), `public class AlarmRule`, `AppHolder` (class), `ChannelDispatcher` (class), `public class ChannelMessage`, `ChannelReportSender` (class), `public class ChartAxisSpec`, `ChartPanel` (class), `ChartRenderer` (class), `public class ChartSeriesSpec`, `public class ChartSpec`, `ClientTransport` (interface), `Clock` (interface), `CommandResult` (struct), `CommandRunner` (interface), `CpuProbe` (class), `public class CpuSample`, `CustomLoadFailure` (class), `CustomLoadReport` (class), `CustomLoader` (struct), `public class DiskDevice`, `public class DiskMount`, `DiskProbe` (class), `public class DiskSample`, `EmailAlarmChannel` (class), `EmptyHistorySource` (class), `ExitHooks` (interface), `FEmailTransport` (class), `FHttpClientProbe` (class), `FLlmClient` (class), `FNetHealthRpcTransport` (class), `FProcessRunner` (class), `FakeClock` (class), `FixtureCommandRunner` (class), `FixtureProcReader` (class), `FprobePainter` (class), `FrameRenderer` (interface), `HardwareProbe` (class), `public class HealthMetrics`, `HealthRpcResult` (class), `HealthRpcTransport` (interface), `public class HealthSample`, `HistoryRing` (class), `HistorySource` (interface), `HttpProbe` (interface), `HttpProbeResult` (struct), `IntervalCounter` (class), `IpmiProbe` (class), `public class IpmiReading`, `JobScheduler` (interface), `KeyMap` (class), `KeySource` (interface), `public class LlmAdvice`, `LlmClient` (interface), `public class LlmSolution`, `LlmTrigger` (enum), `MailAttachmentSpec` (class), `MailTransport` (interface), `MemoryProbe` (class), `public class MemorySample`, `MetricExtractor` (class), `MetricPage` (enum), `MetricProjection` (class), `MetricSpec` (class), `MissingDataTracker` (class), `MvcHealthProbe` (class), `NetClientTransport` (class), `public class NetworkInterface`, `NetworkProbe` (class), `public class NetworkSample`, `NodeEndpoint` (class), `NodeEvent` (class), `NodeEventType` (enum), `NodeHistoryStore` (class), `NodeRpcTransport` (class), `NodeSource` (interface), `NodeState` (class), `NodeStateStore` (class), `NodeStatus` (enum), `NullPainter` (class), `OutgoingMail` (class), `Painter` (interface), `Panel` (class), `PollLoop` (class), `ProbeAdvisor` (class), `ProbeFactory` (class), `public class ProbeRPCImpl <: ProbeRPC`, `ProbeRunner` (class), `ProbeSnapshotBuilder` (class), `ProcReader` (interface), `ProjectionCatalog` (class), `PromptBuilder` (class), `RealProcReader` (class), `ReceivedMail` (class), `RenderLoop` (class), `RenderPlan` (class), `RenderPlanBuilder` (class), `ReplyDecision` (enum), `ReplyStateStore` (class), `ReportBuilder` (class), `ReportDraft` (class), `ReportSender` (interface), `RpcHealthProbe` (class), `public class RpcHealthSample`, `public class RpcHealthTarget`, `ServiceReachabilityProbe` (class), `public class ServiceSample`, `public class ServiceTargetResult`, `SmartProbe` (class), `public class SmartReading`, `SnmpDevice` (class), `SnmpProbe` (class), `public class SnmpReading`, `SparkSeries` (class), `Sparkline` (class), `StdTcpProbe` (class), `StdTtyDetector` (class), `SupervisorApp` (class), `SupervisorBootstrap` (class), `SupervisorComponents` (interface), `SupervisorRuntime` (class), `SupervisorSettings` (class), `SystemClock` (class), `SystemExitHooks` (class), `SystemProbe` (class), `public class SystemSample`, `Table` (class), `TcpProbe` (interface), `TcpProbeResult` (struct), `TerminalFrameRenderer` (class), `TerminalKeyReader` (interface), `TicktockJobScheduler` (class), `public class TopologyDevice`, `public class TopologyLink`, `TopologyProbe` (class), `TopologyRenderer` (class), `public class TopologySample`, `TtyDetector` (interface), `TtyKeySource` (class), `TuiLayout` (class), `TuiTerminalKeyReader` (class), `UiAction` (enum), `UiKey` (enum), `UnsupportedProcReader` (class), `Usage` (class), `ViewModel` (class), `WhitelistResult` (enum), `public func createProcReader(): ProcReader`, `defaultChartFactory` (func), `get` (func), `interpretHealthResponse` (func), `isEmpty` (func), `iterator` (func), `jsonToData` (func), `next` (func), `parse` (func), `register` (func), `requireTty` (func), `size` (prop), `systemKeySource` (func), `systemPainter` (func), `tryParse` (func)
+- `ActionWhitelist`: `apply` (func)
+- `AdviceParser`: `static func parse(text: String): LlmAdvice`
+- `AgentRuntime`: `prepare` (func), `serve` (func), `snapshot` (func), `stop` (func)
+- `AgentSettings`: `apply` (func), `var commandTimeoutMs: Int64 = 3000`, `var customDir: String =`, `var customFailFast: Bool = true`, `var diskExcludeFs: Array<String> = [       ,           ,          ,           ]`, `hostId` (var), `var httpTimeoutMs: Int64 = 2000`, `var intervalMs: Int64 = 5000`, `var ipmiEnabled: Bool = false`, `var mvcHealthUrl: String =`, `var networkInterfaces: Array<String> = []`, `var rpcHealthTargets: Array<NodeEndpoint> = []`, `serviceTargets` (var), `var smartDevices: Array<String> = []`, `var snmpDevices: Array<SnmpDevice> = []`, `validate` (func)
+- `Aggregation`: `aggregate` (func), `parse` (func)
+- `AlarmEngine`: `evaluate` (func)
+- `AlarmEvent`: `let eventType: AlarmEventType`, `format` (func), `isRecovery` (func), `let message: String`, `let rule: String`, `let timestamp: Int64`, `title` (func)
+- `AlarmOp`: `matches` (func), `parse` (func)
+- `AlarmRule`: `parse` (func)
+- `AppHolder`: `var app: ?SupervisorApp = None`
+- `ChannelDispatcher`: `dispatch` (func), `dispatchRich` (func)
+- `ChartPanel`: `static let MIN_HEIGHT: Int64 = 8`, `static let MIN_WIDTH: Int64 = 20`, `chartJson` (func), `render` (func), `supports` (func)
+- `ChartRenderer`: `render` (func)
+- `ChartSelector`: `static let SUPPORTED_TYPES = [      ,       ,      ]`, `configKey` (func), `defaultType` (func), `select` (func), `supports` (func)
+- `ChartSpec`: `jsonObject` (func)
+- `CommandResult`: `let exitCode: Int64`, `let stderr: String`, `let stdout: String`, `succeeded` (func), `let timedOut: Bool`
+- `CustomLoadFailure`: `let library: String`, `let message: String`
+- `CustomLoadReport`: `let failures: Array<CustomLoadFailure>`, `let loaded: Array<String>`
+- `CustomLoader`: `librariesOf` (func), `loadWith` (func)
+- `EmptyHistorySource`: `values` (func)
+- `FEmailTransport`: `list` (func)
+- `FHttpClientProbe`: `get` (func)
+- `FNetHealthRpcTransport`: `call` (func)
+- `FProcessRunner`: `run` (func)
+- `FakeClock`: `advance` (func), `nowMs` (func), `wait` (func)
+- `FixtureCommandRunner`: `respond` (func), `run` (func)
+- `FixtureProcReader`: `list` (func), `read` (func), `set` (func)
+- `FprobePainter`: `draw` (func), `restore` (func), `start` (func), `viewportHeight` (func)
+- `HealthMetrics`: `tryFrom` (func), `tryParse` (func)
+- `HealthRpcResult`: `let metrics: ?HealthMetrics`, `let timedOut: Bool`
+- `HistoryRing`: `append` (func), `let capacity: Int64`, `latest` (func), `size` (func), `values` (func)
+- `HttpProbeResult`: `let body: String`, `let timedOut: Bool`
+- `IntervalCounter`: `update` (func)
+- `KeyMap`: `static func action(key: UiKey): UiAction`
+- `LlmTrigger`: `includesAlarm` (func), `includesInterval` (func), `parse` (func)
+- `MailAttachmentSpec`: `let filename: String`, `let mediaType: String`
+- `MetricExtractor`: `static func primary(kind: String, json: String): ?Float64`
+- `MetricPage`: `chartType` (func), `title` (func)
+- `MetricProjection`: `let aggregation: Aggregation`, `evaluate` (func), `let unit: String`
+- `MetricSpec`: `let label: String`, `let projection: MetricProjection`
+- `MissingDataTracker`: `collectRecovered` (func), `raise` (func)
+- `NetClientTransport`: `close` (func), `transfer` (func)
+- `NodeEndpoint`: `address` (func), `parse` (func)
+- `NodeEvent`: `let eventType: NodeEventType`, `let failures: Int64`, `let message: String`, `let timestamp: Int64`
+- `NodeHistoryStore`: `observe` (func), `values` (func)
+- `NodeRpcTransport`: `static let SERVICE_TYPE =`, `close` (func)
+- `NodeState`: `let consecutiveFailures: Int64`, `let snapshot: ?ProbeSnapshot`, `let status: NodeStatus`, `let updatedAt: Int64`
+- `NodeStateStore`: `all` (func), `get` (func), `update` (func)
+- `NullPainter`: `draw` (func), `restore` (func), `start` (func), `viewportHeight` (func)
+- `OutgoingMail`: `let attachments: Array<MailAttachmentSpec>`, `let html: String`, `let receivers: Array<String>`, `let sender: String`, `let subject: String`, `let text: String`
+- `Panel`: `draw` (func)
+- `PollLoop`: `isRunning` (func), `run` (func), `stop` (func), `tick` (func), `tickCount` (func)
+- `ProbeAdvisor`: `analyzeAlarm` (func), `analyzeInterval` (func)
+- `ProbeFactory`: `instantiate` (func), `register` (func), `registerProduction` (func)
+- `ProbeRPCImpl`: `install` (func), `reset` (func)
+- `ProbeRunner`: `snapshot` (func), `tick` (func), `warmup` (func)
+- `ProbeSnapshot`: `agents` (prop), `decodeAgents` (func), `encodeAgents` (func)
+- `ProbeSnapshotBuilder`: `agentData` (func), `build` (func), `encode` (func)
+- `ProjectionCatalog`: `all` (func), `static func specs(page: MetricPage): Array<MetricSpec>`
+- `PromptBuilder`: `static func build(states: Array<NodeState>, events: Array<AlarmEvent>`
+- `RealProcReader`: `list` (func), `read` (func)
+- `ReceivedMail`: `let from: String`, `let html: String`, `let id: String`, `let subject: String`, `let text: String`, `let unread: Bool`
+- `RenderLoop`: `renderOnce` (func), `run` (func), `stop` (func)
+- `RenderPlan`: `let alarmRows: Array<String>`, `chartHeight` (let), `chartSeries` (let), `chartType` (let), `let metricRows: Array<Array<String>>`, `let nodeRows: Array<String>`, `let note: String`, `let pageTitle: String`, `let selectedIndex: Int64`, `let selectedNode: String`, `let series: Array<SparkSeries>`, `let title: String`
+- `RenderPlanBuilder`: `static func build(view: ViewModel, states: Array<NodeState>, history: HistorySource`
+- `ReplyMonitor`: `static let UNAUTHORIZED_REPLY =`, `pollOnce` (func)
+- `ReplyStateStore`: `isHandled` (func), `markHandled` (func), `size` (func)
+- `ReportBuilder`: `build` (func)
+- `ReportDraft`: `let html: String`, `let subject: String`, `let text: String`
+- `ReportJob`: `static let TASK_NAME =`, `register` (func), `runOnce` (func)
+- `SnapshotStore`: `replace` (func)
+- `SnmpDevice`: `let community: String`
+- `SparkSeries`: `let unit: String`, `let values: Array<Float64>`
+- `Sparkline`: `draw` (func)
+- `StdTcpProbe`: `connect` (func)
+- `StdTtyDetector`: `isTty` (func)
+- `SupervisorApp`: `run` (func), `running` (func), `shutdown` (func), `start` (func), `view` (func)
+- `SupervisorBootstrap`: `build` (func), `run` (func)
+- `SupervisorRuntime`: `close` (func), `start` (func), `stop` (func)
+- `SupervisorSettings`: `apply` (func), `var historyPoints: Int64 = 60`, `hostId` (var), `var missingThreshold: Int64 = 2`, `var nodeTimeoutMs: Int64 = 3000`, `var nodes: Array<NodeEndpoint> = []`, `var pollIntervalMs: Int64 = 5000`, `validate` (func)
+- `SystemClock`: `nowMs` (func), `wait` (func)
+- `SystemExitHooks`: `atExit` (func)
+- `Table`: `draw` (func)
+- `TerminalFrameRenderer`: `draw` (func), `flush` (func), `restore` (func), `size` (func), `start` (func)
+- `TicktockJobScheduler`: `schedule` (func)
+- `TopologyRenderer`: `render` (func)
+- `TtyKeySource`: `map` (func), `readKey` (func)
+- `TuiLayout`: `MIN_CHART_HEIGHT` (let), `chartHeight` (func), `innerHeight` (func)
+- `TuiTerminalKeyReader`: `readKey` (func)
+- `UnsupportedProcReader`: `list` (func), `read` (func)
+- `Usage`: `static func root(): String`
+- `ViewModel`: `static let PAGES: Array<MetricPage> = [`, `let alarmCount: Int64`, `empty` (func), `nextPage` (func), `nodes` (let), `page` (func), `pageCount` (func), `let pageIndex: Int64`, `pageNumber` (func), `previousPage` (func), `selectNext` (func), `selectPrevious` (func), `selectedNode` (func), `let selection: Int64`, `showAlarms` (func), `withAlarmCount` (func), `withNodes` (func)
