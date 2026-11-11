@@ -47,3 +47,13 @@ interrupts other metrics.
 
 - Contract reference: [`doc/contract.md`](doc/contract.md)
 - Extension guide: [`doc/extension-guide.md`](doc/extension-guide.md)
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- `AlarmChannelRegistry`: `channel` (func), `channels` (func), `clear` (func), `registerChannel` (func)
+- `ProbeException`: `code` (let)
+- `ProbeRegistry`: `clear` (func)

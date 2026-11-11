@@ -907,3 +907,8 @@ public class GraphException <: BaseException {
 - 模块级：`BarrierKey`（class）、`ConcurrentEndExecutor`（class）、`FlowInitializer`（interface）、`JitHostRegistry`（class）
 - `BarrierKey`：`let eventName: String`
 - `JitHostRegistry`：`public static func configure(compiler: Compiler): Unit`（把 f_egraph 的宿主类型注册到自定义 `Compiler`，须在执行脚本前调用）
+- 模块级：`EmptyEvent`（class）、`QueuedClosureTask`（class）
+- `AsyncFlow`：`getDispatcher`（func）
+- `ImmediateFlow`：`getDispatcher`（func）
+- `Event`：`let birth`、`let cancelPrev`、`let priority`
+- `QueuedClosureTask`：`drain`（func）、`runNext`（func）、`submit`（func）、`prop cancelledCount`、`prop generation`、`prop owner`、`prop pending`

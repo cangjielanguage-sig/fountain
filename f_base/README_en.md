@@ -781,3 +781,4 @@ The declarations below are not expanded above; they are grouped by module level 
 - `UInt32`: `static prop BYTES: Int64`
 - `UInt64`: `static prop BYTES: Int64`
 - `UInt8`: `static prop BYTES: Int64`
+- `BaseException`: `prop causedBy: ?Exception` (the underlying cause; chained exceptions hang their predecessor here)

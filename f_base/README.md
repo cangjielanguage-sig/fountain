@@ -776,3 +776,4 @@ public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): 
 - `UInt32`：`static prop BYTES: Int64`
 - `UInt64`：`static prop BYTES: Int64`
 - `UInt8`：`static prop BYTES: Int64`
+- `BaseException`：`prop causedBy: ?Exception`（触发该异常的底层原因，链式异常用它挂前因）

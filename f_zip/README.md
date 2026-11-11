@@ -248,3 +248,11 @@ public class ZipException <: BaseException {
 - `doc/f_zip模块设计.md` —— 设计稿（21 条决策表、字节布局、实施顺序）
 - `doc/api.md` —— 九个公开名字的速查与约束（每实例限额、非线程安全、`spilling` 语义）
 - `doc/兼容性例外.md` —— 与 APPNOTE 不一致的真实样本登记表（初始为空）
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`allocate`（func）、`allocateDirectory`（func）、`candidates`（func）、`public let cdOffset: Int64`、`public let cdSize: Int64`、`checksum`（func）、`closeQuietly`（func）、`public var comment: Array<Byte> = Array<Byte>()`、`public var crc: UInt32 = 0`、`createFile`（func）、`createIn`（func）、`dataOffset`（var）、`public let diskStart: Option<Int64>`、`public var dosDate: UInt16 = 0`、`public var dosTime: UInt16 = 0`、`empty`（func）、`public let entryCount: Int64`、`public let eocd64Offset: Option<Int64>`、`public let eocdOffset: Int64`、`public var externalAttributes: UInt32 = 0`、`fallbackDirectory`（func）、`public var flags: UInt16 = 0`、`insertSuffix`（func）、`public var internalAttributes: UInt16 = 0`、`left`（prop）、`public var nameBytes: Array<Byte> = Array<Byte>()`、`openRange`（func）、`public let originalSize: Option<Int64>`、`readAt`（func）、`size`（func）、`streaming`（var）、`public var versionMadeBy: UInt16 = ZipLayout.VERSION_MADE_BY_UNIX`、`public var versionNeeded: UInt16 = ZipLayout.VERSION_DEFAULT`
