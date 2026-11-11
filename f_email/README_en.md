@@ -62,10 +62,20 @@ let report = email.send(
 
 // list: subject + received time + unread flag (IMAP uses EXAMINE, never sets \Seen)
 let summaries = email.list(limit: 20)
+for (summary in summaries) {
+    var received = "?"
+    match (summary.receivedAt) {
+        case Some(value) => received = value.toString()
+        case None => ()
+    }
+    println("${summary.subject}  ${received}  unread=${summary.isUnread()}")
+}
 
 // read body and attachments (read-only)
 let body = email.body(summaries[0])
+let text = body.text ?? ""
 for (attachment in body.attachments) {
+    println("${attachment.filename} ${attachment.size} B")
     attachment.saveTo(Path("download/${attachment.filename}"))
 }
 
@@ -76,9 +86,9 @@ email.close()
 
 | Contract | Behaviour |
 |---|---|
-| Lazy connections | `build()` connects to nothing; `send` opens SMTP, `list` / `fetch` / `delete` open the receive protocol |
-| Locate by summary | `list` returns `MailSummary`; IMAP locates by UID so an `EXPUNGE` between calls cannot delete the wrong mail |
-| Reads are read-only | `list` / `body` use `EXAMINE` + `BODY.PEEK[]`; deleting is always an explicit `delete` |
+| Lazy connections | `build()` connects to nothing; the first `send` opens SMTP, the first `list` / `fetch` / `delete` opens the receive protocol. Sending only does not require IMAP to be reachable. |
+| Locate by summary | `list` returns `MailSummary`; reads and deletes take that summary. IMAP locates by UID, so an `EXPUNGE` in between cannot shift sequence numbers and delete the wrong mail. |
+| Reads are read-only | `list` / `body` use `EXAMINE` + `BODY.PEEK[]` and never modify `\Seen`; deleting is always an explicit `delete` call. |
 
 ### Sending (SMTP)
 
@@ -93,6 +103,7 @@ let message = MailMessage.builder()
     .to("friend@example.com")
     .subject("hello")
     .text("body")
+    .attach("report.pdf", FileBodySource(Path("report.pdf")))
     .build()
 
 let report = client.send(message)   // partial rejection does not throw; inspect report.rejected
@@ -104,8 +115,10 @@ client.close()
 ```cangjie
 let client = Pop3Client.builder("pop.example.com", port: 995).tls(TlsMode.Implicit).build()
 client.login("user", Secret.of("password"))
-let message = client.retrMessage(1)   // RETR feeds MimeParser directly
-client.quit()                         // deletions commit only after +OK for QUIT
+let list = client.list()                 // sequence number and size of every message
+let message = client.retrMessage(1)      // RETR feeds MimeParser directly
+let text = message.text()
+client.quit()                            // deletions commit only after +OK for QUIT
 ```
 
 ### Reading (IMAP)
@@ -121,30 +134,55 @@ let heads = client.fetch(
     [FetchItem.uid(), FetchItem.envelope(), FetchItem.flags()]
 )
 
+// Only unread mail from one sender
 let ids = client.uidSearch(
     SearchCriteria.unseen().andWith(SearchCriteria.from("boss@example.com"))
 )
 ```
 
-### IDLE
+### IDLE (server push)
 
 ```cangjie
-ImapEnable(client).enableUtf8Accept()
-let session = ImapIdle(client).start()      // rebuilds IDLE before the 30-minute cap
+let enabled = ImapEnable(client).enableUtf8Accept()
+let session = ImapIdle(client).start()      // by default re-issues DONE and rebuilds after 25 minutes
 while (true) {
     match (session.nextEvent(timeout: Duration.second * 30)) {
         case Some(event) => println("${event.kind} ${event.sequence}")
         case None => ()                     // a timeout is not an error; the connection stays open
     }
 }
-session.close()
+session.close()                             // sends DONE and cleans up
 ```
 
-## STDX dependency
+### MIME encoding and decoding
+
+```cangjie
+// parse: decoded text up to 256 KB stays in memory, the rest spills to a temp file (mode 0600)
+let message = MimeParser.parse(input, options: MimeParseOptions(strict: false))
+let attachments = message.attachments()
+
+// generate: allow8Bit=true when the target supports 8BITMIME
+MimeWriter(target, options: MimeWriteOptions(allow8Bit: true)).write(message)
+```
+
+## Environment requirements
+
+`CANGJIE_STDX_DYNAMIC_PATH` must point at the stdx dynamic-library directory before building:
 
 ```shell
 export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx
 ```
+
+### P-0 dependency probe results (2026-10-28, Linux aarch64)
+
+| Item | Result |
+|---|---|
+| `stdx.net.tls` | `TlsSocket.client` connected to `smtp.163.com:465`, negotiated TLS 1.3 + `TLS_AES_256_GCM_SHA384`, the system CA chain (3 certificates) verified, default `CertificateVerifyMode.Default` works. **Not verified on the OHOS target** (no device); the designed fallback (caller-injected `TlsClientConfig` + self-signed CA) is kept, `TrustAll` is never the default. |
+| `charset4cj` 1.0.5 | GBK / GB18030 / BIG5 / WINDOWS_1252 decode the Chinese samples correctly (`中文测试`, `中文測試`, `éÿ`). |
+| `stdx.encoding.base64` | **Not lenient**: missing padding (`SGVsbG8`) and embedded whitespace (`SGVs bG8=\n`) both return `None`, as do illegal characters. `mime/Base64Codec` therefore strips whitespace, adds padding and handles illegal characters in lenient / strict modes itself. |
+| `stdx.crypto.digest` | `MD5` / `HMAC(key, HashType.MD5)` + `toHexString` emit **lowercase** hex, usable directly for CRAM-MD5 and APOP digests. |
+
+Verification: one-off probe tests (removed from the repository afterwards), asserting / printing the results above.
 
 ## Not yet verified
 
