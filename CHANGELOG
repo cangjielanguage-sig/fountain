@@ -5,9 +5,9 @@
       f_rule 模块条目；各模块 README 按最新代码补「其他公开 API」小节（中英同构）
     docs(依赖图): 按最新依赖重生成依赖图与矩阵图——64 个库模块、336 条真实依赖；示例应用排除名单
       补 fhydra / fjsonrpcdemo / fmcpdemo，节点数与根 README 模块清单一致
-    docs(skills): fountain-developer 按最新代码同步——模块索引补 13 个模块与对应选型项、新增
-      JSON-RPC / MCP 服务端写法（@Mcp、mcp_* 配置）、移植映射补 Excel / XML / ZIP / 图表 / 邮件 /
-      规则 / 向量库
+    docs(skills): fountain-developer 按最新代码同步——模块索引补 13 个模块与对应选型项、移除已删除的
+      fcoder、新增 JSON-RPC / MCP 服务端写法（@Mcp、mcp_* 配置）、移植映射补 Excel / XML / ZIP /
+      图表 / 邮件 / 规则 / 向量库
 2026-11-10
     feat(f_a2a): 新增 A2A 动态库——模型层（状态机、错误码、Part / Message / Artifact / Task /
       AgentCard 的 JSON 往返）、任务存储与执行器、A2aServer（send / get / cancel / stream /
