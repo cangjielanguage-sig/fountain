@@ -132,14 +132,16 @@ public class PublishCommand <: SubCommand {
     }
     private func allModules(path: Path, modules: HashMap<String, Path>): Unit{
         Directory.walk(path){fi => 
-            // 跳过隐藏目录（.git / .worktrees / .assets 等），避免把工作树里的旧副本当成待发布模块
-            if(fi.isDirectory() && !fi.path.fileName.startsWith('.')){
-                if(exists(fi.path.join('cjpm.toml'))){
+            var descend = true
+            if(fi.isDirectory()){
+                if(fi.path.fileName.startsWith('.')){
+                    // 隐藏目录（.git / .worktrees / .assets 等）整棵子树都不参与发布
+                    descend = false
+                }else if(exists(fi.path.join('cjpm.toml'))){
                     modules[fi.path.fileName] = fi.path |> canonicalize
                 }
-                allModules(fi.path, modules)
             }
-            true
+            descend
         }
     }
     private func allModules(): HashMap<String, Path> {
