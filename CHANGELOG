@@ -1,4 +1,25 @@
+2026-11-13
+    chore(release): 所有模块 cjpm.toml（含 fdemo / frpcdemo / fmqdemo / fdbmdemo / fmcpdemo /
+      fjsonrpcdemo / scripts 工作区）与 f_version/src/FountainVersion.cj 由 1.3.18 升到 1.3.1019
+    docs(skills): 发布口径同步——f_a2a / f_llm 随 [include] 发布、f_hydra 登记，[detention] 仅剩 fleet
+    docs(依赖图): 按最新 API 引用计数重生成依赖图与矩阵图
+    docs(README): 补充版本号命名规则与目录说明；f_chart / f_svg / f_llm 的当前版本号同步到 1.3.1019
+2026-11-12
+    refactor(f_excel,f_llm,f_mvc,f_rule,f_ticktock): 适配新 std 的 Equatable / Comparable 继承关系——
+      移除冗余 Equatable 约束与重复 ToString，RequestMethod.compare 改用 hashCode；驱动依赖移入
+      test-dependencies，避免 cjpm build 连带编译不兼容的驱动源码
+    refactor(f_base): BaseException 移除 ohos 环境分支，统一标准异常构造与 caused 语义
+    refactor(f_base,f_collection,f_concurrent): 精简集合接口继承——Bucket 去掉冗余 Iterable、
+      EmptyMap 直接继承 Bucket、PriorityQueue / SyncPriorityQueue 移除多余约束
+    fix(env): 修正 STDX 动态库路径配置
 2026-11-11
+    fix(f_app): pub 遍历模块时跳过隐藏目录（.worktrees 等），避免把工作树旧副本当成待发布模块
+    chore(.modules): 收录 f_hydra、f_a2a 移入 [include]（f_llm 依赖二者，否则发布校验直接失败）
+    feat: 新增 cangjie-win.sh 构建脚本
+    docs(f_chart,f_email): 补齐英文 README——f_chart 逐节对齐中文（11 组百余图 JSON 结构与 TUI 附录），
+      f_email 补 MIME 小节、P-0 依赖验证表与示例细节
+    docs(fhydra,f_httpclient,f_llm,fdbm): 补齐英文 README——fhydra 新建全文（协议 / 16 方法 / conformance）、
+      f_httpclient 补 SSE 客户端小节、f_llm 补 ProviderDialect 与 ToolName、fdbm 补 next() 细节
     chore(release): 所有模块 cjpm.toml（含 fdemo / frpcdemo / fmqdemo / fdbmdemo / fmcpdemo /
       fjsonrpcdemo / scripts 工作区）与 f_version/src/FountainVersion.cj 由 1.3.17 升到 1.3.18
     docs(README): 根 README（中英）补齐 f_a2a / f_chart / f_excel / f_hydra / f_jsonrpc / f_mcp /
