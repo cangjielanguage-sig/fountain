@@ -202,7 +202,7 @@ public class HelloController {
   - 注解：类上 `@Mcp['kb-server']`（属性 = `serverInfo.name`，不写为 `fountain-mcp`），方法上 `@McpToolMeta` / `@McpResourceMeta` / `@McpPromptMeta`。`@Mcp` 自动补 `@Bean`，模块加载期完成注册并调用 `McpRegistry.build()`（只应在启动阶段调用）。
 - 入参与返回值按 `f_data` 规则转换；`@DataAssist` 类可用 `McpTool.of<T>('name')` 直接生成 schema。`@McpToolMeta` 的 `perCallerRpm` / `perToolRpm` / `maxConcurrency` 等映射为 `ToolRateLimit`（`-1` 沿用服务级、`0` 不限、`>0` 限额）。
 - 配置项：`mcp_publicBaseUrl`、`mcp_rateLimit`、`mcp_rateLimitBackend`、`mcp_trustForwardedFor`（默认值与取值见 `f_mcp/README.md`）。
-- A2A：`f_a2a` 在 `f_jsonrpc` 之上实现 Agent-to-Agent 协议（任务模型、状态机、服务端/客户端）；LLM 侧由 `llm_a2aEnabled` 开关装配（默认关，`f_a2a` 在 `.modules` `[detention]`）。
+- A2A：`f_a2a` 在 `f_jsonrpc` 之上实现 Agent-to-Agent 协议（任务模型、状态机、服务端/客户端）；LLM 侧由 `llm_a2aEnabled` 开关装配（默认关）。
 - 示例：`fjsonrpcdemo`（服务端 + 客户端两进程）、`fmcpdemo`（server / client 两个动态模块）。
 
 ## 4. 构建 / 运行 / 测试

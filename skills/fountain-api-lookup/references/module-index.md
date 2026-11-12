@@ -8,7 +8,7 @@
 
 | 模块 | 描述（一句话） | 常用场景 |
 | --- | --- | --- |
-| `f_a2a` | Agent-to-Agent（A2A）协议：任务模型、状态机、服务端与客户端，传输复用 `f_jsonrpc`（JSON-RPC 2.0 over HTTP，流式走 SSE） | 多智能体协作；**不发布中心仓**（`.modules` `[detention]`） |
+| `f_a2a` | Agent-to-Agent（A2A）协议：任务模型、状态机、服务端与客户端，传输复用 `f_jsonrpc`（JSON-RPC 2.0 over HTTP，流式走 SSE） | 多智能体协作；随 `.modules` `[include]` 发布 |
 | `f_app` | 应用进程管理：加载应用动态库、启动/关闭/重启、子命令机制 | fboot 基础，业务一般不直接用 |
 | `f_aspect` | AOP | 日志/事务/权限切面 |
 | `f_base` | 基础扩展：Iterator/String/Array/Option/Range/Number 扩展、OS、HashBuilder、CpuFeatures 等 | 到处都会用到 |
@@ -66,7 +66,7 @@
 | `f_xml` | XML 1.0 解析与生成：流式事件（推 / 拉）、DOM、命名空间、DTD 内部实体、安全上限 | 读写 XML |
 | `f_zip` | ZIP 容器读写：ZIP64 双向、流式写入、大条目落盘、Zip Slip / 符号链接 / 炸弹防护 | 打包 / 解包 |
 | `f_uring` | liburing 的 FFI 封装 | 仅 Linux，高性能 IO |
-| `f_llm` | 基于 f_egraph 的大模型开发库 | **不发布中心仓**（`.modules` `[detention]`） |
+| `f_llm` | 基于 f_egraph 的大模型开发库（`f_hydra` 默认记忆库、`f_a2a` 双向桥） | 随 `.modules` `[include]` 发布（依赖 `f_hydra` / `f_a2a` / `f_jsonrpc`） |
 | `fleet` | 基于 store/codec/net/protocol 的数据同步服务：服务注册、配置中心、元数据注册 | **不发布中心仓**（`.modules` `[detention]`） |
 
 服务端与示例（不是库依赖）：
@@ -85,7 +85,7 @@
 | `fmcpdemo` | MCP 端到端示例（server / client 两个动态模块） | workspace |
 | `fprobe` | 服务器监控可执行程序：`fprobe agent` 采集 + `fprobe supervisor` 聚合（TUI、告警、内联 SVG 报表、可选 LLM 参谋） | 可执行工具 |
 
-**发布登记以根 `.modules` 为准**：`[include]` 段里的模块才发布中心仓（含 `f_jit` / `f_mq` / `f_dbd` / `f_dbm` / `fmq` / `fdbm` / `fboot` / `f_jsonrpc` / `f_mcp` / `f_xml` / `f_svg` / `f_chart` / `f_zip` / `f_excel` / `f_rule` / `f_probe` / `f_tui`），`[detention]` 段明确不发布（当前 `f_llm` / `fleet` / `f_a2a`）。
+**发布登记以根 `.modules` 为准**：`[include]` 段里的模块才发布中心仓（含 `f_jit` / `f_mq` / `f_dbd` / `f_dbm` / `fmq` / `fdbm` / `fboot` / `f_jsonrpc` / `f_mcp` / `f_xml` / `f_svg` / `f_chart` / `f_zip` / `f_excel` / `f_rule` / `f_probe` / `f_tui` / `f_hydra` / `f_a2a` / `f_llm`），`[detention]` 段明确不发布（当前 `fleet`）。
 「已登记」= 会随发布进中心仓，但**不等于目标版本已有制品**：`f_jit` / `f_dbd` / `f_dbm` / `fdbm` 是刚登记的新模块，早于其发布版本的依赖版本里没有制品。加依赖前先看 `.modules`，解析不到时按 `references/project-setup.md` 退 path 依赖。
 
 ## 2. 选型速查（需求 → 模块）
@@ -124,7 +124,7 @@
 | 发邮件 / 收邮件（SMTP / POP3 / IMAP） | `f_email` | 统一 `Email` 门面 |
 | JSON-RPC 服务端 / 客户端 | `f_jsonrpc` | `f_mvc`（路由/鉴权/线程池）；示例 `fjsonrpcdemo` |
 | 给 LLM 暴露工具 / 资源（MCP） | `f_mcp`（`@Mcp` 宏） | `f_jsonrpc`（消息层）、`f_data`（入参校验）；示例 `fmcpdemo` |
-| 多智能体协作（A2A） | `f_a2a` | `f_jsonrpc`；LLM 侧 `llm_a2aEnabled` 开关（默认关，`[detention]` 不发布） |
+| 多智能体协作（A2A） | `f_a2a` | `f_jsonrpc`；LLM 侧 `llm_a2aEnabled` 开关（默认关） |
 | 业务规则 / 决策表 / 决策流 | `f_rule` | `f_jit`（脚本段）、`f_egraph`（流程） |
 | 向量检索 / 语义记忆 | `f_hydra` | 默认 `llm_memoryStore=f_hydra`；远程部署用 `fhydra`（JSON-RPC） |
 | 服务器监控 / 采集 / 告警 | `fprobe`（agent + supervisor） | 自定义扩展 `f_probe` |
