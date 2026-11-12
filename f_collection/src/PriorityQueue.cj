@@ -34,7 +34,7 @@ class PriorityQueueIterator<T> <: Iterator<T> {
     }
 }
 
-public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
+public class PriorityQueue<T> <: Queue<T> & Growable {
     private static const DEFAULT_CAPACITY = 16
     /**
      * current size
