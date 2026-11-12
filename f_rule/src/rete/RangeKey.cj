@@ -23,7 +23,7 @@ import fountain::f_rule.fact.ValueKey
  * `ValueKey` 是全序，但同值多事实会互相覆盖，因此用 `ownerId`（`FactHandle.id`
  * 或 `Token.id`）兜底，保证跳表的键唯一。比较先按值、再按 id。
  */
-public class RangeKey <: Comparable<RangeKey> & Hashable & Equatable<RangeKey> & ToString {
+public class RangeKey <: Comparable<RangeKey> & Hashable & ToString {
     public let key: ValueKey
     public let ownerId: Int64
 
