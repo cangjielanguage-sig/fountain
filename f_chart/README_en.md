@@ -17,7 +17,7 @@ f_chart
 
 ## Install
 
-The module ships with the fountain repository; its version tracks the repository (currently `1.3.18`):
+The module ships with the fountain repository; its version tracks the repository (currently `1.3.1019`):
 
 ```toml
 [dependencies]
