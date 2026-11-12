@@ -6,7 +6,7 @@
   "fountain::f_log" = {path = "../f_log"}
 
 [workspace]
-  version = "1.3.18"
+  version = "1.3.1019"
   organization = "fountain"
   description = "demo for fountain::f_mcp (server + client + distributed rate limit)"
   members = ["./server", "./client"]
