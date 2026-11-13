@@ -378,6 +378,26 @@ fact.call<Int64>([Int64(5)])      // 120
 | 闭包内 | `LOADL 0`（`locals[0]` 是闭包自身句柄）+ `CALL_CLOSURE` |
 | **尾位置** | 实参**逆序 `STOREL`** + `LOOP_BACK <函数入口>`（帧复用，不发 `RET`；尾递归不增长栈） |
 
+`recursive` 除作调用目标外，还可作**右值**（值化自引用）——把"自己"当成一个闭包值来用：
+
+```cangjie
+// 把当前闭包赋给局部，再由内层闭包捕获它
+let f = c.compile('{ n: Int64 =>
+    let outer = recursive                       // outer 就是当前这个闭包（同一句柄）
+    let inner = { m: Int64 => if (m <= 0) { 0 } else { outer(m - 1) } }
+    if (n <= 0) { 0 } else { inner(n - 1) }
+}')
+f.call<Int64>([Int64(3)])         // 0
+```
+
+| 位置 | 右值形态的降低 |
+|---|---|
+| 闭包内 | `LOADL 0` → `CLOSURE`（**不新建**闭包对象，与外层闭包同一句柄） |
+| 顶层（非闭包） | 合成一个 adapter 闭包转调 `entryFn`，宿主可拿到"指向自己"的闭包值 |
+
+- 该值可存局部、作实参、被内层闭包捕获（捕获类型 12，逃逸时随提升组一起提升）；
+- **注意**：`outer` 与当前闭包是**同一个闭包**——`{ => outer() }` 一旦被调用就是无终止条件的自递归（用于"别名"或"经内层转调"时必须自带终止条件）。
+
 ### 6.3 嵌套闭包与嵌套闭包递归
 
 ```cangjie
@@ -558,3 +578,101 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
 - 逃逸闭包建议显式 `close()`；漏调时单元卸载会级联释放，单元长期存活则提升组一直驻留；
 - 细节规格见 `doc/jit-bytecode-m1.md` / `doc/design-m1.md` / `doc/plan-m1.md`，验收见
   `doc/spec/f-jit-m1/verify.md`，性能见 `doc/perf-m1.md`。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`A64Compiler`（class）、`AArch64Runner`（class）、`Backend`（interface）、`BackendSelector`（class）、`ByteReader`（class）、`ByteWriter`（class）、`CanonKey`（class）、`CodeBuffer`（class）、`CompileCacheKey`（class）、`ConstKind`（class）、`ConstMirror`（class）、`ConstPayload`（enum）、`ConstRegistry`（class）、`CtorBad`（class）、`CtxFlags`（class）、`DecodedInsn`（struct）、`DedupGuard`（class）、`DiagCode`（enum）、`DiagnosticLevel`（enum）、`DiagnosticsSink`（interface）、`DiffCase`（class）、`DiffEngine`（enum）、`DiffMismatchException`（class）、`DiffOutcome`（class）、`DiffRunner`（interface）、`DiffSession`（class）、`EscapeArea`（class）、`FbcFlags`（class）、`FbcHeader`（struct）、`FbcReader`（class）、`FbcRuleRegistry`（class）、`FbcRuleSet`（class）、`FbcWriter`（class）、`Fingerprint`（class）、`FnTable`（class）、`FuncDir`（class）、`FuncEntry`（struct）、`FuncFlags`（class）、`HelperAddresses`（class）、`HelperFail`（class）、`HostCallback`（class）、`HostFault`（class）、`HostFieldAccessor`（class）、`HostFieldTable`（class）、`HostSignature`（class）、`InsnDecoder`（class）、`InterpRunner`（class）、`IterTable`（class）、`JitArtifacts`（class）、`JitBindSupport`（class）、`JitClosureId`（struct）、`JitCompiler`（class）、`JitContext`（class）、`JitFieldBinding`（class）、`public class JsonArray {}`、`public class JsonNull {}`、`LoadedUnit`（class）、`LocalTypes`（class）、`MachineEnv`（class）、`NameEntry`（struct）、`NameTable`（class）、`NativeAssets`（class）、`NativeMem`（class）、`public class NativeRunner <: DiffRunner`、`OpInfo`（struct）、`ReflectAdmin`（class）、`ReflectAnyHolder`（class）、`ReflectBox`（class）、`ReflectUser`（class）、`RegistrationRejectKind`（enum）、`RuntimeEnv`（class）、`SignatureDescriptor`（class）、`SignaturePlan`（class）、`SignatureRegistry`（class）、`SignatureTable`（class）、`SignatureVerifier`（class）、`SiteEntry`（struct）、`SiteTable`（class）、`SourceCompileException`（class）、`SourcePos`（struct）、`SourceUnit`（struct）、`StubRunner`（class）、`TCase`（class）、`TMapping`（class）、`T_MAP_IN_SCOPE`（let）、`T_MAP_M2`（let）、`T_MAP_M3`（let）、`TextFormat`（class）、`TypeNames`（class）、`TypeToken`（class）、`UserHelperEntry`（class）、`UserHelperTable`（class）、`Version`（class）、`X86Compiler`（class）、`abiSummary`（func）、`addAutoFunction`（func）、`addFunc`（func）、`allTMappings`（func）、`allocCtorHelper`（func）、`allocSlot`（func）、`analyze`（func）、`assemble`（func）、`assertTripleEqual`（func）、`autoFunctions`（func）、`awaitReady`（func）、`bail`（func）、`public let body: Array<AstStmt>`、`public let breakLabels: ArrayList<Int64>`、`buildCtor`（func）、`public let builder: BytecodeBuilder`、`bytes`（func）、`callClosure`（func）、`callFunc`（func）、`callHelper`（func）、`callHelperNoCheck`（func）、`callHelperVoid`（func）、`callHost`（func）、`captureDescriptors`（func）、`public let captures: ArrayList<VarSym>`、`claim`（func）、`classOf`（func）、`public let classes: Array<ClassDescriptor>`、`closureFnId`（let）、`closureGroupOf`（func）、`public func closure_fnid(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func closure_new(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`codeLen`（func）、`column`（func）、`consts`（let）、`constsOf`（func）、`public let continueLabels: ArrayList<Int64>`、`ctorHelperList`（func）、`ctorHelpers`（let）、`ctorsOf`（func）、`public func dec_add(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_div(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_from_f64(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_from_i64(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_mul(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_sub(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_to_f64(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dec_to_i64(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`declare`（func）、`depthNow`（func）、`describe`（func）、`diffFour`（func）、`dir`（let）、`display`（func）、`public func dt_add(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dt_diff(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dt_sub(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`dump`（func）、`public func dur_add(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dur_div(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dur_mul(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dur_neg(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func dur_sub(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`elemCode`（func）、`elemTy`（let）、`emit`（func）、`emitI32`（func）、`emitI64`（func）、`emitRel`（func）、`emitU16`（func）、`emitU16U8`（func）、`emitU8`（func）、`empty`（func）、`public let entries: Array<CaptureEntry>`、`public let entryLabel: Int64`、`entryParamClasses`（let）、`entryParamSigs`（let）、`entryThunkBase`（func）、`entryThunkFor`（func）、`public func err_raise(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`escapeAndGet`（func）、`escapedIds`（func）、`public let escaping: Bool`、`fail`（func）、`failWith`（func）、`failureOf`（func）、`fieldOf`（func）、`find`（func）、`public let fingerprint: UInt64`、`finish`（func）、`fixupRel`（func）、`fnIdOf`（func）、`public func fn_table(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`funcAt`（func）、`funcCount`（prop）、`public func h_guard(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func h_is_type(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func h_nonnull(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func h_ref_eq(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func h_tag_of(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`handleCaptureNames`（func）、`has`（func）、`hasFunction`（func）、`hashCode`（func）、`public func hd_cmp(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hd_is_int(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hdur_cmp(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hdur_ticks(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`hex`（func）、`hidOfSlot`（func）、`public func hl_get(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hl_len(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hm_get(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hm_get_or(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hm_has(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hm_len(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`hostParamNames`（func）、`hostParams`（func）、`hostRet`（func）、`hostRetName`（func）、`public func host_call_trampoline(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func host_get_field(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func host_set_field(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hs_at(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hs_cmp(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hs_len(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func ht_cmp(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func ht_field(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func hw_check(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`implOf`（func）、`impls`（let）、`invalidEntries`（func）、`invokeHelper`（func）、`isBuiltinName`（func）、`isCallHelper`（func）、`public let isClosure: Bool`、`isHostObjectCode`（func）、`isInstanceOfClass`（func）、`isInstanceOfHost`（func）、`isInvalidIfEscapes`（func）、`isKeywordName`（func）、`isMutating`（func）、`isRegistered`（func）、`isSameOrSubclass`（func）、`isTerminator`（func）、`isUncondJump`（func）、`isValueCode`（func）、`public func jit_dump(dump: CPointer<Int64>, errCode: Int64, fnId: Int64, nLocals: Int64`、`keyCode`（func）、`keyTy`（let）、`kind`（let）、`lastRegexFlags`（func）、`line`（func）、`public func list_add(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func list_insert(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func list_new(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func list_remove(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func list_set(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`lowerTop`（func）、`makeArgMarshalers`（func）、`makeRetUnboxer`（func）、`public static func mapToken(t: UInt16): UInt16`、`mapType`（func）、`mapTypeRef`（func）、`public func map_iter_begin(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func map_iter_step(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func map_new(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func map_put(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func map_remove(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`marshalArg`（func）、`marshalHostClosure`（func）、`maxStack`（let）、`maxStackSeen`（func）、`methodOf`（func）、`methodsOf`（func）、`nLocals`（func）、`names`（let）、`public let nargs: Int64`、`needsAutoCheck`（func）、`needsPromotion`（func）、`newFnId`（func）、`newLabel`（func）、`next`（func）、`nlBefore`（let）、`noteFunction`（func）、`objectName`（func）、`of`（func）、`okOutcome`（func）、`ops`（func）、`ordinal`（func）、`public let origin: UInt8`、`public let paramNames: Array<String>`、`paramTypesOf`（func）、`public let parent: ?FnCtx`、`parseBlockBody`（func）、`parseExpr`（func）、`parseLambda`（func）、`parseMapLit`（func）、`pendingSites`（func）、`place`（func）、`popScope`（func）、`public let pos: SourcePos`、`position`（func）、`pushScope`（func）、`public func range_contains(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func range_new(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public let raw: Array<UInt8>`、`public func regex_find(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func regex_is_match(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func regex_replace_all(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func regex_replace_nth(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func regex_replace_range(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`register`（func）、`registeredList`（func）、`registry`（let）、`public let relOff: Int64`、`remove`（func）、`removeFunction`（func）、`removeUnit`（func）、`requireClass`（func）、`requireCtors`（func）、`requireField`（func）、`requireMethod`（func）、`requireValue`（func）、`resetRetainedForTest`（func）、`resolve`（func）、`public let ret: UInt16`、`public let retExpr: ?AstExpr`、`retTypeOf`（func）、`retTypes`（let）、`retVoid`（func）、`retainedCount`（func）、`public static func runSource(source: String, c: Compiler): JitFunction`、`runUnit`（func）、`public let scopes: ArrayList<ArrayList<VarSym>>`、`setSite`（func）、`setSlotType`（func）、`public let sites: Array<PendingSite>`、`public let slot: Int64`、`slotCount`（func）、`slotOf`（func）、`slotType`（func）、`slotTypeTable`（func）、`snapshot`（func）、`snapshotOf`（func）、`source`（let）、`public func str_cat(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func str_repeat(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func str_replace(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func str_sub(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`public func str_to_regex(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`text`（let）、`throwJit`（func）、`public func to_str(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64`、`token`（let）、`tokenize`（func）、`public let ty: UInt16`、`public let typeAnn: TypeRef`、`public let typeCode: UInt16`、`public let types: LocalTypes`、`value`（let）
+- `A64Compiler`：`compileFunction`（func）、`compileFunctionFar`（func）、`compileFunctionWith`（func）
+- `AArch64Runner`：`func engine(): DiffEngine`、`isAvailable`（func）、`run`（func）
+- `ByteReader`：`bytes`（func）、`f64bits`（func）、`i32`（func）、`i64`（func）、`offset`（func）、`remaining`（func）、`seek`（func）、`u64`（func）、`u8`（func）
+- `ByteWriter`：`take`（func）、`wBytes`（func）、`wI32`（func）、`wI64`（func）、`wU16`（func）、`wU32`（func）、`wU64`（func）、`wU8`（func）
+- `CanonKey`：`bitsAsI64`（func）、`cell`（func）、`dateTime`（func）、`dec`（func）、`decFromText`（func）、`duration`（func）、`f64`（func）、`i64`（func）、`range`（func）、`str`（func）
+- `ClassDescriptor`：`isInterface`（let）
+- `CodeBuffer`：`alloc`（func）、`flushCount`（func）、`flushICache`（func）、`pageSize`（func）、`patch`（func）、`rawPointer`（func）、`read`（func）、`resetFlushCount`（func）、`seal`（func）、`write`（func）
+- `CompileCacheKey`：`arch`（let）、`fingerprint`（let）、`hashCode`（func）
+- `Compiler`：`hasClass`（func）、`hasFunction`（func）、`let opts: CompileOptions`、`registeredNames`（func）、`unregisterFunction`（func）
+- `ConstMirror`：`at`（func）、`build`（func）
+- `ConstPayload`：`kindOf`（func）
+- `ConstRegistry`：`addDateTime`（func）、`addDecimal`（func）、`addDuration`（func）、`addF64`（func）、`addI64`（func）、`addJson`（func）、`addList`（func）、`addMap`（func）、`addRange`（func）、`addRegex`（func）、`addStr`（func）、`addValue`（func）、`decode`（func）、`encode`（func）、`freeze`（func）、`get`（func）、`instanceAt`（func）、`instantiateAll`（func）、`isFrozen`（prop）、`regexCompileCount`（var）
+- `CtorBad`：`let value: Int32`
+- `DbgDump`：`allocateDump`（func）、`writeOnce`（func）、`writeOnceStackRaw`（func）
+- `DecodedInsn`：`op`（let）、`operands`（let）
+- `DedupGuard`：`fingerprint`（prop）、`matches`（func）、`rawBytes`（prop）
+- `DiffCase`：`unit`（let）
+- `DiffOutcome`：`result`（let）
+- `DiffSession`：`assertTripleEqual`（func）、`ran`（func）、`runAll`（func）、`skipped`（func）、`skippedEngineNames`（func）
+- `DummyDiagnosticsSink`：`func diag(level: DiagnosticLevel, code: DiagCode, message: String): Unit {}`
+- `ErrCode`：`describe`（func）、`isHostSide`（func）
+- `EscapeArea`：`clear`（func）、`contains`（func）、`snapshot`（func）
+- `FbcHeader`：`let codeLen: UInt32`、`let constLen: UInt32`、`hdrSize`（let）、`isLegacyLayout`（func）、`nameLen`（let）、`payloadOff`（func）、`read`（func）、`let siteLen: UInt32`、`write`（func）
+- `FbcReader`：`UNSUPPORTED_MINOR`（let）、`load`（func）、`loadWithoutRegistry`（func）、`maxSupportedMinor`（let）、`minVerMinorOf`（func）、`rulesFor`（func）、`supportedMajor`（let）、`validate`（func）
+- `FbcRuleRegistry`：`V1`（let）、`V2`（let）、`V3`（let）、`get`（func）
+- `FbcRuleSet`：`implemented`（let）、`isInstructionLegal`（func）、`isLocalTypeInLegalSet`（func）、`isLocalTypeLegal`（func）、`isRegistryDependent`（func）、`isVerMinorSupported`（func）、`maxLocalType`（let）、`maxVerMinor`（let）、`minVerMinor`（let）
+- `FbcWriter`：`build`（func）、`crc32OfPayload`（func）、`setCode`（func）、`setConst`（func）、`setEntryFn`（func）、`setFlags`（func）、`setName`（func）、`setSite`（func）、`setVersion`（func）
+- `Fingerprint`：`bytecodeKey`（func）、`constFingerprint`（func）、`fnv1a128`（func）、`fnv1a64`（func）、`normalizeSource`（func）、`sourceKey`（func）
+- `FnTable`：`alloc`（func）
+- `FuncDir`：`at`（func）、`find`（func）、`get`（func）、`validate`（func）
+- `FuncEntry`：`codeLen`（let）、`codeOff`（let）、`localTypesOff`（let）、`maxStack`（let）、`nLocals`（let）、`nargs`（let）、`read`（func）、`write`（func）
+- `HandleTable`：`anyToCell`（func）、`appendAnyBox`（func）、`appendHostObject`（func）、`canonKeyOf`（func）、`escape`（func）、`fetchAny`（func）、`fetchAnyBox`（func）、`fetchClosure`（func）、`fetchDateTime`（func）、`fetchDecimal`（func）、`fetchDuration`（func）、`fetchHostCallback`（func）、`fetchHostObject`（func）、`fetchList`（func）、`fetchRange`（func）、`fetchRegexEx`（func）、`fetchString`（func）、`getAs`（func）、`idxOf`（func）、`initialCapacity`（var）、`isConst`（func）、`isEscaped`（func）、`isFrozen`（func）、`isLiveHandle`（func）、`isType`（func）、`liveCount`（func）、`makeId`（func）、`markFrozen`（func）、`pinAnyBox`（func）、`pinConst`（func）、`pinHostClosure`（func）、`promote`（func）、`release`（func）、`releaseConst`（func）、`resetForTest`（func）、`slotCount`（func）、`syncFrom`（func）、`syncTo`（func）、`tagOf`（func）、`tagOfHandle`（func）、`tagOrZero`（func）、`tokenOf`（func）、`windowBaseOf`（func）、`windowCapOf`（func）、`windowUsed`（func）
+- `HelperAddresses`：`dispatch`（func）、`dump`（func）
+- `HelperCore`：`ctxWriteCode`（func）、`ctxWritePanic`（func）
+- `HelperId`：`isFixed`（func）
+- `HostCallback`：`let fn: Any`、`let sig: ?SignatureDescriptor`、`ti`（let）
+- `HostFault`：`causeOf`（func）、`clear`（func）、`exceptionOf`（func）、`record`（func）、`takeCause`（func）
+- `HostFieldAccessor`：`accepts`（let）、`getter`（let）、`setter`（let）
+- `HostFieldTable`：`find`（func）、`register`（func）、`resetForTest`（func）
+- `HostSignature`：`arity`（func）、`display`（let）、`paramNames`（let）、`ret`（let）、`sameShape`（func）
+- `InsnDecoder`：`decode`（func）、`i32`（func）、`i64`（func）、`rel32`（func）、`u8`（func）
+- `Interp`：`align16`（func）、`constHandle`（func）、`frameInfo`（func）、`frameSize`（func）、`pinnedConstIds`（func）、`result`（func）、`run`（func）
+- `InterpRunner`：`func engine(): DiffEngine`、`isAvailable`（func）、`run`（func）
+- `IterTable`：`genOfCursor`（func）、`idxOfCursor`（func）、`key`（func）、`liveCount`（func）、`makeCursor`（func）、`next`（func）、`open`（func）、`value`（func）
+- `JitArtifacts`：`codeOf`（func）、`let fnIds: Array<UInt32>`、`let lengths: Array<Int64>`、`let offsets: Array<Int64>`
+- `JitBindSupport`：`HOST_OBJECT_CODE`（let）、`UNIT_CODE`（let）、`acceptsInterface`（func）、`bindName`（func）、`bindNameOf`（func）、`enrollInterfaceOf`（func）、`enrolledOf`（func）、`isInterface`（func）、`parentsOf`（func）、`typeMismatch`（func）
+- `JitBindings`：`ctorOf`（func）、`empty`（func）、`fieldOf`（func）、`ignored`（let）、`isEmpty`（func）、`staticOf`（func）、`statics`（let）、`withOverrides`（func）
+- `JitCompiler`：`static func compileUnit(unit: LoadedUnit): ?JitArtifacts`、`compileUnitWith`（func）
+- `JitContext`：`attachDump`（func）、`cp`（func）、`create`（func）、`dumpPointer`（func）、`readAt`（func）、`resetForCall`（func）、`wrap`（func）、`writeAt`（func）
+- `JitException`：`cause`（let）、`sourcePos`（let）
+- `JitExecutor`：`create`（func）、`invoke`（func）、`invokeFn`（func）、`pinnedConstIds`（func）、`release`（func）
+- `JitFieldBinding`：`let get: (Object) -> Any`
+- `JitFunction`：`isJitBacked`（func）
+- `JitHost`：`findSignature`（func）、`registerSignature`（func）、`signatureCount`（func）
+- `LoadedUnit`：`consts`（let）、`dir`（let）、`let header: FbcHeader`、`requiresClassRegistry`（func）、`rules`（let）、`types`（let）
+- `LocalType`：`hasBoxPoint`（func）、`isConvertible`（func）、`isHandle`（func）、`isJson`（func）、`isLegal`（func）、`isSameOrDescendant`（func）
+- `LocalTypes`：`get`（func）、`isHandleSlot`（func）、`read`（func）、`validate`（func）、`write`（func）
+- `MachineEnv`：`setFnTableBase`（func）
+- `NameEntry`：`keyLess`（func）、`read`（func）、`slot`（let）、`strLen`（let）、`strOff`（let）、`write`（func）
+- `NameTable`：`at`（func）、`decode`（func）、`encode`（func）、`freeze`（func）、`isFrozen`（prop）、`strBytesSize`（prop）、`validate`（func）
+- `NativeAssets`：`liveCount`（func）、`resetCounters`（func）
+- `NativeMem`：`static var freeCount: Int64 = 0`、`static var mallocCount: Int64 = 0`、`outstanding`（func）、`resetCounters`（func）
+- `NativeRunner`：`func engine(): DiffEngine`、`isAvailable`（func）、`run`（func）
+- `OpInfo`：`OPCODE_TABLE`（let）、`cat`（let）、`fmt`（let）、`len`（let）、`operandSize`（func）、`selfCheckOk`（func）
+- `PromotionGroup`：`contains`（func）、`release`（func）、`snapshot`（func）
+- `PublicField`：`hasSignature`（func）、`sigParamNames`（let）、`sigParams`（let）、`sigRet`（let）、`sigRetName`（let）
+- `ReflectAnyHolder`：`var anything: Any`、`let flag: Bool`
+- `ReflectBox`：`var value: T`
+- `ReflectUser`：`age`（prop）、`bump`（func）、`counter`（var）、`label`（prop）、`parse`（func）、`let raw: Int32`、`version`（let）
+- `RegistrationException`：`kind`（let）、`occupiedBy`（let）
+- `RuntimeEnv`：`clearDeadline`（func）、`deadlineExpired`（func）、`deadlineNanos`（var）、`deadlineNanosOf`（func）、`nowNanos`（func）、`setDeadline`（func）
+- `SignatureDescriptor`：`isLegalCode`（func）、`paramNames`（let）、`let ret: UInt16`、`validate`（func）
+- `SignaturePlan`：`marshalArgs`（func）、`ret`（let）、`sameShape`（func）
+- `SignatureRegistry`：`adapterOf`（func）、`count`（func）、`find`（func）、`get`（func）、`register`（func）、`resetForTest`（func）
+- `SignatureTable`：`MAX_ENTRIES`（let）、`buildCount`（func）、`enabled`（var）、`entryCount`（func）、`getOrBuild`（func）、`resetForTest`（func）
+- `SignatureVerifier`：`cached`（func）、`verifyReflective`（func）
+- `SiteEntry`：`column`（let）、`line`（let）、`off`（let）、`read`（func）、`write`（func）
+- `SiteTable`：`at`（func）、`decode`（func）、`encode`（func）、`freeze`（func）、`hasExact`（func）、`isFrozen`（prop）、`validate`（func）
+- `SourceCompileException`：`column`（let）、`hint`（let）、`kind`（let）、`line`（let）、`lineText`（let）、`position`（let）
+- `SourcePos`：`column`（let）、`line`（let）
+- `SourceUnit`：`raw`（let）
+- `StubRunner`：`func engine(): DiffEngine`、`func isAvailable(): Bool`、`func run(_: DiffCase): DiffOutcome`
+- `TCase`：`hit`（func）
+- `TMapping`：`caseName`（let）、`inScope`（let）、`steps`（let）
+- `TextFormat`：`bool`（func）、`dateTime`（func）、`decimal`（func）、`duration`（func）、`f64`（func）、`i64`（func）、`offsetText`（func）、`pad2`（func）、`pad4`（func）、`pad9`（func）、`range`（func）
+- `TypeNames`：`codeOf`（func）
+- `UserHelperEntry`：`let ret: UInt16`
+- `UserHelperTable`：`find`（func）、`push`（func）、`resetForTest`（func）
+- `Version`：`supportedMajors`（func）
+- `X86Compiler`：`compileFunction`（func）、`compileFunctionWith`（func）

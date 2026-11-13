@@ -378,3 +378,7 @@ The declarations below are not expanded above; they are grouped by module level 
 - `Executors`: `func shutdown(): Unit`
 - `SyncPriorityQueue`: `func grow(): Unit`
 - `Worker`: `retire` (func)
+- `RateLimiter`: `close` (func)
+- `LeakingBucketRateLimiter`: `close` (func)
+- `SlidingWindowRateLimiter`: `close` (func)
+- `TokenBucketRateLimiter`: `close` (func)

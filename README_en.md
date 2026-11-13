@@ -19,6 +19,12 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## Stargazers over time
 ![Stargazers over time](https://gitcode.com/Cangjie-TPC/fountain/starcharts.svg?variant=adaptive)
 
+## Version Number
+
+The version number has three parts, a.b.c. a.b must strictly match the first two parts of the Cangjie SDK version. c is formatted as x0yz, where yz is the number of releases on top of SDK version a.b. x indicates a major feature change: when the SDK changes in a way that forces a version bump, x is incremented by 1.
+
+For example, starting from 2026.11.09, SDK nightly 1.3.0 no longer allows a subtype to implement or inherit an interface already implemented or inherited by its parent type. Judging from the compiler errors, this seems to be caused by local mode. Therefore the version number was changed to 1.3.1019.
+
 ## Demo Video
 
 > 🎥 [Watch the full demo video](https://www.bilibili.com/video/BV1rtpT62Eaz/?vd_source=29618d9ddd46963c9eabd64d9e362fb4)
@@ -99,6 +105,12 @@ The skill always takes its API facts **from this repository's code and READMEs**
 Usage: copy `skills/fountain-developer` into your coding agent's skills directory (e.g. CodeBuddy's `~/.codebuddy/skills/`, Claude Code's `~/.claude/skills/`, or a project-local skills directory); agents without a skill mechanism can simply read `skills/fountain-developer/SKILL.md`.
 
 ## Detailed documentation of each module
+### `fountain::f_a2a`
+Agent-to-Agent (A2A) protocol dynamic library: task model, state machine, server and client; transport and protocol reuse `f_jsonrpc`
+(JSON-RPC 2.0 over HTTP, streaming over SSE).
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_a2a/README_en.md>
+
 ### `fountain::f_app`
 Application process management module; this module can load application projects developed with fountain as dynamic libraries.
 You can also use the same-named APIs of this module through the `fountain::fountain.app` package.
@@ -129,6 +141,12 @@ Heap cache
 You can also use the same-named APIs of this module through the `fountain::fountain.cache` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_cache/README_en.md>
+
+### `fountain::f_chart`
+JSON-driven SVG charts: callers describe data and styling in JSON; at runtime `f_svg` turns it into SVG.
+One chart per source file, all behind the same `Chart` interface.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_chart/README_en.md>
 
 ### `fountain::f_cmd`
 Command line tools
@@ -179,6 +197,11 @@ Database connection pool built on f_pool, providing a Datasource connection pool
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_dbpool/README_en.md>
 
+### `fountain::f_excel`
+Excel (xlsx / OOXML) reader and writer: streaming parse, streaming generate, date detection and merged cells.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_excel/README_en.md>
+
 ### `fountain::f_exception`
 Exception module
 You can also use the same-named APIs of this module through the `fountain::fountain.exception` package.
@@ -197,11 +220,21 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_httpclient/README_en.md>
 
+### `fountain::f_hydra`
+In-process vector store: `collection → record → three-way vectors`, persisted through `f_store`, no database required.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_hydra/README_en.md>
+
 ### `fountain::f_io`
 IO
 You can also use the same-named APIs of this module through the `fountain::fountain.io` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_io/README_en.md>
+
+### `fountain::f_jsonrpc`
+JSON-RPC 2.0 over HTTP server and client on top of `f_mvc`: the JSON-RPC message model, a runtime method table and the error model.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jsonrpc/README_en.md>
 
 ### `fountain::f_jwt`
 JWT
@@ -220,6 +253,12 @@ Macro utility API
 You can also use the same-named APIs of this module through the `fountain::fountain.macros` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_macros/README_en.md>
+
+### `fountain::f_mcp`
+MCP (Model Context Protocol) client / server SDK: the message layer is `f_jsonrpc`; MCP semantics cover version and capabilities,
+tools, resources, prompts, subscriptions and rate limiting.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_mcp/README_en.md>
 
 ### `fountain::f_mockdb`
 mock database
@@ -273,6 +312,11 @@ Regular expression extensions, regex cache, regex DSL
 You can also use the same-named APIs of this module through the `fountain::fountain.regex` package.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_regex/README_en.md>
+
+### `fountain::f_rule`
+Rule engine: fact bases, a Rete network, an agenda, decision tables and decision flows, built on `f_egraph` and `f_jit`.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_rule/README_en.md>
 
 ### `fountain::f_rx`
 Reactive programming API
@@ -418,6 +462,29 @@ host classes, functions and closures through `JitFunction.call<T>`. The interpre
 authority; native code is Linux-only and other platforms fall back to the interpreter.
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_jit/README_en.md>
+
+### `fountain::f_probe`
+Extension contract for server monitoring: probe agents (`ProbeAgent`), alarm message channels
+(`AlarmMessageChannel`), thread-safe registries and stable error codes. A third-party extension
+depends only on this module to build a dynamic library, without RPC, mail or TUI dependencies.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_probe/README_en.md>
+
+### `fountain::f_tui`
+Unix terminal backend: POSIX `termios` raw mode, terminal size, key decoding, ANSI differential
+rendering, and a `ratatui_buffer.Buffer → ANSI` renderer. It depends only on `f_base` and the
+ratatui base packages, never on `crossterm` / `ratatui_backend` / `ratatui_terminal` /
+`ratatui_widgets`.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_tui/README_en.md>
+
+### `fountain::fprobe`
+Server-monitoring executable (`fprobe agent` / `fprobe supervisor`): the node agent periodically
+collects host metrics and exposes them over RPC; the supervisor aggregates multiple nodes and
+provides TUI and resident modes, alarms, terminal charts, periodic reports with inline SVG,
+an optional LLM advisor and `custom/` dynamic-library extensions.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/fprobe/README_en.md>
 
 ### `fountain::fboot`
 Application project launcher depending on fountain

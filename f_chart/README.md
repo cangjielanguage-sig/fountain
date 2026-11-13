@@ -17,7 +17,7 @@ f_chart
 
 ## 安装
 
-模块随 fountain 仓库发布，版本与仓库一致（当前 `1.3.17`）：
+模块随 fountain 仓库发布，版本与仓库一致（当前 `1.3.1019`）：
 
 ```toml
 [dependencies]
@@ -209,6 +209,24 @@ import fountain::f_data.json.JsonValue
 let svg = TuiBarChart().draw(data)   // 返回 ANSI 彩色字符串
 print(svg)
 ```
+
+### 逐单元格渲染（`TuiCellChart`）
+
+宿主已有自己的终端缓冲（例如 `fprobe` 的 TUI）时，解析 ANSI 既慢又容易在宽字符上错位。
+`TuiLineChart` 与 `TuiBarChart` 另外实现了 `TuiCellChart`：
+
+```cangjie
+public interface TuiCellChart {
+    func drawCells(data: JsonObject): Array<Array<String>>
+}
+```
+
+- 外层是行，每行恰好 `width` 个元素；
+- 宽字符的后半格是空字符串，宿主跳过该列但列号继续前进；
+- 元素不含任何 ANSI 转义，颜色由宿主自行决定；
+- `draw` 的行为完全不变，仍返回 ANSI 字符串。
+
+其余 6 个图表类暂时只提供 `draw`；需要时按同一约定补充 `drawCells`。
 
 | 类 | `type` | 说明 |
 |---|---|---|
@@ -3131,3 +3149,11 @@ cjpm test --skip-build
 
 这些文件是纯文本（ANSI 已剥离），可直接 `cat` 查看或纳入视觉回归。
 
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`ChartErrorKind`（enum）

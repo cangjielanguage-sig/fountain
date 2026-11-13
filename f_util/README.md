@@ -728,3 +728,6 @@ abstract sealed class DiffieHellmanKeyExchanger {
 - `Crc64`：`all`（let）、`checkValue`（let）、`func compute(data: Array<Byte>): UInt64`、`ecma182`（let）、`func initRegister(): UInt64`、`iso`（let）、`jones`（let）、`redis`（let）、`func update(crc: UInt64, data: Array<Byte>): UInt64`、`we`（let）、`xz`（let）
 - `IsUUID`：`prop description: String`、`func validate(value: ?String): Bool`
 - `PathPattern`：`dataByPrefix`（func）、`func extractDataParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: DataParsable<T>`、`func extractParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: Parsable<T>`、`func extractTimeVariableInPath(path: String, name: String, format: String): Option<DateTime>`、`func extractVariablesInPath(path: String): Map<String, String>`、`matches`（func）、`func matchesPrefix(path: String): Bool`
+- 模块级：`Fnv`（class）、`Fnv32`（class）、`Fnv64`（class）、`Fnv128`（class）、`Fnv256`（class）、`Fnv1024`（class）、`FnvHasher`（class）、`FnvVariant`（enum）、`FnvWidth`（enum）
+- `FnvHasher`：`reset`（func）
+- `FnvWidth`：`prop bits`、`prop words`

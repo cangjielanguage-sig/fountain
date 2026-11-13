@@ -53,12 +53,15 @@ f_chart
 f_zip
 f_excel
 f_rule
+f_probe
+f_tui
+f_hydra
+f_a2a
 f_llm
+fboot
 fmq
 fdbm
-fjsonrpcdemo
-fmcpdemo
-fboot
+fprobe
 .
 
 [exclude]

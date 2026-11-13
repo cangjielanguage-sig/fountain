@@ -301,3 +301,17 @@ public interface Chart {
 - TUI 的 `smooth` 仅接受不报错，字符网格按折线绘制。
 
 测试策略：每个 TUI 类一个测试文件，另加 `TuiCanvas_test` / `TuiFrame_test` / `TuiConfig_test`；断言纯文本（`tuiStripAnsi`）与 ANSI 颜色序列，覆盖默认尺寸、CJK 截断、null 断开、负值、类型错误。
+
+### 10.1 逐单元格接口
+
+`draw` 返回 ANSI 字符串，宿主若要写进自己的缓冲需要解析转义并在宽字符上跳列，既慢又易错。
+`TuiLineChart` 与 `TuiBarChart` 额外实现 `TuiCellChart`：
+
+```cangjie
+public interface TuiCellChart {
+    func drawCells(data: JsonObject): Array<Array<String>>
+}
+```
+
+`TuiCanvas.cellSymbols()` 负责生成矩阵：外层行、每行 `width` 个元素，宽字符的后半格是空串。
+`draw` 仍走 `TuiCanvas.render()`，输出与既有用例逐字节一致；其余图表类暂不实现该接口。

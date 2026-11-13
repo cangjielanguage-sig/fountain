@@ -140,6 +140,24 @@ internal class TuiCanvas {
         }
     }
 
+    /** 逐单元格符号：外层为行，每行恰好 `width` 个；宽字符后半格为 `""`。 */
+    func cellSymbols(): Array<Array<String>> {
+        let rows = ArrayList<Array<String>>()
+        for (row in 0..this.height) {
+            let symbols = ArrayList<String>()
+            for (column in 0..this.width) {
+                let cell = this.cells[row * this.width + column]
+                symbols.add(if (cell.continuation) {
+                    ""
+                } else {
+                    cell.symbol
+                })
+            }
+            rows.add(symbols.toArray())
+        }
+        rows.toArray()
+    }
+
     /** 纯文本行，每行恰好 `width` 个显示列，不含换行符。 */
     func plainLines(): Array<String> {
         let lines = ArrayList<String>()

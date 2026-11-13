@@ -1,0 +1,27 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::fprobe.rpc
+
+import fountain::f_config.Config
+import fountain::f_protocol.default.ProtocolConfig
+
+/**
+ * 测试进程的协议配置。
+ *
+ * `MessageID` 拒绝 `hostId == 0`，而 `Message.consume` 内部会自动生成消息 id；
+ * 用例需要一个合法主机号（与 f_rpc / f_net 的测试装配一致）。
+ */
+let testProtocolHostIdSetup: Unit = Config.set([(ProtocolConfig.protocol_hostId, 1)])

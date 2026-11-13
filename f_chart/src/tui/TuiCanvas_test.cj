@@ -97,4 +97,20 @@ public class TuiCanvas_test {
         @Assert(tuiDisplayWidth("中文") == 4)
         @Assert(tuiDisplayWidth("a中b") == 4)
     }
+
+    /** 逐单元格符号：列数固定，宽字符后半格为空串。 */
+    @TestCase
+    public func cellSymbolsMarksContinuation(): Unit {
+        let canvas = TuiCanvas(3, 2)
+        canvas.putText(0, 0, "A中", "#000000")
+        canvas.set(2, 1, "Z", "#000000")
+        let cells = canvas.cellSymbols()
+        @Assert(cells.size, 2)
+        @Assert(cells[0].size, 3)
+        @Assert(cells[0][0], "A")
+        @Assert(cells[0][1], "中")
+        @Assert(cells[0][2], "")
+        @Assert(cells[1][0], " ")
+        @Assert(cells[1][2], "Z")
+    }
 }

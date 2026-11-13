@@ -211,6 +211,7 @@ extend HttpResponse <: ExtendHttpResponse
 
 - `HttpClient`：`func enablePush(enable: Bool): This`、`func headerTableSize(size: UInt32): This`、`func httpProxy(addr: String): This`、`func httpsProxy(addr: String): This`、`func initialWindowSize(size: UInt32): This`、`func logger(logger: Logger): This`、`func maxConcurrentStreams(size: UInt32): This`、`func maxFrameSize(size: UInt32): This`、`func maxHeaderListSize(size: UInt32): This`、`func noProxy(): This`
 - `HttpResponse`：`func readEntire(): String`、`func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader`、`func readJson(): JsonValue`、`func readToEnd(): Array<Byte>`、`func reader(): StringReader<InputStream>`、`func tryParse<T>(): ?T where T <: DataFields<T>`
+- 模块级：`SseException`（class）
 
 ---
 

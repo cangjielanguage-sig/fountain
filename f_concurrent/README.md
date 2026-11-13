@@ -378,3 +378,7 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
 - `Executors`：`func shutdown(): Unit`
 - `SyncPriorityQueue`：`func grow(): Unit`
 - `Worker`：`retire`（func）
+- `RateLimiter`：`close`（func）
+- `LeakingBucketRateLimiter`：`close`（func）
+- `SlidingWindowRateLimiter`：`close`（func）
+- `TokenBucketRateLimiter`：`close`（func）

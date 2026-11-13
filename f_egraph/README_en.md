@@ -926,3 +926,8 @@ The declarations below are not expanded above; they are grouped by module level 
 - Module level: `BarrierKey` (class), `ConcurrentEndExecutor` (class), `FlowInitializer` (interface), `JitHostRegistry` (class)
 - `JitHostRegistry`: `public static func configure(compiler: Compiler): Unit` (registers the f_egraph host types into a custom `Compiler`; call it before running any script)
 - `BarrierKey`: `let eventName: String`
+- Module level: `EmptyEvent` (class), `QueuedClosureTask` (class)
+- `AsyncFlow`: `getDispatcher` (func)
+- `ImmediateFlow`: `getDispatcher` (func)
+- `Event`: `let birth`, `let cancelPrev`, `let priority`
+- `QueuedClosureTask`: `drain` (func), `runNext` (func), `submit` (func), `prop cancelledCount`, `prop generation`, `prop owner`, `prop pending`

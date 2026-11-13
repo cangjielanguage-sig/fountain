@@ -85,7 +85,7 @@ enum KeyValue {
  * - [compare] 是全序（数值 < 文本 < 布尔 < 时间 < 列表），索引层只依赖它定位；
  * - [strictCompare] 供 `Gt/Ge/Lt/Le/Between` 使用，跨域直接抛 `TYPE_MISMATCH`，不静默判 false。
  */
-public class ValueKey <: Hashable & Equatable<ValueKey> & Comparable<ValueKey> {
+public class ValueKey <: Hashable & Comparable<ValueKey> {
     private let inner: KeyValue
 
     private init(inner: KeyValue) {

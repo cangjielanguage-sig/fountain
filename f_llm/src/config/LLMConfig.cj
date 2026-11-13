@@ -58,6 +58,15 @@ public struct LLMConfig {
     /** 无可用流程时是否自动编排新流程；仅 `llm_supervisor=true` 时生效 */
     public static const LLM_LOOM_ON_NO_USABLE = LLM + '_loomOnNoUsable'
 
+    /**
+     * 是否开启 A2A 服务（`llm_a2aEnabled`）。
+     *
+     * 默认关闭：开启等于对外暴露一个「可执行入口」，不该在升级后悄悄生效。
+     */
+    public static func a2aEnabled(): Bool {
+        Config.getValue<Bool>(LLM + '_a2aEnabled') ?? false
+    }
+
     public static func supervisorEnabled(): Bool {
         Config.getValue<Bool>(LLM_SUPERVISOR) ?? false
     }

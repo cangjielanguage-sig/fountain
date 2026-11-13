@@ -825,3 +825,7 @@ depth=n: match(...match(@.name, 'Alice')..., 'Alice')
 - `ObjectFields`：`func create(): Object`、`static func getObjectFields<T>(metas: () -> (Array<ReadableField>, ()->Object)): ObjectFields`、`func isEmpty()`、`func mutableField(name: String): ?MutableField`、`func mutableFields(): Iterator<MutableField>`、`func readableField(name: String): ?ReadableField`
 - `String`：`static func tryParse(s: String): ?String`
 - `JsonNull`：`static let instance = JsonNull()`（JSON null 的单例，模块级的 `JSON_NULL` 就是它）
+- 模块级：`CompiledSchema`（class）、`JsonSchemaValidator`（class）、`UnknownKeyword`（enum）、`ValidationError`（struct）、`ValidationOptions`（struct）、`ValidationResult`（struct）
+- `CompiledSchema`：`compile`（func）、`prop patternCount`、`prop schema`
+- `ValidationOptions`：`let unknownKeyword`
+- `ValidationResult`：`prop isValid`、`let skipped`

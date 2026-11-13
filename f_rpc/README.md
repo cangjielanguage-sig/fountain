@@ -589,3 +589,11 @@ data是返回给客户端的数据，**data必须能够转换为RPC函数的返�
    - 前两位版本号变化表示发生了破坏性、不兼容变更。
 9. 客户端可能依赖不同业务不同版本的RPC服务端，所以`@RPCStub`的`exactlyVersion`和`version`的属性需要客户端开发者自己定义配置项。
 10. 客户端配置项`rpc_currentSkeleton`用于阻止同模块的Stub注册到IOC。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`registerRPCType`（func）
