@@ -131,17 +131,21 @@ public class PublishCommand <: SubCommand {
         0
     }
     private func allModules(path: Path, modules: HashMap<String, Path>): Unit{
+        // Directory.walk 自身递归，回调返回 false 会中断整次遍历，所以这里恒返回 true，
+        // 只用路径判定过滤隐藏目录（.git / .worktrees / .assets 等）的子树。
         Directory.walk(path){fi => 
-            var descend = true
             if(fi.isDirectory()){
-                if(fi.path.fileName.startsWith('.')){
-                    // 隐藏目录（.git / .worktrees / .assets 等）整棵子树都不参与发布
-                    descend = false
-                }else if(exists(fi.path.join('cjpm.toml'))){
+                var hidden = false
+                for(seg in fi.path.toString().split('/')){
+                    if(seg.startsWith('.')){
+                        hidden = true
+                    }
+                }
+                if(!hidden && exists(fi.path.join('cjpm.toml'))){
                     modules[fi.path.fileName] = fi.path |> canonicalize
                 }
             }
-            descend
+            true
         }
     }
     private func allModules(): HashMap<String, Path> {
