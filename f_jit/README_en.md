@@ -406,6 +406,30 @@ Lowering differs by position:
 | Inside a closure | `LOADL 0` (`locals[0]` holds the closure itself) + `CALL_CLOSURE` |
 | **Tail position** | arguments in **reverse order** into `STOREL` + `LOOP_BACK <entry>` (frame reuse, no `RET`; tail recursion does not grow the stack) |
 
+Besides being a call target, `recursive` can also be used as an **rvalue** (a value-ised self reference) —
+treating "itself" as a closure value:
+
+```cangjie
+// bind the current closure to a local, then let an inner closure capture it
+let f = c.compile('{ n: Int64 =>
+    let outer = recursive                       // outer *is* the current closure (same handle)
+    let inner = { m: Int64 => if (m <= 0) { 0 } else { outer(m - 1) } }
+    if (n <= 0) { 0 } else { inner(n - 1) }
+}')
+f.call<Int64>([Int64(3)])         // 0
+```
+
+| Position | Rvalue lowering |
+|---|---|
+| Inside a closure | `LOADL 0` → `CLOSURE` (creates **no** new closure object; same handle as the enclosing closure) |
+| Top level (not a closure) | a synthetic adapter closure that forwards to `entryFn`, so the host still gets a closure value pointing at itself |
+
+- The value can be stored in a local, passed as an argument, or captured by an inner closure (capture type 12;
+  promoted with the promotion group when the closure escapes);
+- **Caveat**: `outer` and the current closure are the **same** closure — once `{ => outer() }` is called it is
+  unbounded self-recursion (when used as an alias or as an inner indirection it must carry its own
+  termination condition).
+
 ### 6.3 Nested closures and recursive nested closures
 
 ```cangjie
