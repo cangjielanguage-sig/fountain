@@ -1,0 +1,11 @@
+﻿# f_rule decision table v1
+# id: pricing
+# name: 订单折扣
+# version: v1
+# factSpace: orders
+# hitPolicy: First
+# salience: 100
+id,name,when.order.level,when.order.amount,then.discount,then.event
+R1,VIP 大额,>=3,>200,0.85,order.discounted
+R2,普通大额,>=1,>500,0.90,order.discounted
+R3,兜底,,,1.0,order.discounted

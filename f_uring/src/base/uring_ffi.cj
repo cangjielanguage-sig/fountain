@@ -23,7 +23,7 @@ package fountain::f_uring.base
  */
 
 // ==================== 初始化与清理 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -127,7 +127,7 @@ public func ioUringGetSQEFFI(ring: CPointer<IOUring>): CPointer<IOUringSQE> {
 }
 
 // ==================== SQE 操作 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -139,7 +139,7 @@ foreign {
 }
 
 // ==================== 提交与等待 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -193,7 +193,7 @@ foreign {
 }
 
 // ==================== CQE 操作 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -258,7 +258,7 @@ foreign {
 }
 
 // ==================== 注册操作 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -431,7 +431,7 @@ foreign {
 }
 
 // ==================== Buffer Ring 操作 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -468,7 +468,7 @@ foreign {
 }
 
 // ==================== 系统调用 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**
@@ -535,7 +535,7 @@ foreign {
 }
 
 // ==================== 辅助函数 ====================
-
+@FastNative
 @When[os == "Linux"]
 foreign {
     /**

@@ -82,7 +82,7 @@ protected class CursorStore {
         var bytes: Array<Byte> = []
         try {
             codec.encode(position.seq).encode(position.offset)
-            bytes = codec.finish().asBytes().getOrThrow()
+            bytes = codec.finish().asBytes().getOrThrow().clone()
         } finally {
             codec.release()
         }

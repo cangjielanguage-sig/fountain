@@ -15,7 +15,12 @@ limitations under the License.
  */
 package fountain::f_mvc
 
-public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Parsable<RequestMethod> & DataParsable<RequestMethod> & Comparable<RequestMethod> {
+/**
+ * 注：`Comparable<RequestMethod>` 已 `<: Equatable<RequestMethod>`（新 std），
+ * 同时列出二者会让 `Equatable` 被实例化两条路径，local mode 下报
+ * `!=(this @local!, other: T)` must be implemented ⇒ 只保留 `Comparable`。
+ */
+public enum RequestMethod <: Hashable & ToString & Parsable<RequestMethod> & DataParsable<RequestMethod> & Comparable<RequestMethod> {
     | GET
     | POST
     | PUT
@@ -85,7 +90,7 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
         }
     }
     public func compare(other: RequestMethod): Ordering {
-        this.toString().compare(other.toString())
+        this.hashCode().compare(other.hashCode())
     }
     public static func parse(value: String): RequestMethod {
         tryParse(value).getOrThrow {IllegalArgumentException("${value} is an illegal http request method")}

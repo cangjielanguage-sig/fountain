@@ -436,6 +436,7 @@ public interface Destroy {
     func destroy(): Unit
 }
 ```
+Destroy Resource 实现一个就行了，f_bean会先判断是不是Destroy实现，不是再判断是不是Resource实现。
 
 ### PostConstructor
 被`@Bean`修饰的类如果实现了本接口表示bean实例化后，IOC框架需要调用`postConstruct()`完成最后的初始化。

@@ -1,0 +1,26 @@
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_data" = {path = "../f_data"}
+
+[package]
+  cjc-version = "1.2.0"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  description = "服务器监控扩展契约：监控项、告警渠道、注册表与错误码"
+  link-option = ""
+  name = "f_probe"
+  organization = "fountain"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.3.1019"
+  package-configuration = {}
+  category = ["Data Monitoring"]
+  license = ["Apache-2.0"]
+  include = ["src", "doc"]
+  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
+  authors = ["吴京润"]
+  repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/f_probe"
+
+[profile.build]
+  incremental = true

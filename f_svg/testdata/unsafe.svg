@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100">
+  <script>alert(1)</script>
+  <rect onload="x()" onclick="y()" width="10" height="10" fill="red"/>
+  <image href="https://example.com/a.png" width="1" height="1"/>
+  <image href="http://example.com/b.png" width="1" height="1"/>
+  <image href="file:///etc/passwd" width="1" height="1"/>
+  <image xlink:href="data:image/png;base64,AAAA" width="1" height="1"/>
+  <use xlink:href="#ok"/>
+  <use href="//evil/x.svg#a"/>
+  <use href="javascript:alert(1)"/>
+  <use xlink:href="https://example.com/c.svg#a"/>
+</svg>

@@ -60,12 +60,15 @@ MARKER = Path("f_version") / "src" / "FountainVersion.cj"
 DEFAULT_REPO_URL = "https://gitcode.com/Cangjie-TPC/fountain.git"
 CLONE_DIR_NAME = "fountain"
 SKIP_PARTS = {"target", ".build-logs", ".git", "node_modules", ".assets", ".cache"}
-TOOL_MODULES = {"fboot": "工具", "fcoder": "工具"}
+TOOL_MODULES = {"fboot": "工具"}
 SAMPLE_MODULES = {
     "fdemo": "示例应用",
     "frpcdemo": "示例应用",
     "fmqdemo": "示例应用",
     "fdbmdemo": "示例应用",
+    "fhydra": "示例应用",
+    "fjsonrpcdemo": "示例应用",
+    "fmcpdemo": "示例应用",
 }
 SERVICE_MODULES = {"fleet": "服务", "fmq": "服务", "fdbm": "服务"}
 CLONE_HINT = "（自动克隆的文档副本，仅用于查询文档；构建/安装请用用户自己的 fountain 源码或中心仓）"

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg>
+<!-- prolog comment -->
+<?xml-stylesheet type="text/css" href="style.css"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
+  <!-- inner comment -->
+  <rect width="10" height="10"/>
+  <text><![CDATA[a < b & c]]></text>
+</svg>
+<!-- epilog comment -->

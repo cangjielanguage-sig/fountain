@@ -34,7 +34,7 @@ class PriorityQueueIterator<T> <: Iterator<T> {
     }
 }
 
-public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
+public class PriorityQueue<T> <: Queue<T> & Growable {
     private static const DEFAULT_CAPACITY = 16
     /**
      * current size
@@ -128,8 +128,17 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
         true
     }
     public func grow(): Unit {
+        // 容量为 0 时 `currentSize * 2` 仍然是 0，`doOffer` 的 while 会空转成死循环。
+        // 首次扩容至少给到 DEFAULT_CAPACITY（或调用方声明的 capacity）。
+        let target = if (currentSize > 0) {
+            currentSize * 2
+        } else if (capacity > 0) {
+            capacity
+        } else {
+            DEFAULT_CAPACITY
+        }
         let q = queue
-        queue = Array<Option<T>>(currentSize * 2) {
+        queue = Array<Option<T>>(target) {
             i => if (i < currentSize) {
                 q[i]
             } else {

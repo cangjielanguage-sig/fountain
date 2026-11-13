@@ -24,11 +24,11 @@
   output-type = "executable"
   src-dir = ""
   target-dir = ""
-  version = "1.3.17"
+  version = "1.3.1019"
   package-configuration = {}
   category = ["Infrastructure", "Message Queue", "Network", "Distributed", "Data Encapsulation and Transfer"]
   license = ["Apache-2.0"]
-  include = ["src", "doc"]
+  include = ["src", "doc", "fmq.sh"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
   repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/fmq"

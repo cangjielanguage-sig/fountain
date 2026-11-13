@@ -1,0 +1,681 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_svg
+
+import std.collection.*
+import fountain::f_base.*
+import fountain::f_xml.*
+
+/** 构建期间的可变状态。 */
+internal class SvgBuildContext {
+    let options: SvgParseOptions
+    let warnings = ArrayList<String>()
+    var elementCount: Int64 = 0
+
+    init(options: SvgParseOptions) {
+        this.options = options
+    }
+}
+
+/** 把 `f_xml` DOM 构造成 `SvgDocument`。 */
+internal func buildSvgDocument(xml: XmlDocument, options: SvgParseOptions): SvgDocument {
+    let rootXml = match (xml.root) {
+        case Some(root) => root
+        case None => throw syntaxError("文档缺少根元素")
+    }
+    if (rootXml.name.local != "svg") {
+        throw syntaxError("根元素必须是 svg，实际为「${rootXml.name.local}」")
+    }
+    match (rootXml.name.uri) {
+        case Some(uri) => if (uri != SvgNamespaces.SVG) {
+            throw syntaxError("根元素必须位于 SVG 命名空间或无命名空间，实际为「${uri}」")
+        }
+        case None => ()
+    }
+
+    if (countXmlElements(rootXml) > options.security.maxElements) {
+        throw limitError("元素数超过上限 ${options.security.maxElements}")
+    }
+    checkDepth(rootXml, 1, options.security.maxDepth)
+
+    let context = SvgBuildContext(options)
+    let root = SvgRoot()
+    context.elementCount = 1
+    let rootPath = "/svg[1]"
+    fillSvgAttributes(root, rootXml, rootPath, context, true, SvgNamespaces.SVG)
+    buildSvgChildren(root, rootXml, SvgNamespaces.SVG, "/svg[1]", 1, context)
+
+    let document = SvgDocument(root)
+    document.parseOptions = options
+    document.declaration = xml.declaration
+    document.doctype = xml.doctype
+    for (node in xml.prolog) {
+        match (miscSvgNode(node)) {
+            case Some(misc) => document.prolog.add(misc)
+            case None => ()
+        }
+    }
+    for (node in xml.epilog) {
+        match (miscSvgNode(node)) {
+            case Some(misc) => document.epilog.add(misc)
+            case None => ()
+        }
+    }
+    for (warning in context.warnings) {
+        document.warnings.add(warning)
+    }
+    document
+}
+
+/** 递归构建子节点；深度与总量在进入前已由迭代检查拦截。 */
+private func buildSvgChildren(
+    parent: SvgElement,
+    xml: XmlElement,
+    parentNamespace: String,
+    parentPath: String,
+    depth: Int64,
+    context: SvgBuildContext
+): Unit {
+    let counters = HashMap<String, Int64>()
+    for (node in xml.children) {
+        match (node) {
+            case XmlNode.ElementNode(childXml) =>
+                let tag = childXml.name.local
+                let previous = counters.get(tag) ?? 0
+                let index = previous + 1
+                counters[tag] = index
+                let path = parentPath + "/" + tag + "[" + index.toString() + "]"
+                let namespace = namespaceOf(childXml, parentNamespace)
+                match (buildSvgOne(childXml, namespace, path, depth + 1, context)) {
+                    case Some(child) => parent.appendElement(child)
+                    case None => ()
+                }
+            case XmlNode.TextNode(text) => appendTextNode(parent, text)
+            case XmlNode.CDataNode(text) => parent.appendChild(SvgNode.CDataNode(text))
+            case XmlNode.CommentNode(text) => parent.appendChild(SvgNode.CommentNode(text))
+            case XmlNode.PiNode(target, data) => parent.appendChild(SvgNode.PiNode(target, data))
+            case XmlNode.EntityRefNode(_) => ()
+        }
+    }
+}
+
+/** 只构建当前元素本身（属性 + 安全过滤 + 严格校验），不递归子节点。 */
+private func buildSvgOne(
+    xml: XmlElement,
+    namespace: String,
+    path: String,
+    depth: Int64,
+    context: SvgBuildContext
+): ?SvgElement {
+    context.elementCount++
+    if (context.elementCount > context.options.security.maxElements) {
+        throw limitError("元素数超过上限 ${context.options.security.maxElements}")
+    }
+    if (depth > context.options.security.maxDepth) {
+        throw limitError("元素深度超过上限 ${context.options.security.maxDepth}")
+    }
+
+    let local = xml.name.local
+    let rawName = QName(local, prefix: xml.name.prefix, uri: Some(namespace))
+
+    if (local == "script") {
+        if (!context.options.security.allowScript) {
+            match (context.options.security.unsafePolicy) {
+                case SvgUnsafePolicy.Reject =>
+                    throw SvgException("不允许脚本元素", 0, 0, kind: SvgErrorKind.Security, elementPath: Some(path))
+                case SvgUnsafePolicy.Remove =>
+                    context.warnings.add("已移除不安全元素 script（${path}）")
+                    return None
+                case SvgUnsafePolicy.Keep => ()
+            }
+        }
+        let element = SvgUnknownElement(rawName)
+        fillSvgAttributes(element, xml, path, context, false, namespace)
+        buildSvgChildren(element, xml, namespace, path, depth, context)
+        return Some(element)
+    }
+
+    let element: SvgElement
+    if (namespace == SvgNamespaces.SVG && SvgTag.isKnown(local)) {
+        element = match (SvgTag.create(local)) {
+            case Some(created) => created
+            case None => SvgUnknownElement(rawName)
+        }
+    } else if (namespace == SvgNamespaces.SVG) {
+        if (context.options.strict) {
+            throw SvgException(
+                "不支持的 SVG 标签「${local}」",
+                0,
+                0,
+                kind: SvgErrorKind.Unsupported,
+                elementPath: Some(path)
+            )
+        }
+        context.warnings.add("未知标签 ${local}（${path}）")
+        element = SvgUnknownElement(rawName)
+    } else {
+        element = SvgUnknownElement(rawName)
+    }
+
+    if (namespace == SvgNamespaces.SVG && local == "style") {
+        match (externalCssUrlTarget(collectXmlText(xml))) {
+            case Some(found) =>
+                if (context.options.strict) {
+                    throw SvgException(
+                        "不允许外部引用「${found}」",
+                        0,
+                        0,
+                        kind: SvgErrorKind.Security,
+                        elementPath: Some(path)
+                    )
+                }
+                if (applyUnsafePolicy("style 元素中的外部引用「${found}」", path, context)) {
+                    return None
+                }
+            case None => ()
+        }
+    }
+
+    let validateSvg = namespace == SvgNamespaces.SVG && SvgTag.isKnown(local)
+    fillSvgAttributes(element, xml, path, context, validateSvg, namespace)
+    if (context.options.strict && namespace == SvgNamespaces.SVG) {
+        checkRequiredAttributes(local, xml, path)
+    }
+    buildSvgChildren(element, xml, namespace, path, depth, context)
+    if (element is SvgFilter) {
+        for (node in element.children) {
+            match (node) {
+                case ElementNode(child) =>
+                    if (!(child is SvgFilterPrimitive)) {
+                        context.warnings.add(
+                            "元素「${path}」的 filter 内出现非 fe* 子元素「${child.tag}」，已保留但不参与滤镜链"
+                        )
+                    }
+                case _ => ()
+            }
+        }
+    }
+    match (element) {
+        case lighting: SvgLightingPrimitive =>
+            if (lighting.lightSources().size > 1) {
+                context.warnings.add(
+                    "元素「${path}」的光照原语包含多个光源，仅使用第一个"
+                )
+            }
+        case transfer: SvgFeComponentTransfer =>
+            for (node in transfer.children) {
+                match (node) {
+                    case ElementNode(child) =>
+                        if (!(child is SvgFeFunc)) {
+                            context.warnings.add(
+                                "元素「${path}」的 feComponentTransfer 内出现非 feFunc 子元素「${child.tag}」，已忽略"
+                            )
+                        }
+                    case _ => ()
+                }
+            }
+        case image: SvgFeImage =>
+            if (readSvgHref(image).isNone()) {
+                context.warnings.add("元素「${path}」的 feImage 缺少 href，输出透明")
+            }
+        case _ => ()
+    }
+    Some(element)
+}
+
+/** 收集元素子树中的文本与 CDATA，用于扫描 `<style>` 内容。 */
+private func collectXmlText(xml: XmlElement): String {
+    let out = StringBuilder()
+    for (node in xml.children) {
+        match (node) {
+            case XmlNode.TextNode(text) => out.append(text)
+            case XmlNode.CDataNode(text) => out.append(text)
+            case XmlNode.ElementNode(child) => out.append(collectXmlText(child))
+            case _ => ()
+        }
+    }
+    out.toString()
+}
+
+/** 相邻文本节点合并：序列化无法保留文本节点边界，合并后往返才稳定。 */
+private func appendTextNode(parent: SvgElement, text: String): Unit {
+    if (parent.children.size > 0) {
+        let lastIndex = parent.children.size - 1
+        match (parent.children[lastIndex]) {
+            case SvgNode.TextNode(previous) =>
+                parent.children[lastIndex] = SvgNode.TextNode(previous + text)
+                return
+            case _ => ()
+        }
+    }
+    parent.appendChild(SvgNode.TextNode(text))
+}
+
+private func namespaceOf(xml: XmlElement, parentNamespace: String): String {
+    match (xml.name.uri) {
+        case Some(uri) => uri
+        case None => parentNamespace
+    }
+}
+
+private func fillSvgAttributes(
+    element: SvgElement,
+    xml: XmlElement,
+    path: String,
+    context: SvgBuildContext,
+    validate: Bool,
+    namespace: String
+): Unit {
+    for (attribute in xml.attributes) {
+        if (isXmlnsDeclaration(attribute.name)) {
+            continue
+        }
+        if (shouldRemoveAttribute(attribute, path, context, namespace)) {
+            continue
+        }
+        if (validate && isSvgNamespaceAttribute(attribute.name)) {
+            validateSvgAttribute(xml.name.local, attribute, path, context)
+            if (attribute.name.local == "offset") {
+                warnOffsetIfClamped(attribute.value, path, context)
+            }
+        }
+        element.appendAttribute(attribute.name, attribute.value)
+    }
+}
+
+/** 只有无命名空间或 SVG 命名空间的属性才按 SVG 语义校验。 */
+private func isSvgNamespaceAttribute(name: QName): Bool {
+    match (name.uri) {
+        case Some(uri) => uri == SvgNamespaces.SVG
+        case None => true
+    }
+}
+
+private func isXmlnsDeclaration(name: QName): Bool {
+    if (name.local == "xmlns") {
+        return true
+    }
+    match (name.prefix) {
+        case Some(prefix) => prefix == "xmlns"
+        case None => false
+    }
+}
+
+/** 取值可能带 `url(...)` 的属性：外部 URL 必须走统一引用检查。 */
+private let SVG_URL_ATTRIBUTES: Array<String> = [
+    "fill", "stroke", "filter", "clip-path", "mask",
+    "marker-start", "marker-mid", "marker-end", "cursor"
+]
+
+private func isSvgUrlAttribute(local: String): Bool {
+    for (name in SVG_URL_ATTRIBUTES) {
+        if (name == local) {
+            return true
+        }
+    }
+    false
+}
+
+private func shouldRemoveAttribute(
+    attribute: XmlAttribute,
+    path: String,
+    context: SvgBuildContext,
+    elementNamespace: String
+): Bool {
+    let local = attribute.name.local
+    let security = context.options.security
+    if (elementNamespace != SvgNamespaces.SVG) {
+        return false
+    }
+    let svgAttribute = isSvgNamespaceAttribute(attribute.name)
+    let xlinkAttribute = match (attribute.name.uri) {
+        case Some(uri) => uri == SvgNamespaces.XLINK
+        case None => false
+    }
+
+    if (local == "href") {
+        if (svgAttribute || xlinkAttribute) {
+            return handleHrefValue(attribute.value, path, context)
+        }
+        return false
+    }
+    if (attribute.name.uri == Some(SvgNamespaces.XML) && local == "base") {
+        return applyUnsafePolicy("xml:base", path, context)
+    }
+    if (!svgAttribute) {
+        return false
+    }
+    if (attribute.name.uri.isNone() && local.size > 2 && local[0..2].toAsciiLower() == "on") {
+        if (security.allowEventAttributes) {
+            return false
+        }
+        return applyUnsafePolicy("事件属性 ${local}", path, context)
+    }
+    if (isSvgUrlAttribute(local) || local == "style") {
+        let target = if (local == "style") {
+            externalCssUrlTarget(attribute.value)
+        } else {
+            externalUrlTarget(attribute.value)
+        }
+        match (target) {
+            case Some(found) =>
+                if (context.options.strict) {
+                    throw SvgException(
+                        "不允许外部引用「${found}」",
+                        0,
+                        0,
+                        kind: SvgErrorKind.Security,
+                        elementPath: Some(path)
+                    )
+                }
+                let what = if (local == "style") {
+                    "style 属性中的外部引用「${found}」"
+                } else {
+                    "URL 属性「${local}」中的外部引用「${found}」"
+                }
+                return applyUnsafePolicy(what, path, context)
+            case None => ()
+        }
+    }
+    false
+}
+
+/** 扫描 CSS 文本中的 `url(...)` 与 `@import`；返回第一个外部目标。 */
+private func externalCssUrlTarget(value: String): ?String {
+    match (externalUrlTarget(value)) {
+        case Some(target) => return Some(target)
+        case None => ()
+    }
+    let lower = value.toAsciiLower()
+    if (lower.contains("@import")) {
+        return Some("@import")
+    }
+    None
+}
+
+/** 扫描 `url(...)`；内容不是 `#` 开头时返回该目标。 */
+private func externalUrlTarget(value: String): ?String {
+    let lower = value.toAsciiLower()
+    let bytes = lower.unsafeBytes()
+    var index = 0
+    while (index + 4 <= bytes.size) {
+        if (bytes[index] == b'u' && bytes[index + 1] == b'r' && bytes[index + 2] == b'l' &&
+            bytes[index + 3] == b'(') {
+            let contentStart = index + 4
+            var close = contentStart
+            while (close < bytes.size && bytes[close] != b')') {
+                close++
+            }
+            var target = value[contentStart..close].trimAscii()
+            if (target.size >= 2) {
+                let first = target[0]
+                let last = target[target.size - 1]
+                if ((first == b'"' && last == b'"') || (first == b'\'' && last == b'\'')) {
+                    target = target[1..target.size - 1].trimAscii()
+                }
+            }
+            if (target.size > 0 && target[0] != b'#') {
+                return Some(target)
+            }
+            index = if (close < bytes.size) {
+                close + 1
+            } else {
+                close
+            }
+            continue
+        }
+        index++
+    }
+    None
+}
+
+private func handleHrefValue(value: String, path: String, context: SvgBuildContext): Bool {
+    let trimmed = value.trimAscii()
+    let lower = trimmed.toAsciiLower()
+    if (trimmed.size > 0 && trimmed[0] == b'#') {
+        return false
+    }
+    let allowed = if (lower.size >= 5 && lower[0..5] == "data:") {
+        context.options.security.allowDataImages
+    } else {
+        context.options.security.allowExternalReferences && isPermittedExternalReference(lower)
+    }
+    if (allowed) {
+        return false
+    }
+    if (context.options.strict && !context.options.externalDocumentMode) {
+        throw SvgException("不允许外部引用「${trimmed}」", 0, 0, kind: SvgErrorKind.Security, elementPath: Some(path))
+    }
+    applyUnsafePolicy("外部引用 ${trimmed}", path, context)
+}
+
+/** 外部引用放行开关只覆盖 http/https 与协议相对 URL。 */
+private func isPermittedExternalReference(lower: String): Bool {
+    (lower.size >= 5 && lower[0..5] == "http:") ||
+    (lower.size >= 6 && lower[0..6] == "https:") ||
+    (lower.size >= 2 && lower[0..2] == "//")
+}
+
+private func applyUnsafePolicy(what: String, path: String, context: SvgBuildContext): Bool {
+    match (context.options.security.unsafePolicy) {
+        case SvgUnsafePolicy.Reject =>
+            throw SvgException("不允许${what}", 0, 0, kind: SvgErrorKind.Security, elementPath: Some(path))
+        case SvgUnsafePolicy.Remove =>
+            context.warnings.add("已移除${what}（${path}）")
+            true
+        case SvgUnsafePolicy.Keep => false
+    }
+}
+
+/** `offset` 归一后越界必须钳制并记 warning（不做严格模式报错）。 */
+private func warnOffsetIfClamped(value: String, path: String, context: SvgBuildContext): Unit {
+    let trimmed = value.trimAscii()
+    if (trimmed.size == 0) {
+        return
+    }
+    var body = trimmed
+    var percent = false
+    if (trimmed[trimmed.size - 1] == b'%') {
+        percent = true
+        body = trimmed[0..trimmed.size - 1]
+    }
+    match (tryParseSvgFloat(body)) {
+        case Some(number) =>
+            let raw = if (percent) {
+                number / 100.0
+            } else {
+                number
+            }
+            if (raw < 0.0 || raw > 1.0) {
+                context.warnings.add("属性「offset」的值「${value}」超出 0..1，已钳制（${path}）")
+            }
+        case None => ()
+    }
+}
+
+private func validateSvgAttribute(
+    tag: String,
+    attribute: XmlAttribute,
+    path: String,
+    context: SvgBuildContext
+): Unit {
+    if (isValidSvgAttribute(tag, attribute.name.local, attribute.value)) {
+        return
+    }
+    let message = "属性「${attribute.name.local}」的值「${attribute.value}」不合法"
+    if (context.options.strict) {
+        throw SvgException(message, 0, 0, kind: SvgErrorKind.InvalidValue, elementPath: Some(path))
+    }
+    context.warnings.add("${message}（${path}）")
+}
+
+private func isValidSvgAttribute(tag: String, local: String, value: String): Bool {
+    match (local) {
+        case "fill" | "stroke" => tryParseSvgPaint(value).isSome()
+        case "color" | "stop-color" =>
+            value.trimAscii().toAsciiLower() == "currentcolor" ||
+            SvgColor.tryParse(value).isSome() ||
+            value.trimAscii().toAsciiLower() == "none"
+        case "transform" | "gradientTransform" => tryParseSvgTransform(value).isSome()
+        case "viewBox" => tryParseSvgViewBox(value).isSome()
+        case "preserveAspectRatio" => tryParseSvgPreserveAspectRatio(value).isSome()
+        case "points" => tryParseSvgPointList(value).isSome()
+        case "d" => SvgPathData.tryParse(value).isSome()
+        case "stroke-dasharray" =>
+            value.trimAscii().toAsciiLower() == "none" || parseSvgLengthList(value).isSome()
+        case "x" | "y" | "dx" | "dy" => parseSvgLengthList(value).isSome()
+        case "width" | "height" | "x1" | "y1" | "x2" | "y2" | "cx" | "cy" | "r" | "rx" | "ry" |
+            "stroke-width" | "stroke-dashoffset" | "font-size" | "letter-spacing" | "word-spacing" |
+            "textLength" | "startOffset" => SvgLength.tryParse(value).isSome()
+        case "opacity" | "fill-opacity" | "stroke-opacity" | "stroke-miterlimit" | "stop-opacity" =>
+            tryParseSvgFloat(value).isSome()
+        case "offset" => tryParseSvgOffset(value).isSome()
+        case "fill-rule" => SvgFillRule.fromName(value.trimAscii().toAsciiLower()).isSome()
+        case "stroke-linecap" => SvgLineCap.fromName(value.trimAscii().toAsciiLower()).isSome()
+        case "stroke-linejoin" => SvgLineJoin.fromName(value.trimAscii().toAsciiLower()).isSome()
+        case "text-anchor" => SvgTextAnchor.fromName(value.trimAscii()).isSome()
+        case "lengthAdjust" => SvgLengthAdjust.fromName(value.trimAscii()).isSome()
+        case "gradientUnits" => SvgCoordinateUnits.fromName(value.trimAscii()).isSome()
+        case "spreadMethod" => SvgSpreadMethod.fromName(value.trimAscii()).isSome()
+        case "filterUnits" | "primitiveUnits" | "patternUnits" | "patternContentUnits" =>
+            SvgCoordinateUnits.fromName(value.trimAscii()).isSome()
+        case "markerUnits" => SvgMarkerUnits.fromName(value.trimAscii()).isSome()
+        case "orient" => SvgMarkerOrient.fromName(value.trimAscii()).isSome()
+        case "mode" => SvgBlendMode.fromName(value.trimAscii()).isSome()
+        case "operator" =>
+            if (tag == "feMorphology") {
+                SvgMorphologyOperator.fromName(value).isSome()
+            } else {
+                SvgCompositeOperator.fromName(value.trimAscii()).isSome()
+            }
+        case "edgeMode" => SvgEdgeMode.fromName(value).isSome()
+        case "xChannelSelector" | "yChannelSelector" => SvgChannelSelector.fromName(value).isSome()
+        case "radius" | "order" | "kernelMatrix" | "tableValues" | "baseFrequency" =>
+            tryParseSvgNumberArray(value).isSome()
+        case "divisor" | "bias" | "surfaceScale" | "diffuseConstant" | "specularConstant" |
+            "specularExponent" | "azimuth" | "elevation" | "pointsAtX" | "pointsAtY" |
+            "pointsAtZ" | "numOctaves" | "seed" | "limitingConeAngle" =>
+            tryParseSvgFloat(value).isSome()
+        case "preserveAlpha" =>
+            match (value.trimAscii().toAsciiLower()) {
+                case "true" | "false" | "1" | "0" => true
+                case _ => false
+            }
+        case "stitchTiles" =>
+            match (value.trimAscii().toAsciiLower()) {
+                case "stitch" | "nostitch" => true
+                case _ => false
+            }
+        case "image-rendering" => SvgImageRendering.fromName(value).isSome()
+        case "type" =>
+            if (tag == "feColorMatrix") {
+                SvgColorMatrixType.fromName(value.trimAscii()).isSome()
+            } else if (tag == "feTurbulence") {
+                SvgTurbulenceType.fromName(value).isSome()
+            } else if (tag == "feFuncR" || tag == "feFuncG" || tag == "feFuncB" || tag == "feFuncA") {
+                SvgTransferFunctionType.fromName(value).isSome()
+            } else {
+                true
+            }
+        case "path" => SvgPathData.tryParse(value).isSome()
+        case _ => true
+    }
+}
+
+private func checkRequiredAttributes(tag: String, xml: XmlElement, path: String): Unit {
+    let required: Array<String> = match (tag) {
+        case "rect" => ["width", "height"]
+        case "circle" => ["r"]
+        case "ellipse" => ["rx", "ry"]
+        case "path" => ["d"]
+        case "polyline" | "polygon" => ["points"]
+        case _ => Array<String>()
+    }
+    for (name in required) {
+        if (xml.attr(name).isNone()) {
+            throw SvgException(
+                "元素「${tag}」缺少必需属性「${name}」",
+                0,
+                0,
+                kind: SvgErrorKind.InvalidValue,
+                elementPath: Some(path)
+            )
+        }
+    }
+}
+
+private func miscSvgNode(node: XmlNode): ?SvgNode {
+    match (node) {
+        case XmlNode.CommentNode(text) => Some(SvgNode.CommentNode(text))
+        case XmlNode.PiNode(target, data) => Some(SvgNode.PiNode(target, data))
+        case XmlNode.TextNode(text) => Some(SvgNode.TextNode(text))
+        case _ => None
+    }
+}
+
+/** 迭代统计元素数：不递归、不构造模型。 */
+private func countXmlElements(root: XmlElement): Int64 {
+    let queue = ArrayList<XmlElement>()
+    queue.add(root)
+    var position = 0
+    var count = 0
+    while (position < queue.size) {
+        let element = queue[position]
+        position++
+        count++
+        for (node in element.children) {
+            match (node) {
+                case XmlNode.ElementNode(child) => queue.add(child)
+                case _ => ()
+            }
+        }
+    }
+    count
+}
+
+private class SvgDepthEntry {
+    let element: XmlElement
+    let depth: Int64
+
+    init(element: XmlElement, depth: Int64) {
+        this.element = element
+        this.depth = depth
+    }
+}
+
+/** 迭代检查深度，避免深文档在构建前就爆栈。 */
+private func checkDepth(root: XmlElement, rootDepth: Int64, maxDepth: Int64): Unit {
+    let queue = ArrayList<SvgDepthEntry>()
+    queue.add(SvgDepthEntry(root, rootDepth))
+    var position = 0
+    while (position < queue.size) {
+        let entry = queue[position]
+        position++
+        if (entry.depth > maxDepth) {
+            throw limitError("元素深度超过上限 ${maxDepth}")
+        }
+        for (node in entry.element.children) {
+            match (node) {
+                case XmlNode.ElementNode(child) => queue.add(SvgDepthEntry(child, entry.depth + 1))
+                case _ => ()
+            }
+        }
+    }
+}
+
+private func limitError(message: String): SvgException {
+    SvgException(message, kind: SvgErrorKind.Limit)
+}

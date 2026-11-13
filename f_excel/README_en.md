@@ -133,7 +133,6 @@ out.close()
 ```cangjie
 public let EXCEL_MAX_ROW: Int64 = 1_048_576
 public let EXCEL_MAX_COL: Int64 = 16_384
-public let F_EXCEL_VERSION: String
 
 public func columnIndex(letters: String): ?Int64
 public func columnLetters(col: Int64): String
@@ -551,3 +550,17 @@ Warnings do not stop parsing and are available from `ExcelDocument.warnings()` /
 - `cjpm test` green (183 cases).
 - Fixtures build minimal xlsx packages in memory with `f_zip.ZipWriter` (`fixtures.cj`); no external sample files.
 - "Real Excel opens it without repair" is a manual acceptance item, recorded in `doc/spec/implement-f-excel-m1/verification.md`.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `BorderStyle` (enum), `DependencyGraph` (class), `Horizontal` (enum), `PatternType` (enum), `Underline` (enum), `Vertical` (enum), `arg` (func), `public var currentSheet: String =`, `eval` (func), `formulaAt` (func), `get` (func), `public let impl: FnImpl`, `public let maxArgs: Int64`, `merged` (func), `public let minArgs: Int64`, `nextRandom` (func), `public let now: DateTime`, `nowSerial` (func), `public let number: Float64`, `rangeValue` (func), `public let resolver: CalcResolver`, `runsAt` (func), `sheetExists` (func), `todaySerial` (func), `usedBounds` (func), `valueAt` (func)
+- `CfColorScale`: `let cfvos: ArrayList<Cfvo>`, `let colors: ArrayList<String>`
+- `CfDataBar`: `let showValue: Bool`
+- `CfFormat`: `let dataBarLength: ?Float64`, `let fontColor: ?String`, `let icon: ?String`
+- `CfIconSet`: `let cfvos: ArrayList<Cfvo>`, `let showValue: Bool`
+- `DependencyGraph`: `add` (func), `dependenciesOf` (func), `order` (func)
+- `GradientStop`: `let position: Float64`

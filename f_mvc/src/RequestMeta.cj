@@ -396,6 +396,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     private func respond(response: InputStream, ctx: HttpContext): Unit {
         respond(ctx.request.method) {
             populateResponseContentType(ctx)
+            // 流式响应没有 Content-Length：必须显式声明 chunked，
+            // 否则 HTTP 层判定「长度未知」直接 500（此前该分支实测走不通）。
+            let _ = ctx.responseBuilder.header('Transfer-Encoding', 'chunked')
             ctx.responseBuilder.body(response)
         }
     }
