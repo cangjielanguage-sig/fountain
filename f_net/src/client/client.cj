@@ -32,7 +32,7 @@ public import fountain::f_net.*
 internal class PendingRequests {
     private let mutex = Mutex()
     private let requests = HashMap<MessageID, MessageFuture<Message>>()
-    private var failure = None<Exception>()
+    private var failure: ?Exception = None
 
     func add(id: MessageID): MessageFuture<Message> {
         synchronized(mutex) {
