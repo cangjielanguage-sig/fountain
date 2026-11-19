@@ -46,6 +46,13 @@ internal class PendingRequests {
     func take(id: MessageID): ?MessageFuture<Message> {
         synchronized(mutex) { requests.remove(id) }
     }
+    func forget(id: MessageID, future: MessageFuture<Message>): Unit {
+        synchronized(mutex) {
+            if (let Some(current) <- requests.get(id) && refEq(current, future)) {
+                requests.remove(id)
+            }
+        }
+    }
     func close(error: Exception): Unit {
         synchronized(mutex) {
             if (failure.isSome()) { return }
@@ -58,7 +65,7 @@ internal class PendingRequests {
 
 private class ClientConnection {
     let pending = PendingRequests()
-    init(let buffer: SocketBuffer) {}
+    ClientConnection(let buffer: SocketBuffer) {}
     func close(error: Exception): Unit {
         pending.close(error)
         buffer.close()
@@ -312,7 +319,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private func transfer(connection: ClientConnection, message: Message, timeout: Duration): ?Message {
         let future = transfer(connection, message)
         try { future.tryGet(timeout) }
-        finally { connection.pending.take(message.id) }
+        finally { connection.pending.forget(message.id, future) }
     }
     private func transfer(connection: ClientConnection, message: Message): MessageFuture<Message> {
         let future = connection.pending.add(message.id)
@@ -320,14 +327,14 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             connection.buffer.transfer(message)
             future
         } catch (error: Exception) {
-            if (let Some(waiter) <- connection.pending.take(message.id)) { waiter.fail(error) }
+            connection.pending.forget(message.id, future)
+            future.fail(error)
             throw error
         }
     }
 
     public func transfer<T>(message: Message, executor: (Message) -> Unit): ListeningClient<T> where T <: DataFields<T> {
-        let client: Client<T> = (this as Client<T>).getOrThrow()
-        ListeningClient<T>(buffers[0].buffer.clone(), client, message, executor)
+        ListeningClient<T>(buffers[0].buffer.clone(), message, executor)
     }
 }
 
