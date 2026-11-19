@@ -73,3 +73,15 @@ extend StructDecl <: CompositeDecl {
         isPrivate(this)
     }
 }
+
+extend InterfaceDecl <: CompositeDecl {
+    public func isPublic(): Bool {
+        isPublic(this)
+    }
+    public func isProtected(): Bool {
+        isProtected(this)
+    }
+    public func isPrivate(): Bool {
+        isPrivate(this)
+    }
+}

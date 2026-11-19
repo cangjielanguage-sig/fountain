@@ -825,3 +825,7 @@ The declarations below are not expanded above; they are grouped by module level 
 - `ObjectFields`: `func create(): Object`, `static func getObjectFields<T>(metas: () -> (Array<ReadableField>, ()->Object)): ObjectFields`, `func isEmpty()`, `func mutableField(name: String): ?MutableField`, `func mutableFields(): Iterator<MutableField>`, `func readableField(name: String): ?ReadableField`
 - `String`: `static func tryParse(s: String): ?String`
 - `JsonNull`: `static let instance = JsonNull()` (the singleton for JSON null; the module-level `JSON_NULL` is this value)
+- Module level: `CompiledSchema` (class), `JsonSchemaValidator` (class), `UnknownKeyword` (enum), `ValidationError` (struct), `ValidationOptions` (struct), `ValidationResult` (struct)
+- `CompiledSchema`: `compile` (func), `prop patternCount`, `prop schema`
+- `ValidationOptions`: `let unknownKeyword`
+- `ValidationResult`: `prop isValid`, `let skipped`

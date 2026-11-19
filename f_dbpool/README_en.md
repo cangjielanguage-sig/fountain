@@ -67,3 +67,11 @@ Note that it is a **separate declaration** from `fountain::f_orm.exception.Conne
 ## Tests
 
 Run `cjpm test` in this module's directory. `DatabasePool_test.cj` covers borrowing and returning, `PooledConnection_test.cj` covers double returns, and `DatabasePoolTermination_test.cj` uses a barrier and fake datasource to verify timeout, repeated waiting and resource close order. Tests depend on `fountain::f_mockdb` for the mock driver and `MockConnection`; no real database is needed.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- `DatabasePool`: `leased` (prop)

@@ -38,6 +38,8 @@ public class JitBindSupport {
      * 包初始化时把表填好；`registerType<T>()` 不传 `overrides` 时按 `TypeInfo.of<T>().name` 自动取用。
      */
     private static let enrolled = HashMap<String, JitBindings>()
+    /** 接口名 → `o is I` 谓词（反射拿不到「类实现了哪些接口」，只能由宏登记）。 */
+    private static let interfaceAccepts = HashMap<String, (Object) -> Bool>()
     private static let mtx = Mutex()
 
     /** `LocalType.HOST_OBJECT`（14）的编译期常量：宏里直接引用，避免再包一层函数。 */
@@ -73,6 +75,43 @@ public class JitBindSupport {
         synchronized (JitBindSupport.mtx) {
             JitBindSupport.enrolled[key] = b
         }
+    }
+
+    /**
+     * 接口版登记：除 bindings 外还登记 `o is I` 谓词。
+     *
+     * 反射的 `ClassTypeInfo` 不暴露 `interfaces`（实测无该成员），接口实现关系只能由宏在
+     * 编译期用语言级 `is` 固化成一个谓词。
+     */
+    public static func enrollInterfaceOf<T>(b: JitBindings, accepts: (Object) -> Bool): Unit {
+        let key = TypeInfo.of<T>().name
+        synchronized (JitBindSupport.mtx) {
+            JitBindSupport.enrolled[key] = b
+            JitBindSupport.interfaceAccepts[key] = accepts
+        }
+    }
+
+    /** 对象是否实现了名为 `name` 的已注册接口。 */
+    public static func acceptsInterface(o: Object, name: String): Bool {
+        let f = synchronized (JitBindSupport.mtx) {
+            JitBindSupport.interfaceAccepts.get(name)
+        }
+        match (f) {
+            case Some(g) => g(o)
+            case None => false
+        }
+    }
+
+    /** 是否为已登记的接口。 */
+    public static func isInterface(name: String): Bool {
+        synchronized (JitBindSupport.mtx) {
+            JitBindSupport.interfaceAccepts.get(name).isSome()
+        }
+    }
+
+    /** 接口的父接口名（未登记 → 空）。 */
+    public static func parentsOf(name: String): Array<String> {
+        JitBindSupport.enrolledOf(name).parents
     }
 
     /** 取某类的自动登记；没有则空数组（注册侧据此判断是否走反射）。 */

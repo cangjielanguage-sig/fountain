@@ -22,6 +22,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
     private let queue: ArrayBlockingQueue<Mono>
     private let prev = AtomicOptionReference<Mono>()
     private let unfinishedTasks = AtomicInt64(1)
+    private var timer: ?Timer = None
     /**
      * @param timeout 时间窗口
      * @param limit 时间窗口内最大任务数
@@ -41,6 +42,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
             prev.store(mono)
             mono.time + window - MonoTime.now()
         }
+        this.timer = Some(timer)
         atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T {
@@ -61,6 +63,13 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
             }
         } else {
             default
+        }
+    }
+
+    public func close(): Unit {
+        match (timer) {
+            case Some(t) => t.cancel()
+            case _ => ()
         }
     }
 }

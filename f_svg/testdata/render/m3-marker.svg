@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 Z" fill="#222222"/>
+    </marker>
+    <marker id="startDot" markerWidth="6" markerHeight="6" refX="3" refY="3"
+            orient="auto-start-reverse">
+      <circle cx="3" cy="3" r="3" fill="#cc2222"/>
+    </marker>
+    <marker id="diamond" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="45">
+      <path d="M 4 0 L 8 4 L 4 8 L 0 4 Z" fill="#2255cc"/>
+    </marker>
+  </defs>
+  <rect width="100" height="60" fill="#ffffff"/>
+  <line x1="10" y1="15" x2="90" y2="15" stroke="#222222" stroke-width="1"
+        marker-start="url(#startDot)" marker-end="url(#arrow)"/>
+  <polyline points="10,45 35,25 60,45 85,25" fill="none" stroke="#222222"
+            marker-start="url(#startDot)" marker-mid="url(#diamond)"
+            marker-end="url(#arrow)"/>
+</svg>

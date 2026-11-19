@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <style>
+    rect { fill: #333333; }
+    @media screen and (min-width: 60px) { rect { fill: #cc6600; } }
+    @media screen and (max-width: 40px) { rect { fill: #0066cc; } }
+  </style>
+  <rect x="4" y="4" width="56" height="56"/>
+</svg>

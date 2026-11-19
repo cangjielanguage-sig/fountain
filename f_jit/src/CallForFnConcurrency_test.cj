@@ -24,7 +24,7 @@ import fountain::f_jit.base.DummyDiagnosticsSink
 /**
  * A6.1（P2-4）：`callForFn` 全流程串行化。
  *
- * `lastClosureGroup` 是单元级字段：旧实现在 `callMtx` **之外**读取它，两个线程会交换提升组
+ * `lastEscaped` 是单元级字段：旧实现在 `callMtx` **之外**读取它，两个线程会交换提升组
  * （一侧 `close` 提前释放另一侧的捕获）；且读后不清，跨调用残留（把上一次的组当成这次的）。
  */
 @Test

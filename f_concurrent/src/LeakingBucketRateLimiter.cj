@@ -21,6 +21,7 @@ package fountain::f_concurrent
 public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
     private let bucket: ArrayBlockingQueue<(MonoTime, SyncCounter)>
     private let leaked = AtomicInt64(0)
+    private var timer: ?Timer = None
     /**
      * @param timeout 任务等待时长
      * @param maxWaitings 允许等待的最大任务数
@@ -56,6 +57,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
             //如果桶空了，当前线程会阻塞剩余的周期时间
             next
         }
+        this.timer = Some(timer)
         atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T {
@@ -66,6 +68,13 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
             x
         } else {
             default
+        }
+    }
+
+    public func close(): Unit {
+        match (timer) {
+            case Some(t) => t.cancel()
+            case _ => ()
         }
     }
 }

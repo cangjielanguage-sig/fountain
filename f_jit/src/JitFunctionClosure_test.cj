@@ -89,66 +89,57 @@ public class JitFunctionClosure_test {
         let unit = JitFunctionClosure_test.closureUnit()
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([1]), 2)
-        @Assert(unit.unload(0), true)
+        @Assert(unit.close(0), true)
         let e = JitFunctionClosure_test.catchCall(w, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
         w.close()
     }
 
-    /** close 幂等、释放提升组、close 后调用 → 19。 */
+    /** 释放幂等、归还提升组、释放后调用 → 19。 */
     @TestCase
-    public func closeIsIdempotentAndReleasesGroup(): Unit {
+    public func wrapperUnloadIsIdempotentAndReleasesGroup(): Unit {
         HandleTable.resetForTest()
         let unit = JitFunctionClosure_test.closureUnit()
         let base = HandleTable.liveCount()
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(HandleTable.liveCount() > base, true)
-        @Assert(w.isClosed, false)
+        @Assert(w.isClosed(), false)
         w.close()
-        @Assert(w.isClosed, true)
+        @Assert(w.isClosed(), true)
         w.close()
         @Assert(HandleTable.liveCount(), base)
         let e = JitFunctionClosure_test.catchCall(w, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
-        @Assert(TCase.hit('T49/wrapper-close', w.isClosed && HandleTable.liveCount() == base), true)
+        @Assert(TCase.hit('T49/wrapper-close', w.isClosed() && HandleTable.liveCount() == base), true)
     }
 
-    /** 旧 ID 校验拦截：close 后的 ID 再包装 → 19。 */
+    /** 旧 ID 校验拦截：释放后的 ID 再包装 → 19。 */
     @TestCase
     public func staleClosureIdIsRejected(): Unit {
         let unit = JitFunctionClosure_test.closureUnit()
         let id = unit.call<JitClosureId>([])
-        let group = match (unit.lastPromotionGroup()) {
-            case Some(g) => g
-            case None => @Fail('提升组缺失')
+        let entry = match (unit.lastEscapedClosure()) {
+            case Some(e) => e
+            case None => @Fail('逃逸条目缺失')
         }
-        let w = JitFunction.wrapClosure(unit, id, group, -1, LocalType.NONE, Array<UInt16>())
+        let w = JitFunction.wrapClosure(unit, id, entry, -1, LocalType.NONE, Array<UInt16>())
         w.close()
-        let stale = JitFunction.wrapClosure(unit, id, PromotionGroup(), -1,
+        let stale = JitFunction.wrapClosure(unit, id, unit.newEscapedClosure(PromotionGroup()), -1,
             LocalType.NONE, Array<UInt16>())
         let e = JitFunctionClosure_test.catchCall(stale, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
     }
 
-    /** 非闭包包装：close → 19（site=-1），isClosed 恒 false。 */
+    /** 入口实例的 `close()` 是单元卸载（不是闭包释放）：`isClosed()` 随单元状态。 */
     @TestCase
-    public func closeOnEntryInstanceIsRejected(): Unit {
+    public func entryCloseIsUnitLevel(): Unit {
         let f = JitFunctionClosure_test.compiler().compile('{ => 1 }')
-        @Assert(f.isClosed, false)
-        var code: Int64 = 0
-        var site: Int64 = 0
-        try {
-            f.close()
-        } catch (e: JitException) {
-            code = e.code
-            site = e.site
-        }
-        @Assert(code, ErrCode.CALL_CONTRACT)
-        @Assert(site, -1)
-        @Assert(f.isClosed, false)
+        @Assert(f.isClosed(), false)
+        @Assert(f.close(0), true)
+        @Assert(f.isClosed(), true)
     }
 
     /** Q5.11：callForFn 返回可继续调用的 JitFunction；包装值直接作实参 → 19。 */

@@ -39,6 +39,9 @@ exports(){
     export logger_appender_FRPCDemoFile_rotateDuration=DAY
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
     export rpcServer_baseAddresses=$3
+    # 【必填】本机在集群内的唯一主机号：MessageID 拒绝 hostId=0，
+    # (pid, tid, 时间戳) 跨机器会重复，集群维度只能靠它区分。
+    export protocol_hostId="${protocol_hostId:-1}"
     # $1 是产物目录里要排除的名字（本 demo 自己的库目录：fboot run 用 --dylibPattern 按绝对路径加载它，
     # 不需要再出现在搜索路径里）。注意：本工程自建的库目录必须放在搜索路径**前面**，否则会命中别处的旧副本
     # （旧副本里没有新符号，表现为“新符号明明在自建库里有，却报 symbol not found”）。

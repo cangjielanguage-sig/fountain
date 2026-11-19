@@ -497,14 +497,17 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         run(['run', path.toString(), dylibPattern])
     }
-    private func count(dir: Path, counter: CodeCounter, ext: String, ignoreBrackets: Bool, ignoreComments: Bool): Unit {
+    private func count(dir: Path, counter: CodeCounter, ext: String, ignoreBrackets: Bool, ignoreComments: Bool, ignoreTests: Bool, ignoreDemos: Bool): Unit {
         Directory.walk(dir){fi =>
             if (fi.isDirectory()) {
-                if(fi.path.toString().contains('/src/')){
+                let path = fi.path.toString()
+                if(path.contains('/.worktrees/')){
+                    return true
+                }else if(path.contains('/src/') && !(ignoreDemos && path.contains('demo'))){
                     counter.packages++
                 }
-                count(fi.path, counter, ext, ignoreBrackets, ignoreComments)
-            } else if (fi.path.extensionName == ext){
+                count(fi.path, counter, ext, ignoreBrackets, ignoreComments, ignoreTests, ignoreDemos)
+            } else if (fi.path.extensionName == ext && !((ignoreTests && (fi.path.toString().endsWith('_test.cj') || fi.path.toString().endsWith('_bench.cj'))) || (ignoreDemos && fi.path.toString().contains('demo')))){
                 counter.files++
                 try(input = File(fi.path, Read)){
                     let r = StringReader(input)
@@ -533,7 +536,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                         }
                     }
                 }
-            } else if (fi.path.extensionName == 'toml') {
+            } else if (fi.path.extensionName == 'toml' && !(ignoreDemos && fi.path.toString().contains('demo'))) {
                 counter.modules++
             }
             true
@@ -548,6 +551,8 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         var ext = 'cj'
         var ignoreBrackets = false
         var ignoreComments = false
+        var ignoreTests = false
+        var ignoreDemos = false
         for (arg in args[1 ..]) {
             if (arg.startsWith('--ext=')) {
                 ext = arg['--ext='.size ..]
@@ -555,12 +560,22 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                 ignoreBrackets = true
             } else if (arg == '--ignoreComments') {
                 ignoreComments = true
+            } else if (arg == '--ignoreTests') {
+                ignoreTests = true
+            } else if (arg == '--ignoreDemos') {
+                ignoreDemos = true
             }
         }
-        stdOut.writeln('path=${path};ext=${ext};ignoreBrackets=${ignoreBrackets};ignoreComments=${ignoreComments}')
+        stdOut.writeln('''
+path=${path};
+ext=${ext};
+ignoreBrackets=${ignoreBrackets};
+ignoreComments=${ignoreComments};
+ignoreTests=${ignoreTests};
+ignoreDemos=${ignoreDemos}''')
         let counter = CodeCounter()
         let start = MonoTime.now()
-        count(path, counter, ext, ignoreBrackets, ignoreComments)
+        count(path, counter, ext, ignoreBrackets, ignoreComments, ignoreTests, ignoreDemos)
         stdOut.writeln('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${MonoTime.now() - start}')
         0
     }

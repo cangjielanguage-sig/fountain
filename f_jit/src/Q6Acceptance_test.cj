@@ -715,8 +715,8 @@ public class Q6Acceptance_test {
         // 单元卸载与独立 HostClosure 条目无交互
         let cb = HandleTable.pin(HostCallback({ => 2 },
             SignatureDescriptor(Array<UInt16>(), LocalType.I64)))
-        let ok2 = u.unload(0) && HandleTable.isType(cb, TypeToken.HOST_CLOSURE) &&
-            u.unload(0) // 幂等
+        let ok2 = u.close(0) && HandleTable.isType(cb, TypeToken.HOST_CLOSURE) &&
+            u.close(0) // 幂等
         let e = Q6Acceptance_test.errOf({ => let _ = u.call<Int64>([{ => 1 }]) })
         let ok3 = e.code == ErrCode.CALL_CONTRACT && e.site == -1
         HandleTable.resetForTest()
@@ -881,7 +881,7 @@ public class Q6Acceptance_test {
         let closedErr = Q6Acceptance_test.errOf({ => let _ = w.call<Int64>([1]) })
         let unit2 = c.compile('{ => let f = { x: Int64 => x + 1 }\n f }')
         let w2 = unit2.callForFn<(Int64) -> Int64>([])
-        let _ = unit2.unload(0)
+        let _ = unit2.close(0)
         let unloadErr = Q6Acceptance_test.errOf({ => let _ = w2.call<Int64>([1]) })
         w2.close()
         let ok = viaWrapper == viaDirect && closedErr.code == ErrCode.CALL_CONTRACT &&

@@ -21,6 +21,7 @@ import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.SourceCompileException
 import fountain::f_jit.base.PredefinedFunction
 import fountain::f_jit.base.JitBindings
+import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.compiler.ClassRegistrySnapshot
 import fountain::f_jit.compiler.PredefinedSnapshot
 
@@ -38,6 +39,15 @@ public class Compiler {
     private let fns: ArrayList<PredefinedFunction> = ArrayList<PredefinedFunction>()
     /** 宿主侧类注册表（M2；快照语义与函数注册表同族）。 */
     private let classes: ClassRegistry = ClassRegistry()
+
+    /**
+     * 无参形态：等价于 `Compiler(CompileOptions(DummyDiagnosticsSink()))`。
+     *
+     * 用于"只要编译、不关心诊断"的快速上手场景；需要收集诊断时显式传 `CompileOptions`。
+     */
+    public init() {
+        this(CompileOptions(DummyDiagnosticsSink()))
+    }
 
     public init(opts: CompileOptions) {
         this('compiler', opts, 256)
@@ -108,6 +118,17 @@ public class Compiler {
     public func registerType<T>(enabled!: Bool = true,
         bindings!: JitBindings = JitBindings.empty()): Unit where T <: Object {
         ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
+            enabled: enabled, bindings: bindings)
+    }
+
+    /**
+     * 注册接口（X）：接口不是 `Object` 子类型，不能复用 `registerType` 的泛型约束。
+     *
+     * 接口方法必须由 `@JitBind` 提供绑定（反射调用抽象方法必失败）。
+     */
+    public func registerInterface<I>(enabled!: Bool = true,
+        bindings!: JitBindings = JitBindings.empty()): Unit {
+        ReflectRegistrar.registerInterface<I>(into: this.classes, diag: this.opts.diagnostics,
             enabled: enabled, bindings: bindings)
     }
 

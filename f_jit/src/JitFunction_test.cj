@@ -104,8 +104,8 @@ public class JitFunctionLifecycle_test {
     public func unloadThenCallIsRejected(): Unit {
         let f = JitFunctionLifecycle_test.fn()
         @Assert(f.call<Int64>(Array<Any>()), 1)
-        @Assert(TCase.hit('T29/unload-succeeds', f.unload(0)), true)
-        @Assert(TCase.hit('T29/unloaded-visible', f.isUnloaded()), true)
+        @Assert(TCase.hit('T29/unload-succeeds', f.close(0)), true)
+        @Assert(TCase.hit('T29/unloaded-visible', f.isClosed()), true)
         try {
             let _ = f.call<Int64>(Array<Any>())
             @Fail('未抛 19')
@@ -121,8 +121,8 @@ public class JitFunctionLifecycle_test {
         let f = JitFunction(0, LocalType.I64, Array<UInt16>(),
             { _, _ => 1 }, { _, _ => 1 }, '',
             Some({ => released.add(1) }))
-        @Assert(f.unload(0), true)
-        @Assert(f.unload(0), true)
+        @Assert(f.close(0), true)
+        @Assert(f.close(0), true)
         @Assert(released.size, 1)
     }
 

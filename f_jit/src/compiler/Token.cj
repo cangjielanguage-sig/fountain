@@ -100,6 +100,8 @@ internal enum TokenKind <: Equatable<TokenKind> {
     | Plus
     | Minus
     | Star
+    /** `**`（幂运算，仓颉 `operator.md` 优先级 4、右结合）。 */
+    | StarStar
     | Slash
     | Percent
     | Assign
@@ -177,6 +179,8 @@ internal enum TokenKind <: Equatable<TokenKind> {
             case Plus => 34
             case Minus => 35
             case Star => 36
+            // 90 = 独立取值：ordinal 只用于相等判定，无需保持连续
+            case StarStar => 90
             case Slash => 37
             case Percent => 38
             case Assign => 39

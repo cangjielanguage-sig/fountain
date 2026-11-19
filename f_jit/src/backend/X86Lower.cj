@@ -45,6 +45,12 @@ internal class X86Lower {
     /** `roundsd` 需要 SSE4.1；不支持时含取整指令的单元整体降级解释器。 */
     private let sse41: Bool
     private var seq: Int64
+    /** 探针遍：抑制机器码/标签发射，仅采集逐指令栈增量。 */
+    private var probing: Bool
+    /** 逐指令净栈变化（探针遍采集，供 CFG 数据流使用）。 */
+    private let delta = HashMap<Int64, Int64>()
+    /** 每条指令入口深度（CFG 数据流结果）。 */
+    private var depthAt = HashMap<Int64, Int64>()
 
     init(fn: FuncEntry, constBase: Int64, fnTableBase: Int64) {
         this.fn = fn
@@ -55,6 +61,7 @@ internal class X86Lower {
         this.ok = true
         this.sse41 = CpuFeatures.hasSse41
         this.seq = 0
+        this.probing = false
     }
 
     func success(): Bool {
@@ -85,15 +92,63 @@ internal class X86Lower {
         this.add([0x31u8, 0xC0u8])
     }
 
+    /**
+     * 两遍降低：
+     *
+     * 1. **探针遍**：照常走 `translate`，但抑制发射，采集每条指令的净栈变化 `delta[off]`；
+     * 2. **深度遍**：以 `delta` 为输入做控制流数据流（`X86Depth.analyze`），得到每条指令入口深度；
+     *    任一汇合点深度不一致 / 指令未识别 ⇒ 放弃 JIT（`ok = false`，整单元退回解释器）；
+     * 3. **发射遍**：逐指令以 CFG 深度设定栈模型后再降低（`alignBeforeCall` 因而正确）。
+     *
+     * 这样分支汇合后的 `sub rsp, 8` 奇偶与运行期一致（修复 x86_64 栈对齐缺陷）。
+     */
     func lower(unit: LoadedUnit): Unit {
-        var off = Int64(this.fn.codeOff)
-        let end = Int64(this.fn.codeOff) + Int64(this.fn.codeLen)
+        let start = Int64(this.fn.codeOff)
+        let end = start + Int64(this.fn.codeLen)
+        BackendX86_64.resetAuditMemBases()
+
+        // 1) 探针遍：采集逐指令栈增量（不发射任何机器码/标签）
+        this.probing = true
+        this.depth = 0
+        this.delta.clear()
+        var off = start
+        while (off < end) {
+            let before = this.depth
+            let insn = InsnDecoder.decode(unit.code, off)
+            this.translate(insn.op, insn.operands, off, off + insn.size)
+            this.delta[off] = this.depth - before
+            off = off + insn.size
+        }
+        this.probing = false
+
+        // 2) 控制流数据流
+        let analyzed = X86Depth.analyze(unit.code, start, Int64(this.fn.codeLen), this.delta)
+        match (analyzed) {
+            case Some(m) => this.depthAt = m
+            case None =>
+                this.ok = false
+                return
+        }
+
+        // 3) 发射遍
+        off = start
         while (off < end) {
             this.bind('L${off}')
             let insn = InsnDecoder.decode(unit.code, off)
             let next = off + insn.size
+            // 可达偏移以 CFG 深度为准；不可达区域（RET/BAIL 之后的死代码、内联错误块）
+            // 无深度记录，沿用线性累加（与修复前行为一致，且不影响可达汇合点）。
+            match (this.depthAt.get(off)) {
+                case Some(d) => this.depth = d
+                case None => ()
+            }
             this.translate(insn.op, insn.operands, off, next)
             off = next
+        }
+        // G5 审计：机器码只能以栈/帧/ctx 为内存基址（等价于"不得解引用 helper 返回的 cell"）
+        if (!BackendX86_64.auditAllows(BackendX86_64.auditMemBasesSnapshot())) {
+            this.ok = false
+            return
         }
     }
 
@@ -123,17 +178,34 @@ internal class X86Lower {
 
     // ---------------------------------------------------------------- emit
 
+    /** 单字节发射（探针遍抑制，供底层编码器共用）。 */
+    private func put(b: UInt8): Unit {
+        if (this.probing) {
+            return
+        }
+        this.code.add(b)
+    }
+
     private func add(bs: Array<UInt8>): Unit {
+        if (this.probing) {
+            return
+        }
         for (b in bs) {
-            this.code.add(b)
+            this.put(b)
         }
     }
 
     private func bind(name: String): Unit {
+        if (this.probing) {
+            return
+        }
         this.labels[name] = this.code.size
     }
 
     private func rel32(op: Array<UInt8>, label: String): Unit {
+        if (this.probing) {
+            return
+        }
         this.add(op)
         this.fixOff.add(this.code.size - 4)
         this.fixLabel.add(label)
@@ -142,7 +214,7 @@ internal class X86Lower {
     private func w64(v: Int64): Unit {
         var k = 0
         while (k < 8) {
-            this.code.add(UInt8((v >> (8 * k)) & 0xFF))
+            this.put(UInt8((v >> (8 * k)) & 0xFF))
             k = k + 1
         }
     }
@@ -150,15 +222,15 @@ internal class X86Lower {
     private func w32(v: Int64): Unit {
         var k = 0
         while (k < 4) {
-            this.code.add(UInt8((v >> (8 * k)) & 0xFF))
+            this.put(UInt8((v >> (8 * k)) & 0xFF))
             k = k + 1
         }
     }
 
     /** `mov r64, imm64`（reg 0–15）。 */
     private func movImm(reg: Int64, v: Int64): Unit {
-        this.code.add(if (reg >= 8) { 0x49u8 } else { 0x48u8 })
-        this.code.add(UInt8(0xB8 + (reg & 7)))
+        this.put(if (reg >= 8) { 0x49u8 } else { 0x48u8 })
+        this.put(UInt8(0xB8 + (reg & 7)))
         this.w64(v)
     }
 
@@ -171,23 +243,23 @@ internal class X86Lower {
         if (dst >= 8) {
             rex = rex | 0x01u8
         }
-        this.code.add(rex)
-        this.code.add(0x89u8)
-        this.code.add(UInt8(0xC0 | ((src & 7) << 3) | (dst & 7)))
+        this.put(rex)
+        this.put(0x89u8)
+        this.put(UInt8(0xC0 | ((src & 7) << 3) | (dst & 7)))
     }
 
     private func pushReg(reg: Int64): Unit {
         if (reg >= 8) {
-            this.code.add(0x41u8)
+            this.put(0x41u8)
         }
-        this.code.add(UInt8(0x50 + (reg & 7)))
+        this.put(UInt8(0x50 + (reg & 7)))
     }
 
     private func popReg(reg: Int64): Unit {
         if (reg >= 8) {
-            this.code.add(0x41u8)
+            this.put(0x41u8)
         }
-        this.code.add(UInt8(0x58 + (reg & 7)))
+        this.put(UInt8(0x58 + (reg & 7)))
     }
 
     private func addRsp(v: Int64): Unit {
@@ -216,11 +288,13 @@ internal class X86Lower {
 
     /** ctx 字段均为 Int64：必须 64 位写，避免高 32 位残留（site/fnId/errCode）。 */
     private func movQwordCtx(off: Int64, v: Int64): Unit {
+        BackendX86_64.noteMemBase(15)
         this.add([0x49u8, 0xC7u8, 0x47u8, UInt8(off)])
         this.w32(v)
     }
 
     private func movRaxMemRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0x48u8, 0x8Bu8, 0x84u8, 0x24u8])
         this.w32(disp)
     }
@@ -231,6 +305,7 @@ internal class X86Lower {
     }
 
     private func leaRdxRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0x48u8, 0x8Du8, 0x94u8, 0x24u8])
         this.w32(disp)
     }
@@ -245,21 +320,25 @@ internal class X86Lower {
     }
 
     private func pushMemRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0xFFu8, 0xB4u8, 0x24u8])
         this.w32(disp)
     }
 
     private func pushMemRbp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(5)
         this.add([0xFFu8, 0xB5u8])
         this.w32(disp)
     }
 
     private func popMemRbp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(5)
         this.add([0x48u8, 0x8Fu8, 0x85u8])
         this.w32(disp)
     }
 
     private func moveRaxToMemRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.movMemRspRax(disp)
     }
 
@@ -368,6 +447,7 @@ internal class X86Lower {
         }
         this.movReg(7, 15) // rdi = ctx
         this.movImm(0, this.fnTableBase)
+        BackendX86_64.noteAbsMem() // 函数入口表：宿主绝对地址（与 a64 豁免对称）
         let pad = this.alignBeforeCall()
         this.add([0xFFu8, 0x90u8])
         this.w32(8 * fid)
@@ -410,7 +490,7 @@ internal class X86Lower {
         let done = 'fdd${this.seq}'
         this.add([0x66u8, 0x0Fu8, 0x57u8, 0xC9u8])
         this.ucomisdRM(1, 0)
-        this.jcc(0x8Bu8, go) // jnp：除数 NaN 不判零
+        this.jcc(0x8Au8, go) // jp：仅除数 NaN（无序，PF=1）跳过零检查
         this.jcc(0x84u8, z)
         this.bind(go)
         this.floatBin(0x5Eu8, false)
@@ -611,6 +691,7 @@ internal class X86Lower {
     }
 
     private func ucomisdRM(reg: Int64, disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0x66u8, 0x0Fu8, 0x2Eu8, UInt8(0x84 | (reg << 3)), 0x24u8])
         this.w32(disp)
     }
@@ -706,7 +787,8 @@ internal class X86Lower {
                     this.ok = false
                 } else {
                     this.movImm(0, this.constBase + 8 * X86Lower.u16(ops, 0))
-                    this.add([0x48u8, 0x8Bu8, 0x00u8])
+                        BackendX86_64.noteAbsMem() // 常量镜像：宿主绝对地址（与 a64 豁免对称）
+                        this.add([0x48u8, 0x8Bu8, 0x00u8])
                     this.pushReg(0)
                     this.depth = this.depth + 1
                 }
@@ -932,6 +1014,24 @@ internal class X86Lower {
                 this.depth = this.depth - 1
             case 0x73u8 => ()
             case 0x74u8 =>
+                // 回边 = 安全点：STACK_GUARD（overflow >= frame ⇒ deopt -1）→ H22 → 跳
+                this.seq = this.seq + 1
+                let okL = 'sg${this.seq}'
+                // 基准点 = 帧底（rbp - frameSize，与序言同一值）；阈值 = 操作数栈保留区。
+                // x86 帧是预分配的 ⇒ 正常路径 overflow == 8*depth <= 保留区，恒不 deopt
+                //（与 A64 守卫的有效行为一致）；只有违背保留区才 deopt(-1)。
+                let frame = BackendX86_64.frameSize(Int64(this.fn.nLocals), Int64(this.fn.maxStack))
+                let reserve = 8 * (Int64(this.fn.maxStack) + 1)
+                this.add(BackendX86_64.emitLoopBackGuardPrefix(frame))
+                this.movImm(2, reserve)
+                this.add([0x48u8, 0x39u8, 0xD0u8]) // cmp rax, rdx
+                this.rel32(BackendX86_64.emitJbe(), okL)
+                this.movQwordCtx(0, -1) // deopt：写 -1 后直接返回（不转储）
+                this.jumpTo('epilogue')
+                this.bind(okL)
+                this.helper(22, 0, 0) // H22 interrupt_poll（变体 0：占位结果 + 自动 CHECK_ERR）
+                this.addRsp(8)
+                this.depth = this.depth - 1
                 let rel = X86Lower.i32(ops, 0)
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')
             case 0x75u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 0)

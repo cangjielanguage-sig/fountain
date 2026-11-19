@@ -247,7 +247,8 @@ public class MQProtocol {
         try {
             codec.encode(value.toData())
             match (codec.finish().asBytes()) {
-                case Some(bytes) => bytes
+                // 必须在 release 前拷出：asBytes() 是池缓冲的视图，release 后可能被下一次编码复用
+                case Some(bytes) => bytes.clone()
                 case None => throw IllegalArgumentException("MQProtocol.encodePayload: codec produced no bytes")
             }
         } finally {

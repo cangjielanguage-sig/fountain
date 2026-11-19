@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain::f_base
 
+@FastNative
 foreign {
     func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
 

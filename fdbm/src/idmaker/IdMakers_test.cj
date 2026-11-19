@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fdbm.idmaker
 
-import std.collection.{ArrayList, HashMap, HashSet}
+import std.collection.{ArrayList, HashMap, HashSet, Map}
 import std.fs.{Directory, Path}
 import std.sync.{AtomicInt64, Mutex}
 import std.unittest.*
@@ -25,7 +25,9 @@ import fountain::f_mockdb.*
 import fountain::f_base.fromHex
 import fountain::f_util.UUID
 import fountain::fdbm.config.{DatabaseNodeConfig, IdMakerConfig, LoadBalanceConfig, PoolConfig}
-import fountain::fdbm.resources.DatabaseResources
+import fountain::fdbm.resources.{DatabaseResources, NodeAccessor}
+import fountain::fdbm.exception.FdbmException
+import fountain::f_dbd.common.DbdErrorCode
 
 /** 阶段 6：`Uuid` / `Snowflake` / `Sequence` 与 `IdMakers.forTable`。 */
 @Test
@@ -123,6 +125,47 @@ public class IdMakersTest {
         }
     }
 
+    /** 真实取号流程分别在 query/next/update 失败，叠加收尾失败仍保留 SQL 首错与回滚。 */
+    @TestCase
+    public func sequenceSqlFailureSurvivesCleanupFailures(): Unit {
+        for (stage in ['query', 'next', 'update']) {
+            let expectedSqlMessage = SqlException('sequence SQL failure at ${stage}', '23505', 0).message
+            MOCKDB.clear()
+            MOCKDB.execution = {sql, _ =>
+                if (sql.startsWith('select')) {
+                    MOCKDB.addQueryResultColumnInfo(name: 'current_value', nullable: false, typeName: 'Int64')
+                    MOCKDB.addQueryResultColumnInfo(name: 'increment', nullable: false, typeName: 'Int64')
+                    MOCKDB.addQueryResultRow([5, 2])
+                }
+            }
+            let connection = SequenceFailureConnection(stage)
+            let generator = SequenceIdGenerator(SequenceFailureAccessor(connection), 'order', 'orders', 'db0')
+            var message = ''
+            try {
+                generator.nextIntId()
+            } catch (e: FdbmException) {
+                @Assert(e.code, DbdErrorCode.ID_GENERATOR)
+                message = e.message
+                let cause = e.causedBy.getOrThrow()
+                @Assert(cause is SqlException, true)
+                if (let sql: SqlException <- cause) {
+                    @Assert(sql.sqlState, '23505')
+                    @Assert(sql.message, expectedSqlMessage)
+                }
+            }
+            @Assert(message, 'sequence \'order.orders\' failed: ${expectedSqlMessage}')
+            @Assert(connection.isClosed(), true)
+            // 未到 commit 的失败路径，事务已被 rollback 正常结束。
+            var finished = false
+            try {
+                connection.transaction.commit()
+            } catch (e: SqlException) {
+                finished = e.message.contains('has been finished')
+            }
+            @Assert(finished, true)
+        }
+    }
+
     @TestCase
     public func forTableBuildsBuiltins(): Unit {
         let nodes = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb', ['db0'], '', '')]
@@ -191,4 +234,98 @@ private func isTimestampName(name: String): Bool {
         }
     }
     true
+}
+
+/** 委托现有 mock CDBC，仅在本例指定位置注入 SQL 与收尾双失败。 */
+class SequenceFailureAccessor <: NodeAccessor {
+    private let connection: Connection
+    init(connection: Connection) {
+        this.connection = connection
+    }
+    public func selectRead(_: String): Connection { connection }
+    public func selectWrite(_: String): Connection { connection }
+    public func selectAllWrite(_: String): Array<Connection> { [connection] }
+    public func databases(): Array<String> { ['db0'] }
+    public func contains(database: String): Bool { database == 'db0' }
+    public func readNodes(_: String): Array<String> { ['mock'] }
+    public func driver(_: String): String { 'mockdb' }
+}
+
+class SequenceFailureConnection <: Connection {
+    private let inner = MockConnection()
+    let transaction: Transaction = MockTransaction()
+    private let stage: String
+    init(stage: String) {
+        this.stage = stage
+    }
+    public prop state: ConnectionState { get() { inner.state } }
+    public func createTransaction(): Transaction { transaction }
+    public func getMetaData(): Map<String, String> { inner.getMetaData() }
+    public func prepareStatement(sql: String): Statement {
+        SequenceFailureStatement(inner.prepareStatement(sql), stage, sql.startsWith('update'))
+    }
+    public func isClosed(): Bool { inner.isClosed() }
+    public func close(): Unit {
+        inner.close()
+        throw Exception('connection cleanup failure')
+    }
+}
+
+class SequenceFailureStatement <: Statement {
+    private let inner: Statement
+    private let stage: String
+    private let isUpdate: Bool
+    init(inner: Statement, stage: String, isUpdate: Bool) {
+        this.inner = inner
+        this.stage = stage
+        this.isUpdate = isUpdate
+    }
+    public prop parameterColumnInfos: Array<ColumnInfo> { get() { inner.parameterColumnInfos } }
+    public func setOption(key: String, value: String): Unit { inner.setOption(key, value) }
+    public func set<T>(index: Int, value: T): Unit { inner.set<T>(index, value) }
+    public func setNull(index: Int): Unit { inner.setNull(index) }
+    public func query(params: Array<SqlDbType>): QueryResult { inner.query(params) }
+    public func update(params: Array<SqlDbType>): UpdateResult { inner.update(params) }
+    public func query(): QueryResult {
+        if (stage == 'query') {
+            throw SqlException('sequence SQL failure at query', '23505', 0)
+        }
+        SequenceFailureResult(inner.query(), stage)
+    }
+    public func update(): UpdateResult {
+        throw SqlException('sequence SQL failure at update', '23505', 0)
+    }
+    public func isClosed(): Bool { inner.isClosed() }
+    public func close(): Unit {
+        inner.close()
+        if (stage != 'update' || isUpdate) {
+            throw Exception('statement cleanup failure')
+        }
+    }
+}
+
+class SequenceFailureResult <: QueryResult {
+    private let inner: QueryResult
+    private let stage: String
+    init(inner: QueryResult, stage: String) {
+        this.inner = inner
+        this.stage = stage
+    }
+    public prop columnInfos: Array<ColumnInfo> { get() { inner.columnInfos } }
+    public func next(values: Array<SqlDbType>): Bool { inner.next(values) }
+    public func next(): Bool {
+        if (stage == 'next') {
+            throw SqlException('sequence SQL failure at next', '23505', 0)
+        }
+        inner.next()
+    }
+    public func get<T>(index: Int): T { inner.get<T>(index) }
+    public func getOrNull<T>(index: Int): ?T { inner.getOrNull<T>(index) }
+    public func isClosed(): Bool { inner.isClosed() }
+    public func close(): Unit {
+        inner.close()
+        if (stage == 'next') {
+            throw Exception('result cleanup failure')
+        }
+    }
 }

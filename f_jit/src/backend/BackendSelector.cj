@@ -211,6 +211,90 @@ internal class BackendX86_64 <: Backend {
         [0x48u8, 0x83u8, 0xC4u8, 0x08u8]
     }
 
+    /**
+     * 回边 STACK_GUARD 的前缀（`X86Lower` 的 `LOOP_BACK` 使用）：
+     *
+     * ```asm
+     * mov rax, rbp        ; 帧指针
+     * mov rdx, frame      ; 全帧尺寸（frameSize，与序言同一值）
+     * sub rax, rdx        ; rax = rbp - frame（帧底）
+     * sub rax, rsp        ; rax = 操作数栈溢出量 overflow
+     * ```
+     *
+     * 调用方随后以 `mov rdx, 保留区; cmp rax, rdx; jbe ok` 判定：
+     * `overflow <= 8*(maxStack+1)` ⇒ 安全继续，否则 deopt(-1)。
+     * 与 A64 `A64Lower.frame` 对齐：基准点是**帧底**（`frame` 为全帧），不是保留区本身。
+     */
+    internal static func emitLoopBackGuardPrefix(frame: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8) // mov rax, rbp
+        out.add(0x89u8)
+        out.add(0xE8u8)
+        out.add(0x48u8) // mov rdx, frame
+        out.add(0xC7u8)
+        out.add(0xC2u8)
+        BackendX86_64.w32(out, BackendX86_64.i32bits(frame))
+        out.add(0x48u8) // sub rax, rdx
+        out.add(0x29u8)
+        out.add(0xD0u8)
+        out.add(0x48u8) // sub rax, rsp
+        out.add(0x29u8)
+        out.add(0xE0u8)
+        out.toArray()
+    }
+
+    // ---- 发射审计（G5）----
+    //
+    // 只用于**测试与自检**：降低期记录每条内存访问的基址寄存器，`lower()` 结束时校验
+    // 必须落在 `{rsp(4), rbp(5), r15(15)}`。这条约束等价于「机器码不得把 helper 返回的
+    // cell 当指针解引用」——任何解引用都必有基址寄存器，而合法基址只有栈/帧/ctx。
+    private static let auditMemBases = ArrayList<Int64>()
+
+    internal static func noteMemBase(reg: Int64): Unit {
+        auditMemBases.add(reg)
+    }
+
+    internal static func resetAuditMemBases(): Unit {
+        auditMemBases.clear()
+    }
+
+    internal static func auditMemBasesSnapshot(): Array<Int64> {
+        auditMemBases.toArray()
+    }
+
+    /**
+     * 登记一次**宿主绝对地址**解引用（哨兵 `-1`）：常量镜像（`PUSH_KH`）与函数入口表
+     * （`CALL_FUNC`）会把地址物化到寄存器后再 `mov reg,[reg]`，这类访问不属于
+     * "栈/帧/ctx 受控基址"，但它是**受控的地址来源**（编译期烘焙），与 aarch64 对
+     * `movImm64` + `ldr` 的豁免是同一条规则（见 `d2b0b4d8`）。
+     */
+    internal static func noteAbsMem(): Unit {
+        auditMemBases.add(-1)
+    }
+
+    /**
+     * 允许的内存基址：`rsp(4)` / `rbp(5)` / `r15(15)`，以及显式登记的**绝对地址哨兵 `-1`**；
+     * 其余一律拒绝（整单元退回解释器）。
+     */
+    internal static func auditAllows(bases: Array<Int64>): Bool {
+        for (b in bases) {
+            if (b != 4 && b != 5 && b != 15 && b != -1) {
+                return false
+            }
+        }
+        true
+    }
+
+    /** `jb rel32`（低于/无符号小于；回边守卫的"安全继续"分支）。 */
+    internal static func emitJb(): Array<UInt8> {
+        [0x0Fu8, 0x82u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `jbe rel32`（低于或等于；回边守卫：`overflow <= 保留区` ⇒ 安全继续）。 */
+    internal static func emitJbe(): Array<UInt8> {
+        [0x0Fu8, 0x86u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
     /** `SWAP`：交换 `[rsp]` 与 `[rsp+8]`。 */
     internal static func emitSwap(): Array<UInt8> {
         [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x8Bu8, 0x4Cu8, 0x24u8, 0x08u8,

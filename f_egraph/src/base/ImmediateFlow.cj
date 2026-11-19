@@ -72,7 +72,8 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
             dependencied_.computeIfAbsent(this){ConcurrentHashSet<String>()}
         }
     }
-    private func getDispatcher() {
+    /** 该流程所属的派发器：供 `QueuedClosureTask` 等自驱动任务回灌结果 */
+    public func getDispatcher(): ImmediateDispatcher {
         dispatchers.computeIfAbsent(this){
             ImmediateDispatcher()
         }
@@ -104,8 +105,23 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
             registerTask(e, task.exec)
         }
     }
+    /**
+     * 构造期注册 Multi 任务：直接走 dispatcher 的专用入口，绕开业务任务的注册顺序校验（`design.md` D9）。
+     */
+    public func registerMultiEventTask(): Unit {
+        getDispatcher().registerMultiTask(category: category, tag: tag, task: multiEventTaskBody(this))
+    }
+    /**
+     * 开始流程。本地 `startName` 为空时回退到 dispatcher 记录的开始事件名（`design.md` D11）：
+     * 宿主在 `initialize()` 之后新建的实例读不到脚本里 `registerStart` 写下的名字。
+     */
     public func start(data: Any): EndExecutorGetter {
-        dispatchers[this].start(StartEvent(category: category, tag: tag, name: startName, data: data))
+        let name = if(startName.size > 0){
+            startName
+        }else{
+            getDispatcher().startEventName(category: category, tag: tag) ?? ""
+        }
+        dispatchers[this].start(StartEvent(category: category, tag: tag, name: name, data: data))
     }
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit {
         dispatchers.get(this).getOrThrow().accept(DataEvent(eventType: eventType, category: category, tag: tag, name: name, data: data))

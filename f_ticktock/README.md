@@ -126,3 +126,24 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 - 索引按时间单位维护「值桶 / 未约束 / 动态 / 恒真」四类任务集合：`L` 按该单位的候选区间（日字段为 28~31，其余单位为固定值）展开进值桶，只在该区间内参与判定；只有年份约束进入每 tick 判定的动态集合；全通配任务单独成表、无条件候选。
 - `addOrReplaceTask` / `removeTask` 与 tick 在同一把锁内更新索引，运行期动态增删安全。
 - 表达式文本相同的任务在进程内共享同一份只读编译结果（缓存上限 4096 个表达式），降低注册开销与内存占用。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- `CronCompiler`：`static func compile(cronExpr: String): Collection<CronDataCollection>`
+- `CronData`：`func convert(task: TicktockTask): TicktockTask`、`static func createLast(unit: TicktockUnit)`、`duration`（prop）、`func hashCode()`、`last`（prop）、`prop range: Range<Int64>`、`prop unit: TicktockUnit`
+- `CronDataCollection`：`func hashCode()`、`func put(unit: TicktockUnit, data: CronData): Unit`、`func putLast(unit: TicktockUnit)`
+- `FuncInvocationTask`：`func setConcurrentable(concurrentable: Bool)`、`func setFunction(function: () -> Unit)`、`setName`（func）、`func setOnce(once: Bool)`
+- `HourlyTicktockUnit`：`current`（func）
+- `MinutelyTicktockUnit`：`current`（func）
+- `MonthDailyTicktockUnit`：`current`（func）、`func last(now: DateTime): Bool`
+- `MonthlyTicktockUnit`：`current`（func）
+- `SecondlyTicktockUnit`：`current`（func）
+- `Ticktock`：`addOrReplaceDelayTask`（func）、`func emit(now: DateTime): Unit`、`static func getInstance(anyway!: Bool = true): ?Ticktock`、`instance`（prop）、`static func loadTasks(): Unit`、`shutdown`（func）
+- `TicktockInitializer`：`prop dependencies: Array<String>`、`func initialize(): Unit`
+- `TicktockTask`：`func hashCode(): Int64`
+- `WeekDailyTicktockUnit`：`current`（func）
+- `YearlyTicktockUnit`：`func current(now: DateTime): Int64`

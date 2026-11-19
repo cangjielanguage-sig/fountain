@@ -2,7 +2,7 @@
 
 ##### ——初始化
 
-项目链接：https://gitcode.com/Cangjie-SIG/fountain
+项目链接：https://gitcode.com/Cangjie-TPC/fountain
 
 本篇介绍使用fountain开发的应用项目如何启动和初始化。
 

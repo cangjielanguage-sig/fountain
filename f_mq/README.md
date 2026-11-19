@@ -20,6 +20,16 @@ main() {
 }
 ```
 
+跑这段之前要先有服务端、且主题与订阅组已注册（客户端 API 不提供注册入口）：
+
+```bash
+bash fmq/fmq.sh start                                          # 或在 fmq 目录 cjpm build 后 fmq server
+fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+fmq manager --server=127.0.0.1:2350 registerSubscriber /order g1
+```
+
+完整可运行示例（发布端/消费端都是 fboot 加载的动态库）见 [`fmqdemo`](../fmqdemo)。
+
 `MQClient()` 从配置项 `mqClient_hosts`（逗号分隔的 `host:port`）读取节点表；缺失、为空或
 存在非法项时在构造期抛 `MQConnectionException`。显式构造 `MQClient(hosts)` 用于测试或多集群。
 
@@ -140,4 +150,25 @@ public class MQClient <: Resource {
 cd f_mq && cjpm build && cjpm test
 ```
 
-服务端与真实网络链路的端到端测试见 [`fmq`](../fmq) 的 `scripts/mq_e2e.sh`。
+服务端与真实网络链路的端到端测试见仓库根的 `scripts/mq_e2e.sh`（三节点，成功输出 E2E_OK）。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`DeregisterKind`（enum）、`public class MQAckPayload`、`public class MQBackupCursor`、`public class MQBackupPayload`、`public class MQBackupState`、`MQBlob`（class）、`public class MQConsumePayload`、`public class MQConsumeResult`、`public class MQDeadLetterMessage`、`public class MQDeregisterPayload`、`MQFilter`（class）、`MQInternalKind`（class）、`public class MQInternalMessage`、`MQMessageContent`（struct）、`public class MQMetaSnapshot`、`public class MQMetaSyncRequest`、`public class MQMetaTombstone`、`MQPayloadKind`（enum）、`public class MQResult`、`public class MQSubscribePayload`、`MQTopic`（class）、`public class MQTopicAssignment`、`public class MQUnsubscribePayload`
+- `MQBlob`：`copyBytes`（func）、`isEmpty`（func）
+- `MQDeregisterPayload`：`isTopic`（func）、`kindOf`（func）
+- `MQErrorCode`：`messageOf`（func）
+- `MQFilter`：`compile`（func）、`matches`（func）
+- `MQGroup`：`isValid`（func）
+- `MQHost`：`static func parseHost(entry: String): ?(String, UInt16)`
+- `MQMessageContent`：`let messageId: String`
+- `MQMessageRecord`：`decode`（func）、`encode`（func）、`messageId`（func）
+- `MQMetaTombstone`：`isTopic`（func）、`key`（func）
+- `MQProtocol`：`decodePayload`（func）、`deregister`（func）、`encodePayload`（func）、`fail`（func）、`kindOf`（func）、`metaSync`（func）、`publishBackup`（func）、`registerGroup`（func）、`registerTopic`（func）、`respond`（func）
+- `MQTags`：`isValid`（func）
+- `MQTopic`：`static func isValid(topic: String): Bool`
+- `MQTopicAssignment`：`owner`（func）

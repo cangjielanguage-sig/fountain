@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_net.client
 
 import std.env
-import std.collection.concurrent.ConcurrentHashMap
+import std.collection.HashMap
 import fountain::f_protocol.*
 import fountain::f_protocol.exception.InputClosedException
 import fountain::f_random.*
@@ -28,10 +28,56 @@ internal import fountain::f_protocol.default.*
 internal import fountain::f_net.*
 public import fountain::f_net.*
 
+// 每个物理连接有独立的等待集合；重连后不会接管旧连接的请求。
+internal class PendingRequests {
+    private let mutex = Mutex()
+    private let requests = HashMap<MessageID, MessageFuture<Message>>()
+    private var failure: ?Exception = None
+
+    func isClosed(): Bool { synchronized(mutex) { failure.isSome() } }
+    func add(id: MessageID): MessageFuture<Message> {
+        synchronized(mutex) {
+            if (let Some(error) <- failure) { throw error }
+            if (requests.contains(id)) { throw ClientException("Duplicate pending message ID") }
+            let future = MessageFuture<Message>()
+            requests[id] = future
+            future
+        }
+    }
+    func take(id: MessageID): ?MessageFuture<Message> {
+        synchronized(mutex) { requests.remove(id) }
+    }
+    func forget(id: MessageID, future: MessageFuture<Message>): Unit {
+        synchronized(mutex) {
+            if (let Some(current) <- requests.get(id) && refEq(current, future)) {
+                requests.remove(id)
+            }
+        }
+    }
+    func close(error: Exception): Unit {
+        synchronized(mutex) {
+            if (failure.isSome()) { return }
+            failure = Some(error)
+            for ((_, future) in requests) { future.fail(error) }
+            requests.clear()
+        }
+    }
+}
+
+private class ClientConnection {
+    let pending = PendingRequests()
+    let reconnectLock = Mutex()
+    ClientConnection(let buffer: SocketBuffer) {}
+    func close(error: Exception): Unit {
+        pending.close(error)
+        buffer.close()
+    }
+    func isClosed(): Bool { pending.isClosed() || buffer.isClosed() }
+}
+
 public class Client<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
-    private let futures = ConcurrentHashMap<MessageID, MessageFuture<Message>>()
-    private var buffers = Array<SocketBuffer>()
+    private var buffers = Array<ClientConnection>()
     private var checkTimer: Timer = unsafeZeroValue<Timer>()
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
@@ -39,97 +85,106 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private static let CHECK_FAILURE_TOLERANCE = 3
     private var checkFailures = Array<Int64>()
     
-    Client(queueSize: Int64, 
+    private static func readResponses(connection: ClientConnection){
+        let buffer = connection.buffer
+        while (!buffer.isClosed()) {
+            var mid = None<MessageID>
+            var cmd = None<Command>
+            try {
+                // 用 DataAny 中性解码：客户端的响应载荷类型是多样的（Array<String>、Array<ServiceMeta>…），
+                // 若按 T（RPCMessage）解码，会把这类载荷“宽松转换”成字段为空的 RPCMessage，
+                // 调用方随后据其转换会在 f_data 里段错误（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）。原始 Data 交给调用方自行转换。
+                let message: Message = Message.decode<DataAny>(buffer)
+                let id = message.id
+                mid = id
+                cmd = message.command
+                if(let Command.PING(_) <- message.command){
+                    buffer.transfer(Message.ack(id))
+                }else if (let Some(fut) <- connection.pending.take(id)) {
+                    var f = fut
+                    f.set(message)
+                }else{
+                    // 响应到了但该id上没有等待者（id不匹配/已被超时移除）：此前完全静默，是排查时的盲区
+                    log.debug{'Client reader: no future for id ${id}, command ${message.command}'}
+                }
+            } catch(e: InputClosedException){
+                log.warn('Client reader closed', e)
+                connection.pending.close(e)
+                if(!buffer.isClosed()){
+                    try{ buffer.close() }catch(_){}
+                }
+                break
+            } catch (e: Exception) {
+                let mid = mid
+                let cmd = cmd
+                if (buffer.isClosed()) {
+                    // 连接是我们自己关的（发现循环每轮重建、checkTimer 拆链、close()），读到“socket 已关闭”
+                    // 属于正常收尾；记 ERROR 会在每次正常关闭时刷一整条栈（实测一次 70s 运行 138 条），
+                    // 把真正的读取失败淹没在噪音里（见 .autocode/bugs/bug-archived-on-20261004.md 7.5）。
+                    log.debug{'Client reader closed ${cmd}:${mid}'}
+                } else {
+                    log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
+                }
+                // 解码失败 = 字节流已错位，必须断链（不能继续在错位的流上解析）
+                connection.pending.close(e)
+                if(!buffer.isClosed()){
+                    try{ buffer.close() }catch(_){}
+                }
+                break
+            }
+        }
+        connection.pending.close(ClientException("Connection closed before response"))
+    }
+
+    private static func startReader(queueSize: Int64, socket: TcpSocket): ClientConnection {
+        let connection = ClientConnection(SocketBuffer(queueSize, socket))
+        spawn { readResponses(connection) }
+        connection
+    }
+
+    // 首次发送与心跳重连复用同一槽位。一个断开的连接最多发布一个后继。
+    private func reconnect(i: Int64, old: ClientConnection): ClientConnection {
+        synchronized(old.reconnectLock) {
+            let current = synchronized(closeLock) {
+                if (isClosed()) { throw ClientException("Client is closed") }
+                buffers[i]
+            }
+            if (!refEq(old, current) || !current.isClosed()) { return current }
+            let socket = socketCreator()
+            synchronized(closeLock) {
+                if (isClosed()) {
+                    socket.close()
+                    throw ClientException("Client is closed")
+                }
+                let next = startReader(queueSize, socket)
+                sockets[i] = socket
+                buffers[i] = next
+                next
+            }
+        }
+    }
+
+    Client(private let queueSize: Int64,
         let checkDuration: Duration, 
         let checker: () -> ?Message,
         private let pingTimeout: Duration,
         public let address: IPSocketAddress,
         private let socketCreator: () -> TcpSocket, 
         private let sockets: Array<TcpSocket>) {
-        let futures = this.futures
-        func loop(buffer: SocketBuffer){
-            while (!buffer.isClosed()) {
-                var mid = None<MessageID>
-                var cmd = None<Command>
-                try {
-                    // 用 DataAny 中性解码：客户端的响应载荷类型是多样的（Array<String>、Array<ServiceMeta>…），
-                    // 若按 T（RPCMessage）解码，会把这类载荷“宽松转换”成字段为空的 RPCMessage，
-                    // 调用方随后据其转换会在 f_data 里段错误（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）。原始 Data 交给调用方自行转换。
-                    let message: Message = Message.decode<DataAny>(buffer)
-                    let id = message.id
-                    mid = id
-                    cmd = message.command
-                    if(let Command.PING(_) <- message.command){
-                        futures.remove(id)
-                        transfer(buffer, Message.ack(id))
-                    }else if (let Some(fut) <- futures.remove(id)) {
-                        var f = fut
-                        f.set(message)
-                    }else{
-                        // 响应到了但该id上没有等待者（id不匹配/已被超时移除）：此前完全静默，是排查时的盲区
-                        log.debug{'Client reader: no future for id ${id}, command ${message.command}'}
-                    }
-                } catch(e: InputClosedException){
-                    log.warn('Client reader closed', e)
-                    if(!buffer.isClosed()){
-                        try{
-                            buffer.close()
-                        }catch(_){}
-                    }
-                    break
-                } catch (e: Exception) {
-                    let mid = mid
-                    let cmd = cmd
-                    if (buffer.isClosed()) {
-                        // 连接是我们自己关的（发现循环每轮重建、checkTimer 拆链、close()），读到“socket 已关闭”
-                        // 属于正常收尾；记 ERROR 会在每次正常关闭时刷一整条栈（实测一次 70s 运行 138 条），
-                        // 把真正的读取失败淹没在噪音里（见 .autocode/bugs/bug-archived-on-20261004.md 7.5）。
-                        log.debug{'Client reader closed ${cmd}:${mid}'}
-                    } else {
-                        log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
-                    }
-                    // 解码失败 = 字节流已错位，必须断链（不能继续在错位的流上解析）
-                    if(!buffer.isClosed()){
-                        try{
-                            buffer.close()
-                        }catch(_){}
-                    }
-                    break
-                }
-            }
-        }
-        let buffers = Array<SocketBuffer>(sockets.size) {
-            i =>
-                let buffer = SocketBuffer(queueSize, sockets[i])
-                spawn {
-                    loop(buffer)
-                }
-                buffer
-        }
+        let buffers = Array<ClientConnection>(sockets.size) { i => startReader(queueSize, sockets[i]) }
         this.buffers = buffers
         this.checkFailures = Array<Int64>(sockets.size, repeat: 0)
         checkTimer = Timer.repeat(checkDuration, checkDuration, {
             => for (i in 0..sockets.size) {
-                func new() {
-                    try {
-                        sockets[i] = socketCreator()
-                        let buffer = SocketBuffer(queueSize, sockets[i]) 
-                        buffers[i] = buffer
-                        spawn {
-                            loop(buffer)
-                        }
-                    } catch (e: Exception) {
-                        log.error('SocketBuffer.new', e)
-                        throw e
-                    }
-                }
-                let buffer = buffers[i]
+                let buffer = synchronized(closeLock) { buffers[i] }
+                func new() { reconnect(i, buffer); () }
                 try {
                     if(buffer.isClosed()){
+                        buffer.pending.close(ClientException("Connection closed before response"))
                         // 连接已被 reader（解码异常）或本 timer 关闭 → 必须重建，否则永久失去该连接
                         new()
                         continue
-                    }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
+                    }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m, pingTimeout) && res.id == m.id && res.command == Command.ACK) {
                         checkFailures[i] = 0
                     }else{
                         // 单次心跳失败不立刻拆链：先容忍 N 次，避免把一次调度抖动放大成重连风暴
@@ -140,7 +195,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                             checkFailures[i] = 0
                             log.warn('client ping failed ${CHECK_FAILURE_TOLERANCE} times in a row, rebuild connection')
                             if(!buffer.isClosed()){
-                                buffer.close()
+                                buffer.close(ClientException("Heartbeat failed"))
                             }
                             new()
                         }
@@ -155,7 +210,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                         log.error('SocketBuffer.checker', e)
                         try {
                             if (!buffer.isClosed()) {
-                                buffer.close()
+                                buffer.close(ClientException("Heartbeat failed"))
                             }
                         } catch (e: Exception) {
                             log.error('SocketBuffer.close', e)
@@ -187,12 +242,10 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             closed.store(1)
             checkTimer.cancel()
             for (buf in buffers) {
-                if (!buf.isClosed()) {
-                    try {
-                        buf.close()
-                    } catch (e: Exception) {
-                        log.error('SocketBuffer.close', e)
-                    }
+                try {
+                    buf.close(ClientException("Client closed before response"))
+                } catch (e: Exception) {
+                    log.error('SocketBuffer.close', e)
                 }
             }
         }
@@ -259,44 +312,40 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: false)
         }
     }
-    public func transfer(message: Message): MessageFuture<Message> {
-        synchronized(closeLock) {
-            if (isClosed()) {
-                throw Exception('Client is closed')
-            }
-            transfer(index, message)
+    private func readyConnection(i: Int64): ClientConnection {
+        let current = synchronized(closeLock) {
+            if (isClosed()) { throw ClientException("Client is closed") }
+            buffers[i]
         }
+        if (current.isClosed()) { reconnect(i, current) } else { current }
+    }
+    public func transfer(message: Message): MessageFuture<Message> {
+        transfer(readyConnection(index), message)
     }
     public func transfer(message: Message, timeout: Duration): ?Message {
-        let future: MessageFuture<Message>
-        synchronized(closeLock) {
-            if (isClosed()) {
-                return None
-            }
-            future = transfer(index, message)
-        }
-        let result = future.tryGet(timeout)
-        if (result.isNone()) {
-            futures.remove(message.id)
-        }
-        result
+        let connection = try { readyConnection(index) }
+            catch (e: ClientException) { if (isClosed()) { return None }; throw e }
+        transfer(connection, message, timeout)
     }
-    private func transfer(index: Int64, message: Message): MessageFuture<Message> {
-        transfer(buffers[index], message)
+    private func transfer(connection: ClientConnection, message: Message, timeout: Duration): ?Message {
+        let future = transfer(connection, message)
+        try { future.tryGet(timeout) }
+        finally { connection.pending.forget(message.id, future) }
     }
-
-    internal func transfer(buffer: SocketBuffer, message: Message, once!: Bool = true): MessageFuture<Message> {
-        let future = MessageFuture<Message>()
-        if(once){
-            futures.add(message.id, future)
+    private func transfer(connection: ClientConnection, message: Message): MessageFuture<Message> {
+        let future = connection.pending.add(message.id)
+        try {
+            connection.buffer.transfer(message)
+            future
+        } catch (error: Exception) {
+            connection.pending.forget(message.id, future)
+            future.fail(error)
+            throw error
         }
-        buffer.transfer(message)
-        future
     }
 
     public func transfer<T>(message: Message, executor: (Message) -> Unit): ListeningClient<T> where T <: DataFields<T> {
-        let client: Client<T> = (this as Client<T>).getOrThrow()
-        ListeningClient<T>(buffers[0].clone(), client, message, executor)
+        ListeningClient<T>(readyConnection(0).buffer.clone(), message, executor)
     }
 }
 

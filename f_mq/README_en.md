@@ -21,6 +21,18 @@ main() {
 }
 ```
 
+Before running this snippet you need a running server with the topic and subscribe group
+already registered (the client API has no registration entry point):
+
+```bash
+bash fmq/fmq.sh start                                          # or build in fmq/ and run `fmq server`
+fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+fmq manager --server=127.0.0.1:2350 registerSubscriber /order g1
+```
+
+A complete runnable example (publisher and consumer are fboot-loaded dynamic libraries) lives in
+[`fmqdemo`](../fmqdemo).
+
 `MQClient()` reads the node table from `mqClient_hosts` (comma-separated `host:port`).
 A missing/empty value or an invalid entry throws `MQConnectionException` during
 construction. Use `MQClient(hosts)` for tests or multiple clusters.
@@ -163,5 +175,26 @@ The client API exposes no topic/group registration or stats entry point; use
 cd f_mq && cjpm build && cjpm test
 ```
 
-End-to-end tests against a real server and network live in
-[`fmq`](../fmq) under `scripts/mq_e2e.sh`.
+End-to-end tests against a real server and network live in `scripts/mq_e2e.sh` at the repository
+root (three nodes, prints E2E_OK on success).
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `DeregisterKind` (enum), `public class MQAckPayload`, `public class MQBackupCursor`, `public class MQBackupPayload`, `public class MQBackupState`, `MQBlob` (class), `public class MQConsumePayload`, `public class MQConsumeResult`, `public class MQDeadLetterMessage`, `public class MQDeregisterPayload`, `MQFilter` (class), `MQInternalKind` (class), `public class MQInternalMessage`, `MQMessageContent` (struct), `public class MQMetaSnapshot`, `public class MQMetaSyncRequest`, `public class MQMetaTombstone`, `MQPayloadKind` (enum), `public class MQResult`, `public class MQSubscribePayload`, `MQTopic` (class), `public class MQTopicAssignment`, `public class MQUnsubscribePayload`
+- `MQBlob`: `copyBytes` (func), `isEmpty` (func)
+- `MQDeregisterPayload`: `isTopic` (func), `kindOf` (func)
+- `MQErrorCode`: `messageOf` (func)
+- `MQFilter`: `compile` (func), `matches` (func)
+- `MQGroup`: `isValid` (func)
+- `MQHost`: `static func parseHost(entry: String): ?(String, UInt16)`
+- `MQMessageContent`: `let messageId: String`
+- `MQMessageRecord`: `decode` (func), `encode` (func), `messageId` (func)
+- `MQMetaTombstone`: `isTopic` (func), `key` (func)
+- `MQProtocol`: `decodePayload` (func), `deregister` (func), `encodePayload` (func), `fail` (func), `kindOf` (func), `metaSync` (func), `publishBackup` (func), `registerGroup` (func), `registerTopic` (func), `respond` (func)
+- `MQTags`: `isValid` (func)
+- `MQTopic`: `static func isValid(topic: String): Bool`
+- `MQTopicAssignment`: `owner` (func)

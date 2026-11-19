@@ -943,7 +943,7 @@ internal class Parser {
     }
 
     private func parseMultiplicative(): AstExpr {
-        var left = this.parseUnary()
+        var left = this.parsePower()
         while (this.atKind(TokenKind.Star) || this.atKind(TokenKind.Slash) || this.atKind(TokenKind.Percent)) {
             // 替换段优先：斜杠既可能是除法也可能是替换段起头（§11.9）——先试替换，失败再当除法
             if (this.atKind(TokenKind.Slash) && this.replaceDepth == 0) {
@@ -959,7 +959,21 @@ internal class Parser {
                 break
             }
             let opTok = this.take()
-            let right = this.parseUnary()
+            let right = this.parsePower()
+            left = AstExpr.Binary(opTok.kind, left, right, SourcePos(opTok.line, opTok.column))
+        }
+        left
+    }
+
+    /**
+     * 幂：`**`（仓颉 `Appendix/operator.md`：优先级 4——高于 `*`/`/`/`%`、低于一元 `-`；
+     * **右结合**）。右操作数递归本层实现右结合：`2 ** 3 ** 2` = `2 ** (3 ** 2)`。
+     */
+    private func parsePower(): AstExpr {
+        var left = this.parseUnary()
+        if (this.atKind(TokenKind.StarStar)) {
+            let opTok = this.take()
+            let right = this.parsePower()
             left = AstExpr.Binary(opTok.kind, left, right, SourcePos(opTok.line, opTok.column))
         }
         left

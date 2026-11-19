@@ -127,3 +127,24 @@ The timer keeps a time index for the registered CRON expressions: on every tick 
 - The index keeps four sets of tasks per time unit (value buckets / unconstrained / dynamic / always-true): `L` is expanded into the value buckets of its candidate span (28~31 for the day field, a fixed value for the other units), so such tasks take part in the decision only inside that span; only a constrained year goes into the dynamic set that is decided on every tick; all-wildcard tasks are kept in a separate set and are always candidates.
 - `addOrReplaceTask` / `removeTask` update the index under the same lock as a tick, so dynamic add/remove at runtime is safe.
 - Tasks whose expression text is identical share one read-only compiled result within a process (cache limited to 4096 expressions), reducing registration cost and memory footprint.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- `CronCompiler`: `static func compile(cronExpr: String): Collection<CronDataCollection>`
+- `CronData`: `func convert(task: TicktockTask): TicktockTask`, `static func createLast(unit: TicktockUnit)`, `duration` (prop), `func hashCode()`, `last` (prop), `prop range: Range<Int64>`, `prop unit: TicktockUnit`
+- `CronDataCollection`: `func hashCode()`, `func put(unit: TicktockUnit, data: CronData): Unit`, `func putLast(unit: TicktockUnit)`
+- `FuncInvocationTask`: `func setConcurrentable(concurrentable: Bool)`, `func setFunction(function: () -> Unit)`, `setName` (func), `func setOnce(once: Bool)`
+- `HourlyTicktockUnit`: `current` (func)
+- `MinutelyTicktockUnit`: `current` (func)
+- `MonthDailyTicktockUnit`: `current` (func), `func last(now: DateTime): Bool`
+- `MonthlyTicktockUnit`: `current` (func)
+- `SecondlyTicktockUnit`: `current` (func)
+- `Ticktock`: `addOrReplaceDelayTask` (func), `func emit(now: DateTime): Unit`, `static func getInstance(anyway!: Bool = true): ?Ticktock`, `instance` (prop), `static func loadTasks(): Unit`, `shutdown` (func)
+- `TicktockInitializer`: `prop dependencies: Array<String>`, `func initialize(): Unit`
+- `TicktockTask`: `func hashCode(): Int64`
+- `WeekDailyTicktockUnit`: `current` (func)
+- `YearlyTicktockUnit`: `func current(now: DateTime): Int64`

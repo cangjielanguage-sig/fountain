@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <style>
+    rect { fill: #cccccc; }
+    #a:hover { fill: #cc3300; }
+    #b:focus { fill: #0066cc; }
+    circle { fill: #339933; }
+  </style>
+  <rect id="a" x="4" y="4" width="24" height="24"/>
+  <rect id="b" x="36" y="4" width="24" height="24"/>
+  <circle cx="32" cy="44" r="12"/>
+</svg>

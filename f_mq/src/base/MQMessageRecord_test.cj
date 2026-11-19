@@ -263,7 +263,7 @@ class MQMessageRecordTest {
         var payloadBytes: Array<Byte> = []
         try {
             codec.encode(big)
-            payloadBytes = codec.finish().asBytes().getOrThrow()
+            payloadBytes = codec.finish().asBytes().getOrThrow().clone()
         } finally {
             codec.release()
         }

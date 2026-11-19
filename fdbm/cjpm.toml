@@ -29,14 +29,14 @@
   output-type = "executable"
   src-dir = ""
   target-dir = ""
-  version = "1.3.16"
+  version = "1.3.1019"
   package-configuration = {}
   category = ["Database Framework", "Distributed", "Data Encapsulation and Transfer", "Network", "Infrastructure"]
   license = ["Apache-2.0"]
-  include = ["src", "doc", "boot.sh"]
+  include = ["src", "doc", "boot.sh", "fdbm.sh"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
-  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/fdbm"
+  repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/fdbm"
 
 [profile.build]
   incremental = true

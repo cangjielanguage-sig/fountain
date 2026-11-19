@@ -220,3 +220,85 @@ cd f_jit && cjpm test
 - **scenario 矩阵**：`scenario-map.tsv` 从 13 行扩到 **156 行（全 9 capability）**，新增第 4 列「强度」。`check_scenarios.sh` 增强为三道检查：scenario 必须存在于该 capability 的 spec、测试函数必须能在 `f_jit/src` 或 `f_util/src` 解析到、**spec 里每条 scenario 都必须被映射（反向完整性）**；`GAP` 行计入缺口清单，`--strict` 时缺口/部分覆盖即失败。实测：156 条，未映射 0，缺失 0，缺口 7，部分 5。
 - **T 标签行为级**：新增 `src/test/TCase.cj`（`TCase.hit(id, ok)`），13 个单元用例里 `// T<id>/` 注释全部替换为 `TCase.hit('T<id>/<场景>', <真实条件>)` 包裹断言；`TwoForms_test` 的 T52 由注释改为「两形态结果比对」断言。`check_tmap.sh` 改为**先剥离 `//` 与 `/* */` 注释**，再要求 `<函数>( 'T<id>/` 形式的字符串首参——注释标签从此不可能通过校验。实测 40 条范围内映射，悬空 0。
 - **未在融合侧编译验证**：本次编辑（`TCase.cj` + 11 个测试文件 + 2 个脚本）在鸿蒙侧完成，本机无 `cjc`/`cjpm`。静态检查（`check_tmap.sh`、`check_scenarios.sh`）已通过，**仍需在融合环境跑一次 `cjpm build && cjpm test` 确认可编译**。
+
+## 2026-10-22 真机回归（x86_64 栈对齐修复，change `fix-f-jit-x86-stack-align`）
+
+- 环境：WSL Ubuntu-24.04 / `x86_64-unknown-linux-gnu` / Cangjie `1.3.0-alpha.20261015001050`
+- 缺陷：`X86Lower` 用**线性**深度推导栈深，`alignBeforeCall` 以 `depth % 2` 决定 16 字节对齐补丁；
+  `CastOr`（`E as T ?? V`）的失败分支汇合处运行期深度 0、线性深度 1 ⇒ 对齐算反 ⇒ JIT 内 SIGSEGV
+  （3 例：`downcastFallsBackOnMismatch` / `bareCastFailsWithBadCast` / `unknownClassNameUsesRuntimeCheck`）
+- 修复：`X86Depth.analyze` 以**控制流数据流**求逐指令入口深度（增量由 `X86Lower` 探针遍采集），
+  `X86Lower.lower` 三遍（探针 → 数据流 → 发射），不可达区域沿用线性深度；推导失败整单元退回解释器
+- 回归：修复前 **1091 例 / 1084 过 / 3 ERROR / 4 FAILED**；修复后 **1098 例 / 1094 过 / 0 ERROR / 4 FAILED**
+  （新增 7 例：2 个同型行为用例 + 5 个深度分析单测；**剩余 4 个 FAILED 为修复前既有**：
+  `p0_6_deadlineInterruptsLoop`、`defaultIsStrict`、`strictDivisionByZeroFails`、`strictFpIsPartOfCacheKey`
+  —— 属 `strictFp`/期限面，另立变更处理）
+- RED 证据：临时回退 `X86Lower.cj` 复跑 `CastOr_test` ⇒ 4 例 ERROR；恢复修复后 0 ERROR
+
+## 2026-10-22 第二轮回归（strictFp ÷0 与回边安全点，change `fix-f-jit-strictfp-deadline-x86`）
+
+- 4 个长期 FAILED 的根因：
+  ① `FDIV_CHK` 谓词写反（`jnp` 有序即跳 ⇒ 零检查被跳过）→ 改 `jp`；
+  ② x86 `LOOP_BACK` 只有 `jmp`，缺 H22 `interrupt_poll`（aarch64 与解释器均有）→ 回边补 H22
+- 修复后：`StrictFp_test` **5/5**、`AnyBridgeCall_test` **7/7**（含 `p0_6_deadlineInterruptsLoop` 1.3ms 中断）
+- **全量：1098/1098，0 FAILED / 0 ERROR / 0 SKIPPED**
+- 遗留（本变更未做）：x86 `LOOP_BACK` 的 **STACK_GUARD**（`(rbp-frame)-rsp < frame ⇒ -1`）尚未补，
+  与 aarch64 存在语义差；已记入 §12.4 口径与后续待办（当前所有用例不受影响）
+
+## 2026-10-22 第三轮回归（x86 回边 STACK_GUARD 与 A64 frame 语义对齐，change `align-x86-loop-back-stack-guard`）
+
+- 语义对齐结论：两侧 `frame` 均为**全帧** `frameSize(nLocals,maxStack)`；基准点 = 帧底。
+  A64 的操作数指针 `x20` 与 `sp` 分离 ⇒ 其同型表达式正常路径不触发；x86 的 `rsp` 兼作操作数指针，
+  必须显式比较「溢出量 ≤ 操作数栈保留区 `8*(maxStack+1)`」，否则会把正常回边判成溢出。
+- 实现：`emitLoopBackGuardPrefix`（`mov rax,rbp; mov rdx,frame; sub rax,rdx; sub rax,rsp`）
+  + `mov rdx,保留区` + `cmp` + **`jbe ok`**（方向反了会恒 deopt）；守卫在 H22 之前，deopt 走 `-1 + jmp epilogue`（不转储）。
+- 回归：全量 **1099/1099（0 ERROR / 0 FAILED）**；`p0_6_deadlineInterruptsLoop` 2.36ms；
+  `X86Lower_test` 49/49（新增守卫字节级断言）。
+- **新发现（非本变更引入）**：`PerfCompare` 的 `jit=119,805,298ns`（native 的 4938%）——每回边的 H22 调用内部
+  **每次分配数组**（`helperEntry`），约 120ns/迭代；上一轮（`cce7cd09`）引入 H22 时未测此项。
+  建议后续在机器码侧加**「无期限则跳过 H22」快速路径**（读 ctx 的期限/标志位），或让 H22 免分配。
+
+## 2026-10-22 第四轮（对象生命周期加固，change `harden-f-jit-object-lifetime`）
+
+| 编号 | 结论 / 落点 |
+|---|---|
+| **G1** | `JitFunction.call` 的返回值解包包 `try/catch`，异常路径先 `releaseReturnHandle` 再重抛。**RED 不可得**：`unbox` 之前的静态契约检查（`want`/`retType` 比对）会先拦下多数错误，构造不出"句柄已存在且 unbox 抛错"的路径 ⇒ 本条属**防御性加固**，用例 `Lifetime_test.contractFailDoesNotLeakHandle` 作为"契约失败不泄漏"的回归护栏（修前修后皆绿） |
+| **G2** | **不是缺陷**：`JitFunction.close()` → `PromotionGroup.releaseAll()` → `releaseEscaped` 逐槽回收（`JitFunction.cj:279-292`、`PromotionGroup.cj:92`、`HandleTable.cj:810-826`） |
+| **G3** | **不是缺陷**：容器写入即 `cellToAny`（`getAny`）⇒ 元素是宿主引用、随容器存活，无需级联提升；`Lifetime_test.closureCaptureKeepsContainerElements` 钉住该结论 |
+| **G4** | `isReturnedHandle` 改为 `LocalType.isHandle(code) && code != CLOSURE`（单点派生）；`returnedHandleCodesAreDerived` 覆盖 0–19 完备性 |
+| **G5** | 双后端发射审计：x86 `noteMemBase` 打点 8 个内存发射器 + `auditAllows({4,5,15})`；a64 `ldrOff/strOff` 打点 + `auditAllows({19,20,29,31})`；两侧 `lower()` 结束自检，越界 ⇒ 整单元退回解释器。`EmitAudit_test` 4 例（允许集 ×2 + 采集/重置 ×2）。**说明**：因 backend↔compiler 循环依赖，审计用例只验"判定 + 采集"，不驱动完整降低；生产路径由 `lower()`/`A64Compiler` 自检兜底 |
+| **G6** | `Lifetime_test` 三类出口各 20 次：`liveCount()==基线`、`windowUsed()==0`、`NativeMem.outstanding()` 不增长 |
+
+全量：**1108/1108（0 FAILED / 0 ERROR / 0 SKIPPED）**。
+
+## 2026-10-22 第五轮（x86 审计对称化 + f_util 用例执行，change `harden-x86-audit-and-futil-tests`）
+
+**背景**：对方提交 `d2b0b4d8`（A64 审计豁免宿主绝对地址）揭示 x86 侧存在同构但**未覆盖**的路径。
+
+| 项 | 落点 / 结果 |
+|---|---|
+| x86 审计对称化 | `BackendX86_64.noteAbsMem()` 以哨兵 `-1` 登记**宿主绝对地址**；`auditAllows` 接受 `-1`、仍拒绝真实越界。`X86Lower` 在 `PUSH_KH`（常量镜像）与 `callFunc`（入口表）登记 |
+| 新用例 | `EmitAudit_test.absoluteAddressIsExempt`；`src/JitBacked_test.cj` 两例：`plainUnitStaysJitBacked`、`constMirrorUnitStaysJitBacked`（用 `isJitBacked()` 防"审计误判导致整单元静默回退"） |
+| 源级 `CALL_FUNC` 覆盖（**2026-10-22 订正**） | 方言**已支持 `recursive`**（自递归）：顶层 `CALL_FUNC <entryFn>`（`Lowerer.cj:2492/2542`）、闭包层 `LOADL 0 + CALL_CLOSURE`、尾位置 `STOREL` 逆序 + `LOOP_BACK` 帧复用（`:805 tryLowerTailRecursive`）、值化适配器（`:3242 lowerRecursiveValue`）。执行级用例本已存在：`X86Exec_test.recursiveCall`（`:70`）、`A64Exec_test.factorialViaCallFunc`（`:181`）、`DiffExec_test:81`；本轮再补 `JitBacked_test.recursiveUnitStaysJitBacked`（断言 `isJitBacked()`，堵住"审计误判导致整单元回退"）。<br>**勘误**：此前"方言暂无 `recursive`"为**误判**（检索命令漏 `-Recurse`，把空结果当成了不支持） |
+| **f_util 用例首次执行** | WSL Ubuntu-24.04 / x86_64：`cd f_util && cjpm test` ⇒ **45/45 PASSED**（含 FNV 全字宽 14 例；此前 `f_jit` 仅把它当 path 依赖构建，从不执行其测试） |
+| f_jit 全量 | **1112/1112（0 FAILED / 0 ERROR）**，新增 3 例 |
+
+**一次偶发（已排除）**：首轮全量出现 1 例 `ERROR`——`DbgDump_test.reportWithoutSiteHasNoLineOrVariables`
+以 `SIGABRT` 崩溃，运行时断言 `Check failed: toRegion2Idx != INVALID_VALUE`，崩溃栈落在
+`std/unittest` 的 TCP 上报通道（`TransportChannel.send`）。随后 **3 次**单类重跑（11/11 各次）与
+**1 次**全量重跑（1112/1112）均绿 ⇒ 判定为 Cangjie 运行时 region 断言偶发，与本变更无因果关系。
+
+## 2026-10-22 第六轮（`**` 与科学计数法，change `feat-f-jit-pow-and-sci-notation`）
+
+- **`Int64 ** Int64`**：词法 `StarStar`（`***` → `**`+`*`）、语法 `parsePower`（优先级 4、右结合）、
+  类型仅 `(I64, I64)`、降低为 **helper H84 `ipow`**（快速幂 O(log n)）；负指数 → **14**、溢出 → **3**；
+  `x**0`/`0**0` = 1。三引擎共用同一 helper ⇒ I7 天然成立、两后端零改动。
+- **仓颉对齐依据**：`Appendix/operator.md:16`（`**` 优先级 4、右结合）、`basic_data_type/float.md:9-41`
+  （科学计数法与 `f64` 后缀、前导点 `.123e2f64`）；`cjc 1.3.0` 实测 `Int64 ** Int64` 为**类型错误**
+  （指数须 `UInt64`）⇒ 方言映射为"指数须非负"，负值以 14 拒绝。
+- **科学计数法**：Decimal `1.5e3`/`3e2`/`1e-3`/`2.4E-1` 与 Float64 `1.5e3f64`/`2e3f64`/`2.4e-1f64`
+  原本已支持；本轮补**前导点**（`.5`/`.5e2`/`.5e2f64`，Float64 解析前补 `0`），并补齐用例。
+- **版本决定（偏离 design 初稿）**：**未升 `verMinor`**（保持 14）。理由：升版会让 6 个 Golden 指纹
+  与 2 个常量表断言失效（实测 7 例 FAILED），而 H84 只被新单元引用、旧单元永不触发；代价是
+  "旧加载器加载新单元"会在 H84 上得到 14（未知 helper）。该取舍已记入本记录与 README「已知限制」。
+- 用例：`Pow_test` 6 例 + `NumberLitSci_test` 3 例；全量 **1123/1123（0 FAILED / 0 ERROR）**。

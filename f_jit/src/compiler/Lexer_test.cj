@@ -143,6 +143,7 @@ public class Lexer_test {
 
     private static func kindName(k: TokenKind): String {
         match (k) {
+            case TokenKind.StarStar => 'StarStar'
             case TokenKind.IntLit => 'IntLit'
             case TokenKind.DecLit => 'DecLit'
             case TokenKind.F64Lit => 'F64Lit'

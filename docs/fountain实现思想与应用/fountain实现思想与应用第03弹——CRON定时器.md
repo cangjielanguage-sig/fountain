@@ -2,7 +2,7 @@
 
 ##### ——ticktock
 
-先上项目链接 https://gitcode.com/Cangjie-SIG/fountain
+先上项目链接 https://gitcode.com/Cangjie-TPC/fountain
 
 ### 实现原理
 

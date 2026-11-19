@@ -28,8 +28,10 @@ public interface IdGenerator {
 - `IdGeneratorException` 是 `f_dbm` 自己的异常类型，生成器实现应抛它而不是裸 `Exception`。
 - **只实现一种能力是合法用法**：例如只实现 `nextStringId()`，调用方在需要整型 ID 时按能力回退；
   两个默认方法都未实现时调用方映射为 `ID_GENERATOR`。
-- **与内置名重名不允许覆盖**：自定义 `name` 等于 `step`/`hash`/... 或 `uuid`/`snowflake`/`sequence`
-  时，fdbm 启动自检直接失败。
+- **名字必须唯一，不允许同名覆盖**：自定义 `name` 与内置（`step`/`hash`/`std`/`crc16`/`crc32`/`crc64`/
+  `murmur`/`substr`，或 `uuid`/`snowflake`/`sequence`）重名，或与另一个自定义扩展重名时，fdbm 启动自检
+  直接失败（算法 `PARTITION_CONFIG`、ID 生成器 `CONFIG`），内置实现不会被自定义替换。
+  这条限制是刻意保留的：重名时命中哪个实现取决于加载顺序，排查成本很高，直接报错更容易定位。
 
 ## 写一个自定义扩展
 
@@ -60,8 +62,9 @@ class MyPartition <: PartitionAlgorithm & Initializer {
 1. fdbm 先把 `custom/` 下**全部**动态库 `PackageInfo.load`，再调用一次
    `InitializerCollection.initialize()`，因此各库 `static init` 的注册都能被看到；
 2. 用两轮模式匹配收集 `PartitionAlgorithm` 与 `IdGenerator`（同一实例可同时命中两者）；
-3. 自定义之间重名 → `CONFIG` / `PARTITION_CONFIG` 启动失败；与内置同名时**自定义优先**
-   （算法/生成器工厂先查自定义，再查内置），因此可以用自定义实现覆盖内置实现；
+3. **名字必须唯一**：自定义之间重名 → `PARTITION_CONFIG`（算法）/ `CONFIG`（ID 生成器）启动失败；
+   与内置同名同样启动失败，**不允许用自定义实现覆盖内置实现**（工厂虽然先查自定义，但自检已保证
+   重名到不了运行期）；
 4. 任一库加载失败或任一 `initialize()` 抛异常 → `CONFIG` 启动失败；
 5. `custom/` 目录不存在表示没有扩展；目录里只应放扩展库（所有 `Initializer` 都会被执行）。
 

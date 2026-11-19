@@ -44,6 +44,7 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 用户说要开发新服务，直接从 F 开始 | 先确认 A→B→C→D 的产物；缺什么先加载对应技能 |
 | 工作流技能没装，自己手写流程 | 先 `install_skill.py workflows`，装完再加载 |
 | 用户没说清楚是哪个工作流 | 问清楚再加载；不要替用户猜 |
+| 凭记忆断言「fountain 没有 X」或凭记忆写 API | 先按 `references/module-index.md` 选型，再 `fountain_lookup.py search` / `api` / `--in docs` 现场核对；MQ（`f_mq`+`fmq`）、数据库中间件（`fdbm`+`f_dbd`）、表达式 JIT（`f_jit`）等较新能力不在旧记忆里 |
 | 工作流技能返回后不汇总、不报下一棒 | 调度器要给出目标 / 产物 / 验收 / 下一步建议 |
 
 ## 随包资源

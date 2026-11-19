@@ -72,6 +72,21 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitJnz()), '0F8500000000')
     }
 
+    /**
+     * 回边 STACK_GUARD（`LOOP_BACK`）：前缀 + `jbe`。
+     *
+     * 前缀 = `mov rax,rbp; mov rdx,阈值; sub rax,rdx; sub rax,rsp; mov rdx,阈值; cmp rax,rdx`；
+     * 阈值 = **操作数栈保留区** `8*(maxStack+1)`（样例取 24 = maxStack 2）。
+     * 方向必须是 **`jbe`（0F 86，overflow ≤ 保留区 ⇒ 继续）**——反向会让回边恒 deopt、循环退化解释器。
+     */
+    @TestCase
+    public func loopBackStackGuard(): Unit {
+        // 基准点 = 帧底（frame = 64），前缀只算到 overflow；随后 cmp 保留区 24 + jbe
+        @Assert(X86Lower_test.hex(BackendX86_64.emitLoopBackGuardPrefix(64)),
+            '4889E8' + '48C7C240000000' + '4829D0' + '4829E0')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitJbe()), '0F8600000000')
+    }
+
     @TestCase
     public func bitAndCompareOps(): Unit {
         let tail = '4889442408' + '4883C408'

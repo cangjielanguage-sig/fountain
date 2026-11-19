@@ -269,7 +269,9 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         if(bool) { byte } else { 0u8 }
     }
     public func encode(): EncodedMessage {
-        let bytes = DefaultCodec().encode(id.time).encode(id.pid).encode(id.tid).encode(id.hostId).encode(data).finish()
+        // 预留帧头（version + cmd + len）：整帧随后可在同一缓冲里原地补齐，省一次整帧分配+拷贝
+        let bytes = DefaultCodec(headroom: FRAME_HEAD_SIZE).encode(id.time).encode(id.pid).encode(id.tid)
+            .encode(id.hostId).encode(data).finish()
         EncodedMessage(command.value, bytes)
     }
     /**
@@ -344,19 +346,27 @@ public struct EncodedMessage <: MessageCopier & Releasable {
     }
     /** 小帧：整帧 `[version][cmd][len][payload][crc]` 一次 write。 */
     private func asOneSmallFrame(): ?Array<Byte> {
-        if (let Some(n) <- bytes.byteSize() && n <= SMALL_MESSAGE_LIMIT && let Some(payload) <- bytes.asBytes()) {
-            let out = Array<Byte>(FRAME_OVERHEAD + n, repeat: 0u8)
-            out[0] = FRAME_VERSION
-            out[1] = command
-            putInt32BE(out, 2, n)
-            for (i in 0..payload.size) {
-                out[FRAME_HEAD_SIZE + i] = payload[i]
+        if (let Some(n) <- bytes.byteSize() && n <= SMALL_MESSAGE_LIMIT) {
+            // C 路径：编码缓冲预留了帧头，整帧视图就在原缓冲上，原地补头/尾即可（0 次组装拷贝）
+            if (let Some(frame) <- bytes.frameBytes(FRAME_HEAD_SIZE, FRAME_CRC_SIZE)) {
+                frame[0] = FRAME_VERSION
+                frame[1] = command
+                putInt32BE(frame, 2, n)
+                putInt32BE(frame, FRAME_HEAD_SIZE + n, Int64(crc32(frame[0..FRAME_HEAD_SIZE + n])))
+                return frame
             }
-            putInt32BE(out, FRAME_HEAD_SIZE + n, Int64(crc32(out[0..FRAME_HEAD_SIZE + n])))
-            out
-        } else {
-            None<Array<Byte>>
+            // 回退：非单缓冲实现（流式载荷等）仍按「整帧另分配 + 批量拷贝」组装
+            if (let Some(payload) <- bytes.asBytes()) {
+                let out = Array<Byte>(FRAME_OVERHEAD + n, repeat: 0u8)
+                out[0] = FRAME_VERSION
+                out[1] = command
+                putInt32BE(out, 2, n)
+                payload.copyTo(out, 0, FRAME_HEAD_SIZE, payload.size)
+                putInt32BE(out, FRAME_HEAD_SIZE + n, Int64(crc32(out[0..FRAME_HEAD_SIZE + n])))
+                return out
+            }
         }
+        None<Array<Byte>>
     }
     public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
         var ok = false

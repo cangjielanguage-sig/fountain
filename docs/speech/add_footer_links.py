@@ -13,7 +13,7 @@ PPTX = os.path.join(DOCS, 'speech.pptx')
 BACKUP_DIR = os.path.join(DOCS, 'speech', 'backup')
 
 URL1 = 'https://pkg.cangjie-lang.cn/org/fountain'
-URL2 = 'https://gitcode.com/Cangjie-SIG/fountain'
+URL2 = 'https://gitcode.com/Cangjie-TPC/fountain'
 
 SEP = '\u3000\u00b7\u3000'          # 全角空格 · 全角空格
 SZ = '975'

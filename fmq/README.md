@@ -14,9 +14,27 @@ export mqServer_port=2350
 fmq server
 ```
 
+### 启停脚本（推荐）
+
+仓库内的 `fmq.sh` 把启停与全部配置项收在一处：
+
+```bash
+bash fmq.sh start     # 后台启动；pid 写 fmq.pid、输出追加到 fmq.log
+bash fmq.sh stop      # SIGTERM，走 f_base 的退出钩子做优雅关闭
+bash fmq.sh restart   # 先 stop 再 start
+```
+
+脚本里已 `export` 全部配置项：`mqClient_hosts` 必填（保持 export），有默认值的项一律注释掉，
+取消注释即覆盖默认值；每项上方都有一行说明。可执行文件按 `$FMQ_BIN` → `PATH` 里的 `fmq` →
+本仓库 `target/release/bin/main` 的顺序查找，`metas/` 仍由可执行文件所在目录决定。
+默认的 `mqServer_segmentedLogDir` / `mqServer_deadMsgDir` 在 `/var/log/fmq` 下，普通用户请先改成可写目录。
+
 `mqClient_hosts` 既是客户端节点表，也是服务端的集群节点表。服务端按 `mqServer_port` 在表中
-匹配本机下标；端口不在表中或重复出现会在启动时报错退出。多节点部署还应给每台机器设置唯一的
-`protocol_hostId`，否则 `MessageID` 无法区分节点。
+匹配本机下标；端口不在表中或重复出现会在启动时报错退出。
+
+`protocol_hostId`（f_protocol 的配置，脚本里已默认导出 `1`）**必填且每台机器唯一**：
+`MessageID` 的相等/哈希包含它，配 0 或漏配会在构造 `MessageID` 时抛 `IllegalArgumentException`
+（`(pid, tid, 时间戳)` 跨机器会重复，集群维度只能靠它区分）。
 
 配置项（均可用环境变量或命令行参数覆盖）：
 
@@ -154,3 +172,19 @@ skippedUnreadable / skippedNoMatch / skippedUnsupported`：
 cd fmq && cjpm build && cjpm test
 cd .. && ./scripts/mq_e2e.sh    # 三节点端到端，输出 E2E_OK
 ```
+
+单机全流程的最小示例见 [`fmqdemo`](../fmqdemo)：发布端/消费端都是 fboot 加载的动态库，
+`bash fmqdemo/run-demo.sh` 一条命令完成「起 fmq → 注册主题/订阅组 → 发布 → 消费 ack → 校验」。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`MQManager`（class）、`MQManagerArgs`（struct）、`MQManagerOutput`（class）、`MQUsage`（class）、`MetaApplyResult`（enum）、`QueueCorruptionException`（class）、`backupCursors`（func）、`backupStates`（func）、`execute`（func）、`installExitHooks`（func）、`isAlive`（func）、`isClosed`（func）、`isKnownDead`（func）、`next`（func）、`pendingCount`（prop）、`selfIndex`（prop）、`send`（func）、`successors`（func）
+- `MQManager`：`deleteSubscribeGroup`（func）、`deleteTopic`（func）、`registerSubscriber`（func）
+- `MQManagerArgs`：`let command: String`、`helpText`（func）、`let operands: Array<String>`、`parse`（func）
+- `MQManagerOutput`：`EMPTY`（let）、`ERROR_PREFIX`（let）、`STATS_HEADER`（let）、`assignments`（func）、`error`（func）、`registeredTopic`（func）、`table`（func）、`topicList`（func）、`width`（func）
+- `MQServer`：`isClosed`（func）
+- `MQUsage`：`managerHelp`（func）、`root`（func）、`serverHelp`（func）

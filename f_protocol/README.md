@@ -184,7 +184,10 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 }
 ```
 
-- `MessageID` 的相等/哈希**只用 `time`/`pid`/`tid`**（`hostId` 不参与）；
+- `MessageID` 的相等/哈希**由 `hostId`/`pid`/`tid`/`time` 共同决定**：`(pid, tid, 时间戳)` 只在单机内唯一，
+  跨机器 pid/tid 会重复（容器里通常都是 1），集群维度只能靠 `hostId`；
+- `hostId` **必填**：构造时 `hostId == 0` 抛 `IllegalArgumentException`（`protocol_hostId` 没配就是 0）。
+  解码一帧时用的是**编码侧**写进来的 hostId，不受本机配置影响；
 - `unsubscribe<T>(data!)` 与 `subscribe<T>(data!)` 同构：自动生成 `MessageID` 并携带载荷。
   `f_dbd` 用它发送 `QueryResultClosePayload(qid)` 关闭游标（服务端以 `ACK` 应答）；
   既有的 `unsubscribe(id)` / `unsubscribe(id, data!)` 语义不变；
@@ -195,7 +198,7 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 
 | 配置项 | 默认 | 说明 |
 | --- | --- | --- |
-| `protocol_hostId` | `0` | 主机 ID，整个集群内每台主机唯一（写进 `MessageID`） |
+| `protocol_hostId` | 无（**必填**） | 主机 ID，整个集群内每台主机唯一（写进 `MessageID`，参与相等/哈希）；未配或配 `0` 时构造 `MessageID` 抛 `IllegalArgumentException` |
 | `protocol_maxFramePayload` | `1 << 30`（1GB） | 单帧 payload 上限，收发两侧都校验 |
 
 配置在**首次使用时**才读取并缓存（不能在包初始化期读：那时 `Config` 可能还没就绪）。

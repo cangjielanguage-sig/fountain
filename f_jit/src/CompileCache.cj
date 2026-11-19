@@ -55,6 +55,7 @@ protected class CompileCache {
     /** 管线成功：发布结果并唤醒等待者。 */
     public static func finish(key: String, fn: JitFunction): Unit {
         synchronized(mtx) {
+            fn.bindCacheKey(key)
             ready[key] = fn
             compiling.remove(key)
             failures.remove(key)

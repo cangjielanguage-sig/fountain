@@ -1,0 +1,122 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_hydra
+
+import std.collection.*
+
+/**
+ * 向量存储接口：`collection` 隔离，记录按 `id` 幂等覆盖。
+ *
+ * v0.1 只提供 dense 暴力检索；IVF/PQ、稀疏倒排、colbert 重排按设计文档分批接入。
+ */
+public interface VectorStore {
+    func upsert(collection: String, record: VectorRecord): Unit
+    func get(collection: String, id: String): ?VectorRecord
+    func remove(collection: String, id: String): Bool
+    func searchDense(query: VectorQuery): ArrayList<VectorHit>
+    /**
+     * 按命名向量检索（方案 C）：`field` = `dense` 用默认向量，其它值用 `v:f:{field}:`。
+     * 命名向量不走 IVF（IVF 只建在默认 dense 上）。
+     */
+    func searchDenseField(query: VectorQuery, field: String): ArrayList<VectorHit>
+    /** 稀疏倒排检索：按 `查询权重 × 记录权重` 累加 */
+    func searchSparse(query: SparseQuery): ArrayList<VectorHit>
+    /**
+     * 对一级候选做 colbert 重排（max-sim）。
+     *
+     * `ids` 是 dense/sparse 召回的候选；只对这些 id 现算，不做全库扫描。
+     */
+    func rerank(collection: String, ids: ArrayList<String>,
+                queryColbert: Array<Array<Float64>>): ArrayList<VectorHit>
+    func count(collection: String): Int64
+
+    /** 训练/重建 IVF 索引，返回簇数（0 表示数据为空） */
+    func buildIndex(collection: String, clusters!: Int64): Int64
+    /** 当前簇数，0 表示尚未建索引（检索自动退回暴力扫描） */
+    func indexClusters(collection: String): Int64
+
+    /**
+     * 崩溃恢复：清理未写完的记录（缺 `ready` 标记或正文），返回清理条数。
+     * 建议进程启动时调用一次；`recover` 只做清理，不尝试补全。
+     */
+    func recover(collection: String): Int64
+
+    /** 设置集合 TTL（epoch 秒）；`seconds <= 0` 表示立即过期，`< 0` 表示取消 TTL */
+    func setTtl(collection: String, seconds: Int64): Unit
+
+    /** 读取 TTL（epoch 秒），0 表示未设置 */
+    func ttlOf(collection: String): Int64
+
+    /** 过期集合物理删除，返回删除的 key 数 */
+    func purgeExpired(collection: String): Int64
+
+    /** 按 id 字典序分页（只返回就绪记录），供导出/运维遍历 */
+    func ids(collection: String, offset: Int64, limit: Int64): ArrayList<String>
+
+    /**
+     * 按元数据过滤分页：`filters` 里每个键值都要匹配（AND）。
+     *
+     * 默认实现在客户端侧过滤（逐页取 id 再读记录比对），有索引的实现应覆盖成 O(命中数)。
+     */
+    func idsFiltered(collection: String, filters: HashMap<String, String>,
+                     offset: Int64, limit: Int64): ArrayList<String> {
+        let matched = ArrayList<String>()
+        if(filters.isEmpty()){
+            return ids(collection, offset, limit)
+        }
+        let pageSize: Int64 = 256
+        var cursor: Int64 = 0
+        while(true){
+            let page = ids(collection, cursor, pageSize)
+            if(page.isEmpty()){
+                break
+            }
+            for(id in page){
+                match(get(collection, id)){
+                    case Some(record) =>
+                        var hit = true
+                        for((field, value) in filters){
+                            match(record.filters.get(field)){
+                                case Some(actual) =>
+                                    if(actual != value){
+                                        hit = false
+                                    }
+                                case None => hit = false
+                            }
+                        }
+                        if(hit){
+                            matched.add(id)
+                        }
+                    case None => ()
+                }
+            }
+            if(Int64(page.size) < pageSize){
+                break
+            }
+            cursor += pageSize
+        }
+        let result = ArrayList<String>()
+        var index = offset
+        while(index < Int64(matched.size) && Int64(result.size) < limit){
+            result.add(matched[index])
+            index++
+        }
+        result
+    }
+
+    /** 把本集合的就绪记录写到另一个实现（跨进程/跨实现迁移），返回条数 */
+    func exportTo(collection: String, target: VectorStore, targetCollection: String): Int64
+}

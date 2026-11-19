@@ -158,7 +158,7 @@ public class EmptyIterable<T> <: Iterable<T> {
     }
 }
 
-public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> {
+public class EmptyMap<K, V> <: Bucket<K, V> where K <: Equatable<K> {
     // public static let instance = EmptyMap<K, V>()
     public static func instance(): Map<K, V> {
         EmptyMap<K, V>()

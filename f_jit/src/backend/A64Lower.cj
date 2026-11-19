@@ -195,7 +195,7 @@ internal class A64Lower {
                 } else {
                     let idx = A64Lower.u16(ops, 0)
                     this.e.movImm64(9, this.constBase + 8 * idx)
-                    this.e.ldrOff(9, 9, 0)
+                    this.e.ldrAbs(9, 9, 0)
                     this.pushX(9)
                 }
             case 0x17 =>
@@ -321,7 +321,7 @@ internal class A64Lower {
             case 0x5D => this.floatCmp(A64Cond.GE, true)
             case 0x5E =>
                 this.e.ldrOff(9, 20, 0)
-                this.e.word(0xD2400009u32) // eor x9,x9,#1（逻辑非；0↔1）
+                this.e.eorImm1(9, 9) // 逻辑非：eor x9,x9,#1（0↔1）
                 this.e.strOff(9, 20, 0)
             case 0x5F => this.boolBin(0)
             case 0x60 => this.boolBin(1)
@@ -612,7 +612,7 @@ internal class A64Lower {
             return
         }
         this.e.movImm64(9, this.fnTableBase + 8 * fid)
-        this.e.ldrOff(10, 9, 0)
+        this.e.ldrAbs(10, 9, 0)
         this.e.movReg(0, 19)
         if (argc == 0) {
             this.e.movReg(1, 31)

@@ -76,8 +76,10 @@ public class MQClient <: Resource {
         if (!MQTags.isValid(tags)) {
             throw MQException("invalid tags on topic '${topic}'")
         }
-        // 用 UTC 生成 id：帧里的时间戳往返后按 UTC 表示，记录中的 MESSAGE_ID 才能与解码后的帧 id 逐字一致
-        let id = MessageID(time: DateTime.nowUTC())
+        // 用 UTC 生成 id：帧里的时间戳往返后按 UTC 表示，记录中的 MESSAGE_ID 才能与解码后的帧 id 逐字一致。
+        // hostId 显式取自配置：它参与 MessageID 的相等/哈希（跨机器 pid/tid 会重复），
+        // 也是内存 id 与记录里 MESSAGE_ID 共同的节点维度，不能靠默认值兜底
+        let id = MessageID(time: DateTime.nowUTC(), hostId: ProtocolConfig.getProtocolHostId())
         let record = MQMessageRecord.encode(topic, tags, id.toString(), body)
         var sawNotOwner = false
         var lastConnectionError: ?Exception = None

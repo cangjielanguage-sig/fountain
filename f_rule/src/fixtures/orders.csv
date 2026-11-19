@@ -1,0 +1,9 @@
+﻿# f_rule decision table v1
+# id: orders
+# name: 订单分档
+# factSpace: orders
+# factType: Order
+# hitPolicy: First
+id,when.order.amount,then.band
+O1,>200,high
+O2,,low

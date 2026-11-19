@@ -31,7 +31,7 @@ wsl -d Ubuntu-24.04 bash -lc "<命令>"
 ### 2.1 本机没有 fountain 源码时（文档副本 + 按版本切换）
 
 `fountain_lookup.py` 找不到仓库根时会自动执行：
-`git clone --depth 1 https://gitcode.com/Cangjie-SIG/fountain.git <skill-root>/fountain`，
+`git clone --depth 1 https://gitcode.com/Cangjie-TPC/fountain.git <skill-root>/fountain`，
 该副本**仅用于查询文档**（README / 源码 API 参考，查询结果里会标注），不要用于构建或安装。
 定位规则、版本优先级（`--version` > `$FOUNTAIN_VERSION` > 项目依赖）、切 tag 机制、`switch` / `version`
 命令与「切版本只动副本」的约定见 SKILL.md「定位 fountain 仓库与查询版本」；本节只补该小节没有的细节：

@@ -118,9 +118,10 @@ public class ReleasableTest {
         }
         @Assert(threw)                           // 修前：不抛，释放后的 2 字节落进池项
         let second = b.build().getOrThrow()
-        // 池项里只应剩下 release **之前**写的 3 字节（`clearOnReturning: false` 时不代清理是池的口径）；
-        // 修前这里是 5 字节 —— 多出来的 2 字节正是「释放后仍可写」漏进池项的脏数据（探针 useafterrelease 实测 5）。
-        @Assert(second.byteSize() == Some(3))
+        // 新契约（单缓冲）：底层字节可能残留（`clearOnReturning: false` 不由池代清），但新借用方从 `len = 0`
+        // 开始，`byteSize` / `asBytes` 不会暴露上一个借用者的内容；「释放后再写」仍会抛（见上面的断言）。
+        // 改造前这里期望 Some(3)：旧实现把长度存在被池复用的 ArrayList 上，才看得到上次的内容。
+        @Assert(second.byteSize() == Some(0))
         second.release()
     }
 

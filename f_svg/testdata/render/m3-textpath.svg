@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60">
+  <defs>
+    <path id="curve" d="M 10 45 Q 50 0 90 45"/>
+  </defs>
+  <rect width="100" height="60" fill="#ffffff"/>
+  <text font-family="Hershey" font-size="12" fill="#1b1b1b">
+    <textPath href="#curve" startOffset="0" rotate="0 10 20 30 40">CURVE</textPath>
+  </text>
+  <text x="10" y="58" font-family="Hershey" font-size="8" fill="#666666">rotate list</text>
+</svg>

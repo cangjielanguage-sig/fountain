@@ -18,7 +18,7 @@ package fountain::fmq.queue
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_io.LogPosition
+import fountain::f_io.{LogPosition, LogConfig, SegmentedLog}
 import fountain::fmq.test.TestDirs
 
 @Test
@@ -393,11 +393,15 @@ class QueueLogTest {
         QueueLog {
         let dir = dirOf(name)
         clean(dir)
-        Directory.create(dir, recursive: true)
-        for (i in 0..segments.size) {
-            let file = File.create("${dir}/log_${i + 1}.log")
-            file.write(segments[i])
-            file.close()
+        // 使用真实存储边界，只破坏被测的 MQ 记录格式，不伪造历史无边界目录。
+        let storage = SegmentedLog(LogConfig(dir, "log", maxFileSize, 1, durableBoundary: true))
+        try {
+            for (i in 0..segments.size) {
+                if (i > 0) { storage.rotate() }
+                storage.append(segments[i])
+            }
+        } finally {
+            storage.close()
         }
         QueueLog(dir, maxFileSize, 1)
     }
@@ -762,16 +766,18 @@ class QueueLogTest {
         }
     }
 
-    /** 目录整体缺失时 `segmentsOrEmpty` 返回空而不是抛异常。 */
+    /** 目录整体缺失不能冒充空队列，否则会掩盖已确认消息的丢失。 */
     @TestCase
-    public func segmentsOrEmptyToleratesMissingDirectory(): Unit {
+    public func missingDirectoryRejectsCommittedQueue(): Unit {
         let dir = dirOf("missing_dir")
         clean(dir)
         let log = QueueLog(dir, 1024 * 1024, 1)
         try {
             log.append(recordOf(0x01u8, 4))
             remove(dir, recursive: true)
-            @Assert(log.segmentsOrEmpty().size == 0)
+            var rejected = false
+            try { log.segmentsOrEmpty() } catch (_: QueueCorruptionException) { rejected = true }
+            @Assert(rejected)
         } finally {
             log.close()
             clean(dir)
@@ -866,7 +872,8 @@ class QueueLogTest {
     public func oversizedRecordIsRejectedBeforeWrite(): Unit {
         let dir = dirOf("oversized")
         clean(dir)
-        let log = QueueLog(dir, 1024 * 1024 * 1024, 1)
+        // 段可容纳超限正文和长度头，单独验证记录上限，避免无关的 1 GiB 预分配。
+        let log = QueueLog(dir, QueueLog.MAX_RECORD_SIZE + QueueLog.PREFIX_SIZE + 1, 1)
         try {
             @Assert(QueueLog.MAX_RECORD_SIZE == 64 * 1024 * 1024)
             var thrown = false
@@ -882,4 +889,55 @@ class QueueLogTest {
             clean(dir)
         }
     }
+    /** 预分配尾部保持原样；重开使用持久长度，B 后直接读取下一段 C。 */
+    @TestCase
+    public func committedBoundaryReopensPreallocatedTailWithoutScanning(): Unit {
+        let dir = dirOf("durable_reopen")
+        clean(dir)
+        let capacity = 8 * 1024 * 1024
+        let first = QueueLog(dir, capacity, 1)
+        first.append(recordOf(0x41u8, 46))
+        let b = first.append(recordOf(0x42u8, 46))
+        first.close()
+        let path = "${dir}/log_1.log"
+        let file = File(path, OpenMode.ReadWrite)
+        file.setLength(capacity)
+        file.flush()
+        file.close()
+        let reopened = QueueLog(dir, capacity, 1)
+        try {
+            let c = reopened.append(recordOf(0x43u8, 46))
+            @Assert(reopened.segments()[0].size == 100)
+            let reader = reopened.openRecordsFrom(b)
+            try {
+                @Assert(reader.next().getOrThrow()[0] == recordOf(0x42u8, 46))
+                let next = reader.next().getOrThrow()
+                @Assert(next[0] == recordOf(0x43u8, 46))
+                @Assert(next[1].seq == c.seq && next[1].offset == c.offset)
+                @Assert(reader.next().isNone() && !reader.isCorrupted())
+            } finally { reader.close() }
+            @Assert(FileInfo(path).size == capacity)
+        } finally { reopened.close(); clean(dir) }
+    }
+
+    /** 取得视图后旧段被截短，失败和重复读取均不改变逻辑位点。 */
+    @TestCase
+    public func committedShortReadKeepsLogicalPosition(): Unit {
+        let dir = dirOf("durable_short")
+        clean(dir)
+        let log = QueueLog(dir, 8, 1)
+        log.append([1u8, 2u8, 3u8, 4u8])
+        log.append([5u8, 6u8, 7u8, 8u8])
+        let reader = log.openRecordsFrom(LogPosition(1, 0))
+        let file = File("${dir}/log_1.log", OpenMode.ReadWrite)
+        file.setLength(5)
+        file.close()
+        try {
+            @Assert(reader.next().isNone())
+            @Assert(reader.isCorrupted())
+            @Assert(reader.position().seq == 1 && reader.position().offset == 0)
+            @Assert(reader.next().isNone())
+        } finally { reader.close(); log.close(); clean(dir) }
+    }
+
 }

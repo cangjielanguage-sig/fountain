@@ -16,10 +16,11 @@ limitations under the License.
 macro package fountain::f_jit.macros
 
 import std.ast.*
+import std.collection.HashSet
 import fountain::f_macros.*
 
 /**
- * `@JitBind`（M2.1）：修饰**类**，把它的公共成员一次性展开成类型化绑定。
+ * `@JitBind`（M2.1 / 接口扩展）：修饰**类或接口**，把公共成员一次性展开成类型化绑定。
  *
  * ```
  * @JitBind
@@ -45,12 +46,14 @@ import fountain::f_macros.*
  * 属注册面的「永久排除」（`§12.5` 附 B），宏只发 WARNING、不生成。
  */
 public macro JitBind(input: Tokens): Tokens {
-    let klass = match (parseDecl(input)) {
+    let klass: CompositeDecl = match (parseDecl(input)) {
         case c: ClassDecl => c
+        case i: InterfaceDecl => i
         case _ =>
-            diagReport(ERROR, input, '@JitBind 只能修饰类', '')
+            diagReport(ERROR, input, '@JitBind 只能修饰类或接口', '')
             return input
     }
+    let isIface = klass is InterfaceDecl
     let clsName = klass.identifier
     var methods = quote()
     var fields = quote()
@@ -62,15 +65,23 @@ public macro JitBind(input: Tokens): Tokens {
     var hasStatic = false
     var skippedGeneric = 0
 
+    // 子宏 `@IgnoreJitBinding` 先展开并投递成员名；这里按名字跳过（D10）。
+    let ignored = HashSet<String>()
+    for (msg in getChildMessages('IgnoreJitBinding')) {
+        ignored.add(msg.getString('member'))
+    }
+
     for (d in klass.body.decls) {
-        match (d) {
-            case f: FuncDecl where isPublic(f) && !isStatic(f) =>
+        match (unwrapMemberMacro(d)) {
+            case f: FuncDecl where (isPublic(f) || isIface) && !isStatic(f) =>
                 if (f.identifier.value == 'init') {
                     if (hasCtor) {
                         ctors += Token(TokenKind.COMMA, ',').toTokens()
                     }
                     ctors += buildCtor(f, clsName)
                     hasCtor = true
+                } else if (ignored.contains(f.identifier.value)) {
+                    ()
                 } else if (f.isGenericDecl) {
                     skippedGeneric = skippedGeneric + 1
                 } else {
@@ -80,7 +91,8 @@ public macro JitBind(input: Tokens): Tokens {
                     methods += buildMethod(f, clsName)
                     hasMethod = true
                 }
-            case f: FuncDecl where isPublic(f) && isStatic(f) =>
+            case f: FuncDecl where isPublic(f) && isStatic(f) && !isIface &&
+                !ignored.contains(f.identifier.value) =>
                 if (f.isGenericDecl) {
                     skippedGeneric = skippedGeneric + 1
                 } else {
@@ -90,7 +102,8 @@ public macro JitBind(input: Tokens): Tokens {
                     statics += buildStaticFunc(f, clsName)
                     hasStatic = true
                 }
-            case v: VarDecl where isPublic(v) && isStatic(v) =>
+            case v: VarDecl where isPublic(v) && isStatic(v) && !isIface &&
+                !ignored.contains(v.identifier.value) =>
                 if (v.isVar()) {
                     diagReport(WARNING, input,
                         '${clsName.value}.${v.identifier.value}：static var 未纳入注册面（附 B），不生成绑定', '')
@@ -101,7 +114,8 @@ public macro JitBind(input: Tokens): Tokens {
                     statics += buildStaticValue(v.identifier, v.declType, clsName, true)
                     hasStatic = true
                 }
-            case p: PropDecl where isPublic(p) && isStatic(p) =>
+            case p: PropDecl where isPublic(p) && isStatic(p) && !isIface &&
+                !ignored.contains(p.identifier.value) =>
                 if (isMut(p)) {
                     diagReport(WARNING, input,
                         '${clsName.value}.${p.identifier.value}：static mut prop 未纳入注册面（附 B），不生成绑定', '')
@@ -112,13 +126,15 @@ public macro JitBind(input: Tokens): Tokens {
                     statics += buildStaticValue(p.identifier, p.declType, clsName, false)
                     hasStatic = true
                 }
-            case v: VarDecl where isPublic(v) && !isStatic(v) =>
+            case v: VarDecl where isPublic(v) && !isStatic(v) && !isIface &&
+                !ignored.contains(v.identifier.value) =>
                 if (hasField) {
                     fields += Token(TokenKind.COMMA, ',').toTokens()
                 }
                 fields += buildField(v, clsName)
                 hasField = true
-            case p: PropDecl where isPublic(p) && !isStatic(p) =>
+            case p: PropDecl where (isPublic(p) || isIface) && !isStatic(p) &&
+                !ignored.contains(p.identifier.value) =>
                 if (hasMethod) {
                     methods += Token(TokenKind.COMMA, ',').toTokens()
                 }
@@ -137,6 +153,34 @@ public macro JitBind(input: Tokens): Tokens {
     }
 
     let enrollName = Token(TokenKind.IDENTIFIER, 'jitBindEnroll_' + clsName.value)
+    // 忽略名单随登记表一起下发：反射注册侧据此跳过自动包装（D10 的第二层）。
+    var ignoredNames = quote()
+    var hasIgnored = false
+    for (name in ignored) {
+        if (hasIgnored) {
+            ignoredNames += Token(TokenKind.COMMA, ',').toTokens()
+        }
+        ignoredNames += Token(TokenKind.STRING_LITERAL, name).toTokens()
+        hasIgnored = true
+    }
+    if (isIface) {
+        var parents = quote()
+        var hasParent = false
+        for (t in klass.superTypes) {
+            if (hasParent) {
+                parents += Token(TokenKind.COMMA, ',').toTokens()
+            }
+            parents += Token(TokenKind.STRING_LITERAL, typeNameOf(t)).toTokens()
+            hasParent = true
+        }
+        return quote(
+            $input
+            let $enrollName = JitBindSupport.enrollInterfaceOf<$clsName>(
+                JitBindings(methods: [$methods], parents: [$parents], ignored: [$ignoredNames]),
+                { o: Object => o is $clsName }
+            )
+        )
+    }
     quote(
         $input
         let $enrollName = JitBindSupport.enrollOf<$clsName>(
@@ -144,10 +188,34 @@ public macro JitBind(input: Tokens): Tokens {
                 methods: [$methods],
                 fields: [$fields],
                 ctors: [$ctors],
-                statics: [$statics]
+                statics: [$statics],
+                ignored: [$ignoredNames]
             )
         )
     )
+}
+
+/** 成员上仍挂着未展开的成员宏时，向下穿透到真实声明；是否忽略由父宏消息决定。 */
+private func unwrapMemberMacro(d: Decl): Decl {
+    match (d) {
+        case m: MacroExpandDecl =>
+            var inner: Decl = m.macroInputDecl
+            while (let md: MacroExpandDecl <- inner) {
+                inner = md.macroInputDecl
+            }
+            inner
+        case _ => d
+    }
+}
+
+/** 类型节点的首 token 名（接口父类型只需名字，不走 `codeOf` 的 14 判定）。 */
+private func typeNameOf(t: TypeNode): String {
+    let ts = t.toTokens()
+    if (ts.size == 0) {
+        ''
+    } else {
+        ts[0].value
+    }
 }
 
 // ---- 方法 ----

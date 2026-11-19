@@ -1,0 +1,9 @@
+﻿# f_rule decision table v1
+# id: users
+# name: 用户等级
+# factSpace: users
+# factType: User
+# hitPolicy: Collect
+id,when.user.level,then.tier
+U1,>=3,gold
+U2,>=1,silver

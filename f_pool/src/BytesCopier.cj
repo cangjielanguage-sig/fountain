@@ -27,6 +27,14 @@ public interface BytesCopyTo {
     func asBytes(): ?Array<Byte> {
         None<Array<Byte>>
     }
+    /**
+     * 整帧视图：`[start-headroom, start+len+tail)`，供帧装配原地补头/尾；不支持时返回 None。
+     *
+     * 默认不支持（流式内容、多段链等），由具备单缓冲的实现覆写。
+     */
+    func frameBytes(headroom: Int64, tail: Int64): ?Array<Byte> {
+        None<Array<Byte>>
+    }
 }
 public interface BytesCopyFrom {
     func copy(from!: InputStream, closeFromOnEnd!: Bool, closeToOnEnd!: Bool): Unit
@@ -132,14 +140,16 @@ public struct ChainedBytesCopyTo <: BytesCopyTo & Releasable {
     }
     /** 整体取出：任一子项不支持则整体不支持。 */
     public func asBytes(): ?Array<Byte> {
+        // 单元素直返视图：省掉一次整段分配 + 一次全量拷贝（4KB 小帧的常见形态）
+        if (bytes.size == 1) {
+            return bytes[0].asBytes()
+        }
         if (let Some(n) <- byteSize()) {
             let out = Array<Byte>(n, repeat: 0u8)
             var off = 0i64
             for (b in bytes) {
                 if (let Some(part) <- b.asBytes()) {
-                    for (i in 0..part.size) {
-                        out[off + i] = part[i]
-                    }
+                    part.copyTo(out, 0, off, part.size)
                     off += part.size
                 } else {
                     return None<Array<Byte>>
@@ -149,6 +159,13 @@ public struct ChainedBytesCopyTo <: BytesCopyTo & Releasable {
         } else {
             None<Array<Byte>>
         }
+    }
+    /** 单元素时透传整帧视图；多段/流式内容不支持原地成帧。 */
+    public func frameBytes(headroom: Int64, tail: Int64): ?Array<Byte> {
+        if (bytes.size == 1) {
+            return bytes[0].frameBytes(headroom, tail)
+        }
+        None<Array<Byte>>
     }
     /** 释放所有子项占用的池项（幂等）。 */
     public func release(): Unit {

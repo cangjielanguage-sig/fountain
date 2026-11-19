@@ -15,15 +15,39 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
+import std.collection.ArrayList
+
 import fountain::f_data.macros.*
 
 @DataAssist[props fields]
 public open class ChatMessage {
+    /** 多模态内容：非空时 `content` 只是文本摘要，报文用 `parts` 组装 */
+    private let parts: ArrayList<ContentPart> = ArrayList<ContentPart>()
+
     public ChatMessage(
         private var role: Role,
         private var content: String) {}
     public init(){
         this('', '')
+    }
+
+    /** 追加一段文本 */
+    public func addText(text: String): This {
+        parts.add(ContentPart.textOf(text))
+        this
+    }
+
+    /** 追加一张图片（`data:` URI 或公网 URL） */
+    public func addImage(url: String, detail!: String = 'auto'): This {
+        parts.add(ContentPart.imageOf(url, detail: detail))
+        this
+    }
+
+    /** 是否含多模态片段 */
+    public prop multimodal: Bool {
+        get() {
+            !parts.isEmpty()
+        }
     }
 }
 

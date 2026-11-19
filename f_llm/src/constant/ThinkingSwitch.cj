@@ -18,3 +18,10 @@ package fountain::f_llm.constant
 public type ThinkingSwitch = String
 public const THINGKING_ENABLED = 'enabled'
 public const THINGKING_DISABLED = 'disabled'
+
+/** 模型的思考形态：由能力解析层算出，方言只负责按它写字段 */
+public enum ThinkingMode {
+    | None      // 没有思考能力，任何思考字段都不该出现
+    | Always    // 恒思考，开关无效、也不接受 temperature
+    | Toggle    // 可开关
+}

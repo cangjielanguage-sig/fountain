@@ -26,6 +26,7 @@ internal import fountain::f_base.*
 internal import fountain::f_egraph.*
 internal import fountain::f_bean.*
 internal import fountain::f_data.*
+internal import fountain::f_log.*
 internal import fountain::f_regex.*
 
 internal import fountain::f_llm.config.*

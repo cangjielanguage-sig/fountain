@@ -23,7 +23,8 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.{Data, DataAny, DataBool, DataString, ToData}
 import fountain::f_dbd.common.*
-import fountain::f_dbm.{IdGenerator, PartitionAlgorithm}
+import fountain::f_dbm.{IdGenerator, IdGeneratorException, PartitionAlgorithm}
+import fountain::fdbm.exception.FdbmException
 import fountain::f_log.LoggerFactory
 import fountain::f_mockdb.*
 import fountain::f_net.client.Client
@@ -178,6 +179,72 @@ public class HandlerTest {
         }
     }
 
+    /** 分组 INSERT 失败走真实 handler 回包；单连接池必须归还后才能继续查询。 */
+    @TestCase
+    public func insertGroupFailurePreservesSqlStateAndReturnsConnection(): Unit {
+        let harness = Harness(rows: [1], maxSize: 1)
+        let statements = ConcurrentLinkedQueue<String>()
+        MOCKDB.execution = {sql, _ =>
+            statements.add(sql)
+            if (sql.startsWith('insert')) {
+                throw SqlException('duplicate key', '23505', 0)
+            }
+            if (sql.startsWith('select')) {
+                MOCKDB.addQueryResultColumnInfo(name: 'id', nullable: false, typeName: 'Int64')
+                MOCKDB.addQueryResultRow([1])
+            } else {
+                MOCKDB.rowCount = 0
+            }
+        }
+        let client = harness.client()
+        try {
+            let error = client.transfer(consume(SqlPayload("insert into t (id, name) values (1, 'duplicate')")),
+                Duration.second * 5).getOrThrow()
+            @Assert(codeOf(error), DbdErrorCode.DB_ERROR)
+            let payload = decodeStrict<DbdErrorPayload>(error.data).getOrThrow()
+            @Assert(payload.sqlState, '23505')
+            @Assert(payload.message.contains('committed: []'), true)
+            let failed = statements.toArray()
+            @Assert(failed.size, 3)
+            @Assert(failed[0], 'begin')
+            @Assert(failed[1].startsWith('insert'), true)
+            @Assert(failed[2], 'rollback')
+            let response = client.transfer(consume(SqlPayload('select * from t where id = 1')),
+                Duration.second * 5).getOrThrow()
+            @Assert(matches(response.command), true)
+            @Assert(next(client).data.toString(), 'true')
+            @Assert(cell(client, 0).toString(), '1')
+            @Assert(isAck(close(client, response.id.toString())), true)
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
+    @TestCase
+    public func errorMappingPreservesOuterClassificationAndNestedSqlState(): Unit {
+        let sql = SqlException('duplicate key', '23505', 0)
+        let nested = FdbmException(DbdErrorCode.DB_ERROR, 'group failure',
+            Exception('adapter context', FdbmException(DbdErrorCode.DB_ERROR, 'driver context', sql)))
+        let group = databaseErrorPayload(nested)
+        @Assert(group.errorCode(), DbdErrorCode.DB_ERROR)
+        @Assert(group.message, 'group failure')
+        @Assert(group.sqlState, '23505')
+        let sequence = databaseErrorPayload(FdbmException(DbdErrorCode.ID_GENERATOR, 'sequence failed', nested))
+        @Assert(sequence.errorCode(), DbdErrorCode.ID_GENERATOR)
+        @Assert(sequence.message, 'sequence failed')
+        @Assert(sequence.sqlState, '23505')
+        let direct = databaseErrorPayload(sql)
+        @Assert(direct.errorCode(), DbdErrorCode.DB_ERROR)
+        @Assert(direct.sqlState, '23505')
+        let internalPayload = databaseErrorPayload(Exception('outer context', sql))
+        @Assert(internalPayload.errorCode(), DbdErrorCode.INTERNAL)
+        @Assert(internalPayload.message, 'outer context')
+        @Assert(internalPayload.sqlState, '23505')
+        @Assert(databaseErrorPayload(IdGeneratorException('unsupported id')).sqlState, '')
+        @Assert(databaseErrorPayload(FdbmException(DbdErrorCode.DB_ERROR, '23505 in text only')).sqlState, '')
+    }
+
     @TestCase
     public func routingFailureIsMappedToError(): Unit {
         let harness = Harness(rows: [1])
@@ -284,7 +351,7 @@ class Harness {
     let port: UInt16
     let buffers = ConcurrentLinkedQueue<SocketBuffer>()
 
-    init(rows!: Array<Int64>, rowCount!: Int64 = 1, sweep!: Duration = Duration.second * 30) {
+    init(rows!: Array<Int64>, rowCount!: Int64 = 1, maxSize!: Int64 = 4, sweep!: Duration = Duration.second * 30) {
         MOCKDB.clear()
         MOCKDB.execution = {sql, _ =>
             if (sql.startsWith('select')) {
@@ -298,7 +365,7 @@ class Harness {
         }
         let nodes = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb',
             ['db0', 'db1'], '', '')]
-        let pool = PoolConfig(initSize: 0, minSize: 0, maxSize: 4, checkOnBorrowing: false,
+        let pool = PoolConfig(initSize: 0, minSize: 0, maxSize: maxSize, checkOnBorrowing: false,
             checkOnReturning: false, connectTimeout: Duration.second, maxWaiting: Duration.second)
         this.resources = DatabaseResources(nodes, pool, LoadBalanceConfig())
         let rules = [PartitionRule('db0', 't', 'id', StepPartition(['db0', 'db1'], 1000))]

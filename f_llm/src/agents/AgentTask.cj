@@ -78,10 +78,11 @@ public open class AgentTask <: Task {
     private static let log = LoggerFactory.getLogger<AgentTask>()
     private let producingEventJsons: JsonArray
     public AgentTask(private let agent: Agent){
-        producingEventJsons = JsonArray(Array<JsonValue>(agent.producingEvents.size){i =>
-           let v: JsonValue = JsonString(agent.acceptableEvents[i])
-           v
-        })
+        let list = ArrayList<JsonValue>()
+        for(i in 0 .. agent.producingEvents.size){
+            list.add(JsonString(agent.acceptableEvents[i]))
+        }
+        producingEventJsons = JsonArray(list: list)
     }
     public prop name: String{
         get(){
@@ -286,10 +287,10 @@ ___
     }
     private func generateNextEvents(ne: JsonObject){
         let description = if(let Some(desc: JsonString) <- ne.get('description')){
-            if(let Some(idx) <- desc.getValue().indexOf('## 事件列表')){
-                desc.getValue()[0 .. idx]
+            if(let Some(idx) <- desc.value.indexOf('## 事件列表')){
+                desc.value[0 .. idx]
             }else{
-                desc.getValue()
+                desc.value
             }
         }else{
             ''
@@ -298,7 +299,7 @@ ___
         if(let Some(events: JsonArray) <- ne.get('enum') && let items <- events.getItems() && items.size > 0){
             let eventDesc = StringGenerator('## 事件列表')
             for(ens in items){
-                let en = ens.asString().getValue()
+                let en = ens.asString().value
                 let desc = eventFinder.find(en)
                 eventDesc.append('''
 
@@ -391,14 +392,14 @@ ${eventDesc}
             for(call in functions){
                 let props = call.function.parameters.properties.asObject()
                 if(let Some(ne: JsonObject) <- props.get('nextEvent')){
-                    if(!ne.containsKey('enum')){
+                    if(!ne.contains('enum')){
                         ne.add('enum', producingEventJsons)
                     }
                     generateNextEvents(ne)
                 }
                 func putEnum(propName: String, value: String){
                     if(let Some(ne: JsonObject) <- props.get(propName)){
-                        ne.add('enum', JsonArray([JsonString(value)]))
+                        ne.add('enum', JsonArray(list: ArrayList<JsonValue>([JsonString(value)])))
                     }    
                 }
                 putEnum('event', e.name)
@@ -422,7 +423,8 @@ ${eventDesc}
                 var resp: LLMResp = unsafeZeroValue<LLMResp>()
                 while(count < maxCount && elapsed < maxElapsed){
                     try{
-                        resp = LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)
+                        // 新门面：按 llmName 从配置快照里选平台，失败转移与熔断由 LLM 内部处理
+                        resp = LLM.chatByName(agent.llmName, params)
                         break
                     }catch(ex: Exception){
                         elapsed = MonoTime.now() - start

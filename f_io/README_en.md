@@ -407,6 +407,20 @@ let config = LogConfig(
 )
 ```
 
+### Durable valid-length mode
+
+`LogConfig(..., durableBoundary: true)` adds a durable segment boundary for callers that need sync-confirmed writes. MQ enables it for the main queue, backup queue and dead-letter store; the default `false` keeps the existing call behaviour, including `f_store::WAL`.
+
+This mode only accepts `syncInterval <= 1` and automatically generated segment file names. A mismatching configuration fails at initialization instead of silently changing the durability guarantee. Each append runs as "write and flush data → atomically publish the boundary file and sync the directory → update the visible length → return the position". The boundary file records version, segment number, capacity, committed length, lifecycle state and a CRC32; message bytes and logical positions are unchanged. The CRC32 covers only boundary metadata and does not detect media corruption of the message payload.
+
+The preallocated file size is not the valid data length. `readView()` takes a fixed segment range under one lock; the following `metas()` and `openStream(seq, offset)` share that range and are unaffected by later appends or rotation; a strict stream closes on a short read or open failure and never fills the gap with bytes from a successor segment. After a sync or publish failure the log stops both reading and writing; `close()` only releases resources and keeps the unknown result instead of truncating.
+
+Startup first validates every committed boundary and its data, renames any leftover uncommitted temporary boundary of the same managed segment aside with an exclusive rename, syncs the directory, and never treats a temporary file as committed. A new segment first persists a zero-length intent to initialize, then creates and syncs the file; startup recognizes such an unfinished creation, keeps the original file and continues with a larger segment number. Normal cleanup must go through `removeById` or the matching range-removal entry, which registers the deletion intent before deleting the file; do not delete durable-mode files directly from the paths returned by `takeOldFiles()`.
+
+**Format compatibility boundary:** legacy directories without boundaries, missing or corrupted boundaries, and out-of-range committed lengths are rejected explicitly — no automatic scanning, truncation or migration. This candidate only verifies newly created synthetic directories; offline conversion of existing logs needs separate verification, and a complete prefix found by scanning cannot be called a historically confirmed length. Older versions do not recognize these boundaries, so in-place downgrade writes in the same directory are not supported.
+
+This mode adds boundary files and directory syncs; throughput and latency must be measured. Passing abnormal-process recovery does not mean power-loss durability, media-failure recovery or quorum confirmation have been proven.
+
 ### Creating an instance
 
 ```cj
@@ -806,7 +820,7 @@ extend Path <: ExtendPath
 
 The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
 
-- Module level: `ChainedSegmentStream` (class), `LogClosedException` (class), `public interface MMapProtArray`, `SeekException` (class)
+- Module level: `ChainedSegmentStream` (class), `LogBoundaryException` (class, `init(message: String)`), `LogClosedException` (class), `LogRecordTooLargeException` (class, `init(size: Int64, limit: Int64)`), `SegmentReadView` (class, returned by `readView()`: `metas()` and `openStream(seq, offset)` share one segment range), `public interface MMapProtArray`, `SeekException` (class)
 - `Array`: `func combine(): IntNative`
 - `MMapFlag`: `prop isPrivate: Bool`, `prop isShared: Bool`, `value` (prop)
 - `MMapProt`: `value` (prop)

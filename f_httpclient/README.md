@@ -210,4 +210,52 @@ extend HttpResponse <: ExtendHttpResponse
 以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
 
 - `HttpClient`：`func enablePush(enable: Bool): This`、`func headerTableSize(size: UInt32): This`、`func httpProxy(addr: String): This`、`func httpsProxy(addr: String): This`、`func initialWindowSize(size: UInt32): This`、`func logger(logger: Logger): This`、`func maxConcurrentStreams(size: UInt32): This`、`func maxFrameSize(size: UInt32): This`、`func maxHeaderListSize(size: UInt32): This`、`func noProxy(): This`
-- `HttpResponse`：`func readEntire(): String`、`func readJson(): JsonValue`、`func readToEnd(): Array<Byte>`、`func reader(): StringReader<InputStream>`、`func tryParse<T>(): ?T where T <: DataFields<T>`
+- `HttpResponse`：`func readEntire(): String`、`func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader`、`func readJson(): JsonValue`、`func readToEnd(): Array<Byte>`、`func reader(): StringReader<InputStream>`、`func tryParse<T>(): ?T where T <: DataFields<T>`
+- 模块级：`SseException`（class）
+
+---
+
+## SSE 客户端
+
+`text/event-stream` 的解析放在本模块，业务模块（如 `f_llm`）只消费事件，不再各写一份行解析。
+
+```cj
+public struct SseEvent {
+    public SseEvent(public let event: String, public let data: String, public let id: String, public let retry: Int64){}
+}
+
+public class SseReader <: Resource {
+    public init(body: InputStream, maxLineBytes!: Int64 = 1024 * 1024, idleTimeout!: Duration = Duration.second * 120)
+    public func next(): ?SseEvent      // 流正常结束返回 None
+    public func close(): Unit
+}
+
+extend HttpResponse <: ExtendHttpResponse {
+    public func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader
+}
+```
+
+使用：
+
+```cj
+resource(response.sseReader(maxLineBytes: 1 << 20, idleTimeout: Duration.second * 120)){reader =>
+    while(let Some(event) <- reader.next()){
+        // event.data 是原文；`[DONE]` 之类的业务语义由调用方判断
+    }
+}
+```
+
+实现要求（每条都有单测）：
+
+| # | 规则 |
+|---|---|
+| 1 | 按字节读 `response.body`（8 KiB 缓冲循环），不先 `readToEnd()`——否则“流式”是假的 |
+| 2 | 行分隔 `\n`，容忍行尾 `\r` |
+| 3 | `:` 开头是注释/心跳，整行丢弃，不产生事件 |
+| 4 | 空行 = 一条事件结束；只认 `event` / `data` / `id` / `retry`，其余字段丢弃 |
+| 5 | `data` 多行以 `\n` 拼接；字段值去掉前导一个空格 |
+| 6 | 单行超过 `maxLineBytes` 抛 `SseLineTooLongException` |
+| 7 | `idleTimeout` 内没读到任何字节抛 `SseTimeoutException`（与连接超时区分） |
+| 8 | **返回 `data` 原文**，不解释 `[DONE]`、不解析 JSON |
+| 9 | `close()` 关闭底层流（能关的才关），`Resource` 保证 `resource(...)` 可用 |
+| 10 | 不做自动重连、不消费 `Last-Event-ID`（LLM 的流断了只能重发请求） |

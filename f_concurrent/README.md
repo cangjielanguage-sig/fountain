@@ -340,7 +340,7 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
 ## 补充：README 未展开的公开面（以源码为准）
 
 - **`Executors` / `Executor` / `ExecutorFuture`**（`Executor.cj`）：线程池 + Future ——
-  `Executors(n)` 创建，`call(task)` / `tryCall(task)` / `call(limiter, task)` 提交，`get(...)` 取结果。
+  `Executors(n)` 创建，`call(task)` / `tryCall(task)` / `call(limiter, task)` 提交，`get(...)` 取结果。多个工作线程可以并行执行各自的任务；慢任务只占用承载它的工作线程。
 - **事件总线**（`eventbus/`）：`EventBus`（`init(workers, maxWaitingJobPerWorker, fullJobQueueStrategy,
   toThrowIfNotMatch, abilities)`，方法 `arrange` / `arrangeAndGet` / `register` / `retireAll`）、
   `Event`（抽象事件基类：`name` / `getData` / `setData` / `deliverResult` / `workerId`）、
@@ -378,3 +378,7 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
 - `Executors`：`func shutdown(): Unit`
 - `SyncPriorityQueue`：`func grow(): Unit`
 - `Worker`：`retire`（func）
+- `RateLimiter`：`close`（func）
+- `LeakingBucketRateLimiter`：`close`（func）
+- `SlidingWindowRateLimiter`：`close`（func）
+- `TokenBucketRateLimiter`：`close`（func）

@@ -28,7 +28,7 @@ python <skill-root>/scripts/install_skill.py all                 # 三组旧联�
 | 加载失败的是 | 安装来源 | 说明 |
 | --- | --- | --- |
 | `cangjie-doc-lookup` | **已克隆的 fountain 项目**的 `<fountain-root>/skills/cangjie-doc-lookup` | fountain 仓库根按 `fountain_lookup.py` 同一套规则定位（`--root` > `$FOUNTAIN_ROOT` > 当前目录上溯 > 技能相对位置 > 技能目录下的克隆副本；都没有会先克隆文档副本）。若那份源码停在还没有该技能的旧版本，脚本会给出提示：切到较新的版本（文档副本用 `python <skill-root>/scripts/fountain_lookup.py switch latest`）或 `--fountain-root` 指到含它的源码 |
-| `cangjie-coding` | `https://gitcode.com/Cangjie-SIG/CangjieSkills.git` | 默认**稀疏克隆**到 `~/.cangjie-skills/CangjieSkills`（只取 `.agents/skills`，`--repo-dir` 可改；已存在则 `git pull --ff-only`），再从 `.agents/skills/cangjie-coding` 复制进技能目录 |
+| `cangjie-coding` | `https://gitcode.com/Cangjie-TPC/CangjieSkills.git` | 默认**稀疏克隆**到 `~/.cangjie-skills/CangjieSkills`（只取 `.agents/skills`，`--repo-dir` 可改；已存在则 `git pull --ff-only`），再从 `.agents/skills/cangjie-coding` 复制进技能目录 |
 | 12 个 `opsx-*` | **已克隆的 fountain 项目**的 `<fountain-root>/skills/opsx-<工作流>` | 与 `cangjie-doc-lookup` 同一套仓库定位规则；子命令 `opsx` 一次装齐 12 个（也可用 `install_skill.py opsx-propose` 单个装）。检出分支还没这批技能时（如停在未合入的 master），脚本会报该切哪个分支；用于鸿蒙 PC 上执行 OpenSpec，展开见 `references/openspec-workflow.md` 第 9 节 |
 | `cangjie-code-review-harness`（及 harness 仓其它审议式技能） | `https://gitcode.com/zhangyin_gitcode/cangjie_harness.git` 的 `.opencode/skills/*` | 子命令 `harness` 装全部技能；默认检出到 `~/.cangjie-harness/cangjie_harness`（`--harness-dir` 可改）。本机没有 git 时优先借融合侧 git 克隆到共享目录，失败再用 GitCode 归档下载。工作流 L 依赖其中的 `cangjie-code-review-harness` |
 | fountain 全部技能 | **已克隆的 fountain 项目**的 `<fountain-root>/skills/*` | 子命令 `fountain` 一次装 `cangjie-doc-lookup`、12 个 `opsx-*`、`fountain-tag`、`installing-cangjie-sdk`、`skill-generator` 等；跳过 `fountain-developer` 自身，避免边运行边覆盖。工作流 L 用它一次补齐 OpenSpec 通道与文档查阅 |

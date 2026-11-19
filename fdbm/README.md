@@ -17,6 +17,20 @@ ID 生成、分库缓存**。应用侧通过 [f_dbd](../f_dbd) 驱动连接，�
 | `fountain::fdbm.execute` | 会话、服务端游标、各语句执行器、统一分发 |
 | `fountain::fdbm.server` | 协议 handler、会话注册表、驱动/扩展加载、服务生命周期 |
 
+## 对外接口
+
+fdbm 是常驻服务，不提供库级 API；对外接口只有四类：
+
+| 入口 | 形态 | 说明 |
+| --- | --- | --- |
+| 进程 | `fdbm` | **无子命令**，启动即监听 `fdbm_port`（默认 8112）；退出码 0=正常停止，1=启动自检失败 |
+| 启停脚本 | `./fdbm.sh start\|stop\|restart` | 随模块交付；配置项全部写在脚本里（见下节） |
+| 配置落盘 | `./boot.sh` | `EXPORT <key>=<value>` 语句把配置写回该脚本的 managed 区块 |
+| 协议 | `CONSUME` / `UNSUBSCRIBE` | 见[协议口径](#协议口径)；客户端由 [f_dbd](../f_dbd) 实现 |
+
+应用可见的 SQL 面（`SELECT`/`INSERT`/`UPDATE`/`DELETE`/`SHOW`/`DDL`/`EXPORT`/事务）见
+[SQL 能力](#sql-能力)。
+
 ## 构建与部署
 
 ```bash
@@ -39,7 +53,20 @@ fdbm                                                              # 无子命令
 - `custom/`：自定义 `PartitionAlgorithm` / `IdGenerator` 扩展库（目录不存在表示没有扩展）。
 - `boot.sh`：配置与进程管理脚本；`export k=v` 会写回其 managed 区块。
 
-`boot.sh`（随模块交付）支持：
+### 启停脚本 `fdbm.sh`
+
+```bash
+./fdbm.sh start     # setsid 启动（脱离当前会话），等端口就绪后返回；日志 fdbm.log、pid 文件 fdbm.pid
+./fdbm.sh stop      # 只发 SIGTERM（走优雅停止）
+./fdbm.sh restart
+```
+
+配置项全部写在脚本开头的 `export` 区块里：**只保留不配置就无法启动的项**
+（`fdbm_db`、每节点的 `fdbm_db_driver_<node>` 与 `fdbm_db_database_<node>`），
+其余能取默认值的项一律注释掉，并在注释里写明默认值与语义，需要时取消注释即可。
+每个配置项前都有说明注释。
+
+`boot.sh`（模块自带的另一份脚本，由 `EXPORT` 语句生成/维护配置区块）支持：
 
 ```bash
 ./boot.sh start     # nohup 启动并等待端口就绪
@@ -52,28 +79,106 @@ fdbm                                                              # 无子命令
 会话与游标（归还借用连接）→ 逐池 `closeAndAwait` → 关闭分库缓存 → 退出码 0。
 `test/lifecycle_test.sh` 覆盖 start/status/stop 与优雅停止标记。
 
-## 配置
+## 配置项
 
-全部配置经 `f_config.Config`（环境变量 / `Config.set`）读取，主要分组：
+全部配置经 `f_config.Config`（环境变量 / `Config.set`）读取。下表 `默认值` 一列的值即为
+"不配置时的行为"；`必填` 列为"是"的项缺失会导致启动失败（`CONFIG`）。
 
-| 分组 | 键 |
-| --- | --- |
-| 服务与进程 | `fdbm_port`、`fdbm_bootScript`、`fdbm_driverDir`、`fdbm_customDir`、`fdbm_checkDuration`、`fdbm_unavailableChecked`、`fdbm_sessionSweepInterval`、`fdbm_shutdownTimeout` |
-| 节点与凭据 | `fdbm_db`（`name@host:port;...`）、`fdbm_db_driver_<node>`、`fdbm_db_database_<node>`、`fdbm_db_username_<node>`、`fdbm_db_password_<node>` |
-| 逻辑库 | `fdbm_db_logicalDatabase_<logical>` |
-| 连接池 | `fdbm_databasePool*` |
-| 负载均衡 | `fdbm_loadbalance`、`fdbm_loadbalance_weight_<node>[__<db>]` |
-| 分库/全局表 | `fdbm_partition__<table>`、`fdbm_partition_substr__<table>`、`fdbm_partition_step`、`fdbm_global__<table>` |
-| ID 生成 | `fdbm_idmaker`、`fdbm_sequenceDatabase` |
-| 分库缓存 | `fdbm_cache`、`fdbm_cache_expire`、`fdbm_cache_size`、`fdbm_cachePath` |
+### 服务与进程
 
-启动时先做完整自检（驱动唯一性、扩展加载与重名、跨项引用、算法/生成器参数、超时取值），
-任一失败在**接受连接之前**报错退出；`boot.sh` 整理失败只记日志，不阻塞启动。
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_port` | `8112` | 否 | 监听端口，1..65535 |
+| `fdbm_bootScript` | `./boot.sh` | 否 | `EXPORT` 语句落盘的目标脚本（写 managed 区块） |
+| `fdbm_driverDir` | `./driver` | 否 | 物理驱动目录；目录里必须恰好一个动态库 |
+| `fdbm_customDir` | `./custom` | 否 | 自定义算法/ID 生成器扩展目录；不存在表示无扩展 |
+| `fdbm_checkDuration` | `30s` | 否 | TCP 有效性检查周期。语句执行期间读不到心跳，执行时长超过约 3 倍该值会被判死链断开 |
+| `fdbm_unavailableChecked` | `3` | 否 | 连续检查失败次数阈值 |
+| `fdbm_sessionSweepInterval` | `30s` | 否 | 断连会话巡检周期（f_net 无断连回调，靠巡检回收会话/游标/连接） |
+| `fdbm_shutdownTimeout` | `30s` | 否 | 优雅停止等待在途请求的上限 |
 
-**逻辑库口径**：`fdbm_db_logicalDatabase_<logical>` 是逻辑库的唯一显式来源（物理库名不会被注册成逻辑库）；
-被 `fdbm_partition__*` 引用但未显式配置的逻辑库隐式包含全部物理库。`SHOW DATABASES` 返回逻辑库名，
-`SHOW TABLES [<logical>]` 按逻辑库解析物理库；会话默认库取排序首个逻辑库（多逻辑库部署用
-`<logical>.<table>` 限定）。
+### 物理节点与凭据
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_db` | 无 | **是** | 节点清单 `<node>@<host>:<port>`，多个用 `;` 分隔；名字重复报错 |
+| `fdbm_db_driver_<node>` | 无 | **是** | 该节点的物理驱动注册名（`postgres` / `mysql` / ...） |
+| `fdbm_db_database_<node>` | 无 | **是** | 该节点承载的物理库，逗号分隔（每库一个连接池） |
+| `fdbm_db_username_<node>` | 空 | 否 | 物理库用户名 |
+| `fdbm_db_password_<node>` | 空 | 否 | 物理库密码 |
+
+### 逻辑库
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_db_logicalDatabase_<logical>` | 无 | 否 | 逻辑库 → 物理库列表（逗号分隔）；引用了不存在的物理库即启动失败 |
+
+口径（与 `LogicalCatalog` 一致）：
+
+- **只有显式声明的名字才是逻辑库**，物理库名不会自动成为逻辑库；
+- 被 `fdbm_partition__<table>` 引用但未显式声明的逻辑库，隐式包含**全部**物理库；
+- 全局表不创建逻辑库（避免 `fdbm_global__<table>` 的值拼错时启动才发现不了）；
+- 一个逻辑库都没声明时，排序首个物理库成为唯一逻辑库（记 WARN）；
+- 有多个逻辑库时，会话默认库取排序首个，其余需用 `<logical>.<table>` 限定（记 WARN）。
+
+### 连接池（每物理库一个池）
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_databasePoolInitSize` | `1` | 否 | 初始连接数 |
+| `fdbm_databasePoolMinSize` | `1` | 否 | 最小连接数 |
+| `fdbm_databasePoolMaxSize` | `1` | 否 | 最大连接数（并发长游标/长事务多时调大） |
+| `fdbm_databasePoolCheckOnCreation` | `false` | 否 | 建池时检查连接有效性 |
+| `fdbm_databasePoolCheckOnBorrowing` | `true` | 否 | 借出时检查 |
+| `fdbm_databasePoolCheckOnReturning` | `false` | 否 | 归还时检查 |
+| `fdbm_databasePoolIdleTimeout` | `0`（秒，不过期） | 否 | 空闲超时 |
+| `fdbm_databasePoolConnectionLife` | `86400`（秒） | 否 | 连接最长存活时间 |
+| `fdbm_databasePoolCheckInterval` | `300`（秒） | 否 | 后台检查间隔 |
+| `fdbm_databasePoolConnectTimeout` | `50`（毫秒） | 否 | 取连接超时 |
+| `fdbm_databasePoolMaxWaiting` | `30000`（毫秒，`0`=无限等待） | 否 | 池耗尽等待上限 |
+| `fdbm_databasePoolCheckSql` | `select 1` | 否 | 有效性检查 SQL |
+
+### 负载均衡与读写权重
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_loadbalance` | `random` | 否 | `random` / `roundrobin`，其它值启动失败 |
+| `fdbm_loadbalance_weight_<node>` | `w,1;r,1` | 否 | 读写权重 `w,<n>;r,<n>`（也接受 `w=<n>`、`;` 或 `/` 分段）；`0` 表示不参与该方向 |
+| `fdbm_loadbalance_weight_<node>__<db>` | 继承节点级 | 否 | 库级权重，优先于节点级 |
+
+读写分离靠权重实现：主库 `w,1;r,0`、从库 `w,0;r,1` 即"写只走主、读只走从"。
+
+### 分库与全局表
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_partition_step` | `10000000` | 否 | `step` 算法步长，必须为正 |
+| `fdbm_partition__<table>` | 无 | 否 | `<逻辑库>,<算法>,<分库列>`；算法：`step` / `hash` / `std` / `crc16` / `crc32` / `crc64` / `murmur` / `substr` |
+| `fdbm_partition_substr__<table>` | 无 | 算法为 `substr` 时**必须** | `<起始位置>,<长度>,<哈希>`；哈希：`std` / `hash` / `crc16` / `crc32` / `crc64` / `murmur` |
+| `fdbm_global__<table>` | 无 | 否 | 值为逻辑库名；写入广播到该库全部物理库，读只取一份副本 |
+
+### ID 生成
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_idmaker` | `uuid,1` | 否 | `uuid[,1\|4\|6\|7]` / `snowflake[,0..1023]` / `sequence` / 自定义扩展名 |
+| `fdbm_sequenceDatabase` | 默认逻辑库的首个物理库 | 否 | `sequence` 的分配库，可写逻辑库名或物理库名 |
+
+`sequence` 生成器要求分配库里存在 `fountain_sequence(table_name, current_value, increment)` 表，
+启动自检会检查；取号走"事务 + `select ... for update`"。
+
+### 分库缓存
+
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `fdbm_cache` | `true` | 否 | 是否开启分库键 → 物理库的路由缓存 |
+| `fdbm_cache_expire` | 不过期 | 否 | 过期时间（`Duration`，如 `30s`）；留空 = 永不过期 |
+| `fdbm_cache_size` | `0` | 否 | 容量上限，`0` = 不限；超限后不再写入新键（既有键照常命中） |
+| `fdbm_cachePath` | `./cache` | 否 | `f_store` 落地目录 |
+
+启动时先做完整自检（驱动唯一性、扩展加载与重名（含与内置同名）、跨项引用、算法/生成器参数、超时取值），
+任一失败在**接受连接之前**报错退出（`CONFIG` / `NO_DRIVER` / `PARTITION_CONFIG` / `ID_GENERATOR`）；
+`boot.sh` 整理失败只记日志，不阻塞启动。
 
 ## SQL 能力
 
@@ -146,3 +251,12 @@ bash fdbm/test/e2e/run.sh mysql
 `test/postgres_e2e/run.sh`、`test/mysql_e2e/run.sh` 是兼容入口。环境变量、后端矩阵、
 覆盖范围（路由、全局表、DDL、序列、事务、SHOW/EXPORT、缓存、`RETURNING`/`count(*)`/派生表分页、
 f_orm 实体操作等）与已知边界见 [`test/e2e/README.md`](test/e2e/README.md)。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`aliasQuoted`（let）、`allPhysicals`（func）、`public let arg: ?String`、`public let args: Array<SqlExpression>`、`asciiEquals`（func）、`public let assignments: Array<(ColumnExpression, SqlExpression)>`、`await`（func）、`public static func bind(statement: SqlStatement, params: Array<DataAny>): SqlStatement`、`public let bootScript: String`、`broadcast`（func）、`public let buffer: ?SocketBuffer`、`canRead`（func）、`canWrite`（func）、`public let catalog: LogicalCatalog`、`cell`（func）、`public let checkDuration: Duration`、`public let checkInterval: Duration`、`public let checkOnBorrowing: Bool`、`public let checkOnCreation: Bool`、`public let checkOnReturning: Bool`、`public let checkSql: String`、`close`（func）、`closeAll`（func）、`collectTables`（func）、`columnInfos`（prop）、`columnsOf`（func）、`public let condition: ?SqlExpression`、`public let connectTimeout: Duration`、`public let connection: Connection`、`public let connectionLife: Duration`、`contains`（func）、`public static func create(name: String, databases: Array<String>, step: Int64`、`currentCursor`（func）、`cursor`（prop）、`public let customDir: String`、`public let data: Data`、`databaseQuoted`（let）、`public let databases: Array<String>`、`default`（func）、`public let defaultDatabase: String`、`derived`（let）、`public let dispatcher: ExecutorDispatcher`、`public let distinct: Bool`、`drain`（func）、`public let driverDir: String`、`public let driverName: String`、`effectiveName`（func）、`empty`（func）、`public let enabled: Bool`、`enter`（func）、`equalsName`（func）、`public let expire: ?Duration`、`extract`（func）、`extractRange`（func）、`flush`（func）、`public static func forTable(config: IdMakerConfig, resources: NodeAccessor`、`public let from: Array<TableRef>`、`get`（func）、`getOrNull`（func）、`public let globalTables: Array<GlobalTableConfig>`、`public static func handle(context: ServerContext, buffer: SocketBuffer`、`public let hex: String`、`public let hi: ?Int64`、`public let hiInclusive: Bool`、`public let id: String`、`idGeneratorNames`（func）、`public let idGenerators: HashMap<String, IdGenerator>`、`public let idleTimeout: Duration`、`public let index: Int64`、`public let initSize: Int64`、`installCursor`（func）、`invalidate`（func）、`isClosed`（func）、`isEmpty`（func）、`isGlobal`（func）、`isKeyword`（func）、`isLiteral`（func）、`isPartitioned`（func）、`isPinned`（func）、`public let joinType: JoinType`、`public let joins: Array<JoinClause>`、`public let kind: String`、`leave`（func）、`public let left: SqlExpression`、`public let like: ?String`、`limit`（let）、`literal`（func）、`literalInt64`（func）、`literalString`（func）、`public let lo: ?Int64`、`public let loInclusive: Bool`、`load`（func）、`public let loadBalance: LoadBalanceConfig`、`public let logger: AbstractLogger`、`public let logicalDatabases: HashMap<String, Array<String>>`、`matches`（func）、`public let maxSize: Int64`、`public let maxWaiting: Duration`、`public let minSize: Int64`、`multi`（func）、`public let name: String`、`names`（func）、`public let negated: Bool`、`nextIntId`（func）、`nextStringId`（func）、`public let nodes: Array<DatabaseNodeConfig>`、`normalize`（func）、`of`（func）、`ofDriver`（func）、`public let offset: ?SqlExpression`、`public let on: ?SqlExpression`、`public let op: BinaryOp`、`public let operand: SqlExpression`、`public let orderBy: Array<(SqlExpression, Bool)>`、`parse`（func）、`parseSessionCtl`（func）、`partitionNames`（func）、`partitionRange`（func）、`public let partitionStep: Int64`、`public let partitions: Array<PartitionRuleConfig>`、`public let password: String`、`public let path: String`、`physicalDatabases`（func）、`physicals`（func）、`pin`（func）、`pinnedConnection`（func）、`public let pool: PoolConfig`、`public let position: Int64`、`put`（func）、`quoteIdentifier`（func）、`public let quoted: Bool`、`public let read: Int64`、`readNodes`（func）、`reason`（prop）、`remove`（func）、`public static func render(statement: SqlStatement, dialect!: SqlDialect = SqlDialect.Unknown`、`public let result: QueryResult`、`public let right: SqlExpression`、`routeByValue`（func）、`rule`（func）、`public let savepoint: ?String`、`selectAllWrite`（func）、`selectRead`（func）、`selectWrite`（func）、`public let sequenceDatabase: String`、`public let sessionSweepInterval: Duration`、`public let sessions: SessionRegistry`、`public let setPairs: Array<(Identifier, SqlExpression)>`、`public let showKind: ShowKind`、`public let shutdownTimeout: Duration`、`single`（func）、`public let size: Int64`、`public let statement: Statement`、`tableQuoted`（let）、`tables`（func）、`takeCursor`（func）、`public let text: String`、`tokenize`（func）、`public var transactionOpen: Bool = false`、`public let unavailableChecked: Int64`、`unpin`（func）、`unroutable`（func）、`upperText`（func）、`url`（func）、`public let username: String`、`validate`（func）、`public let values: Array<SqlExpression>`、`public let verb: SessionCtlVerb`、`weight`（func）、`withDerived`（func）、`public let write: Int64`
+- `FdbmException`：`code`（prop）

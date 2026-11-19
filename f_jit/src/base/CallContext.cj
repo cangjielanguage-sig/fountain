@@ -32,16 +32,15 @@ import std.time.DateTime
  * 字面量是编译期常量，桥层不存在「深拷贝字面量」的时机。
  */
 public struct CallContext {
-    /** 入参 cell 数组（Marshal 结果）。 */
-    public var args: Array<Int64> = Array<Int64>()
-    /** 截止时间：到期后 `interrupt_poll` 写 -2。 */
-    public var deadline: ?DateTime = None
-
-    /** 默认构造：三个开关全取规格默认值。 */
-    public init() {}
-
-    /** 以 Marshal 结果构造（最常见的调用形态）。 */
-    public init(args: Array<Int64>) {
-        this.args = args
-    }
+    /**
+     * 截止时间：到期后 `interrupt_poll` 写 -2（`None` = 不设期限，默认）。
+     *
+     * **不可变值语义**：调用级选项在构造时给定、之后只读——需要不同期限就构造新值
+     * （struct 逐值复制，成本 = 一个 `?DateTime`）。
+     *
+     * **为何删掉 `args`**：桥的实参走 `call<T>(args: Array<Any>)` 形参并经 `CallMarshal`
+     * 封送，`ctx.args` 从未被任何执行路径读取（全仓 grep 仅测试使用）；保留它会让
+     * "ctx 里放什么"有两个真相来源。默认构造即 `CallContext()`。
+     */
+    public CallContext(public let deadline!: ?DateTime = None) {}
 }

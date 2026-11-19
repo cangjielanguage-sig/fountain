@@ -18,7 +18,7 @@ cjpm build
 ```
 也可以从git下载源码
 ```bash
-git clone https://gitcode.com/Cangjie-SIG/fountain.git
+git clone https://gitcode.com/Cangjie-TPC/fountain.git
 git checkout -b release-<a.b.c> # <a.b.c> 改成最新版本
 cd /path/of/fountain/cloned
 cd fboot

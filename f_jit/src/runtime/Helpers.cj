@@ -135,6 +135,8 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         case 81 => jsonGet(ctx, a)
         case 82 => jsonSet(ctx, a)
         case 83 => jsonNew(ctx, a)
+    // ---- 幂运算（H84，`**`）----
+    case 84 => ipow(ctx, a)
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)
