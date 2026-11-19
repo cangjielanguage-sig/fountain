@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_net.client
 
 import std.env
-import std.collection.concurrent.ConcurrentHashMap
+import std.collection.HashMap
 import fountain::f_protocol.*
 import fountain::f_protocol.exception.InputClosedException
 import fountain::f_random.*
@@ -28,10 +28,47 @@ internal import fountain::f_protocol.default.*
 internal import fountain::f_net.*
 public import fountain::f_net.*
 
+// 每个物理连接有独立的等待集合；重连后不会接管旧连接的请求。
+internal class PendingRequests {
+    private let mutex = Mutex()
+    private let requests = HashMap<MessageID, MessageFuture<Message>>()
+    private var failure = None<Exception>()
+
+    func add(id: MessageID): MessageFuture<Message> {
+        synchronized(mutex) {
+            if (let Some(error) <- failure) { throw error }
+            if (requests.contains(id)) { throw ClientException("Duplicate pending message ID") }
+            let future = MessageFuture<Message>()
+            requests[id] = future
+            future
+        }
+    }
+    func take(id: MessageID): ?MessageFuture<Message> {
+        synchronized(mutex) { requests.remove(id) }
+    }
+    func close(error: Exception): Unit {
+        synchronized(mutex) {
+            if (failure.isSome()) { return }
+            failure = Some(error)
+            for ((_, future) in requests) { future.fail(error) }
+            requests.clear()
+        }
+    }
+}
+
+private class ClientConnection {
+    let pending = PendingRequests()
+    init(let buffer: SocketBuffer) {}
+    func close(error: Exception): Unit {
+        pending.close(error)
+        buffer.close()
+    }
+    func isClosed(): Bool { buffer.isClosed() }
+}
+
 public class Client<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
-    private let futures = ConcurrentHashMap<MessageID, MessageFuture<Message>>()
-    private var buffers = Array<SocketBuffer>()
+    private var buffers = Array<ClientConnection>()
     private var checkTimer: Timer = unsafeZeroValue<Timer>()
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
@@ -46,8 +83,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         public let address: IPSocketAddress,
         private let socketCreator: () -> TcpSocket, 
         private let sockets: Array<TcpSocket>) {
-        let futures = this.futures
-        func loop(buffer: SocketBuffer){
+        func loop(connection: ClientConnection){
+            let buffer = connection.buffer
             while (!buffer.isClosed()) {
                 var mid = None<MessageID>
                 var cmd = None<Command>
@@ -60,9 +97,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     mid = id
                     cmd = message.command
                     if(let Command.PING(_) <- message.command){
-                        futures.remove(id)
-                        transfer(buffer, Message.ack(id))
-                    }else if (let Some(fut) <- futures.remove(id)) {
+                        buffer.transfer(Message.ack(id))
+                    }else if (let Some(fut) <- connection.pending.take(id)) {
                         var f = fut
                         f.set(message)
                     }else{
@@ -71,10 +107,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     }
                 } catch(e: InputClosedException){
                     log.warn('Client reader closed', e)
+                    connection.pending.close(e)
                     if(!buffer.isClosed()){
-                        try{
-                            buffer.close()
-                        }catch(_){}
+                        try{ buffer.close() }catch(_){}
                     }
                     break
                 } catch (e: Exception) {
@@ -89,18 +124,18 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                         log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
                     }
                     // 解码失败 = 字节流已错位，必须断链（不能继续在错位的流上解析）
+                    connection.pending.close(e)
                     if(!buffer.isClosed()){
-                        try{
-                            buffer.close()
-                        }catch(_){}
+                        try{ buffer.close() }catch(_){}
                     }
                     break
                 }
             }
+            connection.pending.close(ClientException("Connection closed before response"))
         }
-        let buffers = Array<SocketBuffer>(sockets.size) {
+        let buffers = Array<ClientConnection>(sockets.size) {
             i =>
-                let buffer = SocketBuffer(queueSize, sockets[i])
+                let buffer = ClientConnection(SocketBuffer(queueSize, sockets[i]))
                 spawn {
                     loop(buffer)
                 }
@@ -112,11 +147,13 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             => for (i in 0..sockets.size) {
                 func new() {
                     try {
-                        sockets[i] = socketCreator()
-                        let buffer = SocketBuffer(queueSize, sockets[i]) 
-                        buffers[i] = buffer
-                        spawn {
-                            loop(buffer)
+                        let socket = socketCreator()
+                        synchronized(closeLock) {
+                            if (isClosed()) { socket.close(); return }
+                            sockets[i] = socket
+                            let replacement = ClientConnection(SocketBuffer(queueSize, socket))
+                            buffers[i] = replacement
+                            spawn { loop(replacement) }
                         }
                     } catch (e: Exception) {
                         log.error('SocketBuffer.new', e)
@@ -126,10 +163,11 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 let buffer = buffers[i]
                 try {
                     if(buffer.isClosed()){
+                        buffer.pending.close(ClientException("Connection closed before response"))
                         // 连接已被 reader（解码异常）或本 timer 关闭 → 必须重建，否则永久失去该连接
                         new()
                         continue
-                    }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
+                    }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m, pingTimeout) && res.id == m.id && res.command == Command.ACK) {
                         checkFailures[i] = 0
                     }else{
                         // 单次心跳失败不立刻拆链：先容忍 N 次，避免把一次调度抖动放大成重连风暴
@@ -140,7 +178,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                             checkFailures[i] = 0
                             log.warn('client ping failed ${CHECK_FAILURE_TOLERANCE} times in a row, rebuild connection')
                             if(!buffer.isClosed()){
-                                buffer.close()
+                                buffer.close(ClientException("Heartbeat failed"))
                             }
                             new()
                         }
@@ -155,7 +193,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                         log.error('SocketBuffer.checker', e)
                         try {
                             if (!buffer.isClosed()) {
-                                buffer.close()
+                                buffer.close(ClientException("Heartbeat failed"))
                             }
                         } catch (e: Exception) {
                             log.error('SocketBuffer.close', e)
@@ -187,12 +225,10 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             closed.store(1)
             checkTimer.cancel()
             for (buf in buffers) {
-                if (!buf.isClosed()) {
-                    try {
-                        buf.close()
-                    } catch (e: Exception) {
-                        log.error('SocketBuffer.close', e)
-                    }
+                try {
+                    buf.close(ClientException("Client closed before response"))
+                } catch (e: Exception) {
+                    log.error('SocketBuffer.close', e)
                 }
             }
         }
@@ -260,43 +296,38 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         }
     }
     public func transfer(message: Message): MessageFuture<Message> {
-        synchronized(closeLock) {
-            if (isClosed()) {
-                throw Exception('Client is closed')
-            }
-            transfer(index, message)
+        let connection = synchronized(closeLock) {
+            if (isClosed()) { throw ClientException("Client is closed") }
+            buffers[index]
         }
+        transfer(connection, message)
     }
     public func transfer(message: Message, timeout: Duration): ?Message {
-        let future: MessageFuture<Message>
-        synchronized(closeLock) {
-            if (isClosed()) {
-                return None
-            }
-            future = transfer(index, message)
+        let connection = synchronized(closeLock) {
+            if (isClosed()) { return None }
+            buffers[index]
         }
-        let result = future.tryGet(timeout)
-        if (result.isNone()) {
-            futures.remove(message.id)
-        }
-        result
+        transfer(connection, message, timeout)
     }
-    private func transfer(index: Int64, message: Message): MessageFuture<Message> {
-        transfer(buffers[index], message)
+    private func transfer(connection: ClientConnection, message: Message, timeout: Duration): ?Message {
+        let future = transfer(connection, message)
+        try { future.tryGet(timeout) }
+        finally { connection.pending.take(message.id) }
     }
-
-    internal func transfer(buffer: SocketBuffer, message: Message, once!: Bool = true): MessageFuture<Message> {
-        let future = MessageFuture<Message>()
-        if(once){
-            futures.add(message.id, future)
+    private func transfer(connection: ClientConnection, message: Message): MessageFuture<Message> {
+        let future = connection.pending.add(message.id)
+        try {
+            connection.buffer.transfer(message)
+            future
+        } catch (error: Exception) {
+            if (let Some(waiter) <- connection.pending.take(message.id)) { waiter.fail(error) }
+            throw error
         }
-        buffer.transfer(message)
-        future
     }
 
     public func transfer<T>(message: Message, executor: (Message) -> Unit): ListeningClient<T> where T <: DataFields<T> {
         let client: Client<T> = (this as Client<T>).getOrThrow()
-        ListeningClient<T>(buffers[0].clone(), client, message, executor)
+        ListeningClient<T>(buffers[0].buffer.clone(), client, message, executor)
     }
 }
 

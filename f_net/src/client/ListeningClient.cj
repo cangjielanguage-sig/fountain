@@ -28,7 +28,7 @@ public class ListeningClient<T> <: Resource where T <: DataFields<T> {
         private let message: Message,
         private let executor: (Message) -> Unit
     ){
-        client.transfer(buffer.load(), message, once: false)
+        buffer.load().transfer(message)
         this.future = spawn{
             while(!Thread.currentThread.hasPendingCancellation && let m <- Message.decode<T>(buffer.load())){
                 spawn{executor(m)}
