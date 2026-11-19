@@ -16,45 +16,59 @@ limitations under the License.
 package fountain::f_net
 
 import std.sync.Mutex
-import std.time.DateTime
+import std.time.MonoTime
 
 public class MessageFuture<DE> {
     private let mutex = Mutex()
     private var ref = None<DE>
     
+    private var failure = None<Exception>
+
     private let condition = synchronized(mutex){
         mutex.condition()
     }
     func set(data: DE): Unit {
         synchronized(mutex){
-            ref = data
-            condition.notify()
+            if (failure.isNone()) {
+                ref = data
+                condition.notifyAll()
+            }
         }
+    }
+    func fail(error: Exception): Unit {
+        synchronized(mutex) {
+            if (ref.isNone() && failure.isNone()) {
+                failure = Some(error)
+                condition.notifyAll()
+            }
+        }
+    }
+    private func result(): ?DE {
+        if (let Some(error) <- failure) { throw error }
+        ref
     }
     public func get(): DE {
         synchronized(mutex){
-            while (ref.isNone()) {
+            while (ref.isNone() && failure.isNone()) {
                 condition.wait()
             }
-            ref.getOrThrow()
+            result().getOrThrow()
         }
     }
     public func tryGet(): ?DE {
         synchronized(mutex){
-            ref
+            result()
         }
     }
     public func tryGet(timeout: Duration): ?DE {
         synchronized(mutex){
-            if (let Some(d) <- ref) {
-                d
-            } else {
-                let deadline = DateTime.now() + timeout
-                while (ref.isNone() && DateTime.now() < deadline) {
-                    condition.wait(timeout: deadline - DateTime.now())
-                }
-                ref
+            let deadline = MonoTime.now() + timeout
+            while (ref.isNone() && failure.isNone()) {
+                let remaining = deadline - MonoTime.now()
+                if (remaining <= Duration.Zero) { break }
+                condition.wait(timeout: remaining)
             }
+            result()
         }
     }
 }
