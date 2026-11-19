@@ -66,24 +66,17 @@ public class Executor<T> {
     public func call(task: () -> ?T): ExecutorFuture<T> {
         let future = ExecutorFuture<T>(mutex, condition)
         q.add({=> 
-            synchronized(mutex){
-                future.result = task()
-                condition.notifyAll()
-            }
+            future.complete(task())
         })
         future
     }
     public func call(timeout: Duration, task: () -> ?T): ExecutorFuture<T> {
         let future = ExecutorFuture<T>(mutex, condition)
         let added = q.add({=> 
-            synchronized(mutex){
-                future.result = task()
-                future.finished = true
-                condition.notifyAll()
-            }
+            future.complete(task())
         }, timeout)
         if(!added){
-            future.finished = true
+            future.complete(None)
         }
         future
     }
@@ -97,15 +90,10 @@ public class Executor<T> {
         let future = ExecutorFuture<T>(mutex, condition)
         limiter.exec{
             let added = q.tryAdd({=> 
-                synchronized(mutex){
-                    future.result = task()
-                    future.finished = true
-                    condition.notifyAll()
-                }
+                future.complete(task())
             })
             if(!added){
-                future.result = default
-                future.finished = true
+                future.complete(default)
             }
         }
         future
@@ -118,6 +106,14 @@ public class ExecutorFuture<T> {
     var result = None<T>
     var finished = false
     ExecutorFuture(private let mutex: Mutex, private let condition: Condition){}
+    // 业务任务在工作线程上执行；只在发布结果和唤醒等待者时持锁。
+    func complete(value: ?T): Unit {
+        synchronized(mutex) {
+            result = value
+            finished = true
+            condition.notifyAll()
+        }
+    }
     public func get(): T {
         get(None<T>).getOrThrow()
     }
@@ -142,7 +138,7 @@ public class ExecutorFuture<T> {
         default()
     }
     public func tryGet(): ?T {
-        result
+        synchronized(mutex) { result }
     }
     public func get(timeout: Duration): ?T {
         synchronized(mutex){

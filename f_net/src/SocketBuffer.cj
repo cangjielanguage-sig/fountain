@@ -47,14 +47,17 @@ public class SocketBuffer <: IOStream & Resource {
         spawn {
             while (stop.stopped.load() == 0) {
                 if(let Some(fn) <- queue.remove(Duration.millisecond * 50)){
+                    var failed = false
                     beginFrame()
                     try {
                         fn()
                     } catch (e: Exception) {
+                        failed = true
                         log.warn('SocketBuffer write error', e)
                     } finally {
                         endFrame()
                     }
+                    if (failed) { close() }
                 }
             }
         }
@@ -70,10 +73,15 @@ public class SocketBuffer <: IOStream & Resource {
         }
     }
     public func transfer(message: Message): Unit {
-        queue.add({=> 
+        let writeFrame = {=>
             message.encode().copy(to: this, closeToOnEnd: false)
             flush()
-        })
+        }
+        // 满队列中的发送者也要能观察到连接已关闭。
+        while (!isStopped()) {
+            if (queue.add(writeFrame, Duration.millisecond * 50)) { return }
+        }
+        throw IllegalStateException("Socket buffer is closed")
     }
     public func read(bytes: Array<Byte>): Int64 {
         let s = socket.read(bytes)
