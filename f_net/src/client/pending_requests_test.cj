@@ -19,7 +19,7 @@ public class PendingRequestsTest {
             try { a.get(); false } catch (e: ClientException) { e.message == "disconnected" }
         }
         failed.close(ClientException("disconnected"))
-        @Assert(wait.tryGet(Duration.second) == Some(true))
+        @Assert(wait.get(Duration.second))
         @AssertThrows[ClientException](b.tryGet(Duration.second))
         @AssertThrows[ClientException](failed.add(id))
         @Assert(failed.take(id).isNone())
