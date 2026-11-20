@@ -17,7 +17,7 @@ f_chart
 
 ## 安装
 
-模块随 fountain 仓库发布，版本与仓库一致（当前 `1.3.1019`）：
+模块随 fountain 仓库发布，版本与仓库一致（当前 `1.3.1020`）：
 
 ```toml
 [dependencies]
