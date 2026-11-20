@@ -101,12 +101,11 @@ public class HMACDigest <: Digest {
      */
     public HMACDigest(private let hmac: HMAC) {}
     /**
-     * @param key 签名密钥
+     * @param key 签名密钥，不能为空
      * @param algorithm HMAC算法类型 stdx.crypto.digest.HashType
+     * @throws JWTException 密钥为空时抛 "HMAC key must not be empty"
      */
-    public init(key: Array<Byte>, algorithm: HashType) {
-        this(HMAC(key, algorithm))
-    }
+    public init(key: Array<Byte>, algorithm: HashType)
     public prop size: Int64 {
         get() {
             hmac.size
@@ -541,6 +540,44 @@ public interface JwtIdCache<T> where T <: Equatable<T> {
 - `HeapJwtIdCache<T>`
     - `public class HeapJwtIdCache<T> <: JwtIdCache<T> where T <: ToString & Equatable<T>`
     - 基于`fountain::f_cache.HeapCache`
+
+## 签名与验签约定
+
+### 算法入口与 `alg` 头
+
+`JWT` 上的 13 个算法入口都会把算法名写进签名出的 token 头，且编码时以实际算法为准（调用方手设的 `alg` 会被覆盖）：
+
+| 入口 | `alg` 头 | 入口 | `alg` 头 |
+|---|---|---|---|
+| `hmacMD5` | `HM5` | `ecdsa224` | `ES224` |
+| `hmacSHA1` | `HS1` | `ecdsa256` | `ES256` |
+| `hmacSHA224` | `HS224` | `ecdsa384` | `ES384` |
+| `hmacSHA256` | `HS256` | `ecdsa512` | `ES512` |
+| `hmacSHA384` | `HS384` | `rsa256` | `RS256` |
+| `hmacSHA512` | `HS512` | `rsa384` | `RS384` |
+| | | `rsa512` | `RS512` |
+
+- HS256 / HS384 / HS512 分别使用 SHA256 / SHA384 / SHA512 摘要。**1.3.1019 及更早版本错用 SHA1**，
+  旧版本签发的这三类 token 需要重签，本模块不提供过渡兼容。
+- `SM2SignAlgo` 只作为签名包装器存在，`JWT` 没有 `sm2()` 入口。
+
+### 验签必须配算法与密钥
+
+`JWTVerifier` 继承 `JWT`，验签前必须用对应入口把算法与密钥配置到同一个 verifier 上：
+
+```cj
+let verifier = JWT.verifier(token).hmacSHA256(key)   // HMAC：共享密钥
+verifier.verifySign()
+
+JWT.verifier(token).rsa256(publicKeyPem: pub).verifySign()   // RSA/ECDSA：公钥
+```
+
+- 未配置算法：`verifySign()` 抛 `JWTException("sign algo was not be specified")`。
+- token 头的 `alg` 与已配置算法不一致：`verifySign()` 抛 `JWTException("sign algo mismatch: token alg is '…', configured algo is '…'")`，
+  该校验先于实际验签，不会因为密钥不同而退化成返回 `false`。
+- 在 verifier 上配置算法不会覆盖 token 解析出的头，`getHeader("alg")` 始终是 token 自带的算法名。
+- 算法一致但密钥（公钥）不匹配：返回 `false`，不抛异常。
+- HMAC 密钥不能为空，空密钥抛 `JWTException("HMAC key must not be empty")`。
 
 ## 异常
 
