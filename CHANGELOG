@@ -1,4 +1,31 @@
+2026-11-20
+    chore(release): 所有模块 cjpm.toml（含 fdemo / frpcdemo / fmqdemo / fdbmdemo / fmcpdemo /
+      fjsonrpcdemo / scripts 工作区）与 f_version/src/FountainVersion.cj 由 1.3.1019 升到 1.3.1020
+    docs(依赖图): 按最新依赖重生成依赖图与矩阵图——f_uring 增 f_io 依赖（declared 377 / used 336），
+      自检全绿
+    docs(README): f_chart / f_svg / f_llm 的当前版本号同步到 1.3.1020
+    fix(f_orm): 结果集类型名只接受 Sql* 抽象名与仓颉类型名
+    fix(f_uring): 修复测试套件编译失败并公开 IoUringFuture 构造器；cjpm.toml 增加 fountain::f_io 依赖
+    fix(f_jwt): 修正签名摘要映射与验签算法一致（HS256/384/512 对应 SHA256/384/512）
+    fix(f_data): @DataAssist 归一化父接口，兼容 SDK local mode
+    fix(fdbm): 集成测试补客户端驱动注册名
+    fix(fmq): 段缺失语义与 stats 异常映射，适配 f_io 持久边界；readAt 的 resume 参数文档同步
+    fix(f_egraph): QueuedClosureTask 批合并与队列用例修复
+    fix(f_concurrent): 独立池任务在结果锁之外执行
+    chore(cjpm): postgres_driver 依赖切到版本号配置；f_mvc 清理无效的 RequestMethod 文件
+    docs(review): 归档 f_mq 基础层全树审计报告
+2026-11-19
+    fix(f_net): 连接关闭时结算挂起请求——断连槽位重开后再发新请求，中断写按 pending 精确退休，
+      新增断连回归用例（含 f_concurrent 池任务与 result lock 隔离）
+2026-11-18
+    chore(cjpm): f_mcp / fprobe / f_jsonrpc 的 category 配置调整
+    docs(agents): 新增 OpenSpec 系列技能文档，指定 openspec-target 为 codebuddy own-files
 2026-11-13
+    fix(f_app): pub 遍历模块时跳过隐藏目录（.worktrees 等）——先按目录名跳过，再改为按路径段过滤
+      （walk 回调返回 false 会中断整次遍历），避免把工作树旧副本当成待发布模块
+    docs(f_jit): README 补 recursive 作右值（值化自引用）用法，并重排中英表格格式
+    fix(f_pool): 按平台条件导入信号相关符号（Windows 排除 SIGIOT / SIGSEGV）
+    fix(fdemo): Windows 脚本改用 fboot.exe，postgres_driver 切到 Git 源
     chore(release): 所有模块 cjpm.toml（含 fdemo / frpcdemo / fmqdemo / fdbmdemo / fmcpdemo /
       fjsonrpcdemo / scripts 工作区）与 f_version/src/FountainVersion.cj 由 1.3.18 升到 1.3.1019
     docs(skills): 发布口径同步——f_a2a / f_llm 随 [include] 发布、f_hydra 登记，[detention] 仅剩 fleet
