@@ -71,9 +71,12 @@ class QueuedClosureTask_test {
         task.submit(ev('p2-b', 2))
         task.submit(ev('p0', 0))
 
+        // p0 在提交时立即执行，先出现在 dispatcher
+        @Expect(recorder.events.size, 1)
+        @Expect(recorder.events[0].name, 'p0')
+        @Expect(task.drain(), 3)        // p1 批 + 两条 2 号
         let seen = names(recorder)
         @Expect(seen[0], 'p0')          // 0 号先执行（提交时）
-        @Expect(task.drain(), 3)        // p1 批 + 两条 2 号
         @Expect(seen[1], 'p1')          // 1 号同名合并批，name 取批内首条
         @Expect(seen[2], 'p2-a')        // 同优先级按 birth（提交顺序）
         @Expect(seen[3], 'p2-b')
@@ -84,8 +87,8 @@ class QueuedClosureTask_test {
         let recorder = RecordingDispatcher()
         let task = newTask(recorder)
         task.submit(ev('a', 1))
-        task.submit(ev('b', 1))
-        task.submit(ev('c', 1))
+        task.submit(ev('a', 1))
+        task.submit(ev('a', 1))
 
         @Expect(task.drain(), 1)
         @Expect(recorder.events.size, 1)
@@ -203,7 +206,9 @@ class QueuedClosureTask_test {
                 }
                 if(payload == 'slow'){
                     match(holder.task){
-                        case Some(target) => target.submit(ev('slow', 0))
+                        // 同名（slow）才能顶替外层；载荷用 urgent 避免任务体再次提交自身
+                        case Some(target) => target.submit(DataEvent(eventType: EventType.Task,
+                            category: 'c', tag: 't', name: 'slow', data: 'urgent', priority: 0))
                         case None => ()
                     }
                     holder.slow++
