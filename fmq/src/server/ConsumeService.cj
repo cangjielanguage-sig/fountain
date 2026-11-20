@@ -182,7 +182,15 @@ protected class ConsumeService <: BackupStateSource {
                 backlog.add(group, 0)
             }
             for ((queueIndex, log_) in locals) {
-                if (log_.segmentsOrEmpty().size == 0) {
+                // 边界损坏/目录丢失时 segmentsOrEmpty 抛 QueueCorruptionException，
+                // 必须映射成 INTERNAL，不能把原始异常抛给调用方（A61）。
+                let segs = try {
+                    log_.segmentsOrEmpty()
+                } catch (e: QueueCorruptionException) {
+                    throw MQServiceException(MQErrorCode.INTERNAL,
+                        "stats scan failed on ${name}/${queueIndex}: ${e.message}")
+                }
+                if (segs.size == 0) {
                     // 空队列也至少有一个段：没有段说明段被删或目录不可读，不能输出 backlog=0（A61）
                     log.warn("stats of ${name}/${queueIndex} has no readable segment, report INTERNAL")
                     throw MQServiceException(MQErrorCode.INTERNAL,

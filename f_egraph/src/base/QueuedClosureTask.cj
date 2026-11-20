@@ -222,18 +222,19 @@ public class QueuedClosureTask <: ClosureTask {
                 let priority = head.event.priority
                 let name = head.event.name
                 if(priority <= 1){
-                    while(true){
-                        match(queue.peek()){
-                            case Some(top) =>
-                                if(top.event.priority != priority || top.event.name != name){
-                                    break
-                                }
-                                match(queue.remove()){
-                                    case Some(item) => batch.add(item.event)
-                                    case None => break
-                                }
-                            case None => break
+                    // 同优先级 + 同名的事件全部合并为一批（不要求队列中相邻）
+                    let matched = ArrayList<QueueEntry>()
+                    for(item in queue.toArray()){
+                        if(item.event.priority == priority && item.event.name == name){
+                            matched.add(item)
                         }
+                    }
+                    let entries = matched.toArray()
+                    sortBySequenceAsc(entries)
+                    for(item in entries){
+                        let target = item.sequence
+                        queue.removeIf({ entry => entry.sequence == target })
+                        batch.add(item.event)
                     }
                 }else{
                     match(queue.remove()){
@@ -298,6 +299,19 @@ public class QueuedClosureTask <: ClosureTask {
             let current = entries[index]
             var position = index - 1
             while(position >= 0 && entries[position].sequence < current.sequence){
+                entries[position + 1] = entries[position]
+                position--
+            }
+            entries[position + 1] = current
+        }
+    }
+
+    /** 按入队序号升序（批内保持提交顺序） */
+    private static func sortBySequenceAsc(entries: Array<QueueEntry>): Unit {
+        for(index in 1..entries.size){
+            let current = entries[index]
+            var position = index - 1
+            while(position >= 0 && entries[position].sequence > current.sequence){
                 entries[position + 1] = entries[position]
                 position--
             }
