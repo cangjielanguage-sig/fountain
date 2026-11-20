@@ -17,8 +17,10 @@ package fountain::f_pool.diagnostics
 
 import std.env.{atExit, exit, getStdErr}
 import std.sync.{AtomicBool, AtomicInt64}
+@When[os != "Windows"]
 import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal, SIGIOT, SIGSEGV}
-
+@When[os == "Windows"]
+import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal}
 /**
  * f_pool 的运行时统计 + 致命信号取证（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
  *

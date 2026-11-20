@@ -280,7 +280,12 @@ public class IoUringPromise<T> <: CompletionSlot {
 public class IoUringFuture<T> {
     private let promise: IoUringPromise<T>
 
-    init(promise: IoUringPromise<T>) {
+    /**
+     * 构造 Future
+     *
+     * @param promise 已注册到 ring 完成槽位（`CompletionRegistry`）的 Promise
+     */
+    public init(promise: IoUringPromise<T>) {
         this.promise = promise
     }
 

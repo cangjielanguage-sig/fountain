@@ -26,6 +26,14 @@ Configure the environment variable: `export CANGJIE_STDX_DYNAMIC_PATH=/path/to/d
   (decoding an unregistered type across modules fails; generic classes are not registered)
 - Attribute names are case insensitive and may be written in any case; there is also the companion annotation `@DataExclude[prop|hash|equal|compare|tostring|field]`
   to exclude a member from the corresponding capability
+- The expansion **normalizes the supertype list of the decorated class**: an exactly duplicated supertype is kept once,
+  and `Equatable<T>` is dropped when `Comparable<T>` is present (`Comparable` already implies `Equatable`). So
+  `class A <: Comparable<A> & Equatable<A>` together with `@DataAssist[equal compare]` is legal, and the class still
+  implements both interfaces. Reason: since SDK 1.3.0 the std library ships local mode — two paths reaching
+  `Equatable<A>` make the compiler demand a `@local!` `!=` (which cannot be written in normal mode), and listing the
+  same supertype twice is rejected outright with `duplicate interface`
+- `compare` compares fields in declaration order and the first non-equal field decides the returned `Ordering`
+  (before 2026-11-20 the expansion never assigned `result`, so `compare` always returned `EQ`)
   ```cj
   //Assume the class
   @DataAssist[props]

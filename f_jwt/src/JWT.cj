@@ -32,6 +32,9 @@ sealed abstract class JWT {
     let headers = HashMap<String, String>()
     let payload = HashMap<String, Any>()
     var signAlgo: SignAlgo = NoneSignAlgo.INSTANCE
+    /// 已配置的签名算法名，与 headers 里的 alg 解耦：
+    /// 编码器据此写 alg 头，验签器据此比对 token 自带的 alg。
+    var algoName: String = ""
 
     protected init() {}
 
@@ -39,12 +42,13 @@ sealed abstract class JWT {
         headers[name] = value
         this
     }
-    private func HM5(): This {
-        header("alg", "HM5")
+    private func useAlgo(name: String, algo: SignAlgo): This {
+        signAlgo = algo
+        algoName = name
+        this
     }
     public func hmacMD5(key: Array<Byte>): This {
-        signAlgo = DigestSignAlgo(HMACDigest(key, HashType.MD5))
-        HM5()
+        useAlgo("HM5", DigestSignAlgo(HMACDigest(key, HashType.MD5)))
     }
     public func hmacMD5ByBase64Key(key: String): This {
         hmacMD5(fromBase64(key))
@@ -52,12 +56,8 @@ sealed abstract class JWT {
     public func hmacMD5ByHexKey(key: String): This {
         hmacMD5(fromHex(key))
     }
-    private func HS1(): This {
-        header("alg", "HS1")
-    }
     public func hmacSHA1(key: Array<Byte>): This {
-        signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
-        HS1()
+        useAlgo("HS1", DigestSignAlgo(HMACDigest(key, HashType.SHA1)))
     }
     public func hmacSHA1ByBase64Key(key: String): This {
         hmacSHA1(fromBase64(key))
@@ -65,12 +65,8 @@ sealed abstract class JWT {
     public func hmacSHA1ByHexKey(key: String): This {
         hmacSHA1(fromHex(key))
     }
-    private func HS224(): This {
-        header("alg", "HS224")
-    }
     public func hmacSHA224(key: Array<Byte>): This {
-        signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA224))
-        HS224()
+        useAlgo("HS224", DigestSignAlgo(HMACDigest(key, HashType.SHA224)))
     }
     public func hmacSHA224ByBase64Key(key: String): This {
         hmacSHA224(fromBase64(key))
@@ -78,12 +74,8 @@ sealed abstract class JWT {
     public func hmacSHA224ByHexKey(key: String): This {
         hmacSHA224(fromHex(key))
     }
-    private func HS256(): This {
-        header("alg", "HS256")
-    }
     public func hmacSHA256(key: Array<Byte>): This {
-        signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
-        HS256()
+        useAlgo("HS256", DigestSignAlgo(HMACDigest(key, HashType.SHA256)))
     }
     public func hmacSHA256ByBase64Key(key: String): This {
         hmacSHA256(fromBase64(key))
@@ -91,12 +83,8 @@ sealed abstract class JWT {
     public func hmacSHA256ByHexKey(key: String): This {
         hmacSHA256(fromHex(key))
     }
-    private func HS384(): This {
-        header("alg", "HS384")
-    }
     public func hmacSHA384(key: Array<Byte>): This {
-        signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
-        HS384()
+        useAlgo("HS384", DigestSignAlgo(HMACDigest(key, HashType.SHA384)))
     }
     public func hmacSHA384ByBase64Key(key: String): This {
         hmacSHA384(fromBase64(key))
@@ -104,12 +92,8 @@ sealed abstract class JWT {
     public func hmacSHA384ByHexKey(key: String): This {
         hmacSHA384(fromHex(key))
     }
-    private func HS512(): This {
-        header("alg", "HS512")
-    }
     public func hmacSHA512(key: Array<Byte>): This {
-        signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
-        HS512()
+        useAlgo("HS512", DigestSignAlgo(HMACDigest(key, HashType.SHA512)))
     }
     public func hmacSHA512ByBase64Key(key: String): This {
         hmacSHA512(fromBase64(key))
@@ -117,11 +101,8 @@ sealed abstract class JWT {
     public func hmacSHA512ByHexKey(key: String): This {
         hmacSHA512(fromHex(key))
     }
-    private func ES224(): This {
-        header("alg", "ES224")
-    }
     public func ecdsa224(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA224(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA224(),
@@ -130,14 +111,11 @@ sealed abstract class JWT {
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
-        ES224()
-    }
-    private func ES256(): This {
-        header("alg", "ES256")
+        useAlgo("ES224", algo)
     }
 
     public func ecdsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA256(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA256(),
@@ -146,13 +124,10 @@ sealed abstract class JWT {
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
-        ES256()
-    }
-    private func ES384(): This {
-        header("alg", "ES384")
+        useAlgo("ES256", algo)
     }
     public func ecdsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA384(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA384(),
@@ -161,13 +136,10 @@ sealed abstract class JWT {
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
-        ES384()
-    }
-    private func ES512(): This {
-        header("alg", "ES512")
+        useAlgo("ES384", algo)
     }
     public func ecdsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA512(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA512(),
@@ -176,14 +148,11 @@ sealed abstract class JWT {
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
-        ES512()
-    }
-    private func RS256(): This {
-        header("alg", "RS256")
+        useAlgo("ES512", algo)
     }
     public func rsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
         padType!: PadOption = PKCS1): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA256(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
             case (Some(pri), Option<String>.None) => RSASignAlgo(SHA256(), privateKey: RSAPrivateKey.decodeFromPem(pri),
@@ -195,14 +164,11 @@ sealed abstract class JWT {
             )
             case _ => throw JWTException("no key of RSA is been specified")
         }
-        RS256()
-    }
-    private func RS384(): This {
-        header("alg", "RS384")
+        useAlgo("RS256", algo)
     }
     public func rsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
         padType!: PadOption = PKCS1): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA384(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
             case (Some(pri), Option<String>.None) => RSASignAlgo(SHA384(), privateKey: RSAPrivateKey.decodeFromPem(pri),
@@ -214,14 +180,11 @@ sealed abstract class JWT {
             )
             case _ => throw JWTException("no key of RSA is been specified")
         }
-        RS384()
-    }
-    private func RS512(): This {
-        header("alg", "RS512")
+        useAlgo("RS384", algo)
     }
     public func rsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
         padType!: PadOption = PKCS1): This {
-        signAlgo = match ((privateKeyPem, publicKeyPem)) {
+        let algo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA512(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
             case (Some(pri), Option<String>.None) => RSASignAlgo(SHA512(), privateKey: RSAPrivateKey.decodeFromPem(pri),
@@ -233,7 +196,7 @@ sealed abstract class JWT {
             )
             case _ => throw JWTException("no key of RSA is been specified")
         }
-        RS512()
+        useAlgo("RS512", algo)
     }
     public func keyId(keyId: String): This {
         header("kid", keyId)
@@ -324,6 +287,10 @@ public class JWTEncoder <: JWT {
         var json = JsonObject()
         for ((k, v) in headers) {
             json.add(k, JsonString(v))
+        }
+        // 算法名以实际配置的 signAlgo 为准，覆盖调用方手设的 alg，避免签出来的 token 声明与实际算法不符
+        if (algoName.size > 0) {
+            json.add("alg", JsonString(algoName))
         }
         let headerJson = json.toString()
         let headerBase64 = toBase64(headerJson)
@@ -472,6 +439,14 @@ public class JWTVerifier <: JWT {
         }
     }
     public func verifySign(): Bool {
+        // 先比对算法：token 声明的 alg 必须与调用方配置的算法一致，避免算法混淆
+        if (algoName.size > 0) {
+            let tokenAlg = headers.get("alg") ?? ""
+            if (tokenAlg != algoName) {
+                throw JWTException("sign algo mismatch: token alg is '${tokenAlg}', configured algo is '${algoName}'")
+            }
+        }
+        // 未配置算法时 algoName 为空，落到 NoneSignAlgo 抛 "sign algo was not be specified"
         signAlgo.verify(bytesForSign(headerBytes, payloadBytes), signBytes)
     }
     /**

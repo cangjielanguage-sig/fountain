@@ -36,6 +36,8 @@ import fountain::f_macros.*
  * 如果@DataAssist[fields]修饰的是泛型类，而泛型形参是实例成员变量的类型，则会编译错误。
  * 因为实例成员变量的类型会作为fountain.data.{ReadonlyField, MutableField}类型的泛型实参，而@DataAssist[fields]展开用它们的实例数组声明了静态成员变量。
  * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
+ * 展开末尾会归一化被修饰类的父接口列表（重复项去重、`Comparable<T>` 存在时删掉冗余的 `Equatable<T>`），
+ * 所以类可以同时显式实现 `Comparable<T>` 和 `Equatable<T>`；详见 `normalizeSuperTypes`。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     let (decl, index) = parseDeclFragment(input)
@@ -133,6 +135,7 @@ private func assist(attr: Tokens, input: Decl): Tokens {
             generate('compare', d, excludeCompare, generateCompare)
             generate('tostring', d, excludeToString, generateToString)
             generate('fields', d, excludeFields, generateToFields)
+            normalizeSuperTypes(d)
             d.toTokens()
         case d: MacroExpandDecl => 
             var ind = d
@@ -146,6 +149,58 @@ private func assist(attr: Tokens, input: Decl): Tokens {
             diagReport(ERROR, input.toTokens(), 'input must be class decl', '')
             throw IllegalArgumentException("input must be a class decl")
     }
+}
+
+/**
+ * 归一化被修饰类的父接口列表，消除重复路径。
+ *
+ * 必要性（SDK 1.3.0-alpha，nightly 20261110 起 std 合入 local mode）：std 里 `Comparable<T> <: Equatable<T>`。
+ * 一个类同时列出 `Comparable<X>` 与 `Equatable<X>` 时，`Equatable<X>` 有两条继承路径，编译器会要求实现
+ * 带 `@local!` 模态的 `!=`（普通模式写不出来，补 `@local!` 又报 `is not a subtype of`）；同一父接口列两遍
+ * 则直接报 `duplicate interface`。宏无条件追加父接口，所以这两种形态都必须在这里归一化掉。
+ *
+ * 只删冗余声明，不改变类最终实现的接口集合：`Comparable<X>` 存在时删掉 `Equatable<X>`，类仍是二者的实例。
+ * 因此用户显式写 `<: Comparable<X> & Equatable<X>` 配 `@DataAssist` 合法。
+ */
+private func normalizeSuperTypes(decl: ClassDecl): Unit {
+    let superTypes = decl.superTypes
+    if (superTypes.size < 2) {
+        return
+    }
+    // `Comparable<X>` 隐含的 `Equatable<X>`：删掉同名声明，避免两条路径
+    let implied = HashSet<String>()
+    let prefix = 'Comparable<'
+    for (t in superTypes) {
+        let text = superTypeText(t)
+        if (text.startsWith(prefix)) {
+            implied.add('Equatable<' + text[prefix.size .. text.size])
+        }
+    }
+    let kept = ArrayList<TypeNode>()
+    let seen = HashSet<String>()
+    for (t in superTypes) {
+        let text = superTypeText(t)
+        if (seen.contains(text) || implied.contains(text)) {
+            continue
+        }
+        seen.add(text)
+        kept.add(t)
+    }
+    if (kept.size < superTypes.size) {
+        decl.superTypes = kept
+    }
+}
+
+/** 父接口的规范化文本：拼上词法单元的值并跳过换行 / 注释，使 `Comparable<X>` 与 `Comparable< X >` 视为同一项。 */
+private func superTypeText(t: TypeNode): String {
+    var text = ''
+    for (token in t.toTokens()) {
+        if (token.kind == NL || token.kind == COMMENT) {
+            continue
+        }
+        text += token.value
+    }
+    text
 }
 
 func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
@@ -326,7 +381,8 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     var cmp = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        cmp += quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
+        // 必须把比较结果写回 `result`：此前只求值不赋值，`compare` 对任何输入都返回 EQ（`@DataAssist[compare]` 实际失效）
+        cmp += quote(result = f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
             if(result != EQ){
                 return result
             }

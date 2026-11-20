@@ -17,11 +17,22 @@ package fountain::f_jwt
 
 import std.crypto.digest.Digest
 import stdx.crypto.digest.{HMAC, HashType}
+import fountain::f_jwt.exception.JWTException
 
 public class HMACDigest <: Digest {
     public HMACDigest(private let hmac: HMAC) {}
     public init(key: Array<Byte>, algorithm: HashType) {
-        this(HMAC(key, algorithm))
+        this(HMACDigest.create(key, algorithm))
+    }
+    /**
+     * 空密钥签出的 token 谁都能伪造，属配置错误，这里统一转成模块自己的异常，
+     * 不让 stdx 的 CryptoException 漏给调用方。
+     */
+    private static func create(key: Array<Byte>, algorithm: HashType): HMAC {
+        if (key.size == 0) {
+            throw JWTException("HMAC key must not be empty")
+        }
+        HMAC(key, algorithm)
     }
     public prop size: Int64 {
         get() {

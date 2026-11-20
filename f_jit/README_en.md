@@ -49,6 +49,7 @@ memory, and evicts the unit from the compile cache (recompiling the same source 
 ```cangjie
 f.close()                            // unit-level; later calls on f throw JitException(ErrCode.CALL_CONTRACT)
 ```
+
 A bare `close()` does **not wait** for in-flight calls: if any are still active it returns `false`
 immediately and the unit goes back to usable. Pass `close(timeoutMs)` to drain.
 
@@ -56,17 +57,18 @@ immediately and the unit goes back to usable. Pass `close(timeoutMs)` to drain.
 
 ## 2. API
 
-| Type | Purpose | Key members |
-|---|---|---|
-| `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, **`registerInterface<I>()`**, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
-| `CompileOptions` | Compile options | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics` |
-| `JitFunction` | Compiled unit / callable object (implements `std.core.Resource`) | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()` / `close(timeoutMs): Bool` (entry = unload unit; wrapper = release this closure), `isClosed()` |
-| `JitException` | Runtime failure (`base` package) | `code` (`ErrCode`), `site` (line:column / byte offset), `report` |
-| `CompileCache` | Compile cache (key includes `strictFp`/`verMajor`) | `lookup`, `reset`, `runs` |
-| `CallContext` | Call context | `deadline` (interrupts at safety points → `InterruptedException`) |
-| `PredefinedFunction` / `ClassDescriptor` / `PublicCtor` / `PublicField` | Host registration surface | Functions/classes/ctors/fields callable from the dialect |
-| `DbgDump` | Variable dump on failure (name/value/type) | Triggered by the diagnostics sink |
-| `JitReport` | Execution report (incl. `-1` DEOPT semantics) | Consumed by the bridge inside `call` |
+
+| Type                                                                    | Purpose                                                         | Key members                                                                                                                                                            |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Compiler`                                                              | Facade: register host capabilities + compile                    | `registerType<T>()`, **`registerInterface<I>()`**, `registerClass(desc)`, `registerFunction(f)`, `compile(src)`                                                        |
+| `CompileOptions`                                                        | Compile options                                                 | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics`                                                           |
+| `JitFunction`                                                           | Compiled unit / callable object (implements`std.core.Resource`) | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()` / `close(timeoutMs): Bool` (entry = unload unit; wrapper = release this closure), `isClosed()` |
+| `JitException`                                                          | Runtime failure (`base` package)                                | `code` (`ErrCode`), `site` (line:column / byte offset), `report`                                                                                                       |
+| `CompileCache`                                                          | Compile cache (key includes`strictFp`/`verMajor`)               | `lookup`, `reset`, `runs`                                                                                                                                              |
+| `CallContext`                                                           | Call context                                                    | `deadline` (interrupts at safety points → `InterruptedException`)                                                                                                     |
+| `PredefinedFunction` / `ClassDescriptor` / `PublicCtor` / `PublicField` | Host registration surface                                       | Functions/classes/ctors/fields callable from the dialect                                                                                                               |
+| `DbgDump`                                                               | Variable dump on failure (name/value/type)                      | Triggered by the diagnostics sink                                                                                                                                      |
+| `JitReport`                                                             | Execution report (incl.`-1` DEOPT semantics)                    | Consumed by the bridge inside`call`                                                                                                                                    |
 
 Packages (`fountain::f_jit.*`): `base` (contracts, error codes), `bytecode` (`.fbc` encode/decode/load),
 `compiler` (front-end + lowering), `runtime` (interpreter, handle table, helpers), `backend` (two native
@@ -102,12 +104,13 @@ main() {
 }
 ```
 
-| Aspect | Rule |
-|---|---|
-| Expansion | the class stays **unchanged**; one package-level `let jitBindEnroll_<Class> = enrollOf<Class>(JitBindings(...))` is generated — no declarations injected, no thunks |
-| Covered | instance methods → `PublicMethod`; instance fields (`var`/`let`) → getter (`var` also setter); properties (`prop`/`mut prop`) → getter + `set<Name>`; each `init` → one `PublicCtor`; **static functions / read-only static fields / read-only static properties** → `PredefinedFunction` |
-| Not covered | private members, generic methods (WARNING), `static var` and `static mut prop` (permanently excluded, WARNING), members marked `@IgnoreJitBinding` |
-| Registration | `Compiler.registerType<T>()` / `registerInterface<I>()` pick up the macro's registration when `bindings` is omitted |
+
+| Aspect       | Rule                                                                                                                                                                                                                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expansion    | the class stays**unchanged**; one package-level `let jitBindEnroll_<Class> = enrollOf<Class>(JitBindings(...))` is generated — no declarations injected, no thunks                                                                                                                           |
+| Covered      | instance methods →`PublicMethod`; instance fields (`var`/`let`) → getter (`var` also setter); properties (`prop`/`mut prop`) → getter + `set<Name>`; each `init` → one `PublicCtor`; **static functions / read-only static fields / read-only static properties** → `PredefinedFunction` |
+| Not covered  | private members, generic methods (WARNING),`static var` and `static mut prop` (permanently excluded, WARNING), members marked `@IgnoreJitBinding`                                                                                                                                             |
+| Registration | `Compiler.registerType<T>()` / `registerInterface<I>()` pick up the macro's registration when `bindings` is omitted                                                                                                                                                                           |
 
 **Interfaces must be annotated**: reflection cannot `apply` abstract methods, so an unannotated interface
 makes `registerInterface<I>()` raise `RegistrationException`. Parent-interface methods are merged at
@@ -166,11 +169,12 @@ public func jitSignatures(): Unit {}        // the function itself is untouched;
 
 ### 2.2 The three registration entries: `registerType` / `registerInterface` / `registerClass`
 
-| Entry | For | Constraint | Binding source | Guidance |
-|---|---|---|---|---|
-| `registerType<T>()` | **classes** | `where T <: Object` | `@JitBind`'s package-init registration (optional `bindings` **merge** and override individual members); without the macro it falls back to reflection | **Preferred**: annotate the class with `@JitBind`, register with no arguments |
-| `registerInterface<I>()` | **interfaces** | **no** `T <: Object` constraint | **requires** `@JitBind` (reflection cannot `apply` abstract methods) | Always annotate interfaces; parent-interface methods are merged at registration |
-| `registerClass(desc)` | any class (including ones you cannot annotate) | must supply a full `ClassDescriptor` | hand-written `PublicField` / `PublicMethod` / `PublicCtor` | only when macros/reflection are not an option |
+
+| Entry                    | For                                            | Constraint                          | Binding source                                                                                                                                        | Guidance                                                                        |
+| ------------------------ | ---------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `registerType<T>()`      | **classes**                                    | `where T <: Object`                 | `@JitBind`'s package-init registration (optional `bindings` **merge** and override individual members); without the macro it falls back to reflection | **Preferred**: annotate the class with `@JitBind`, register with no arguments   |
+| `registerInterface<I>()` | **interfaces**                                 | **no** `T <: Object` constraint     | **requires** `@JitBind` (reflection cannot `apply` abstract methods)                                                                                  | Always annotate interfaces; parent-interface methods are merged at registration |
+| `registerClass(desc)`    | any class (including ones you cannot annotate) | must supply a full`ClassDescriptor` | hand-written`PublicField` / `PublicMethod` / `PublicCtor`                                                                                             | only when macros/reflection are not an option                                   |
 
 #### `registerType<T>()` — reflection-based auto registration (best with `@JitBind`)
 
@@ -244,11 +248,12 @@ Bytecode is **architecture-neutral**.
 
 **② Execute (three engines)**:
 
-| Engine | Implementation | Notes |
-|---|---|---|
-| `Interp` | Pure Cangjie interpreter | Reference semantics; fallback on every platform |
-| `BackendX86_64` | `X86Lower` → machine code | Linux x86_64; three passes (probe → CFG depth → emit) |
-| `BackendAArch64` | `A64Lower` → machine code | Linux aarch64; dedicated operand-stack pointer `x20` |
+
+| Engine           | Implementation             | Notes                                                   |
+| ---------------- | -------------------------- | ------------------------------------------------------- |
+| `Interp`         | Pure Cangjie interpreter   | Reference semantics; fallback on every platform         |
+| `BackendX86_64`  | `X86Lower` → machine code | Linux x86_64; three passes (probe → CFG depth → emit) |
+| `BackendAArch64` | `A64Lower` → machine code | Linux aarch64; dedicated operand-stack pointer`x20`     |
 
 **③ Object model (handles)**: machine code never holds object pointers — only **Int64 handles** encoded as
 `idx:u32 | tag:u16 | gen:u16` (`runtime/HandleTable.cj`). Objects live in a Cangjie `ArrayList<Any>` on the
@@ -272,12 +277,13 @@ does that transparently. Any other code (1/2/3/6/7/8/16/18/19/21/22…) surfaces
 
 ## 4. Support matrix (bytecode vs native code)
 
-| Layer | Supported | Evidence |
-|---|---|---|
-| **Bytecode** (compile / interpret / `call`) | **Any platform that runs Cangjie 1.3.x** (Linux / Windows / macOS, x86_64 / aarch64); architecture-independent | `.fbc` is plain data; `Interp` is pure Cangjie |
-| **Native code (JIT)** | **Linux x86_64 only**, **Linux aarch64 only** | `backend/JitExecutor.cj`: requires `OS.current.isLinux` and `Arch.current ∈ {X86_64, AArch64}`; otherwise the whole unit runs in the interpreter |
-| x86_64 prerequisite | **SSE4.1** (for `roundsd`-style rounding); without it, units containing rounding ops are not JITed | `X86Lower.floatRoundChecked` / `CpuFeatures.hasSse41` |
-| aarch64 prerequisite | None (no CPUID branch) | — |
+
+| Layer                                       | Supported                                                                                                      | Evidence                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Bytecode** (compile / interpret / `call`) | **Any platform that runs Cangjie 1.3.x** (Linux / Windows / macOS, x86_64 / aarch64); architecture-independent | `.fbc` is plain data; `Interp` is pure Cangjie                                                                                                    |
+| **Native code (JIT)**                       | **Linux x86_64 only**, **Linux aarch64 only**                                                                  | `backend/JitExecutor.cj`: requires `OS.current.isLinux` and `Arch.current ∈ {X86_64, AArch64}`; otherwise the whole unit runs in the interpreter |
+| x86_64 prerequisite                         | **SSE4.1** (for `roundsd`-style rounding); without it, units containing rounding ops are not JITed             | `X86Lower.floatRoundChecked` / `CpuFeatures.hasSse41`                                                                                             |
+| aarch64 prerequisite                        | None (no CPUID branch)                                                                                         | —                                                                                                                                                |
 
 > Bottom line: **the same `.fbc` runs on all four platforms**; **Linux x86_64 / Linux aarch64 execute
 > native code**, Windows / macOS execute the interpreter (different speed, identical semantics).
@@ -289,13 +295,14 @@ does that transparently. Any other code (1/2/3/6/7/8/16/18/19/21/22…) surfaces
 JIT is an accelerator; on any of the following, the **whole unit** falls back to the interpreter
 (`ok = false`) — semantics unchanged, only slower:
 
-| Category | Examples |
-|---|---|
-| Rejected at assembly time | `DT_NEW` (0xA9), `DUR_NEW` (0xAA) |
-| Missing runtime facilities | needs a constant mirror but `constBase == 0`; needs a function table but `fnTableBase == 0` |
-| Platform capability | x86 without SSE4.1 and the unit contains rounding ops |
-| Statically unprovable | inconsistent operand-stack depth at a merge; emit audit finds an out-of-set memory base (only stack/frame/ctx allowed) |
-| Unimplemented | unknown opcode (anything not yet lowered falls back) |
+
+| Category                   | Examples                                                                                                               |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Rejected at assembly time  | `DT_NEW` (0xA9), `DUR_NEW` (0xAA)                                                                                      |
+| Missing runtime facilities | needs a constant mirror but`constBase == 0`; needs a function table but `fnTableBase == 0`                             |
+| Platform capability        | x86 without SSE4.1 and the unit contains rounding ops                                                                  |
+| Statically unprovable      | inconsistent operand-stack depth at a merge; emit audit finds an out-of-set memory base (only stack/frame/ctx allowed) |
+| Unimplemented              | unknown opcode (anything not yet lowered falls back)                                                                   |
 
 ---
 
@@ -304,21 +311,22 @@ JIT is an accelerator; on any of the following, the **whole unit** falls back to
 The dialect is a **subset of Cangjie**: every type maps to the Cangjie standard library (no
 user-defined types). Literals and operators:
 
-| Type | Backing (std) | Literals / construction | Main operations |
-|---|---|---|---|
-| **Int64** | scalar | `42`, `-7` | `+ - * / % **`, comparisons; `/` and `%` by zero → 3; `Int64(x)` narrowing |
-| **Float64** | scalar | `1.5`, `1.0f64`, `1.5e3f64`, `.123e2f64` | `+ - * /`, comparisons; `strictFp` defaults to `true` ⇒ ÷0 fails with 1, otherwise IEEE ±Inf |
-| **String** | `std.core.String` | `'abc'` / `"abc"`, multi-line `'''…'''` / `"""…"""`, raw `#`×n; interpolation `"v${x}"` | `+` concat, `* 3` repeat, `s[a..=b]` (code-point half-open range) |
-| **Range** | `std.core.Range` | `a..b`, `a..=b`, optional `: step` | `for x in a..b { … }` |
-| **List** | `std.collection.ArrayList` | `[1, 2, 3]` (**constant, shared read-only**), `[]` (fresh **mutable** empty list, needs a contextual type) | `xs[i]`, `xs[i] = v`, `for x in xs`; append/remove are mutating helpers (`LIST_APPEND`/`LIST_REMOVE`; writing a constant → 20) |
-| **Map** | `std.collection.HashMap` | `{k: v}` (constant, read-only), `{}` (mutable, needs a contextual type) | `m[k]`, `m[k] = v`, `for (k, v) in m` |
-| **JSON** | handles 16–19 (`JsonValue` family) | **backtick literal**: `` `{"k": 1}` `` (the only form; parsed once at load time) | `j["k"]` read, `j["k"] = v` write (mutable in-world), member sugar `j.k`, `is`/`as`; `JsonObject(...)` construction → compile error |
-| **Regex** | `std.regex.Regex` | `/pat/flags` (flags ∈ `i m u`, order-independent, idempotent); `s.regex()` builds at run time (no flags) | `re ~ s`, `re !~ s`, `re/s/r/g` (replace all), `re/s/r/n` (replace n times) |
-| **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`, `1.5e3`, `1e-3`; `Decimal(...)` | `+ - * /`, comparisons |
-| **Duration** | `std.core.Duration` | no literal (from the host, or `DateTime` difference) | `Duration ± Duration`, comparisons; overflow → 12 |
-| **DateTime** | `std.time.DateTime` | no literal (from the host) | `DateTime ± Duration`, `DateTime − DateTime → Duration`; out of range → 11 |
-| **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `close()` |
-| **Any** | handle 12 (`JitAnyBox`) | passed in by the host, or `Any`-annotated local/param | boxing/unboxing (H78/H79), `is` checks, returned as `Any` |
+
+| Type         | Backing (std)                       | Literals / construction                                                                                    | Main operations                                                                                                                      |
+| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Int64**    | scalar                              | `42`, `-7`                                                                                                 | `+ - * / % **`, comparisons; `/` and `%` by zero → 3; `Int64(x)` narrowing                                                          |
+| **Float64**  | scalar                              | `1.5`, `1.0f64`, `1.5e3f64`, `.123e2f64`                                                                   | `+ - * /`, comparisons; `strictFp` defaults to `true` ⇒ ÷0 fails with 1, otherwise IEEE ±Inf                                      |
+| **String**   | `std.core.String`                   | `'abc'` / `"abc"`, multi-line `'''…'''` / `"""…"""`, raw `#`×n; interpolation `"v${x}"`                 | `+` concat, `* 3` repeat, `s[a..=b]` (code-point half-open range)                                                                    |
+| **Range**    | `std.core.Range`                    | `a..b`, `a..=b`, optional `: step`                                                                         | `for x in a..b { … }`                                                                                                               |
+| **List**     | `std.collection.ArrayList`          | `[1, 2, 3]` (**constant, shared read-only**), `[]` (fresh **mutable** empty list, needs a contextual type) | `xs[i]`, `xs[i] = v`, `for x in xs`; append/remove are mutating helpers (`LIST_APPEND`/`LIST_REMOVE`; writing a constant → 20)      |
+| **Map**      | `std.collection.HashMap`            | `{k: v}` (constant, read-only), `{}` (mutable, needs a contextual type)                                    | `m[k]`, `m[k] = v`, `for (k, v) in m`                                                                                                |
+| **JSON**     | handles 16–19 (`JsonValue` family) | **backtick literal**: `` `{"k": 1}` `` (the only form; parsed once at load time)                           | `j["k"]` read, `j["k"] = v` write (mutable in-world), member sugar `j.k`, `is`/`as`; `JsonObject(...)` construction → compile error |
+| **Regex**    | `std.regex.Regex`                   | `/pat/flags` (flags ∈ `i m u`, order-independent, idempotent); `s.regex()` builds at run time (no flags)  | `re ~ s`, `re !~ s`, `re/s/r/g` (replace all), `re/s/r/n` (replace n times)                                                          |
+| **Decimal**  | `std.math.numeric.Decimal`          | **a bare decimal literal is a Decimal**: `1.23`, `1.5e3`, `1e-3`; `Decimal(...)`                           | `+ - * /`, comparisons                                                                                                               |
+| **Duration** | `std.core.Duration`                 | no literal (from the host, or`DateTime` difference)                                                        | `Duration ± Duration`, comparisons; overflow → 12                                                                                  |
+| **DateTime** | `std.time.DateTime`                 | no literal (from the host)                                                                                 | `DateTime ± Duration`, `DateTime − DateTime → Duration`; out of range → 11                                                       |
+| **Closure**  | handle 12 (`JitClosure`)            | `{ x => e }`, captures outer locals                                                                        | call`f(a)`; escaping returns use `callForFn<Fn>`, then `close()`                                                                     |
+| **Any**      | handle 12 (`JitAnyBox`)             | passed in by the host, or`Any`-annotated local/param                                                       | boxing/unboxing (H78/H79),`is` checks, returned as `Any`                                                                             |
 
 ```cangjie
 // one literal per type (as a jit lambda's return / local)
@@ -342,13 +350,14 @@ parameter signature).
 Literal form `/pattern/flags`: `pattern` (UTF-8) sits between the two `/`, and the following `i`/`m`/`u`
 characters are flags.
 
-| flag | Meaning | Effect | Example (result) |
-|---|---|---|---|
-| `i` | **Case-insensitive** (`RegexFlag.IgnoreCase`; `std.regex` is authoritative) | case-folds literal characters and character classes; escape sequences themselves are unaffected | `/AbC/i ~ "abc"` → `1`; `/AbC/ ~ "abc"` → `0` |
-| `m` | **Multiline** | `^` also matches right after every newline, `$` also matches right before every newline. It does **not** make `.` match newlines (no DOTALL/`s` flag) | `/^b/m ~ "a\nb"` → `1`; `/^b/ ~ "a\nb"` → `0`; `/c$/m ~ "c\nd"` → `1` |
-| `u` | **Unicode mode** | character classes/`\p{…}` match **code points** (one element = one code point, not one byte); `\w`/`\d` use Unicode ranges (`std.regex` is authoritative) | `/^\p{L}+$/u ~ "中文"` → `1` |
-| combining | `i m u` in **any order, repeats idempotent** | normalised to a bitfield at load time (bit0=i bit1=m bit2=u); order/repeats never affect the dedup key, text form or matching behaviour (`/pat/im` ≡ `/pat/mi` ≡ `/pat/ii`) | — |
-| illegal | any character other than `i m u` | **rejected at load time** (`JitException(14)`, `site=-1`, never executed) | `/pat/x` → 14 |
+
+| flag      | Meaning                                                                     | Effect                                                                                                                                                                        | Example (result)                                                         |
+| --------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `i`       | **Case-insensitive** (`RegexFlag.IgnoreCase`; `std.regex` is authoritative) | case-folds literal characters and character classes; escape sequences themselves are unaffected                                                                               | `/AbC/i ~ "abc"` → `1`; `/AbC/ ~ "abc"` → `0`                          |
+| `m`       | **Multiline**                                                               | `^` also matches right after every newline, `$` also matches right before every newline. It does **not** make `.` match newlines (no DOTALL/`s` flag)                         | `/^b/m ~ "a\nb"` → `1`; `/^b/ ~ "a\nb"` → `0`; `/c$/m ~ "c\nd"` → `1` |
+| `u`       | **Unicode mode**                                                            | character classes/`\p{…}` match **code points** (one element = one code point, not one byte); `\w`/`\d` use Unicode ranges (`std.regex` is authoritative)                    | `/^\p{L}+$/u ~ "中文"` → `1`                                            |
+| combining | `i m u` in **any order, repeats idempotent**                                | normalised to a bitfield at load time (bit0=i bit1=m bit2=u); order/repeats never affect the dedup key, text form or matching behaviour (`/pat/im` ≡ `/pat/mi` ≡ `/pat/ii`) | —                                                                       |
+| illegal   | any character other than`i m u`                                             | **rejected at load time** (`JitException(14)`, `site=-1`, never executed)                                                                                                     | `/pat/x` → 14                                                           |
 
 Notes:
 
@@ -374,17 +383,18 @@ the content.
 >|}"""
 ```
 
-| Rule | Detail |
-|---|---|
-| Scope | **Multi-line forms only** (`'''` / `"""`); single-line and raw (`#`×n) strings are unaffected (`>\|` is just two characters there) |
-| Valid marker | the `>\|` at the **first non-blank position** of a line (only indentation may precede it) |
-| Mode switch | if **any** line has a valid marker, the **whole string** is in anchor mode; otherwise normal mode (`a>\|b` does not trigger) |
-| Marker line | the marker and its leading indentation are consumed; everything **after** `>\|` is the line content (further `>\|` on that line is literal text; a bare `>\|` line yields an empty string) |
-| Non-marker line | kept **verbatim** (no slicing, no normalisation) |
-| First-only | `>\|>\|abc` → `>\|abc`; `>\|    >\|` → `    >\|` (only the first valid marker is consumed) |
-| Joining | lines are joined with `\n` (`CRLF`/`CR` normalised to `\n` for the whole string first) |
-| Order | anchoring happens **before** escape decoding and before interpolation splitting: `${x}` in `>\|${x}` still interpolates, the `>\|` never enters the text |
-| Non-marker cases | `>>\|`, `a>\|b`, `\|>\|` ⇒ `>\|` is literal content (line kept as-is) |
+
+| Rule             | Detail                                                                                                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope            | **Multi-line forms only** (`'''` / `"""`); single-line and raw (`#`×n) strings are unaffected (`>|` is just two characters there)                                                     |
+| Valid marker     | the`>|` at the **first non-blank position** of a line (only indentation may precede it)                                                                                                |
+| Mode switch      | if**any** line has a valid marker, the **whole string** is in anchor mode; otherwise normal mode (`a>|b` does not trigger)                                                             |
+| Marker line      | the marker and its leading indentation are consumed; everything**after** `>|` is the line content (further `>|` on that line is literal text; a bare `>|` line yields an empty string) |
+| Non-marker line  | kept**verbatim** (no slicing, no normalisation)                                                                                                                                        |
+| First-only       | `>|>|abc` → `>|abc`; `>|    >|` → `    >|` (only the first valid marker is consumed)                                                                                                 |
+| Joining          | lines are joined with`\n` (`CRLF`/`CR` normalised to `\n` for the whole string first)                                                                                                  |
+| Order            | anchoring happens**before** escape decoding and before interpolation splitting: `${x}` in `>|${x}` still interpolates, the `>|` never enters the text                                  |
+| Non-marker cases | `>>|`, `a>|b`, `|>|` ⇒ `>|` is literal content (line kept as-is)                                                                                                                      |
 
 > Note: `>|` is **not** a global dedent — only lines with a valid marker are sliced; all other lines are
 > preserved verbatim.
@@ -400,35 +410,12 @@ fact.call<Int64>([Int64(5)])      // 120
 
 Lowering differs by position:
 
-| Position | Lowering |
-|---|---|
-| Top-level lambda | `CALL_FUNC <entryFn>` (through the **function table**, host absolute address) |
-| Inside a closure | `LOADL 0` (`locals[0]` holds the closure itself) + `CALL_CLOSURE` |
-| **Tail position** | arguments in **reverse order** into `STOREL` + `LOOP_BACK <entry>` (frame reuse, no `RET`; tail recursion does not grow the stack) |
 
-Besides being a call target, `recursive` can also be used as an **rvalue** (a value-ised self reference) —
-treating "itself" as a closure value:
-
-```cangjie
-// bind the current closure to a local, then let an inner closure capture it
-let f = c.compile('{ n: Int64 =>
-    let outer = recursive                       // outer *is* the current closure (same handle)
-    let inner = { m: Int64 => if (m <= 0) { 0 } else { outer(m - 1) } }
-    if (n <= 0) { 0 } else { inner(n - 1) }
-}')
-f.call<Int64>([Int64(3)])         // 0
-```
-
-| Position | Rvalue lowering |
-|---|---|
-| Inside a closure | `LOADL 0` → `CLOSURE` (creates **no** new closure object; same handle as the enclosing closure) |
-| Top level (not a closure) | a synthetic adapter closure that forwards to `entryFn`, so the host still gets a closure value pointing at itself |
-
-- The value can be stored in a local, passed as an argument, or captured by an inner closure (capture type 12;
-  promoted with the promotion group when the closure escapes);
-- **Caveat**: `outer` and the current closure are the **same** closure — once `{ => outer() }` is called it is
-  unbounded self-recursion (when used as an alias or as an inner indirection it must carry its own
-  termination condition).
+| Position          | Lowering                                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level lambda  | `CALL_FUNC <entryFn>` (through the **function table**, host absolute address)                                                     |
+| Inside a closure  | `LOADL 0` (`locals[0]` holds the closure itself) + `CALL_CLOSURE`                                                                 |
+| **Tail position** | arguments in**reverse order** into `STOREL` + `LOOP_BACK <entry>` (frame reuse, no `RET`; tail recursion does not grow the stack) |
 
 ### 6.3 Nested closures and recursive nested closures
 
@@ -448,13 +435,40 @@ f.call<Int64>([Int64(4)])         // 24
 - **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `close()` it when done (otherwise its
   promotion group stays resident).
 
+
+Besides being a call target, `recursive` can also be used as an **rvalue** (a value-ised self reference) —
+treating "itself" as a closure value:
+
+```cangjie
+// bind the current closure to a local, then let an inner closure capture it
+let f = c.compile('{ n: Int64 =>
+    let outer = recursive                       // outer *is* the current closure (same handle)
+    let inner = { m: Int64 => if (m <= 0) { 0 } else { outer(m - 1) } }
+    if (n <= 0) { 0 } else { inner(n - 1) }
+}')
+f.call<Int64>([Int64(3)])         // 0
+```
+
+
+| Position                  | Rvalue lowering                                                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Inside a closure          | `LOADL 0` → `CLOSURE` (creates **no** new closure object; same handle as the enclosing closure)                 |
+| Top level (not a closure) | a synthetic adapter closure that forwards to`entryFn`, so the host still gets a closure value pointing at itself |
+
+- The value can be stored in a local, passed as an argument, or captured by an inner closure (capture type 12;
+  promoted with the promotion group when the closure escapes);
+- **Caveat**: `outer` and the current closure are the **same** closure — once `{ => outer() }` is called it is
+  unbounded self-recursion (when used as an alias or as an inner indirection it must carry its own
+  termination condition).
+
 ### 6.4 `as` syntax (cast / fallback / test)
 
-| Form | Semantics | Failure behaviour |
-|---|---|---|
-| `x as T` | downcast; `T` must be compatible with the static type of `x` | incompatible → **rejected at compile time** (message names both types); runtime mismatch → **7 `BAD_CAST`** (not reported as host exception 21) |
-| `x as T ?? fb` | "take the original object on success, otherwise `fb`"; **the fallback is lazy** (never evaluated on success) | mismatch is not an error; `fb` must be `T` or a subtype of `T` |
-| `x is T` | type test returning `Bool` (no cast, no error) | — |
+
+| Form           | Semantics                                                                                                   | Failure behaviour                                                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `x as T`       | downcast;`T` must be compatible with the static type of `x`                                                 | incompatible →**rejected at compile time** (message names both types); runtime mismatch → **7 `BAD_CAST`** (not reported as host exception 21) |
+| `x as T ?? fb` | "take the original object on success, otherwise`fb`"; **the fallback is lazy** (never evaluated on success) | mismatch is not an error;`fb` must be `T` or a subtype of `T`                                                                                    |
+| `x is T`       | type test returning`Bool` (no cast, no error)                                                               | —                                                                                                                                               |
 
 ```cangjie
 let pick = c.compile('{ u: User => u as Admin ?? Admin("fallback") }')
@@ -498,17 +512,18 @@ longer than the closure's).
 
 ### 6.6 Exponentiation `**` and scientific notation
 
-| Item | Rule |
-|---|---|
-| `**` types | `(Int64, Int64) → Int64` only; anything else (`1.5 ** 2`, `2 ** 1.5`, `"a" ** 2`) is a compile-time `TYPE_MISMATCH` |
-| Precedence / associativity | **4** (tighter than `*`/`/`/`%`, looser than unary `-`), **right-associative**: `2 ** 3 ** 2` = 512; `-2 ** 2` = 4 |
-| Exponent | must be **non-negative** (Cangjie uses `UInt64`, so a negative exponent is unrepresentable): a runtime negative → `ERR_ARG_MISMATCH(14)` |
-| Overflow | `ERR_OVERFLOW_I64(3)` (`2 ** 63` fails); `x ** 0` = `1`, `0 ** 0` = `1`, `0 ** n` = `0` |
-| Implementation | shared helper **H84 `ipow`** (fast power, O(log n)); identical in all three engines ⇒ bit-identical results/error codes, zero backend change |
-| Scientific (Decimal) | `1.5e3` (=1500), `3e2` (=300), `1e-3` (=0.001), `2.4E-1` |
-| Scientific (Float64) | `1.5e3f64`, `2e3f64`, `2.4e-1f64`, `.123e2f64` (= 12.3) |
-| Leading dot | `.5`, `.5e2` (Decimal), `.5e2f64` (Float64) are all valid |
-| Illegal | `1e`, `1e+`, identifier right after a number, `1.5f32` (no `f32` in the dialect) → lexical error |
+
+| Item                       | Rule                                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `**` types                 | `(Int64, Int64) → Int64` only; anything else (`1.5 ** 2`, `2 ** 1.5`, `"a" ** 2`) is a compile-time `TYPE_MISMATCH`                         |
+| Precedence / associativity | **4** (tighter than `*`/`/`/`%`, looser than unary `-`), **right-associative**: `2 ** 3 ** 2` = 512; `-2 ** 2` = 4                           |
+| Exponent                   | must be**non-negative** (Cangjie uses `UInt64`, so a negative exponent is unrepresentable): a runtime negative → `ERR_ARG_MISMATCH(14)`     |
+| Overflow                   | `ERR_OVERFLOW_I64(3)` (`2 ** 63` fails); `x ** 0` = `1`, `0 ** 0` = `1`, `0 ** n` = `0`                                                      |
+| Implementation             | shared helper**H84 `ipow`** (fast power, O(log n)); identical in all three engines ⇒ bit-identical results/error codes, zero backend change |
+| Scientific (Decimal)       | `1.5e3` (=1500), `3e2` (=300), `1e-3` (=0.001), `2.4E-1`                                                                                     |
+| Scientific (Float64)       | `1.5e3f64`, `2e3f64`, `2.4e-1f64`, `.123e2f64` (= 12.3)                                                                                      |
+| Leading dot                | `.5`, `.5e2` (Decimal), `.5e2f64` (Float64) are all valid                                                                                    |
+| Illegal                    | `1e`, `1e+`, identifier right after a number, `1.5f32` (no `f32` in the dialect) → lexical error                                            |
 
 ```cangjie
 c.compile('{ => 2 ** 10 }')                 // 1024
@@ -553,11 +568,12 @@ tables store **cells and code addresses**, not object pointers.
 
 ### Q3 After a call returns, do objects stay resident? Any leak?
 
-| Case | Handling | Resident? |
-|---|---|---|
-| Non-escaping (inside the window) | `call`'s `finally` → `resetWindow(-1)`: `alive=false`, `objs[i]=0`, `gen+1` | No longer referenced by f_jit ⇒ collected by GC |
-| Returned handle | `releaseReturnHandle` releases it right after unboxing (`JitFunction.cj:477-487`) | No |
-| Escaping closures / captures | Owned by `PromotionGroup`; **released by the wrapper's `close()`, with unit `close()` cascading at terminal state** | Stays resident until the host releases it, for as long as the unit lives (contract, not a bug) |
+
+| Case                             | Handling                                                                                                           | Resident?                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Non-escaping (inside the window) | `call`'s `finally` → `resetWindow(-1)`: `alive=false`, `objs[i]=0`, `gen+1`                                       | No longer referenced by f_jit ⇒ collected by GC                                               |
+| Returned handle                  | `releaseReturnHandle` releases it right after unboxing (`JitFunction.cj:477-487`)                                  | No                                                                                             |
+| Escaping closures / captures     | Owned by`PromotionGroup`; **released by the wrapper's `close()`, with unit `close()` cascading at terminal state** | Stays resident until the host releases it, for as long as the unit lives (contract, not a bug) |
 
 Constant slots (`constFlags`) are never released (unit constant pool, bounded); the underlying
 `HandleTable` arrays only grow, capped by `capacityLimit = 1048576` (`:92`) — a watermark, not a leak.

@@ -259,6 +259,12 @@ public class IoUringFuture
 
 A Future for asynchronous operations, wrapping IoUringPromise.
 
+#### Constructors
+
+`public init(promise: IoUringPromise<T>)` — the promise must first be registered with the ring's completion slot (`CompletionRegistry`); the ring completes that slot when the CQE arrives, which is what makes the result available to the future.
+
+#### Methods
+
 | Method | Signature | Description |
 |------|------|------|
 | get | `func get(): T` | Blocking get |
@@ -645,7 +651,7 @@ A uring wrapper implementing std.io.IOStream
 public class IOUringStream <: IOStream & Resource
 ```
 
-Package: `fountain::f_io`
+Package: `fountain::f_uring`
 
 An IOStream implementation based on io_uring (dual ring architecture). Write returns immediately after an asynchronous submission, while Read does submit + waitCQE on the same thread. An optional registered buffer mode is available.
 
