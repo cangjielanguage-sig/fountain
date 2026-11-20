@@ -58,11 +58,11 @@ public class QueryResultWrap <: QueryResult {
     // 必须是 static：构造期不允许调用实例方法。
     private static func makeReader(result: QueryResult, typeName: String): (Int64) -> Any {
         match(typeName){
-            case 'SqlChar' | 'SqlVarchar' | 'String' | 'string' | 'char' | 'text' | 'varchar' => { i => result.getOrNull<String>(i) }
+            case 'SqlChar' | 'SqlVarchar' | 'String' => { i => result.getOrNull<String>(i) }
             case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => { i => result.getOrNull<InputStream>(i) }
             case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => { i => result.getOrNull<Array<Byte>>(i) }
-            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' | 'numeric' => { i => result.getOrNull<Decimal>(i) }
-            case 'SqlBool' | 'Bool' | 'bool' => { i => result.getOrNull<Bool>(i) }
+            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' => { i => result.getOrNull<Decimal>(i) }
+            case 'SqlBool' | 'Bool' => { i => result.getOrNull<Bool>(i) }
             case 'SqlByte' | 'Int8' => { i => result.getOrNull<Int8>(i) }
             case 'UInt8' | 'Byte' => { i => result.getOrNull<UInt8>(i) }
             case 'SqlSmallInt' | 'Int16' => { i => result.getOrNull<Int16>(i) }

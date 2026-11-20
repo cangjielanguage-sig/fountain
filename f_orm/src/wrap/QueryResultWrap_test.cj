@@ -34,7 +34,7 @@ private class ProbeInputStream <: InputStream {
  * QueryResultWrap 取值路径的契约（bug.md §1.13 / ORM-2）。
  *
  * 修复把「列类型 -> 取值」的判定从「逐单元格内联 match」改成「按列构造取值器」，
- * 本用例钉住语义不变：按索引/按列名取值同源、各 typeName 分支与别名、
+ * 本用例钉住语义不变：按索引/按列名取值同源、各 typeName 分支（`Sql*` 抽象名与仓颉类型名）、
  * indexStartsWith 偏移（驱动物理列从 1 开始）、未知类型走 String 兜底、
  * String 到目标数值类型的转换，以及 list 缓存按行重置。
  */
@@ -76,7 +76,7 @@ public class QueryResultWrapTest {
         @Assert('active', w.columnInfos[3].name)
     }
 
-    /** 每个取值器分支（含别名与未知类型的 String 兜底）都必须取到原值 */
+    /** 每个取值器分支（`Sql*` 抽象名与仓颉类型名，含未知类型的 String 兜底）都必须取到原值 */
     @TestCase
     public func testEveryReaderBranchAndAlias(): Unit {
         let clob = ProbeInputStream(7)
@@ -90,12 +90,12 @@ public class QueryResultWrapTest {
             ['char-v', 'text-v', clob, blob, bin12, bin3, decimal, decimal, true,
              Int8(1), UInt8(2), Int16(3), UInt16(4), Int32(5), UInt32(6), Int64(7), UInt64(8),
              Float32(1.5), Float64(2.5), moment, moment, span, 'fallback-v'],
-            [('c0', 'SqlChar'), ('c1', 'text'), ('c2', 'SqlBlob'), ('c3', 'std.io.InputStream'),
-             ('c4', 'SqlVarBinary'), ('c5', 'bytea'), ('c6', 'SqlDecimal'), ('c7', 'money'),
+            [('c0', 'SqlChar'), ('c1', 'String'), ('c2', 'SqlBlob'), ('c3', 'std.io.InputStream'),
+             ('c4', 'SqlVarBinary'), ('c5', 'Array<UInt8>'), ('c6', 'SqlDecimal'), ('c7', 'Decimal'),
              ('c8', 'SqlBool'), ('c9', 'Int8'), ('c10', 'Byte'), ('c11', 'SqlSmallInt'),
-             ('c12', 'UInt16'), ('c13', 'SqlInteger'), ('c14', 'int4'), ('c15', 'SqlBigInt'),
-             ('c16', 'UInt64'), ('c17', 'SqlReal'), ('c18', 'float8'), ('c19', 'SqlTimestamp'),
-             ('c20', ''), ('c21', 'SqlInterval'), ('c22', 'weird_unknown_type')])
+             ('c12', 'UInt16'), ('c13', 'SqlInteger'), ('c14', 'UInt32'), ('c15', 'SqlBigInt'),
+             ('c16', 'UInt64'), ('c17', 'SqlReal'), ('c18', 'Float64'), ('c19', 'SqlTimestamp'),
+             ('c20', 'std.time.DateTime'), ('c21', 'SqlInterval'), ('c22', 'weird_unknown_type')])
         @Assert(true, w.next())
         @Assert(Some('char-v'), w.getOrNull<String>(0))
         @Assert(Some('text-v'), w.getOrNull<String>(1))
@@ -123,11 +123,43 @@ public class QueryResultWrapTest {
         @Assert(Some(Float32(1.5)), w.getOrNull<Float32>(17))
         @Assert(Some(Float64(2.5)), w.getOrNull<Float64>(18))
         @Assert(Some(moment), w.getOrNull<DateTime>(19))
-        // typeName 为空串时按 DateTime 处理（既有口径）
+        // DateTime 的全限定写法（驱动可能带包前缀上报 typeName）
         @Assert(Some(moment), w.getOrNull<DateTime>(20))
         @Assert(Some(span), w.getOrNull<Duration>(21))
         // 未知 typeName 落最后一个分支：按 String 取值
         @Assert(Some('fallback-v'), w.getOrNull<String>(22))
+    }
+
+    /**
+     * 契约边界：`Sql*` 抽象名与仓颉类型名之外的拼写（SQL / 方言名）不建立专门映射，
+     * 一律按未识别类型处理；兜底口径不变——驱动值是字符串时按 String 读出，否则抛 ORMException。
+     */
+    @TestCase
+    public func testSqlSpellingTypeNamesAreTreatedAsUnknown(): Unit {
+        // `numeric` 曾命中 Decimal 分支；现在按未识别类型兜底，取不到非字符串值
+        let numericColumn = fixture([Decimal.parse('12.34')], [('c0', 'numeric')])
+        @Assert(true, numericColumn.next())
+        var caught = false
+        try {
+            numericColumn.getOrNull<Decimal>(0)
+        } catch (_: ORMException) {
+            caught = true
+        }
+        @Assert(true, caught)
+        // `bool` 曾命中 Bool 分支；同上
+        let boolColumn = fixture([true], [('c0', 'bool')])
+        @Assert(true, boolColumn.next())
+        caught = false
+        try {
+            boolColumn.getOrNull<Bool>(0)
+        } catch (_: ORMException) {
+            caught = true
+        }
+        @Assert(true, caught)
+        // 字符串类拼写（text）与兜底同源：按未识别类型兜底仍能读出字符串
+        let textColumn = fixture(['text-v'], [('c0', 'text')])
+        @Assert(true, textColumn.next())
+        @Assert(Some('text-v'), textColumn.getOrNull<String>(0))
     }
 
     /** indexStartsWith 非 0 的驱动：逻辑列 i 读物理列 i + offset（默认分支见上一个用例） */
