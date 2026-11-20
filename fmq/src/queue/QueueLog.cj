@@ -88,10 +88,26 @@ protected class QueueLog <: Resource {
     /**
      * 从位置起读一条记录，并区分「读到了」「记录损坏」「段已不存在」。
      *
-     * 调用方必须能分开处理损坏与段缺失：损坏时不推进游标（否则丢消息），
-     * 段缺失时按恢复语义前移（R3-M1/M2）。
+     * 调用方必须能分开处理损坏与段缺失：损坏时不推进游标（否则丢消息）。
+     *
+     * `resume = true`（默认）时，目标段已不存在则按流式恢复跳到后继段；
+     * `resume = false` 时返回 `SegmentGone`——消费游标必须用它，否则会把后继段的
+     * 另一条记录当成该位置返回，内容与位置不符（R3-M1/M2）。
      */
-    protected func readAt(position: LogPosition): LogReadResult {
+    protected func readAt(position: LogPosition, resume!: Bool = true): LogReadResult {
+        if (!resume) {
+            let segs = segmentsOrEmpty()
+            var present = false
+            for (meta in segs) {
+                if (meta.index == position.seq) {
+                    present = true
+                    break
+                }
+            }
+            if (!present) {
+                return LogReadResult.SegmentGone
+            }
+        }
         let reader = openRecordsFrom(position)
         try {
             match (reader.next()) {
