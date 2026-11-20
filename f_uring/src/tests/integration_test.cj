@@ -154,6 +154,63 @@ public class IoUringIntegrationTest {
         }
     }
 
+    /** 测试 IoUringFuture 完成状态：完成前未完成且 tryGet 为空，完成后可取到结果 */
+    @TestCase
+    public func testFutureCompletedState(): Unit {
+        try(ring = IoUring(TEST_ENTRIES)) {
+            let registry = ring.getRegistry()
+            let sqeOpt = ring.getSQE()
+            @Expect(sqeOpt.isSome())
+            if (let Some(sqe) <- sqeOpt) {
+                ioUringPrepNop(sqe)
+                let id = registry.nextId()
+                let promise = IoUringPromise<Int32>(id, { cqe => ioUringCQEGetRes(cqe) })
+                let future = IoUringFuture(promise)
+
+                // 提交前：未完成、未取消、取不到结果
+                @Expect(!future.isCompleted())
+                @Expect(!future.isCancelled())
+                @Expect(future.tryGet().isNone())
+
+                registry.register(id, promise)
+                ioUringSQESetData64(sqe, id)
+                ring.submit()
+                ring.waitAndProcess()
+
+                // 完成后：可取到结果
+                @Expect(future.isCompleted())
+                @Expect(future.get() == 0)
+                let tryResult = future.tryGet()
+                @Expect(tryResult.isSome())
+                if (let Some(v) <- tryResult) {
+                    @Expect(v == 0)
+                }
+            }
+        }
+    }
+
+    /** 测试 IoUringFuture 取消：isCancelled 为真且 get() 抛 IoUringException */
+    @TestCase
+    public func testFutureCancelled(): Unit {
+        let promise = IoUringPromise<Int32>(99, { cqe => ioUringCQEGetRes(cqe) })
+        let future = IoUringFuture(promise)
+        @Expect(!future.isCancelled())
+        @Expect(!future.isCompleted())
+
+        promise.cancel()
+        @Expect(future.isCancelled())
+        @Expect(!future.isCompleted())
+
+        var threw = false
+        try {
+            future.get()
+        } catch (e: IoUringException) {
+            threw = true
+            @Expect(e.message.contains("cancelled"))
+        }
+        @Expect(threw)
+    }
+
     // ==================== 批量 nop 压力测试 ====================
 
     @TestCase

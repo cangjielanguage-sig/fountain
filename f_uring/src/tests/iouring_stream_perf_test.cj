@@ -20,6 +20,7 @@ import std.fs.*
 import std.time.*
 import fountain::f_base.*
 import fountain::f_io.*
+import fountain::f_uring.*
 
 /**
  * IOUringStream 与 File 的性能对比测试

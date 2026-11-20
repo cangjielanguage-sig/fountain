@@ -259,6 +259,12 @@ public class IoUringFuture
 
 异步操作 Future，包装 IoUringPromise。
 
+#### 构造函数
+
+`public init(promise: IoUringPromise<T>)` — Promise 需先注册到 ring 的完成槽位（`CompletionRegistry`），CQE 到达时由 ring 完成该槽位，Future 才能取到结果。
+
+#### 方法
+
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | get | `func get(): T` | 阻塞获取 |
@@ -645,7 +651,7 @@ public class LockFreePromise <: CompletionCallback
 public class IOUringStream <: IOStream & Resource
 ```
 
-包: `fountain::f_io`
+包: `fountain::f_uring`
 
 基于 io_uring 的 IOStream 实现（双 ring 架构）。Write 异步提交后立即返回，Read 同线程 submit + waitCQE。可选注册缓冲区模式。
 
