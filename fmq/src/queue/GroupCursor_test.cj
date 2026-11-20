@@ -702,14 +702,17 @@ class GroupCursorTest {
     }
 
     @TestCase
-    public func allSegmentsMissingReturnsNone(): Unit {
-        let fixture = CursorFixture("all_gone")
+    public func allSegmentsRemovedReturnsNone(): Unit {
+        let fixture = CursorFixture("all_gone", maxFileSize: 4 + recordSize("m0", []))
         try {
-            fixture.append([], "one")
+            // m0 填满段 1，m1（同尺寸）触发轮转：段 1 封口、段 2 为活动段。
+            fixture.append([], "m0")
+            fixture.append([], "m1")
             let cursor = fixture.cursorOf()
-            let sub = fixture.sub("s1")
-            // 整目录被删除：没有任何可读段，返回空而不是抛出
-            remove("${fixture.root}/logs", recursive: true)
+            // 订阅只认 tag "a"：段 2 的 m1 不匹配，只作为「已决」跳过。
+            let sub = fixture.sub("s1", tags: ["a"])
+            // TTL 只删封口段（数据 + .boundary 一起删）；活动段永远保留。
+            fixture.log.removeById(1)
             @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
             cursor.close()
         } finally {
@@ -990,9 +993,11 @@ class GroupCursorTest {
     /** 记录不可读时标记已决但必须留痕，不能静默吞掉（A48）。 */
     @TestCase
     public func unreadableRecordIsCounted(): Unit {
-        let fixture = CursorFixture("unreadable")
+        let fixture = CursorFixture("unreadable", maxFileSize: 4 + recordSize("m0", ["b"]))
         try {
-            let position = fixture.append(["b"], "one")
+            // 目标记录落在封口段 1；再写一条触发轮转，段 2 为活动段。
+            let position = fixture.append(["b"], "m0")
+            fixture.append([], "m1")
             let cursor = fixture.cursorOf()
             let s1 = fixture.sub("s1", tags: ["a"])
             let s2 = fixture.sub("s2", tags: ["b"])
@@ -1000,18 +1005,8 @@ class GroupCursorTest {
             // s1 扫描：记录分配给 s2（entry.position = 记录位置）
             @Assert(cursor.next(s1, members, MQMatcher()).isNone())
             // 真实删段（模拟 TTL 清理）：readAt 按「段缺失」处理，而不是「记录损坏」
-            let dir = "${fixture.root}/logs"
-            let segments = ArrayList<String>()
-            Directory.walk(dir) {info: FileInfo =>
-                if (!info.isDirectory() && info.name.startsWith("log_")) {
-                    segments.add(info.path.toString())
-                }
-                true
-            }
-            @Assert(segments.size > 0)
-            for (path in segments) {
-                remove(path)
-            }
+            // TTL 删除封口段：removeById 同时删数据与 .boundary；活动段保留。
+            fixture.log.removeById(1)
             @Assert(cursor.next(s2, members, MQMatcher()).isNone())
             @Assert(cursor.unreadableSkipped == 1)
             @Assert(cursor.committed.seq > position.seq ||
