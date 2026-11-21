@@ -18,7 +18,7 @@ package fountain::f_base
 /**
  * 支持 local 实例的比较。
  *
- * 与 [LocalEquatable] 同构：真正的排序比较放在抽象 hook `localCompare` 上，
+ * 继承 [LocalEquatable]：真正的排序比较放在抽象 hook `localCompare` 上，
  * `@ local?` / `@ local!` 的 `compare` 与 `<` / `>` / `<=` / `>=` 默认转调它。
  *
  * 普通（`@ ~local`）的 `compare` **要求实现类提供**（DataAssist 生成非模态版本），
@@ -30,10 +30,11 @@ package fountain::f_base
  * 完整的 local 相等比较；`equal` + `compare` 同时存在时，DataAssist 会生成显式的
  * `localEq` 覆盖它。
  *
- * 注意：不要同时实现 `LocalEquatable` 与 `LocalComparable`——两者都继承 `Equatable`，
- * 会出现两条继承路径。需要比较时只实现 `LocalComparable`。
+ * 注意：本接口已继承 `LocalEquatable`，不要再把 `LocalEquatable` 显式加进同一个类的
+ * 父接口列表。由于 `Equatable` 同时经 `LocalEquatable` 与 `Comparable` 两条路径，
+ * 这里必须显式实现普通与 `@ local?` 的 `!=`，否则编译器会报 must be implemented。
  */
-public interface LocalComparable<T> <: Comparable<T> {
+public interface LocalComparable<T> <: LocalEquatable<T> & Comparable<T> {
     /** 真正执行排序比较；实现类必须重写。只对 local 实例调用。 */
     func localCompare(this @ local?, other: T @ local?): Ordering
 
@@ -58,9 +59,18 @@ public interface LocalComparable<T> <: Comparable<T> {
         !lhs.localEq(rhs)
     }
 
+    operator func !=(this @ local?, other: T @ local?): Bool {
+        !(this.localEq(other))
+    }
+
     /** 普通比较的运算符：基于普通 `compare`，不经过 local 视图。 */
     operator func ==(other: T): Bool {
         this.compare(other) == EQ
+    }
+
+    /** 显式实现普通 `!=`，消除 LocalEquatable / Comparable 两条 Equatable 路径的歧义。 */
+    operator func !=(other: T): Bool {
+        !(this == other)
     }
 
     operator func <(other: T): Bool {
