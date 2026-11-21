@@ -16,6 +16,14 @@ A large-model engineering library for Cangjie, part of the [fountain](../) repos
 - Version: `1.3.1020`, `output-type = "dynamic"`
 - Dependencies: `f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util`, all modules in the same repository
 
+### Build requirement (local mode)
+
+`[package].compile-option` enables `--experimental --enable-local-mode`: the full-text `ArrayList<Rune>` buffer inside `KnowledgeChunker.split` uses the thread-local region when the content is at most 2 MiB (8 MiB per-call budget), and falls back to the normal heap above that limit. Chunking output is unchanged.
+
+- Callers do not need local mode; `KnowledgeChunker` and other public APIs carry no modal types.
+- `f_llm` and its dependencies must be rebuilt with the same SDK version (local-mode artifacts are not guaranteed to be compatible across SDKs).
+- `aarch64-linux-ohos` / `x86_64-linux-ohos` SDKs reject this flag, so this module is not built for HarmonyOS targets (same as the `f_base` / `f_data` / `f_svg` local-mode baseline).
+
 ---
 
 ## Layout

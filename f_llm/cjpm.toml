@@ -6,7 +6,7 @@
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"
-  compile-option = "--dy-std"
+  compile-option = "--dy-std --experimental --enable-local-mode"
   override-compile-option = "--dy-std"
   link-option = ""
   package-configuration = {}

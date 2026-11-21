@@ -16,6 +16,14 @@
 - 版本：`1.3.1020`，`output-type = "dynamic"`
 - 依赖：`f_base` / `f_bean` / `f_config` / `f_data` / `f_egraph` / `f_jit` / `f_orm` / `f_store` / `f_hydra` / `f_mcp` / `f_ticktock` / `f_util` 等，全部是同仓模块
 
+### 编译期要求（local mode）
+
+`f_llm` 的 `[package].compile-option` 开启了 `--experimental --enable-local-mode`：`KnowledgeChunker.split` 的全文 `ArrayList<Rune>` 缓冲在内容不超过 2 MiB 时使用线程 local region（单次预算 8 MiB），超过门限回落普通堆分配，切块输出不变。
+
+- 调用方无需开启 local mode，`KnowledgeChunker` 等公开 API 不带模态。
+- `f_llm` 及其依赖必须用同一 SDK 版本重新编译（local 产物不保证跨 SDK 兼容）。
+- `aarch64-linux-ohos` / `x86_64-linux-ohos` 的 SDK 不支持该开关，鸿蒙目标暂不构建本模块（与 `f_base` / `f_data` / `f_svg` 的 local-mode 基线一致）。
+
 ---
 
 ## 目录结构
