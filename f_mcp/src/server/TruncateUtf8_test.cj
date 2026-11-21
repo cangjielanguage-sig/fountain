@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mcp.server
 
 import std.collection.ArrayList
+import std.env.getVariable
 import std.runtime.{gc, getAllocatedHeapSize, getGCCount, getGCFreedSize}
 import std.time.MonoTime
 import std.unittest.*
@@ -72,6 +73,13 @@ private func isRuneAlignedPrefix(text: String, cut: String, limit: Int64): Bool 
         }
     }
     true
+}
+
+private func benchEnabled(): Bool {
+    match (getVariable("F_MCP_BENCH")) {
+        case Some(v) => v == "1"
+        case None => false
+    }
 }
 
 /** 强制 GC 并等计数稳定：`gc()` 可能异步收尾，紧接着的窗口会把这次 GC 记进去。 */
@@ -244,4 +252,48 @@ class TruncateUtf8_test {
         }
     }
 
+    /** 门控默认关闭：未设置环境变量时必须走 SKIP，不拖慢常规测试。 */
+    @TestCase
+    public func benchGateDefaultsOff(): Unit {
+        if (benchEnabled()) {
+            println("SKIP: F_MCP_BENCH=1，门控用例在开启态不做断言")
+            return
+        }
+        @Assert(!benchEnabled())
+        println("SKIP: 未设置 F_MCP_BENCH=1，truncateUtf8 基准不执行")
+    }
+
+    /**
+     * 1 MiB 文本的分配对照基准（`F_MCP_BENCH=1` 门控）。
+     *
+     * 断言只用确定性指标（分配字节）：新路径 `<= 2 × limit`、ASCII 上新路径分配量不到旧路径的一半；
+     * 耗时只打印（`-O0` 测试构建，不代表生产数值）。
+     */
+    @TestCase
+    public func benchTruncateUtf8(): Unit {
+        if (!benchEnabled()) {
+            println("SKIP: 未设置 F_MCP_BENCH=1，truncateUtf8 基准不执行")
+            return
+        }
+        let limit = 262_144
+        let cases = [
+            ('ascii', repeatText('a', 1_048_576)),
+            ('chinese', repeatText('中', 349_525))
+        ]
+        for ((label, text) in cases) {
+            let newCut = McpServer.truncateUtf8(text, limit)
+            let refCut = referenceTruncate(text, limit)
+            @Assert(refCut, newCut)
+            let (newAlloc, newNs, newSamples) = measureCall({ => McpServer.truncateUtf8(text, limit) })
+            let (refAlloc, refNs, refSamples) = measureCall({ => referenceTruncate(text, limit) })
+            @Assert(newSamples > 0 && refSamples > 0)
+            println('TRUNCATE_BENCH case=${label} bytes=${text.size} limit=${limit} ' +
+                'newAlloc=${newAlloc} refAlloc=${refAlloc} newNs=${newNs} refNs=${refNs} ' +
+                'samples=${newSamples}/${refSamples}')
+            @Assert(newAlloc >= 0 && newAlloc <= 2 * limit)
+            if (label == 'ascii') {
+                @Assert(refAlloc > 0 && newAlloc * 2 < refAlloc)
+            }
+        }
+    }
 }

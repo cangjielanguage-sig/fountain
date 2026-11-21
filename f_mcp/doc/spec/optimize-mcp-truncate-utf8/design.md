@@ -187,8 +187,11 @@ oracle 仍然固化「旧行为」这份契约。
 - 未设 `F_MCP_BENCH=1` 时打印 `SKIP:` 并返回，常规 `cjpm test` 不受影响；
 - 输入：1 MiB ASCII（`'a' × 1_048_576`）与约 1 MiB 中文（`'中' × 349_525`），
   `limit = 256 KiB`；
-- 测量：`gc(heavy: true)` → 记录 `getAllocatedHeapSize()` → 调一次 → 再记录；
-  5 个样本取中位数，窗口内 `getGCCount()` 变化或堆回缩则丢弃重试（同 `FrameEncodeBench_test`）；
+- 测量：`gc(heavy: true)` + 等 GC 计数稳定（`settleGc`）→ 记录 `getAllocatedHeapSize()` 与
+  `getGCFreedSize()` → 调一次 → 再记录；分配量按 `存活堆增量 + 期间释放量` 计算，
+  5 个样本取中位数。
+  （只读存活堆会在窗口内发生 GC 时低估：大对象分配本身会诱发 GC，`setGCThreshold` 对大对象无效；
+  先 `settleGc` 清空既有垃圾后，窗口内的释放量只可能来自本次调用新产生的对象。）
 - 输出一行：
   `TRUNCATE_BENCH case=ascii bytes=... limit=... newAlloc=... refAlloc=... newNs=... refNs=... samples=...`
 - 断言（只在门控开启时）：
@@ -213,7 +216,7 @@ oracle 仍然固化「旧行为」这份契约。
 | --- | --- |
 | `StringBuilder(capacity)` 签名 | 已确认 `init(capacity: Int64)`（std `string_builder.cj:82`）；无需 `reserve` 退化 |
 | `runes()` 每次创建迭代器 | O(1) 对象，远小于被消除的数组；基准会把它计入 `newAlloc` |
-| 分配量测量受 GC 影响 | 沿用 `FrameEncodeBench_test` 的 `settleGc` + 丢样重试 + 中位数；只做上界断言 |
+| 分配量测量受 GC 影响 | `settleGc` 清空既有垃圾，再按「存活堆增量 + `getGCFreedSize` 增量」计分配量（GC 不再导致低估）；只做上界断言 |
 | `-O0` 测试构建下的耗时不可比 | 耗时只打印；门控基准不代表生产 `-O2` 数值，结论以分配量为准 |
 | 非法 UTF-8 输入 | 明确不在范围内，行为与现状一致不承诺 |
 
@@ -253,4 +256,18 @@ ASCII 额外分配约为文本字节的 13 倍（`toRuneArray` 的全量数组 +
 
 ### 10.2 改造后基准（`F_MCP_BENCH=1`）
 
-> 落地后补。
+`-O0` 测试构建（`cjpm test` 默认），`limit = 262 144`（256 KiB），5 个有效样本取中位数：
+
+```
+TRUNCATE_BENCH case=ascii   bytes=1048576 limit=262144 newAlloc=266344 refAlloc=13675048 newNs=14918444 refNs=48476271 samples=5/5
+TRUNCATE_BENCH case=chinese bytes=1048575 limit=262144 newAlloc=266344 refAlloc=5296912  newNs=10422974 refNs=27925793 samples=5/5
+```
+
+| 用例 | 新路径分配 | 旧路径分配 | 倍数 | 新/旧耗时（`-O0`） |
+| --- | --- | --- | --- | --- |
+| ASCII 1 MiB | 266 344 B（≈ limit） | 13 675 048 B | **51.3×** | 14.9 ms / 48.5 ms |
+| 中文 1 MiB | 266 344 B（≈ limit） | 5 296 912 B | **19.9×** | 10.4 ms / 27.9 ms |
+
+结论与设计一致：额外内存从「与输入文本同阶（1–13×）」降到「与输出同阶（≈ limit）」，
+且耗时同步下降。断言 `newAlloc <= 2 × limit` 与 ASCII `newAlloc × 2 < refAlloc` 均成立。
+（耗时是 `-O0` 数值，仅作参照；生产 `-O2` 下分配量结论不变。）

@@ -37,12 +37,12 @@
 
 ## T4 1 MiB 基准（`F_MCP_BENCH=1`）
 
-- [ ] 4.1 基准用例：ASCII 1 MiB 与 中文 ≈1 MiB，`limit = 256 KiB`；`settleGc` +
-      `getAllocatedHeapSize()` 差值，5 样本中位数（窗口内 GC 变化则丢弃重试）
-- [ ] 4.2 打印 `TRUNCATE_BENCH case=... bytes=... limit=... newAlloc=... refAlloc=... newNs=... refNs=... samples=...`
-- [ ] 4.3 断言：`newAlloc <= 2 * limit`；ASCII `newAlloc * 2 < refAlloc`；两条路径结果逐字节相同
-- [ ] 4.4 未设 `F_MCP_BENCH=1` 时打印 `SKIP:` 并返回，默认 `cjpm test` 不受影响
-- [ ] 4.5 跑一次把输出写入 `design.md` §10「实测记录」
+- [x] 4.1 基准用例：ASCII 1 MiB 与 中文 ≈1 MiB，`limit = 256 KiB`；`settleGc` +
+      `getAllocatedHeapSize()` 与 `getGCFreedSize()` 增量合计算分配量，5 样本中位数
+- [x] 4.2 打印 `TRUNCATE_BENCH case=... bytes=... limit=... newAlloc=... refAlloc=... newNs=... refNs=... samples=...`
+- [x] 4.3 断言：`newAlloc <= 2 * limit`；ASCII `newAlloc * 2 < refAlloc`；两条路径结果逐字节相同
+- [x] 4.4 未设 `F_MCP_BENCH=1` 时打印 `SKIP:` 并返回，默认 `cjpm test` 不受影响
+- [x] 4.5 跑一次把输出写入 `design.md` §10「实测记录」
 
 ## T5 回归
 
@@ -53,7 +53,7 @@
 
 ## T6 产物与提交
 
-- [ ] 6.1 确认 `f_mcp/doc/spec/optimize-mcp-truncate-utf8/` 与
+- [x] 6.1 确认 `f_mcp/doc/spec/optimize-mcp-truncate-utf8/` 与
       `openspec/changes/optimize-mcp-truncate-utf8/` 逐文件一致（`diff -ru` 无输出）
-- [ ] 6.2 分支 `feature/optimize-mcp-truncate-utf8`，按「实现 + 用例」与「基准 + 实测记录」分成
+- [x] 6.2 分支 `feature/optimize-mcp-truncate-utf8`，按「实现 + 用例」与「基准 + 实测记录」分成
       两次提交（均在有单元测试之后）
