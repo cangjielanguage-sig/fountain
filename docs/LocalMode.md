@@ -13,10 +13,10 @@
 ## 0. 结论摘要
 
 1. local mode 降低的是**峰值内存**，不是吞吐。它把“函数内临时对象”分配在线程的 local region，函数返回时整块释放，不等 GC；分配本身仍要付成本。
-2. 模态会沿调用链传播：local 值不能传给普通（`@ ~local`）形参、不能返回、不能进字段/缓存/全局、不能进 spawn。因此它**不适合“构建结果对象”的路径**，只适合“函数内创建、函数内用完”的计算型临时区。
-3. fountain 全仓生产代码目前**没有**任何 `@local!`/`@local?`/`exclave`；但已经被动受过 std 模态影响（`f_data` 的 `@DataAssist` 父接口归一化，见 `f_data/doc/spec/fix-dataassist-local-mode/`）。
-4. 本项目最合适的策略是：**只在模块内部、只在元素为 `Copyable` 的容器上 local 化，公开 API 一律保持 `@ ~local`**。这样调用方无需开启 local mode，也不破坏已发布模块的 ABI。
-5. 真正适合先试点的只有 **f_svg**（`analyticCoverage` 的 `width * height` 浮点累加器）和 **f_llm**（`KnowledgeChunker.split` 的全文 `ArrayList<Rune>`）。其余模块要么先做“去拷贝/去重复/复用缓冲”的结构优化，要么被接口 this-mode、泛型、FFI、跨线程锁死。
+2. 模态会沿调用链传播：local 值不能传给普通（`@ ~local`）形参、不能返回、不能进字段/缓存/全局、不能进 spawn。因此它适合“函数内创建、函数内用完”的临时区，以及“只在模块内部调用链传递”的中间对象；不适合“构建结果对象并跨模块返回”的路径。
+3. `f_base` / `f_data` 已经启用 local mode（`LocalEquatable` / `LocalComparable`、`@DataAssist` 的 local hook）；其余模块生产代码目前基本没有 `@local!`/`@local?`/`exclave`。历史遗留的 std 模态影响见 `f_data/doc/spec/fix-dataassist-local-mode/`。
+4. 本次采用**函数级强制规则**：函数体内创建且不逃逸的实例 → `@local!`；只在模块内部调用链传递的实例 → `@local!`。下游参数受“外部 local! 不能直接转发”限制时写 `@local?`，返回 local 用 `exclave`。公开 API、接口方法、跨线程、FFI、泛型入口仍是边界。
+5. 全仓按上述规则逐函数审计；满足条件的函数在 2.5 表中列出并给出声明改法。收益最大的仍是 **f_svg**（`analyticCoverage` 的 `width * height` 累加器）和 **f_llm**（`KnowledgeChunker.split` 的 `ArrayList<Rune>`），但不再局限于这两个模块。
 6. fountain 里多数热点用 local mode 收益很小甚至为负；结构性优化的收益更大，例如 `f_security` 每请求解析两次 JWT、`f_email` Base64 三重实体化、`f_log` 每条日志重新编译模板。
 7. 面向 local-mode 发版（`1.3.10xx` 是最后一个无 local mode 兼容版本），`f_base` 新增 `LocalEquatable` / `LocalComparable`（继承 std `Equatable` / `Comparable`）：抽象成员是 hook `localEq` / `localCompare`，`@ local?` 的 `==` / `compare` 默认转调 hook，普通与 `@ local!` 重载再转调 `@ local?`；保留 `is Equatable` / `is Comparable`。`@DataAssist` 的 `equal` / `compare` 已生成普通实现与 local hook，并在 WSL 测试通过（见 3.4「落地状态」）。
 
@@ -227,8 +227,8 @@ struct Demode<T> {
 ### 2.2 总策略
 
 1. **先结构性优化，再 local mode**。去重复解析、去多余拷贝、复用缓冲的收益通常更大，且没有兼容性代价。
-2. **性能优化类的 local 化只做模块内部实现细节**：不新增、不修改公开模态签名；调用方无需开启 local mode。语言/API 级的 local 支持（`LocalEquatable`/`LocalComparable`、`@DataAssist`）是例外，按 3.4 的 local-mode 发版基线推进。
-3. **只改“分配规模大 + 元素 `Copyable` + 纯计算”的点**；小对象、接口方法、泛型方法不动。
+2. **函数级规则优先于“只做内部细节”**：函数体内创建且不逃逸的实例，声明 `@local!`；只在模块内部调用链传递的实例，声明 `@local!`（下游参数按语言规则用 `@local?`）。公开 API 仍保持 `@ ~local`，接口方法、跨线程、FFI、泛型入口不强行 local 化。
+3. **不再限定 `Copyable` 容器**：非 `Copyable` 的临时对象只要满足“函数内创建且不逃逸”或有 `exclave init`，同样按规则 A 声明 `@local!`；但小对象、负收益点仍不改。
 4. **每个模块独立开启** `compile-option`，不修改 `override-compile-option`；后者会把整棵依赖树拖下水，让所有依赖里的 `exclave`/`demode` 变成关键字。local-mode 发版也沿用这个约定。
 5. **先探针、后改造**。文档只确认 `String`、`Array`、`ArrayList`、`HashMap` 有 local 写法；其余 API 必须实测。
 6. **按峰值内存验收**：`-O2` 构建、同输入同负载，比较 peak RSS、`getAllocatedHeapSize()`、`getAllocatedLocalObjectSize()`。不要用吞吐量证明 local 的收益。
@@ -242,9 +242,114 @@ struct Demode<T> {
 - 压缩、加密、字符集编码的大头在 stdx/native 堆，local region 管不到。
 - 小对象高频分配时，local 的记账成本可能超过收益；官方文档也提示“常见类型并非每个 API 都支持所有 mode”。
 
+2.4 已把这些限制编码成逐函数判定；“不是到处加”指的是在逃逸/接口/线程/FFI/负收益这些边界处不加，而不是只允许 f_svg、f_llm 两个模块用。
+
+### 2.4 函数级规则（全仓每个函数适用）
+
+#### 规则 A：函数体内创建、且不逃逸的实例，声明 `@local!`
+
+```cangjie
+let accumulated = Array<Float64>(width * height, repeat: 0.0) @ local!
+let events = ArrayList<Float64>() @ local!
+let tmpMap = HashMap<String, Int64>() @ local!
+```
+
+判定“不逃逸”：
+
+- 不作为 `@ ~local` 返回值；
+- 不写入字段、缓存、全局、注册表；
+- 不被 `spawn` / `Future` / 异步回调捕获；
+- 不通过 `@ ~local` 的接口方法传出；
+- 不被闭包捕获后逃逸。
+
+项目自有类型要能 local 构造，必须有 `exclave init(this @ local!, ...)`；否则先用 std 的 `Array`/`ArrayList`/`HashMap`/`StringBuilder` 等 local 构造替代，或先补 `exclave init`。
+
+#### 规则 B：只在模块内部函数调用链传递的实例，声明 `@local!`
+
+“模块内部”指 `private` / `internal` 的具体函数，不经过：
+
+- `public` 导出 API、跨模块调用；
+- 接口方法（`this` mode 被接口锁死）；
+- `spawn` / `Future` / 异步回调；
+- `@C` / FFI；
+- 泛型入口（`publish<T>`、`decode<T>` 等，类型参数不能带 mode）。
+
+编码方式（受“外部 `@ local!` 不能直接转发”限制）：
+
+```cangjie
+func outer(): Unit {
+    let buf = ArrayList<Int64>() @ local!   // 规则 A：创建点 @local!
+    consume(buf)                            // 沿内部链传递
+}
+
+private func consume(buf: ArrayList<Int64> @ local?): Unit {
+    // 下游参数写 @local?，才能接收外部 local!
+    // 若 consume 不再继续转发，也可以写 @ local!，但调用方必须是本函数创建的 local 实例
+}
+```
+
+- 创建点：`@ local!`；
+- 下游参数：默认 `@ local?`；确认不再转发且只接收本函数创建的 local 实例时，可写 `@ local!`；
+- 内部函数返回 local：`@ local!` + `exclave`，或由调用方 region 承接的 `@ local?`；
+- 一旦遇到 public/接口/线程/FFI/泛型边界，停止传播，转普通值或复制。
+
+#### 逐函数判定流程
+
+1. 函数内是否创建了实例？否 → 不改。
+2. 实例是否逃逸出函数？是 → 不改，或在边界复制。
+3. 是否经过 public / 接口 / 跨模块 / spawn / FFI / 泛型入口？是 → 不改。
+4. 类型是否支持 local 构造？否 → 先补 `exclave init` 或改用 std 容器。
+5. 创建点标 `@ local!`；内部参数按上表选 `@ local?` / `@ local!`；返回按 `exclave` 规则。
+6. 编译探针 + 模块测试 + 峰值内存基准；小对象/负收益点回退。
+
+### 2.5 全仓函数审计结果
+
+按模块逐个函数过一遍，只列需要改或需要说明的点；未列出的函数不满足规则 A/B（逃逸、public API、接口、泛型、spawn、FFI、无大临时对象或负收益）。
+
+| 模块 | 函数/位置 | 实例 | 结论 |
+| --- | --- | --- | --- |
+| f_svg | `SvgAnalyticRasterizer.analyticCoverage`（124-180） | `accumulated: Array<Float64>`、每行 `events` | `@ local!`；`accumulateAnalyticRow(accumulated: ... @ local?)` |
+| f_llm | `KnowledgeChunker.split`（33-68） | 全文 `ArrayList<Rune>` | `@ local!`；内部 helper 参数 `@ local?` |
+| f_excel | `PackageWriter`（125-218） | `ByteBuffer(256 * 1024)` | 先给 `ByteBuffer` 加 `exclave init`；中间缓冲 `@ local!` |
+| f_excel | `SheetXmlWriter.writeCell`（112-160） | 单元格属性列表/小字符串 | 不改（小对象负收益） |
+| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | `@ local!`；请求体 String 仍普通 |
+| f_jsonrpc | `JsonRpcClient.readCapped`（308-332） | 8 KB 读缓冲 | 优先字段复用；每次新建则 `@ local!` |
+| f_mcp | `McpServer.truncateUtf8`（1140-1164） | `toRuneArray()` 结果 | `@ local!`；更优是改 UTF-8 字节切片 |
+| f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | `@ local!` |
+| f_http | `ContentDisposition.parse`（280-358） | 1~7 元素 `ArrayList<String>` | 不改（小对象） |
+| f_httpclient | `SseReader.readLine`（145-175） | `ArrayList<Byte>` + `toArray()` | `@ local!`，或复用字段缓冲 |
+| f_xml | `XmlWriter` flush | 16 KB 编码数组 | `@ local!`，或复用编码缓冲 |
+| f_xml | `EntityExpander.checkReplacement` | 每次新建 `Lexer`/`LineWindow` | 优先复用单个 Lexer；不改 |
+| f_data | `DataJson.toJsonString`（92-110） | 每字段中间 `valStr` | `@ local!`；更优是写入式 sink |
+| f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转 | `@ local!`（不再逃逸时） |
+| f_orm | `RootDAO.arg`（323-389） | `Any` 装箱进 executor | 不改（逃逸） |
+| f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 两层临时包装 | `@ local!` |
+| f_mq | `candidateNodes` | `ArrayList<Int64>` | `@ local!` |
+| f_rule | `AlphaMemory.range/select`（147-188） | `ArrayList<FactHandle>` + `toArray()` | 结果逃逸，不改；改调用方 buffer |
+| f_egraph | `takeBatchLocked`（218-248） | 整队列快照 | 逃逸，不改 |
+| f_cache | `HeapCache.checkOverSize`（179-224） | `segmentIterators`/`tops` | 字段复用，不改 |
+| f_ticktock | `Ticktock.emit`（236-268） | `batch` 被 `spawn` 捕获 | 不改（跨线程） |
+| f_log | 格式化链路 | 闭包/异步/接口 | 不改 |
+| f_mvc | `PathPattern.extract` | `split("/")` + `HashMap` | 内部 helper 可 `@ local!`；接口 `extract` 不改 |
+| f_security / f_email | JWT 两次解析 / Base64 三重实体化 | 中间 String/数组 | 先做结构性优化，不改 local |
+| f_jwt / f_crypto / f_zip | Base64/HMAC/zlib 中间对象 | stdx/FFI | 不改（native 堆） |
+| f_base / f_io | `StringGenerator` / `ByteBuffer` | 接口方法锁死 | 不改；`RotatableBuffer` 可先加 `exclave init` |
+| f_collection / f_concurrent / f_net / f_pool / f_dbpool / f_dbm | 接口/线程/池化 | — | 不改 |
+| f_store / f_hydra / f_jit / f_tui / f_protocol / f_time / f_regex | 待采样 | — | 按 2.4 流程逐函数判定，当前不改 |
+| 其余模块 | 启动期/纯接口/无大临时对象 | — | 不改 |
+
+说明：
+
+- 表中“`@ local!`”是审计结论/目标声明；落地前必须确认该类型有 local 构造（`exclave init` 或 std 的 local API），没有则先补构造或降级为结构性优化。
+- 表中“`@ local!`”指创建点/内部链的实例声明；下游参数默认写 `@ local?`，原因见 2.4 的外部 local! 转发限制。
+- 这张表是**函数级审计的汇总**，不是“每个函数都改”。未列出的函数按 2.4 流程判定为不改；新增热点时继续往表里补。
+- 规则 B 只覆盖模块内部具体函数；`public` API 仍保持 `@ ~local`，避免调用方被迫开启 local mode。
+
 ---
 
 ## 3. 逐模块建议
+
+> 本节的结构优化建议仍然有效；local 化部分以 2.4 的函数级规则为准：满足“函数内创建且不逃逸”或“仅模块内部链传递”的实例标 `@local!`，其余不改。早期“只做内部、只 Copyable”的保守结论已被 2.4 取代。
 
 ### 3.1 首批试点
 
@@ -798,7 +903,7 @@ p6 第一次编译还发现一个坑：`!=(this @ local!, other: T @ local!)` �
 
 | 分类 | 模块 |
 | --- | --- |
-| 首批试点 | f_svg、f_llm（仅 rune 缓冲） |
+| 首批试点（函数级规则） | f_svg、f_llm（创建点 `@ local!`，helper 参数 `@ local?`） |
 | 第二批（先结构优化） | f_excel、f_rule、f_egraph、f_cache、f_jsonrpc、f_mcp、f_httpclient、f_xml |
 | 基础能力改造 | f_base（LocalEquatable / LocalComparable）、f_data（DataAssist + 字段 helper）、f_io（ByteBuffer / RotatableBuffer） |
 | 需前置设施的下游模块 | f_jsonrpc、f_mcp、f_codec、f_http、f_chart、f_orm、f_dbd、f_mq、f_ticktock、f_zip |
@@ -858,8 +963,9 @@ func makeSquares(n: Int64): Array<Int64> @ local! {
 ### 4.5 第 4 步：按模块推进
 
 - 增量阶段只给真正写了 local 代码的模块加 `--experimental --enable-local-mode`；
-- 每次只改一个模块，`cjpm build` + `cjpm test` + 基准三件套；
-- 性能优化类改动保持公开 API `@ ~local`；`LocalEquatable`/`LocalComparable` 与 `@DataAssist` 按 3.4 的接口设计新增模态签名；
+- 每次只改一个模块，按 2.4 逐函数判定：创建点 `@ local!`，内部链下游 `@ local?`，public API 保持 `@ ~local`；
+- 每次 `cjpm build` + `cjpm test` + 基准三件套；
+- `LocalEquatable`/`LocalComparable` 与 `@DataAssist` 按 3.4 的接口设计新增模态签名；
 - 不修改 `override-compile-option`（仓库约定）；local-mode 发版也只加各模块的 `compile-option`。
 
 ### 4.6 第 5 步：前置设施（可选）
@@ -884,6 +990,9 @@ func makeSquares(n: Int64): Array<Int64> @ local! {
 11. **继承/接口重复路径**：std 的 `Equatable`/`Comparable` 已带模态重载，类型声明里重复列出祖先接口会报 `must be implemented ... @local!`；不要通过补 `@ local!` 解决，去掉重复父接口即可。`@DataAssist` 的 `normalizeSuperTypes` 同时处理 `LocalEquatable` / `LocalComparable` 与 std 祖先的冗余（保留 `LocalComparable` 时删掉 `LocalEquatable`、`Comparable`、`Equatable`）。详见 `f_data/doc/spec/fix-dataassist-local-mode/`。
 12. **ohos**：std 的 local 模态成员都带 `@When[env != "ohos"]`（`equatable.cj`、`comparable.cj`、`hashable.cj`、`object.cj` 均如此），ohos 构建没有这些重载；跨平台模块不能把 local 重载作为唯一实现路径，需要用条件编译或保留普通路径。
 13. **std 接口兼容性**：方案 B 保留 `is Equatable` / `is Comparable`，泛型 `T <: Equatable<T>` / `Comparable<T>` 继续可用；`LocalComparable` 继承 `LocalEquatable`，因此 equal + compare 类同时 `is LocalEquatable` / `is LocalComparable`。代价是 `Equatable` 双路径要求 `LocalComparable` 显式实现普通与 local? 的 `!=`；不要再手动把 `LocalEquatable` 加进同一个类。
+14. **外部 local! 不能直接转发**：规则 B 的下游参数默认写 `@ local?`；`@ local!` 形参只用于“不继续转发”的直接消费。内部链要返回 local 时用 `exclave`，否则只能返回普通值。
+15. **规则 B 的边界**：`public` API、接口方法、跨模块调用、`spawn`/`Future`、`@C` FFI、泛型入口都会截断内部链；这些位置保持普通类型，不要为了“统一”硬加 `@ local!`。
+16. **函数级审计 ≠ 每个分配都 local**：小对象、高频短生命周期、无 local 构造、负收益点仍不改；满足规则 A/B 只是“可以 local”，最终还要过基准。
 
 ---
 
