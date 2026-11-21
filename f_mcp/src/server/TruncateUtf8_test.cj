@@ -18,6 +18,7 @@ package fountain::f_mcp.server
 import std.collection.ArrayList
 import std.env.getVariable
 import std.runtime.{gc, getAllocatedHeapSize, getGCCount, getGCFreedSize}
+import std.sort.*
 import std.time.MonoTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -135,8 +136,8 @@ private func measureCall(action: () -> String): (Int64, Int64, Int64) {
     if (allocs.size == 0) {
         return (-1, 0, 0)
     }
-    allocs.sort()
-    times.sort()
+    sort(allocs)
+    sort(times)
     (allocs[allocs.size / 2], times[times.size / 2], allocs.size)
 }
 
@@ -201,7 +202,6 @@ class TruncateUtf8_test {
                 let want = referenceTruncate(text, limit)
                 @Assert(want, got)
                 @Assert(got.size <= limit)
-                println('EQUIV case=${label} bytes=${text.size} limit=${limit} cut=${got.size}')
             }
         }
     }

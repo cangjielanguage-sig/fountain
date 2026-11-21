@@ -24,7 +24,8 @@
       且分配量 `< text.size / 16`
 - [x] 2.5 Red：`stopsAtFirstNonFittingRune` —— 「可填满 limit 的前缀 + 1 MiB 尾巴」的结果只含前缀
 - [x] 2.6 Red：`zeroAndNegativeLimit` —— `limit = 0 / -1` 返回 `''`
-- [x] 2.7 运行：`cd f_mcp && cjpm test --filter TruncateUtf8`，2.4 先红（现实现返回前就物化全量数组）
+- [x] 2.7 Red：`keepsRuneBoundaryForMixedScript` —— 混合串在 `limit` 落在各宽度字符中间 → 结果可按 UTF-8 往返
+- [x] 2.8 运行：`cd f_mcp && cjpm test --filter TruncateUtf8`，2.4 先红（现实现返回前就物化全量数组）
 
 ## T3 实现（Green）
 

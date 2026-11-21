@@ -2,7 +2,8 @@
 
 > **唯一入库副本**：`f_mcp/doc/spec/optimize-mcp-truncate-utf8/`。`openspec/changes/optimize-mcp-truncate-utf8/`
 > 是本地工作副本（`openspec/` 已被 `.gitignore` 忽略）；两份逐文件字节一致。
-> 同步：`rsync -a --delete f_mcp/doc/spec/optimize-mcp-truncate-utf8/ openspec/changes/optimize-mcp-truncate-utf8/`
+> 同步：以 `f_mcp/doc/spec/optimize-mcp-truncate-utf8/` 为准 `cp -a` 到
+> `openspec/changes/optimize-mcp-truncate-utf8/`（本机无 rsync）。
 > 校验：`diff -ru f_mcp/doc/spec/optimize-mcp-truncate-utf8 openspec/changes/optimize-mcp-truncate-utf8` 无输出。
 
 ## Why
