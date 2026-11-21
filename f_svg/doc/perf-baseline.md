@@ -140,3 +140,25 @@
 
 - 每次查询重算一次样式树；不做跨调用缓存，与 M5 `getBBox` 口径一致。
 - 命中测试 `SvgHitTest` 同样每次重算样式树；`maxElements` 在递归前累计并抛 `Limit`。
+
+## Local mode 试点：解析覆盖率累加器（参考值，非门禁）
+
+- 环境：Linux aarch64，Cangjie SDK `1.3.0-alpha.20261118001016`，`-O2`，单次渲染，含噪声。
+- 场景：`fill=red` 的圆（半径随画布约 0.4 倍宽），`antiAlias = Analytic`、`samplesPerPixel = 1`；只计 `SvgRenderer.render`，不含解析。
+- 口径：耗时与 peak RSS 来自关闭采样的独立进程；`local 峰值` / `堆峰值` 来自同一几何下每 1 ms 采样 `getAllocatedLocalObjectSize()` / `getAllocatedHeapSize()` 的独立进程，取过程最大值（采样本身会暂停仓颉线程，故不计入耗时）。peak RSS 取 `/proc/self/status` 的 `VmHWM`。
+- 基准工程：临时 cjpm 工程以 path 依赖引用本模块，`main` 内直接调用公开 `SvgRenderer`；未写入仓库。
+
+| 尺寸 | 累加器档位 | local 峰值 | 堆峰值 | 耗时（3 次） | peak RSS |
+|---|---|---|---|---|---|
+| 1024×1024 | local（8 MiB，门限内） | 8,388,816 B | 约 155–164 MB | 115 / 118 / 129 ms | 174–189 MB |
+| 1024×1024 | 堆（对照） | 192 B | 约 180 MB | 128 / 136 / 147 ms | 180–200 MB |
+| 2048×2048 | 堆（门限外） | 192 B | 约 256 MB | 616 / 630 / 734 ms | 约 238 MB |
+| 2048×2048 | local（32 MiB，首轮档位，已弃用） | 33,554,640 B | 约 263 MB | 541 / 659 / 669 ms | 约 277 MB |
+| 3840×2160 | 堆（门限外，未变） | 192 B | 约 265 MB | 1086 / 1377 / 1395 ms | 216–231 MB |
+
+- `local 峰值` 与理论值吻合：1024² × 8 = 8 MiB；2048² 与 4K 按 8 MiB 门限走堆，只有每行 `events` 的少量字节。
+- 对照行的「堆」是把门限临时置为 0 后同一份代码重跑，用来隔离「累加器放 local / 放堆」的差别；`events` 两种情况下都走 local（见 design D3）。
+- 本机 1024² 档位的堆峰值与 peak RSS 均下降（约 25 MB / 15 MB）；首轮 32 MiB 档位在 2048² 的 peak RSS 反而上升约 40 MB——local region 的 32 MiB 与 GC 堆峰值叠加，而不是替换堆里的同一块内存。因此复审把门限下调到 **8 MiB**：1024² 及以下走 local，2048² 与 4K 走堆。
+- 与 `cjLocalRegionMaxSize`（默认 256 MB，全线程合计）的关系：8 MiB 门限允许最多 32 个解析覆盖率渲染并发占满默认上限；需要更高并发时应调大该环境变量，或降低单次画布尺寸。
+- ohos 目标不支持 `--enable-local-mode`（鸿蒙侧 SDK 报 `invalid option`），本模块在 `aarch64-linux-ohos` / `x86_64-linux-ohos` 上不构建，与 `f_base` / `f_data` 的 local-mode 基线一致。
+- 以上数值为参考、非 CI 门禁；不做吞吐量承诺。逐元素等价由 `SvgAnalyticLocalMode_test.cj` 覆盖，重复渲染确定由既有 `combinedDeterminism` 覆盖。
