@@ -48,8 +48,6 @@ f_email
 f_jsonrpc
 f_mcp
 f_xml
-f_svg
-f_chart
 f_zip
 f_excel
 f_rule
@@ -62,6 +60,8 @@ fboot
 fmq
 fdbm
 fprobe
+f_svg
+f_chart
 .
 
 [exclude]
