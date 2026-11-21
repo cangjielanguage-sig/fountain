@@ -34,6 +34,14 @@ The module follows the fountain repository version (currently `1.3.1020`):
 With a central repository configured, `"fountain::f_svg" = "1.3.1020"` also works.
 Register `f_svg` in the repository root `.modules` file.
 
+### Build requirement (local mode)
+
+`[package].compile-option` enables `--experimental --enable-local-mode`: the analytic-coverage accumulator uses the thread-local region up to 8 MiB and falls back to the normal heap above that limit.
+
+- Callers do not need local mode; `SvgRenderer` / `SvgRenderOptions` / `SvgBitmap` and other public APIs carry no modal types.
+- `f_svg` and its dependencies must be rebuilt with the same SDK version (local-mode artifacts are not guaranteed to be compatible across SDKs).
+- `aarch64-linux-ohos` / `x86_64-linux-ohos` SDKs reject this flag, so this module is not built for HarmonyOS targets (same as the `f_base` / `f_data` local-mode baseline).
+
 ## Quick start
 
 ### 1. Parse → render PNG
