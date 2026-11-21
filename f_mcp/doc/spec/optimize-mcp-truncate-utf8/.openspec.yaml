@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-22
+x-scope: f_mcp-result-truncation
+x-design-doc: f_mcp/doc/f_mcp模块设计.md
+x-predecessor: f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings
+x-gate: equivalence-and-allocation
+x-runtime-env: default (no cjHeapSize / cjGCInterval / cjRegionSize)
