@@ -123,7 +123,11 @@ internal class StylePool {
 /** 生成 `xl/styles.xml`（最小完整结构 + 用户样式）。 */
 internal class StylesWriter {
     static func write(pool: StylePool): Array<Byte> {
-        let buffer = ByteBuffer(256 * 1024)
+        write(pool, ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY))
+    }
+
+    static func write(pool: StylePool, buffer: ByteBuffer): Array<Byte> {
+        buffer.clear()
         let xml = XmlWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(styleEl("styleSheet"))

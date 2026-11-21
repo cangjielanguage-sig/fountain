@@ -23,6 +23,9 @@ import fountain::f_zip.ZipWriter
 private let NS_XDR: String = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
 private let NS_A: String = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
+/** 单次包写出复用的 XML 部件缓冲初始容量。 */
+internal let OPC_PART_BUFFER_INITIAL_CAPACITY: Int64 = 256 * 1024
+
 private func xdr(local: String): QName {
     QName(local, prefix: Some("xdr"), uri: Some(NS_XDR))
 }
@@ -75,14 +78,18 @@ internal class PackageWriter {
         }
         let zip = ZipWriter(output)
         let styles = StylePool()
-        zip.add("[Content_Types].xml", contentTypes(count, sheetDrawing: sheetDrawing, formats: usedFormats))
-        zip.add("_rels/.rels", rootRels())
+        let parts = ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY)
+        zip.add(
+            "[Content_Types].xml",
+            contentTypes(count, buffer: parts, sheetDrawing: sheetDrawing, formats: usedFormats)
+        )
+        zip.add("_rels/.rels", rootRels(parts))
         let names = ArrayList<String>()
         for (sheet in sheets) {
             names.add(sheet.name)
         }
-        zip.add("xl/workbook.xml", workbookXmlFromNames(names.toArray(), date1904))
-        zip.add("xl/_rels/workbook.xml.rels", workbookRels(count))
+        zip.add("xl/workbook.xml", workbookXmlFromNames(names.toArray(), date1904, parts))
+        zip.add("xl/_rels/workbook.xml.rels", workbookRels(count, parts))
         for (i in 0..sheets.size) {
             let images = sheets[i].sheetImages()
             var drawingRel: ?String = None
@@ -93,9 +100,9 @@ internal class PackageWriter {
                 for (j in 0..images.size) {
                     zip.add("xl/media/${media[j]}", images[j].data)
                 }
-                zip.add("xl/drawings/drawing${drawing}.xml", drawingXml(images))
-                zip.add("xl/drawings/_rels/drawing${drawing}.xml.rels", drawingRels(media))
-                zip.add("xl/worksheets/_rels/sheet${i + 1}.xml.rels", sheetRels(drawing))
+                zip.add("xl/drawings/drawing${drawing}.xml", drawingXml(images, parts))
+                zip.add("xl/drawings/_rels/drawing${drawing}.xml.rels", drawingRels(media, parts))
+                zip.add("xl/worksheets/_rels/sheet${i + 1}.xml.rels", sheetRels(drawing, parts))
             }
             let entry = zip.openEntry("xl/worksheets/sheet${i + 1}.xml")
             let writer = SheetXmlWriter(entry, styles, date1904, sheets[i].name, warnings)
@@ -114,7 +121,7 @@ internal class PackageWriter {
             writer.end(sheets[i].mergedRanges(), sheets[i].conditionalFormats(), drawingRel: drawingRel)
             entry.close()
         }
-        zip.add("xl/styles.xml", StylesWriter.write(styles))
+        zip.add("xl/styles.xml", StylesWriter.write(styles, parts))
         zip.close()
     }
 
@@ -127,7 +134,21 @@ internal class PackageWriter {
         sheetDrawing!: ArrayList<Int64> = ArrayList<Int64>(),
         formats!: ArrayList<ImageFormat> = ArrayList<ImageFormat>()
     ): Array<Byte> {
-        let buffer = ByteBuffer(256 * 1024)
+        contentTypes(
+            sheetCount,
+            buffer: ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY),
+            sheetDrawing: sheetDrawing,
+            formats: formats
+        )
+    }
+
+    internal static func contentTypes(
+        sheetCount: Int64,
+        buffer!: ByteBuffer,
+        sheetDrawing!: ArrayList<Int64> = ArrayList<Int64>(),
+        formats!: ArrayList<ImageFormat> = ArrayList<ImageFormat>()
+    ): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(QName("Types", uri: Some(NS_CONTENT_TYPES)))
@@ -217,7 +238,11 @@ internal class PackageWriter {
     }
 
     internal static func rootRels(): Array<Byte> {
-        let buffer = ByteBuffer(64 * 1024)
+        rootRels(ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY))
+    }
+
+    internal static func rootRels(buffer: ByteBuffer): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(QName("Relationships", uri: Some(NS_PKG_REL)))
@@ -235,7 +260,15 @@ internal class PackageWriter {
     }
 
     internal static func workbookXmlFromNames(sheets: Array<String>, date1904: Bool): Array<Byte> {
-        let buffer = ByteBuffer(128 * 1024)
+        workbookXmlFromNames(sheets, date1904, ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY))
+    }
+
+    internal static func workbookXmlFromNames(
+        sheets: Array<String>,
+        date1904: Bool,
+        buffer: ByteBuffer
+    ): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(
@@ -263,7 +296,11 @@ internal class PackageWriter {
     }
 
     internal static func workbookRels(sheetCount: Int64): Array<Byte> {
-        let buffer = ByteBuffer(128 * 1024)
+        workbookRels(sheetCount, ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY))
+    }
+
+    internal static func workbookRels(sheetCount: Int64, buffer: ByteBuffer): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(QName("Relationships", uri: Some(NS_PKG_REL)))
@@ -290,8 +327,8 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    private static func drawingXml(images: ArrayList<SheetImage>): Array<Byte> {
-        let buffer = ByteBuffer(256 * 1024)
+    internal static func drawingXml(images: ArrayList<SheetImage>, buffer: ByteBuffer): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(xdr("wsDr"), attributes: [XmlAttribute(QName("xmlns:r"), NS_REL)])
@@ -351,8 +388,8 @@ internal class PackageWriter {
         xml.endElement(xdr(tag))
     }
 
-    private static func drawingRels(media: ArrayList<String>): Array<Byte> {
-        let buffer = ByteBuffer(64 * 1024)
+    internal static func drawingRels(media: ArrayList<String>, buffer: ByteBuffer): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(QName("Relationships", uri: Some(NS_PKG_REL)))
@@ -371,8 +408,8 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    private static func sheetRels(drawing: Int64): Array<Byte> {
-        let buffer = ByteBuffer(64 * 1024)
+    internal static func sheetRels(drawing: Int64, buffer: ByteBuffer): Array<Byte> {
+        buffer.clear()
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(QName("Relationships", uri: Some(NS_PKG_REL)))
