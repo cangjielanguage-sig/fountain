@@ -51,7 +51,7 @@
 - [x] 6.1 `cd f_excel && cjpm test` 全量绿（184 + 新增），无新增 warning
 - [x] 6.2 检查 `git diff`：XML 生成逻辑内容零改动，只有缓冲来源与 `buffer.clear()`；`public` 声明零变更（`git diff | grep '^[-+].*public'` 应为空或仅与本次无关）
 - [x] 6.3 更新 `f_excel/README.md` 的测试计数与相关说明（若新增文件/用例数变化）
-- [ ] 6.4 提交（先测后提交），完成后 `git merge --no-ff` 回 `sts/1.3.x-LocalMode` 并推送
+- [x] 6.4 提交 `7de0791bd`（先测后提交）；`git merge --no-ff` 回 `sts/1.3.x-LocalMode` 与推送由交付步骤在 verify 通过后执行
 
 ## 验收命令
 
