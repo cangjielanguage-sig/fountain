@@ -79,7 +79,7 @@ local / 堆分档 SHALL 只影响 rune 缓冲的分配位置，不得改变任�
 - **WHEN** 调用公开 `KnowledgeChunker.split` 并运行既有 `KnowledgeChunkerTest`
 - **THEN** 签名与默认值不变，既有 5 条切块用例与知识检索用例全部通过
 
-#### Scenario: 返回容器保持堆分配
+#### Scenario: 返回容器保持堆分配（基准手工验证）
 
-- **WHEN** 在基准进程内对门限以下的输入调用 `split`
-- **THEN** `getAllocatedLocalObjectSize()` 的峰值只反映 rune 缓冲（约 8 MiB 以内），`chunks` 与 `StringBuilder` 仍计入堆
+- **WHEN** 在基准进程内对门限以下的输入调用 `split`，并同时记录 `getAllocatedLocalObjectSize()` 与 `getAllocatedHeapSize()`
+- **THEN** local 峰值只反映 rune 缓冲（约 8 MiB），`chunks` 与 `StringBuilder` 的堆增量单独计入；该场景由 `f_llm/doc/perf-baseline.md` 记录，不作 CI 断言

@@ -17,7 +17,7 @@
 - §1.9：所有线程活跃 local region 合计默认上限 256 MB，超限抛 `LocalRegionOutOfMemoryError`；因此需要门限。
 - §2.2：只改模块 `[package].compile-option`，不改 `override-compile-option`；`f_base` / `f_data` / `f_svg` 已按此先例开启。
 - §4.1：按 peak RSS、`getAllocatedHeapSize()`、`getAllocatedLocalObjectSize()` 验收，不以吞吐量证明收益。
-- `f_svg` 的 `local-mode-f-svg-analytic-coverage` 已验证「单一实现 + `useLocal` 档位开关 + 门限」模式；本次沿用，但对象换成 `ArrayList<Rune>`，且 `@ local?` ArrayList 的读取支持需要在 apply 首步探针确认。
+- `f_svg` 的 `local-mode-f-svg-analytic-coverage` 已验证「单一实现 + `useLocal` 档位开关 + 门限」模式；本次沿用档位开关与门限，但窗口循环因 `-O0` 下 mode 化读取的 local 临时对象而拆成两档（见 D2）。
 
 已核对的契约：
 
@@ -74,7 +74,7 @@ internal func knowledgeChunkerUsesLocal(content: String): Bool {
 - 为什么不按 rune 数判定：需要先完整展开 rune 才能知道数量；本试点先用内容字节这个廉价上界，精确 rune 数只用于容量。若后续实测希望放宽中文门限，可在 D3 的 `countRunes` 后改用 `total <= BUDGET / 4`，但不作为本轮默认。
 - 为什么拆出 `knowledgeChunkerUsesLocalBytes`：门限边界用例可以直接用字节数断言（0、1、2 MiB-1、2 MiB、2 MiB+1、`Int64.Max`），不必在单测里构造 2 MiB 字符串。
 
-### D2 单一实现 + `useLocal` 开关 + `@ local?` rune 缓冲
+### D2 分档实现 + `useLocal` 开关 + 精确容量 rune 缓冲
 
 公开 `split` 只做校验与档位选择；`splitImpl` 同时服务生产与 A/B：
 
@@ -111,7 +111,7 @@ internal static func splitImpl(content: String, maxChars: Int64, overlap: Int64,
     chunks
 }
 
-private static func appendChunksLocal(
+private static exclave func appendChunksLocal(
     runes: ArrayList<Rune> @ local!,
     total: Int64,
     maxChars: Int64,
@@ -138,7 +138,6 @@ private static func appendChunksHeap(
 - 两段窗口循环的重复是这份工具链行为的直接代价，注释互相指向；窗口 / 重叠语义只有一处数字来源（`maxChars`、`overlap`、`total`）。
 - `appendChunksLocal` 声明为 `private static exclave func`：普通函数不能直接读外部 `@ local!` 元素的 `operator[]`（编译器报 `cannot pass argument of external @local! to @local! this parameter`）；`exclave` 让读操作留在 `splitImpl` 的 region，与 `f_svg` 的 `sortAnalyticLocalValues` 同型。
 - 不把填充抽成公共 `fill`：`@ local?` 形参无法调用 `add`，抽出来只能拆成 local / 堆两个 helper，填充逻辑反而分叉。
-- 不需要 `exclave`：local 列表在 `splitImpl` 自己的 local region 内创建，随后在同一函数内只读；没有把 local 值返回给调用者。
 - `total` 来自 `countRunes`，同时用于构造容量与窗口边界，保证两者使用同一个数字。
 - `splitImpl` 的 `useLocal` 是显式档位：生产路径由 `split` 的门限保证不超 8 MiB；测试 / 基准可以对小内容强制任一档位，但调用方不得在超门限内容上强制 local。
 - `chunks` 与 `StringBuilder` 不写 mode，保持普通堆分配；chunk `String` 由 `builder.toString()` 产生，随后进入返回值。
@@ -216,7 +215,8 @@ compile-option = "--dy-std --experimental --enable-local-mode"
 
 - **TDD**：先写 `KnowledgeChunkerLocalMode_test.cj`（RED：常量 / predicate / `splitImpl` 不存在，编译失败），再实现到 GREEN。
 - **门限用例**：`knowledgeChunkerUsesLocalBytes` 覆盖 0、1、2,097,151、2,097,152、2,097,153、`Int64.Max`；`knowledgeChunkerUsesLocal` 覆盖空串与小串；断言 `KNOWLEDGE_CHUNKER_LOCAL_BUDGET_BYTES == 8 * 1024 * 1024`、`KNOWLEDGE_CHUNKER_RUNE_BYTES == 4`、`KNOWLEDGE_CHUNKER_LOCAL_CONTENT_BYTES == 2,097,152`。不构造 2 MiB 字符串做边界断言。
-- **等价性用例**：ASCII、中文、emoji、混合内容，`maxChars` 取 1 / 2 / 4 / 400、`overlap` 取 0 / 1 / 50（合法组合），分别用 `splitImpl(..., true)` 与 `false` 计算，断言长度与每个 chunk 相等；覆盖「内容长度恰好等于 maxChars」「单 rune」「overlap=0」。
+- **等价性用例**：ASCII、中文、emoji、混合内容，`maxChars` 取 1 / 2 / 4 / 400、`overlap` 取 0 / 1 / 50（合法组合），分别用 `splitImpl(..., true)` 与 `false` 计算，断言长度与每个 chunk 相等；覆盖「内容长度恰好等于 maxChars」「单 rune」「overlap=0」；另补 1 MiB 与 2 MiB ASCII 的门限附近 local/堆逐元素等价。
+- **返回容器堆分配**：由 `KnowledgeChunkerLocalModeBench_test.cj` 与 `perf-baseline.md` 手工记录 `getAllocatedLocalObjectSize()` / `getAllocatedHeapSize()`，属于参考值、不作 CI 断言。
 - **公开 API 回归**：`split` 与 `splitImpl(..., false)` 对门限以下内容逐元素一致；既有 `KnowledgeChunkerTest` 的 5 条切块用例与 3 条知识检索用例全部保持通过。
 - **全量回归**：`cd f_llm && cjpm test` 无新增错误（2026-11-21 基线 668 条：659 通过、9 条外部 BgeM3 服务连接错误）；`cjpm test --filter '*KnowledgeChunkerLocalModeTest*'` 单独通过。
 - **内存口径**：按 `docs/LocalMode.md` §4.1，用 `-O2`、固定输入记录 peak RSS 与 `getAllocatedLocalObjectSize()` / `getAllocatedHeapSize()`；只在基准进程里调用后者。结果写入 `f_llm/doc/perf-baseline.md`，作为参考值、不作 CI 门禁。

@@ -128,6 +128,13 @@ public class KnowledgeChunkerLocalModeTest {
         expectSameChunks(actual, expected)
     }
 
+    /** 门限附近的大内容：1 MiB 与 2 MiB ASCII 的 local / 堆逐元素一致。 */
+    @TestCase
+    func testLargeContentTiersAgree(): Unit {
+        expectEquivalent(asciiOf(1024 * 1024), 400, 50)
+        expectEquivalent(asciiOf(2 * 1024 * 1024), 400, 50)
+    }
+
     private func expectEquivalent(content: String, maxChars: Int64, overlap: Int64): Unit {
         let local = KnowledgeChunker.splitImpl(content, maxChars, overlap, true)
         let heap = KnowledgeChunker.splitImpl(content, maxChars, overlap, false)
@@ -139,5 +146,15 @@ public class KnowledgeChunkerLocalModeTest {
         for (index in 0..heap.size) {
             @Expect(local[index], heap[index])
         }
+    }
+
+    private func asciiOf(bytes: Int64): String {
+        let builder = StringBuilder()
+        var index: Int64 = 0
+        while (index < bytes) {
+            builder.append('a')
+            index++
+        }
+        builder.toString()
     }
 }
