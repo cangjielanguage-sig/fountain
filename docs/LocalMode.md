@@ -334,7 +334,7 @@ private func accumulateAnalyticRow(
 | **f_httpclient** | HTTP 客户端/SSE | `SseReader.readLine`（`145-175`）每行 `ArrayList<Byte>` + `toArray()` 双份，行上限 1 MB；`SseReader` 本身就是可复用对象，改成“字段缓冲 + `String.fromUtf8(buf, 0, n)`”即可，不需要 local。`ExtendHttpResponse.readToEnd` 是 `extend HttpResponse <: ExtendHttpResponse` 的接口成员，this mode 锁死。 |
 | **f_xml** | XML 解析/写出 | `XmlWriter` 每 16 KB flush 一次 `encoder.encode(text)` 数组，可复用；`EntityExpander.checkReplacement` 每个实体值新建 `Lexer`/`LineWindow`/`Utf8RuneSource`，复用单个 Lexer 更划算。`EntityExpander` 的 `Lexer` 状态在字段，local 化成本高。 |
 | **f_chart** | SVG 图表渲染 | 整棵 `SvgBuilder` DOM → `toSvgString` 是最大临时区，但要 local 化必须先把 `f_svg.SvgBuilder`/`SvgElement` 和 `f_xml.XmlWriter` 全链 local 化；`Chart.draw` 还是接口实现（this mode 锁死）。当前不做。 |
-| **f_data** | 数据对象/JSON | `f_data/src/json/DataJson.cj:92-110` 的 `toJsonString` 每字段先生成中间 `valStr`，再拼进父 builder，峰值约为最终 JSON 的 2 倍。收益最大的是改成写入式 sink（父 builder 直接接收子节点），不是 local；`DataObject<T>` 是泛型 + `ToJsonString` 接口实现，模态改不动。`@DataAssist` 面向 local-mode 发版：`equal` / `compare` 改为实现 `f_base.LocalEquatable` / `LocalComparable`，只生成 `localEq` / `localCompare` 实现，普通与 local 重载由接口默认实现转调；详见 3.4。 |
+| **f_data** | 数据对象/JSON | `f_data/src/json/DataJson.cj:92-110` 的 `toJsonString` 每字段先生成中间 `valStr`，再拼进父 builder，峰值约为最终 JSON 的 2 倍。收益最大的是改成写入式 sink（父 builder 直接接收子节点），不是 local；`DataObject<T>` 是泛型 + `ToJsonString` 接口实现，模态改不动。`@DataAssist` 面向 local-mode 发版：`equal` / `compare` 实现 `f_base.LocalEquatable` / `LocalComparable`，同时生成普通 `==` / `compare` 与 `localEq` / `localCompare` hook；local 路径由接口默认转调，普通路径保持非模态；详见 3.4。 |
 | **f_orm** | ORM/SQL DSL | `RootDAO.arg`（`323-389`）的 `Any` 装箱会逃逸进 executor 参数表，local 无效；`SqlPartial.UPDATE`（`123-143`）的 `HashMap<String, Any>` 纯中转，直接删掉/直接调另一重载即可。`RootDAO` 是 40+ 默认成员的接口，加 `this @ local?` 会牵连整棵 DAO 体系，不做。 |
 | **f_dbd** | 数据库驱动 | `DbdStatement.sqlPayload`（`158-175`）每参数两层 `DataAny` 包装，是结构性浪费；`QueryResultImpl.get<T>` 实现 std `QueryResult`，this mode 锁死。 |
 | **f_mq** | 消息队列客户端 | `publish<T>`、`MQProtocol.encodePayload<T>` 都是泛型，local 不支持类型参数；`candidateNodes` 的 `ArrayList<Int64>` 可以 local，但规模小、收益低。 |
@@ -500,10 +500,10 @@ public interface LocalEquatable<T> <: Equatable<T> {
 }
 ```
 
-`LocalComparable`（独立于 `LocalEquatable`，只继承 std `Comparable`）：
+`LocalComparable`（继承 `LocalEquatable` 与 std `Comparable`）：
 
 ```cangjie
-public interface LocalComparable<T> <: Comparable<T> {
+public interface LocalComparable<T> <: LocalEquatable<T> & Comparable<T> {
     // 唯一抽象成员：实现类提供真正的排序比较（只对 local 实例调用）
     func localCompare(this @ local?, other: T @ local?): Ordering
 
@@ -515,6 +515,9 @@ public interface LocalComparable<T> <: Comparable<T> {
     // ---- local 路径 ----
     operator func ==(this @ local?, other: T @ local?): Bool {
         this.localEq(other)
+    }
+    operator func !=(this @ local?, other: T @ local?): Bool {
+        !this.localEq(other)
     }
     operator func ==(this @ local!, other: T @ local!): Bool {
         let lhs: LocalComparable<T> @ local? = this
@@ -552,6 +555,10 @@ public interface LocalComparable<T> <: Comparable<T> {
     operator func ==(other: T): Bool {
         this.compare(other) == EQ
     }
+    // 双路径必须显式实现普通 !=
+    operator func !=(other: T): Bool {
+        !(this == other)
+    }
     operator func <(other: T): Bool {
         this.compare(other) == LT
     }
@@ -562,9 +569,9 @@ public interface LocalComparable<T> <: Comparable<T> {
 要点：
 
 - 新增的 `.cj` 文件按仓库规范在 `package` 之前加 Apache 2.0 版权头（年份取新建年）。
-- `LocalEquatable` 与 `LocalComparable` **互不继承**：两者各自继承 std 的 `Equatable` / `Comparable`；如果 `LocalComparable <: LocalEquatable` 再叠加 `Comparable`，`Equatable` 会出现两条继承路径，触发本文件 2.1 提到的 `must be implemented ... @local!` 问题。
-- `LocalComparable` 自带一份 `localEq` 默认实现（`compare == EQ`），因此只实现 `localCompare` 的类也能获得完整相等语义。
-- `equal` + `compare` 同时存在时，`@DataAssist` 只把 `LocalComparable<T>` 加进父接口，并同时生成 `localEq` / `localCompare`（local 路径）与普通 `==` / `!=` / `compare`（普通路径）；此时类仍是 std `Equatable` / `Comparable`，但**不是** `LocalEquatable`。
+- `LocalComparable<T> <: LocalEquatable<T> & Comparable<T>`：`Equatable` 会经过两条路径（`LocalEquatable` 与 `Comparable`），编译器会要求 `LocalComparable` 显式实现普通与 `@ local?` 的 `!=`；接口里已补上，否则报 `interface function '!=(...) must be implemented`。
+- `LocalComparable` 自带一份 `localEq` 默认实现（`compare == EQ`），因此只实现 `localCompare` 的类也能获得完整相等语义；同时它自然也是 `LocalEquatable`。
+- `equal` + `compare` 同时存在时，`@DataAssist` 只把 `LocalComparable<T>` 加进父接口，并同时生成 `localEq` / `localCompare`（local 路径）与普通 `==` / `!=` / `compare`（普通路径）；此时类既是 `LocalEquatable` 也是 `LocalComparable`，同时仍是 std `Equatable` / `Comparable`。
 - `@ local!` 的 `==` / `!=` / `compare` / `<` 默认实现都必须先把 `this` / `other` 转成 `@ local?` 视图。直接写 `this == other` 会报 `cannot pass argument of external @local! to @local! parameter`（实测踩过）。
 - **普通路径必须保持非模态**：不要为了“统一”把普通 `==` / `compare` 也转调 hook；普通实例没有 local region，访问非 Copyable 字段会报 `alloc native local object without local object region`。
 - std 的普通 / `@ local?` `!=` 会转调 `==`；覆盖 `==` 后它们自动生效。只有 std 的 `@ local!` `!=` 默认体抛异常，需要显式覆盖。
@@ -683,7 +690,7 @@ class Item {
 - `@DataExclude[equal]` / `[compare]` 字段在两个 hook 都生效；
 - 普通路径回归：`c1 == c2`、`c1.compare(c2)`；
 - 字段类型矩阵：`Int64`、`Bool`、`String`、集合、嵌套 `@DataAssist` 类；
-- 接口断言：equal-only 类 `is Equatable` **且** `is LocalEquatable`；equal + compare 类 `is Equatable` / `is Comparable`，但 `is LocalEquatable` 为 false；
+- 接口断言：equal-only 类 `is Equatable` **且** `is LocalEquatable`；equal + compare 类 `is Equatable` / `is Comparable` / `is LocalEquatable` / `is LocalComparable`（LocalComparable 继承 LocalEquatable）；
 - 既有 `DataAssist_test.cj` 里对 `is Equatable` / `is Comparable` 的断言保持不变（方案 B 保留 std 接口）。
 
 构造 local 实例需要 local 构造，且非 `Copyable` 参数要传 local 值：
@@ -739,8 +746,8 @@ cd ../f_data && cjpm build && cjpm test
 #### 边界与风险
 
 - **hook 必须是抽象成员**：`localEq` / `localCompare` 无默认实现；`@ local?` 的 `==` / `compare` 是有默认实现的转调层。这样既绕开“不能把默认成员重新声明为抽象”的限制，又保证真正比较逻辑由实现类提供。
-- **`LocalComparable` 不继承 `LocalEquatable`**：两者各自继承 std 接口，避免 `Equatable` 双路径；`LocalComparable` 自带 `localEq` 默认实现。equal + compare 同时存在时类只实现 `LocalComparable`，`is LocalEquatable` 为 false。
-- **多默认实现冲突**：类不要同时直接实现 `LocalEquatable` 与 `LocalComparable`；`Equatable` 会出现两条路径。宏通过 normalize 只保留 `LocalComparable`，手写类也必须遵守。
+- **`LocalComparable` 继承 `LocalEquatable`**：因此 `is LocalEquatable` 为 true，`localEq` 有默认实现（`compare == EQ`）。代价是 `Equatable` 会经过 `LocalEquatable` 与 `Comparable` 两条路径，`LocalComparable` 必须显式实现普通与 `@ local?` 的 `!=`，否则报 `interface function '!=(...) must be implemented`。
+- **多默认实现冲突**：`LocalComparable` 已继承 `LocalEquatable`，不要再把 `LocalEquatable` 显式加进同一个类的父接口列表；宏通过 normalize 只保留 `LocalComparable`，手写类也必须遵守。
 - **递归风险**：`localEq` 的实现不能调用普通 `==`（会绕回 hook），只能逐字段比较或调用字段的比较函数。
 - **`@ local!` 转发**：所有 `@ local!` 默认实现都必须先转 `@ local?` 视图；直接转发外部 local! 会报 `cannot pass argument of external @local! to @local! parameter`。
 - **字段支持**：Copyable 字段走 `_copy`；非 Copyable 字段按具体类型匹配 `Equatable<FieldType>` / `Comparable<FieldType>`，不可比时退回 `refEq` / `EQ`；集合 / `JsonValue` 需测试；没有模态成员的字段会在 local 比较时命中 std 默认体抛 `UnimplementedException`。
@@ -876,7 +883,7 @@ func makeSquares(n: Int64): Array<Int64> @ local! {
 10. **宏边界**：宏参数/返回值只能 `@ ~local`；`@DataAssist` 默认生成的 hook 实现要求使用方按 local-mode 基线编译，序列化、字段复制、`toString` 仍无 local 版本。
 11. **继承/接口重复路径**：std 的 `Equatable`/`Comparable` 已带模态重载，类型声明里重复列出祖先接口会报 `must be implemented ... @local!`；不要通过补 `@ local!` 解决，去掉重复父接口即可。`@DataAssist` 的 `normalizeSuperTypes` 同时处理 `LocalEquatable` / `LocalComparable` 与 std 祖先的冗余（保留 `LocalComparable` 时删掉 `LocalEquatable`、`Comparable`、`Equatable`）。详见 `f_data/doc/spec/fix-dataassist-local-mode/`。
 12. **ohos**：std 的 local 模态成员都带 `@When[env != "ohos"]`（`equatable.cj`、`comparable.cj`、`hashable.cj`、`object.cj` 均如此），ohos 构建没有这些重载；跨平台模块不能把 local 重载作为唯一实现路径，需要用条件编译或保留普通路径。
-13. **std 接口兼容性**：方案 B 保留 `is Equatable` / `is Comparable`，泛型 `T <: Equatable<T>` / `Comparable<T>` 继续可用；但 `LocalComparable` 不继承 `LocalEquatable`，equal + compare 同时存在时类只实现 `LocalComparable`，`is LocalEquatable` 为 false。不要手动同时实现两个接口（`Equatable` 双路径会报错）。
+13. **std 接口兼容性**：方案 B 保留 `is Equatable` / `is Comparable`，泛型 `T <: Equatable<T>` / `Comparable<T>` 继续可用；`LocalComparable` 继承 `LocalEquatable`，因此 equal + compare 类同时 `is LocalEquatable` / `is LocalComparable`。代价是 `Equatable` 双路径要求 `LocalComparable` 显式实现普通与 local? 的 `!=`；不要再手动把 `LocalEquatable` 加进同一个类。
 
 ---
 

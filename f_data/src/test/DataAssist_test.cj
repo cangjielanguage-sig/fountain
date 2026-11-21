@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_data.test
 
 import fountain::f_data.*
+import fountain::f_base.*
 import fountain::f_data.macros.DataAssist
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -49,6 +50,8 @@ public class DataAssistSuperTypesTest {
         let b = OrderedItem()
         @Assert(a is Comparable<OrderedItem>)
         @Assert(a is Equatable<OrderedItem>)
+        @Assert(a is LocalComparable<OrderedItem>)
+        @Assert(a is LocalEquatable<OrderedItem>)
         @Assert(a == b)
         @Assert(!(a != b))
         @Assert(a.compare(b) == Ordering.EQ)
@@ -104,6 +107,8 @@ public class LocalDataAssistTest {
         let a = LocalItem(1, "a")
         let b = LocalItem(1, "a")
         let c = LocalItem(2, "a")
+        @Assert(a is LocalComparable<LocalItem>)
+        @Assert(a is LocalEquatable<LocalItem>)
         @Assert(a == b)
         @Assert(a.compare(b) == Ordering.EQ)
         @Assert(a < c)
