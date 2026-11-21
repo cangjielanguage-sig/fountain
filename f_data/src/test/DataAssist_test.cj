@@ -79,3 +79,43 @@ public class DataAssistSuperTypesTest {
         @Assert(!(a == b))
     }
 }
+
+/** 同时支持普通构造与 local 构造，用于验证 DataAssist 生成的 localEq / localCompare。 */
+@DataAssist[equal compare]
+public class LocalItem {
+    public var id: Int64
+    public var name: String
+
+    public init(id: Int64, name: String) {
+        this.id = id
+        this.name = name
+    }
+
+    public exclave init(this @ local!, id: Int64, name: String @ local!) {
+        this.id = id
+        this.name = name
+    }
+}
+
+@Test
+public class LocalDataAssistTest {
+    @TestCase
+    public func testLocalEqualityAndCompare(): Unit {
+        let a = LocalItem(1, "a")
+        let b = LocalItem(1, "a")
+        let c = LocalItem(2, "a")
+        @Assert(a == b)
+        @Assert(a.compare(b) == Ordering.EQ)
+        @Assert(a < c)
+
+        let la = LocalItem(1, String("a") @local!) @local!
+        let lb = LocalItem(1, String("a") @local!) @local!
+        let lc = LocalItem(2, String("a") @local!) @local!
+        @Assert(la == lb)
+        @Assert(!(la != lb))
+        @Assert(la.compare(lb) == Ordering.EQ)
+        @Assert(la < lc)
+        @Assert(la == b)
+        @Assert(a == lb)
+    }
+}

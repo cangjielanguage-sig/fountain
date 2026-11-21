@@ -66,3 +66,23 @@ public func f_data_cmp<T1, T2>(a: T1, b: T2): Ordering {
         }
     }
 }
+
+/**
+ * Copyable 字段（数值、Bool、Rune 等）的 local 判等：
+ * 先按值 demode 成普通值，再走非模态 helper。
+ *
+ * Bool 没有模态 `==`（std 只有 `extend Bool <: Equatable<Bool> {}`），
+ * 必须经过这里；非 Copyable 字段由宏按具体类型内联 match，不走泛型 helper。
+ */
+public func f_data_eq_copy<T>(a: T @ local?, b: T @ local?): Bool where T <: Copyable {
+    let x: T = a
+    let y: T = b
+    f_data_eq(x, y)
+}
+
+/** Copyable 字段的 local 比较：demode 后走非模态 helper；不可比类型返回 EQ。 */
+public func f_data_cmp_copy<T>(a: T @ local?, b: T @ local?): Ordering where T <: Copyable {
+    let x: T = a
+    let y: T = b
+    f_data_cmp(x, y)
+}

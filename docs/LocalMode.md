@@ -4,9 +4,9 @@
 >
 > 依据：仓颉官方开发指南 `dev-guide/source_zh_cn/modal_type/` 下的 `modal_overview.md`、`local_mode_rules.md`、`exclave.md`、`copyable_and_demode.md`，以及 `Appendix/compile_options.md`、`Appendix/runtime_env.md`、`Appendix/keyword.md`。
 >
-> SDK 前提：`1.3.0-alpha` nightly（std 已合入 local mode，`Equatable`/`Comparable` 等带 `@local!` 重载）。local mode 仍是实验特性，语法、规则、编译选项都可能在后续版本变化。
+> SDK 前提：`1.3.0-alpha.20261112001016`（std 已合入 local mode，`Equatable`/`Comparable` 等带 `@local!` 重载）。local mode 仍是实验特性，语法、规则、编译选项都可能在后续版本变化。
 >
-> 说明：本文的 API 支持结论以官方文档为准；`StringBuilder`、`ByteBuffer`、`String.fromUtf8`、`InputStream.read`、`OutputStream.write`、`JsonValue` 等是否提供 local 重载，文档未逐一列出，落地前必须用附录 A 的探针实测。
+> 说明：本文的 API 支持结论以官方文档为准；`StringBuilder`、`ByteBuffer`、`String.fromUtf8`、`InputStream.read`、`OutputStream.write`、`JsonValue` 等是否提供 local 重载，文档未逐一列出，落地前必须用附录 A 的探针实测。3.4 的 `LocalEquatable`/`LocalComparable` 与 DataAssist 设计已在 Windows cjnative SDK 上用探针编译运行验证（见 3.4「实测结论」）。
 
 ---
 
@@ -18,7 +18,7 @@
 4. 本项目最合适的策略是：**只在模块内部、只在元素为 `Copyable` 的容器上 local 化，公开 API 一律保持 `@ ~local`**。这样调用方无需开启 local mode，也不破坏已发布模块的 ABI。
 5. 真正适合先试点的只有 **f_svg**（`analyticCoverage` 的 `width * height` 浮点累加器）和 **f_llm**（`KnowledgeChunker.split` 的全文 `ArrayList<Rune>`）。其余模块要么先做“去拷贝/去重复/复用缓冲”的结构优化，要么被接口 this-mode、泛型、FFI、跨线程锁死。
 6. fountain 里多数热点用 local mode 收益很小甚至为负；结构性优化的收益更大，例如 `f_security` 每请求解析两次 JWT、`f_email` Base64 三重实体化、`f_log` 每条日志重新编译模板。
-7. `@DataAssist` 可以按需（attr 里加 `local`）生成 `==`/`compare` 的 `@ local?` 重载，让 local 实例可比较；这是 opt-in 的宏改动，默认展开不变，需使用方开启 local mode。设计与边界见 3.4。
+7. 面向 local-mode 发版（`1.3.10xx` 是最后一个无 local mode 兼容版本），`f_base` 新增 `LocalEquatable` / `LocalComparable`（继承 std `Equatable` / `Comparable`）：抽象成员是 hook `localEq` / `localCompare`，`@ local?` 的 `==` / `compare` 默认转调 hook，普通与 `@ local!` 重载再转调 `@ local?`；保留 `is Equatable` / `is Comparable`。`@DataAssist` 的 `equal` / `compare` 已生成普通实现与 local hook，并在 WSL 测试通过（见 3.4「落地状态」）。
 
 ---
 
@@ -53,7 +53,7 @@ compile-option = "--dy-std --experimental --enable-local-mode"
 
 - 必须同时给 `--experimental` 和 `--enable-local-mode`；cjpm 没有单独的 local mode 配置项。
 - 依赖模块要用 local mode，需要在各自的 `cjpm.toml` 中开启。
-- 入口模块可以用 `override-compile-option` 统一开启，但这样**所有依赖模块中的 `exclave`、`demode` 都会成为关键字**。本仓库 `cjpm.toml` 的 `[package]` 和各 `[target.*]` 都写了 `compile-option`/`override-compile-option`，不要随手改成全局开启。
+- 入口模块可以用 `override-compile-option` 统一开启，但这样**所有依赖模块中的 `exclave`、`demode` 都会成为关键字**。本仓库约定**不修改 `override-compile-option`**，只在各模块的 `compile-option` 里开启 local mode。
 - 未开启时：
   - `exclave`、`demode` 是普通标识符；
   - 使用 `@ local!`、`@ local?`、`@ ~local` 会报 `local mode is disabled`；
@@ -184,7 +184,7 @@ struct Demode<T> {
 - **异常**：`throw` 的操作数只能是 `@ ~local`；catch 绑定的异常变量是 `@ ~local`。
 - **泛型**：泛型实参不能带 mode；传入 `String @ local!` 时 `T` 推断为 `String`，形参 `x: T` 仍是 `@ ~local`，要接收 local 必须写 `x: T @ local?`；从 `Array<T> @ local?` 读出的元素是 `T @ local?`，要作为 `T` 返回需 `where T <: Copyable`。
 - **C 互操作**：`@C` 函数的参数和返回类型只能是 `@ ~local`。
-- **宏**：宏的参数和返回值只能 `@ ~local`，但展开结果可以包含模态声明（如 `@DataAssist[... local]`）；生成代码能否编译，取决于使用方是否开启 local mode。
+- **宏**：宏的参数和返回值只能 `@ ~local`，但展开结果可以包含模态声明（如 `@DataAssist` 生成的 `@ local?` 实现）；生成代码能否编译，取决于使用方是否开启 local mode。
 - **效应**：`perform` 的操作数只能是 `@ ~local`。
 - **可选参数默认值**：不能引用其他参数，也不能捕获非 `Copyable` 的 `@ local!` 变量。
 
@@ -227,11 +227,12 @@ struct Demode<T> {
 ### 2.2 总策略
 
 1. **先结构性优化，再 local mode**。去重复解析、去多余拷贝、复用缓冲的收益通常更大，且没有兼容性代价。
-2. **local mode 只做模块内部实现细节**：不新增、不修改公开模态签名；调用方无需开启 local mode。
+2. **性能优化类的 local 化只做模块内部实现细节**：不新增、不修改公开模态签名；调用方无需开启 local mode。语言/API 级的 local 支持（`LocalEquatable`/`LocalComparable`、`@DataAssist`）是例外，按 3.4 的 local-mode 发版基线推进。
 3. **只改“分配规模大 + 元素 `Copyable` + 纯计算”的点**；小对象、接口方法、泛型方法不动。
-4. **每个模块独立开启** `compile-option`，不要用 `override-compile-option` 把整棵依赖树拖下水。
+4. **每个模块独立开启** `compile-option`，不修改 `override-compile-option`；后者会把整棵依赖树拖下水，让所有依赖里的 `exclave`/`demode` 变成关键字。local-mode 发版也沿用这个约定。
 5. **先探针、后改造**。文档只确认 `String`、`Array`、`ArrayList`、`HashMap` 有 local 写法；其余 API 必须实测。
 6. **按峰值内存验收**：`-O2` 构建、同输入同负载，比较 peak RSS、`getAllocatedHeapSize()`、`getAllocatedLocalObjectSize()`。不要用吞吐量证明 local 的收益。
+7. **DataAssist / Local\* 面向 local-mode 发版**：`1.3.10xx` 是最后一个兼容无 local mode SDK 的版本；新版本所有使用方按 local mode 基线编译，不做 opt-in，也不保留旧展开。
 
 ### 2.3 为什么不是“到处加 `@local`”
 
@@ -333,7 +334,7 @@ private func accumulateAnalyticRow(
 | **f_httpclient** | HTTP 客户端/SSE | `SseReader.readLine`（`145-175`）每行 `ArrayList<Byte>` + `toArray()` 双份，行上限 1 MB；`SseReader` 本身就是可复用对象，改成“字段缓冲 + `String.fromUtf8(buf, 0, n)`”即可，不需要 local。`ExtendHttpResponse.readToEnd` 是 `extend HttpResponse <: ExtendHttpResponse` 的接口成员，this mode 锁死。 |
 | **f_xml** | XML 解析/写出 | `XmlWriter` 每 16 KB flush 一次 `encoder.encode(text)` 数组，可复用；`EntityExpander.checkReplacement` 每个实体值新建 `Lexer`/`LineWindow`/`Utf8RuneSource`，复用单个 Lexer 更划算。`EntityExpander` 的 `Lexer` 状态在字段，local 化成本高。 |
 | **f_chart** | SVG 图表渲染 | 整棵 `SvgBuilder` DOM → `toSvgString` 是最大临时区，但要 local 化必须先把 `f_svg.SvgBuilder`/`SvgElement` 和 `f_xml.XmlWriter` 全链 local 化；`Chart.draw` 还是接口实现（this mode 锁死）。当前不做。 |
-| **f_data** | 数据对象/JSON | `f_data/src/json/DataJson.cj:92-110` 的 `toJsonString` 每字段先生成中间 `valStr`，再拼进父 builder，峰值约为最终 JSON 的 2 倍。收益最大的是改成写入式 sink（父 builder 直接接收子节点），不是 local；`DataObject<T>` 是泛型 + `ToJsonString` 接口实现，模态改不动。`@DataAssist` 的宏展开由使用方编译，默认不应生成模态签名（否则所有使用方都被强制开启 local mode）；可按需加 `local` 修饰符生成 `equal`/`compare` 的 `@ local?` 重载，详见 3.4。 |
+| **f_data** | 数据对象/JSON | `f_data/src/json/DataJson.cj:92-110` 的 `toJsonString` 每字段先生成中间 `valStr`，再拼进父 builder，峰值约为最终 JSON 的 2 倍。收益最大的是改成写入式 sink（父 builder 直接接收子节点），不是 local；`DataObject<T>` 是泛型 + `ToJsonString` 接口实现，模态改不动。`@DataAssist` 面向 local-mode 发版：`equal` / `compare` 改为实现 `f_base.LocalEquatable` / `LocalComparable`，只生成 `localEq` / `localCompare` 实现，普通与 local 重载由接口默认实现转调；详见 3.4。 |
 | **f_orm** | ORM/SQL DSL | `RootDAO.arg`（`323-389`）的 `Any` 装箱会逃逸进 executor 参数表，local 无效；`SqlPartial.UPDATE`（`123-143`）的 `HashMap<String, Any>` 纯中转，直接删掉/直接调另一重载即可。`RootDAO` 是 40+ 默认成员的接口，加 `this @ local?` 会牵连整棵 DAO 体系，不做。 |
 | **f_dbd** | 数据库驱动 | `DbdStatement.sqlPayload`（`158-175`）每参数两层 `DataAny` 包装，是结构性浪费；`QueryResultImpl.get<T>` 实现 std `QueryResult`，this mode 锁死。 |
 | **f_mq** | 消息队列客户端 | `publish<T>`、`MQProtocol.encodePayload<T>` 都是泛型，local 不支持类型参数；`candidateNodes` 的 `ArrayList<Int64>` 可以 local，但规模小、收益低。 |
@@ -387,6 +388,14 @@ private func accumulateAnalyticRow(
 
 ### 3.4 专项：`@DataAssist` 的 equal / compare local 重载
 
+#### 目标版本与兼容性前提
+
+本节设计面向**未来启用 local mode 的 fountain 版本**，不考虑与无 local mode SDK 的向后兼容：
+
+- `1.3.10xx` 是最后一个兼容“无 local mode SDK”的版本；
+- 新版本基线要求 SDK 支持 local mode，使用 `@DataAssist[equal]` / `[compare]` 的模块都在 `cjpm.toml` 中开启 `--experimental --enable-local-mode`；只使用 `fields` / `hash` / `toString` 的模块不涉及 Local*，不受影响；
+- 因此 `@DataAssist` 可以直接默认生成 local 重载，不需要 `local` 修饰符，也不需要为未开启 local mode 的使用方保留旧展开。
+
 #### 现状与问题
 
 `@DataAssist` 的 `equal` / `compare` 目前只生成普通版本（下列代码为节选）：
@@ -432,166 +441,216 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
 
 结果就是：`@DataAssist` 类一旦被放进 local 计算（本地临时对象、local 容器、local 解析中间结果），就无法比较，成为 local 化的断点。
 
-#### std 的契约（已核对源码，位置 `cangjie_runtime/stdlib/libs/std/core/`）
+#### 设计：抽象 hook + `@ local?` 默认转调（方案 B）
 
-`std/core/equatable.cj`：
+选择方案 B：`LocalEquatable` / `LocalComparable` **继续继承 std 的 `Equatable` / `Comparable`**，保留 `is Equatable` / `is Comparable` 兼容性。
 
-```cangjie
-public interface Equal<T> {
-    operator func ==(other: T): Bool
-    operator func ==(this @local!, other: T @local!): Bool { throw ... }
-    operator func ==(this @local?, other: T @local?): Bool { throw ... }
-}
-public interface NotEqual<T> {
-    operator func !=(other: T): Bool
-    operator func !=(this @local!, other: T @local!): Bool { throw ... }
-    operator func !=(this @local?, other: T @local?): Bool { throw ... }
-}
-public interface Equatable<T> <: Equal<T> & NotEqual<T> {
-    operator func !=(other: T): Bool { !(this == other) }
-    operator func !=(this @local!, other: T @local!): Bool { throw ... }
-    operator func !=(this @local?, other: T @local?): Bool { !(this == other) }
-}
-```
+不能把 std 的 `@ local?` 重载直接重新声明为抽象成员：
 
-`std/core/comparable.cj`：
+- 官方文档规定，子接口继承了父接口带默认实现的成员后，不允许只写声明，必须给出新的默认实现（`dev-guide/source_zh_cn/class_and_interface/interface.md:397`）；
+- 编译器实测报错：`cannot override implemented interface function '==' with abstract function`（见下文实测记录）。
 
-```cangjie
-public interface Comparable<T> <: Equatable<T> & Less<T> & Greater<T> & LessOrEqual<T> & GreaterOrEqual<T> {
-    func compare(other: T): Ordering
-    func compare(this @local?, other: T @local?): Ordering { throw ... }
-    operator func ==(this @local?, other: T @local?): Bool { this.compare(other) == EQ }
-    operator func <(this @local?, other: T @local?): Bool { ... }
-    // > / <= / >= 同理，全部由 compare 派生
-}
-```
+因此方案 B 把**抽象成员放在新命名的 hook 上**：
 
-这两段决定了实现方式：
+- `func localEq(this @ local?, other: T @ local?): Bool`；
+- `func localCompare(this @ local?, other: T @ local?): Ordering`。
 
-1. 要支持 local 比较，类只需要实现两个 `@ local?` 成员：
-   - `operator func ==(this @ local?, other: T @ local?): Bool`
-   - `func compare(this @ local?, other: T @ local?): Ordering`
-2. **不需要生成 `@ local!` 版本**：`@ local!` 实例可以调用 `this @ local?` 方法，`@ local!` 实参也能传给 `@ local?` 形参（子类型关系），一份 `@ local?` 重载覆盖三种实例 mode。
-3. **不需要生成模态 `!=`**：`Equatable<T>` 已提供 `!=(this @ local?, other: T @ local?) { !(this == other) }`；只生成 `compare` 时，`Comparable<T>` 也会派生出模态 `==`/`<`/`>`/`<=`/`>=`。
-4. 这些 `@ local?` 成员在 std 里都有默认实现：`==` / `compare` 的默认体抛 `UnimplementedException`，`!=` / `<` / `>` / `<=` / `>=` 转调它们。所以不实现也能编译，但 local 比较会在运行时抛异常。宏生成的是显式实现，正好把这个默认体替换掉。
+`@ local?` 与 `@ local!` 的 `==` / `compare` 由接口默认实现转调 hook；**普通重载不转调 hook**：
 
-#### 生成签名
+- 普通实例没有 local region，把它当 `@ local?` 去调 hook，访问非 Copyable 字段时会报 `alloc native local object without local object region`（Linux/WSL 实测）；
+- 普通 `==` / `!=`（equal）与普通 `compare`（compare）仍由 `@DataAssist` 生成，普通运算符基于它们。
+
+这样：
+
+- hook 只服务 local 实例；
+- local 的 `==` / `!=` / `compare` / `<` / `>` / `<=` / `>=` 都有实际比较的默认实现；
+- 类仍是 std `Equatable` / `Comparable`，泛型 helper（`where T <: Equatable<T>` / `Comparable<T>`）继续可用。
+
+`LocalEquatable`：
 
 ```cangjie
-// equal + local（Foo 为被 @DataAssist 修饰的类）
-public operator func ==(this @ local?, other: Foo @ local?): Bool
+package fountain::f_base
 
-// compare + local（Foo 为 open 类时带 open）
-public open func compare(this @ local?, other: Foo @ local?): Ordering
-```
+public interface LocalEquatable<T> <: Equatable<T> {
+    // 唯一抽象成员：实现类提供真正的相等比较（只对 local 实例调用）
+    func localEq(this @ local?, other: T @ local?): Bool
 
-- 与非模态版本并存：`~local` 实参优先选非模态（更具体），local 实参只能选模态。
-- `this @ local?` 让普通实例也能调用模态版本（`~local` 实例可调用 `this @ local?`），因此“普通对象 vs local 临时对象”也能比较。
-- 字段集合沿用现有 `generateEqual` / `generateCompare` 的 `exclusion` 与私有字段改名规则，两个版本的字段集合必须一致。
-- 保留 `openTokens(d)`；子类由宏各自展开，沿用现有非模态版本的生成规则。
-
-#### opt-in：必须加 `local` 修饰符
-
-宏展开发生在**使用方模块**里，不是 f_data 模块里。如果无条件生成 `@ local?`，所有现有 `@DataAssist` 用户（没开 local mode）都会在展开处报 `local mode is disabled`，这是破坏性变更。因此只能按需生成：
-
-```cangjie
-@DataAssist[equal compare local]
-class Item { ... }
-```
-
-规则：
-
-- attr 里同时出现 `local` 与 `equal` / `compare` 时，才生成对应的模态版本；
-- 不写 `local` 时，展开结果与今天完全一致；
-- `local` 单独出现（没有 `equal` 也没有 `compare`）建议宏直接报错，避免拼写错误静默失效；
-- 使用方的 `cjpm.toml` 必须加 `--experimental --enable-local-mode`，否则展开处报错。
-
-#### helper 前置（`f_data/src/base/data_cmp.cj`）
-
-模态版本不能直接复用 `f_data_eq` / `f_data_cmp`（它们的形参是 `~local`）。新增两组模态 helper：
-
-```cangjie
-public func f_data_eq_local<T>(a: T @ local?, b: T @ local?): Bool where T <: Equatable<T> {
-    a == b
-}
-
-public func f_data_eq_local<T1, T2>(a: T1 @ local?, b: T2 @ local?): Bool {
-    match (a) {
-        case x: Equatable<T2> => x == b
-        case _ => match (b) {
-            case x: Equatable<T1> => x == a
-            case _ => match ((a, b)) {
-                case (x: Object, y: Object) => refEq(x, y)
-                case _ => false
-            }
-        }
+    // 覆写 std 的 local? ==（std 默认抛异常），转调 hook
+    operator func ==(this @ local?, other: T @ local?): Bool {
+        this.localEq(other)
     }
-}
 
-public func f_data_cmp_local<T>(a: T @ local?, b: T @ local?): Ordering where T <: Comparable<T> {
-    a.compare(b)
-}
+    // @ local! 实例：外部 local! 不能直接转发，先转成 @ local? 视图
+    operator func ==(this @ local!, other: T @ local!): Bool {
+        let lhs: LocalEquatable<T> @ local? = this
+        let rhs: T @ local? = other
+        lhs == rhs
+    }
 
-// Copyable 字段（数值、Bool、Rune 等）：先 demode 成普通值，再走普通比较
-public func f_data_eq_copy<T>(a: T @ local?, b: T @ local?): Bool where T <: Copyable & Equatable<T> {
+    // std 的 local! != 默认体抛异常，必须覆盖
+    operator func !=(this @ local!, other: T @ local!): Bool {
+        let lhs: LocalEquatable<T> @ local? = this
+        let rhs: T @ local? = other
+        !(lhs == rhs)
+    }
+
+    // 普通 ==(other: T) 不在这里给默认实现：由 DataAssist 生成非模态版本。
+    // 普通实例没有 local region，把它当 @ local? 去调用 localEq 会报
+    // `alloc native local object without local object region`。
+}
+```
+
+`LocalComparable`（独立于 `LocalEquatable`，只继承 std `Comparable`）：
+
+```cangjie
+public interface LocalComparable<T> <: Comparable<T> {
+    // 唯一抽象成员：实现类提供真正的排序比较（只对 local 实例调用）
+    func localCompare(this @ local?, other: T @ local?): Ordering
+
+    // 默认相等语义：compare == EQ；equal + compare 同时存在时由实现类覆写
+    func localEq(this @ local?, other: T @ local?): Bool {
+        this.localCompare(other) == EQ
+    }
+
+    // ---- local 路径 ----
+    operator func ==(this @ local?, other: T @ local?): Bool {
+        this.localEq(other)
+    }
+    operator func ==(this @ local!, other: T @ local!): Bool {
+        let lhs: LocalComparable<T> @ local? = this
+        let rhs: T @ local? = other
+        lhs.localEq(rhs)
+    }
+    operator func !=(this @ local!, other: T @ local!): Bool {
+        let lhs: LocalComparable<T> @ local? = this
+        let rhs: T @ local? = other
+        !lhs.localEq(rhs)
+    }
+
+    func compare(this @ local?, other: T @ local?): Ordering {
+        this.localCompare(other)
+    }
+    func compare(this @ local!, other: T @ local!): Ordering {
+        let lhs: LocalComparable<T> @ local? = this
+        let rhs: T @ local? = other
+        lhs.localCompare(rhs)
+    }
+
+    operator func <(this @ local?, other: T @ local?): Bool {
+        this.localCompare(other) == LT
+    }
+    operator func <(this @ local!, other: T @ local!): Bool {
+        let lhs: LocalComparable<T> @ local? = this
+        let rhs: T @ local? = other
+        lhs.localCompare(rhs) == LT
+    }
+    // > / <= / >= 的 local? / local! 版本与 < 同构
+
+    // ---- 普通路径 ----
+    // 普通 compare(other: T) 不在这里给默认实现：由 DataAssist 生成非模态版本。
+    // 普通实例没有 local region，不能把它当 @ local? 去调用 localCompare。
+    operator func ==(other: T): Bool {
+        this.compare(other) == EQ
+    }
+    operator func <(other: T): Bool {
+        this.compare(other) == LT
+    }
+    // > / <= / >= 的普通版本同样基于普通 compare
+}
+```
+
+要点：
+
+- 新增的 `.cj` 文件按仓库规范在 `package` 之前加 Apache 2.0 版权头（年份取新建年）。
+- `LocalEquatable` 与 `LocalComparable` **互不继承**：两者各自继承 std 的 `Equatable` / `Comparable`；如果 `LocalComparable <: LocalEquatable` 再叠加 `Comparable`，`Equatable` 会出现两条继承路径，触发本文件 2.1 提到的 `must be implemented ... @local!` 问题。
+- `LocalComparable` 自带一份 `localEq` 默认实现（`compare == EQ`），因此只实现 `localCompare` 的类也能获得完整相等语义。
+- `equal` + `compare` 同时存在时，`@DataAssist` 只把 `LocalComparable<T>` 加进父接口，并同时生成 `localEq` / `localCompare`（local 路径）与普通 `==` / `!=` / `compare`（普通路径）；此时类仍是 std `Equatable` / `Comparable`，但**不是** `LocalEquatable`。
+- `@ local!` 的 `==` / `!=` / `compare` / `<` 默认实现都必须先把 `this` / `other` 转成 `@ local?` 视图。直接写 `this == other` 会报 `cannot pass argument of external @local! to @local! parameter`（实测踩过）。
+- **普通路径必须保持非模态**：不要为了“统一”把普通 `==` / `compare` 也转调 hook；普通实例没有 local region，访问非 Copyable 字段会报 `alloc native local object without local object region`。
+- std 的普通 / `@ local?` `!=` 会转调 `==`；覆盖 `==` 后它们自动生效。只有 std 的 `@ local!` `!=` 默认体抛异常，需要显式覆盖。
+
+#### DataAssist 生成规则
+
+- `equal`：
+  - 父接口加 `LocalEquatable<T>`；
+  - 生成普通 `operator func ==(other: T)` / `!=`（沿用原 `f_data_hash_eq` + `f_data_eq` 逻辑）；
+  - 生成 local hook `func localEq(this @ local?, other: T @ local?)`（字段比较按具体类型走 `_copy` / 内联 match）。
+- `compare`：
+  - 父接口加 `LocalComparable<T>`；
+  - 生成普通 `func compare(other: T)`（沿用原 `f_data_cmp` 逻辑）；
+  - 生成 local hook `func localCompare(this @ local?, other: T @ local?)`。
+- `equal` + `compare` 同时存在：
+  - 父接口只加 `LocalComparable<T>`；
+  - 生成普通 `==` / `!=`（equal）、普通 `compare`（compare），以及 `localEq(local?)` / `localCompare(local?)`；`localEq` 显式覆盖 `LocalComparable` 的默认相等。
+- 普通路径与 local 路径的字段比较分别走：
+  - 普通：`f_data_hash_eq` / `f_data_eq` / `f_data_cmp`（非模态）；
+  - local：Copyable 字段 `f_data_eq_copy` / `f_data_cmp_copy`；非 Copyable 字段按具体类型内联 `match`，不可比时 `refEq` / `EQ`。
+- `normalizeSuperTypes` 扩展：
+  - 保留现有规则：存在 `Comparable<X>` 时删掉 `Equatable<X>`；
+  - 存在 `LocalEquatable<X>` 时删掉 `Equatable<X>`；存在 `LocalComparable<X>` 时删掉 `Comparable<X>`、`Equatable<X>`、`LocalEquatable<X>`（Local* 已隐含 std 接口）；
+  - 若同时存在 `LocalEquatable<X>` 与 std `Comparable<X>`（没有 `LocalComparable`），宏直接报错：`Equatable` 会有两条路径，要求改用 `compare` / `LocalComparable`。
+- `@DataExclude[equal]` / `[compare]` 的排除集合原样作用于两个 hook。
+- 没有参与比较的字段时：`localEq` 只生成 `refEq(this, other)`，`localCompare` 只生成 `Ordering.EQ`；不要拼出空的 `&&` 链或空的比较序列。
+- localEq 保留 `refEq(this, other)` 引用快路（std 有 `refEq(Object @local?, Object @local?)`，见 `std/core/object.cj:42`）。
+- 不做哈希快筛：相等结果由 `refEq` + 逐字段比较决定；`Hashable` 的 local 实例暂不支持。
+
+#### 字段比较 helper（`f_data/src/base/data_cmp.cj`）
+
+方案 B 下 DataAssist 类仍是 std `Equatable` / `Comparable`，helper 可以继续用 std 约束，不需要运行时匹配 Local*：
+
+```cangjie
+// 已知 Copyable 字段（数值、Bool、Rune 等）：先 demode，再走非模态 helper
+public func f_data_eq_copy<T>(a: T @ local?, b: T @ local?): Bool where T <: Copyable {
     let x: T = a
     let y: T = b
-    x == y
+    f_data_eq(x, y)
 }
-
-public func f_data_cmp_copy<T>(a: T @ local?, b: T @ local?): Ordering where T <: Copyable & Comparable<T> {
+public func f_data_cmp_copy<T>(a: T @ local?, b: T @ local?): Ordering where T <: Copyable {
     let x: T = a
     let y: T = b
-    x.compare(y)
+    f_data_cmp(x, y)
 }
 
-public func f_data_cmp_local<T1, T2>(a: T1 @ local?, b: T2 @ local?): Ordering {
-    // 与非模态 f_data_cmp 的两参版同构：先 A 比 B，再反向，都不可比返回 EQ
-}
+// 非 Copyable 字段不走泛型 helper；宏按字段具体类型内联：
+// match (this.f) {
+//     case x: Equatable<FieldType> => x == other.f
+//     case _ => ... refEq / false
+// }
 ```
 
 说明：
 
-- 单类型版本依赖 std 的模态接口成员（见上，已确认签名）；`String`、数值类型都已实现模态 `==`/`compare`（`String` 见 `std/core/string.cj` 的 `==(this @local?, other: String @local?)` 与 `compare(this @local?, str: String @local?)`）。
-- **`Bool` 是例外**：`std/core/equatable.cj:50` 只有 `extend Bool <: Equatable<Bool> {}`，没有模态 `==`；`f_data_eq_local<Bool>` 会命中 `Equal` 的默认体抛 `UnimplementedException`。Rune 等也可能如此。对已知 `Copyable` 字段类型（数值、`Bool`、`Rune`）应让宏生成 `f_data_eq_copy` / `f_data_cmp_copy`（先 demode 再普通比较），未知类型才走 `f_data_eq_local` / `f_data_cmp_local`。判据可以先用类型文本白名单（`Int8..Int64`、`UInt8..UInt64`、`Float16/32/64`、`Bool`、`Rune`），白名单外一律走模态 helper。
-- 两参兜底版模仿现有 `f_data_eq` / `f_data_cmp`。`refEq` 在 std 里有 `@ local?` 重载（`std/core/object.cj:42`，`refEq(a: Object @local?, b: Object @local?)`），所以“同一引用判等为 true”的兜底可以保留；若探针发现 `T @ local?` 不能传给 `Object @ local?`，就退回纯字段比较（只影响“字段本身不可比”的极端场景）。
-- 模态 `==` 保留 `refEq(this, other)` 引用快路；**不做** `f_data_hash_eq` 快筛：避免依赖 `hashCode(this @ local?)`，结果仍由 `refEq` + 逐字段比较决定。
-- 如果以后要让 local 实例进 `HashSet`/`HashMap`，需要再给 `generateHash` 加 `hashCode(this @ local?)`（`Hashable` 已有该模态成员，见 `std/core/hashable.cj`），不在本次范围。
+- 普通路径继续用 `f_data_eq` / `f_data_cmp`，不涉及 local。
+- local 路径中，Copyable 字段用 `_copy`（demode 后普通比较）；非 Copyable 字段按**具体类型**内联 `match`：
+  - `Equatable<FieldType>` / `Comparable<FieldType>` 命中时调用接口的 `@ local?` 成员；
+  - 不命中时退回 `refEq` / `EQ`，与非模态兜底语义一致。
+- `Bool` 走 `_copy`（std 没有模态 `==`）；`String` 走 `Equatable<String>` 内联匹配；非 Equatable 的 class（如测试里的 `TT`）走 `refEq`。
+- 集合、`JsonValue` 走内联匹配；如果其类型没有实现模态 `==` / `compare`，运行时会命中 std 的抛异常默认体，需在测试矩阵中确认并写入限制。
+- 不要恢复成泛型 `f_data_eq_local<T>(a: T @ local?, ...)`：普通实例没有 local region 时会被错误路由，且泛型模态 helper 在 SDK 上出现过 `OutOfMemoryError`；按具体类型内联是已验证可用的方案。
 
-#### 宏实现点
-
-- `assist` 里解析 opt-in 标志：
-
-```cangjie
-let localMode = set.contains('local')
-```
-
-- `generateEqual` / `generateCompare` 增加 `localMode: Bool` 参数（或包一层带 flag 的 `generate` 闭包），默认 `false` 时行为不变。
-- `generateEqual` 在现有两个非模态函数之后追加模态 `==`，body 是 `refEq(this, other) || (字段比较 && ...)`；不生成模态 `!=`。
-- 字段比较按类型选择 helper：已知 `Copyable` 类型（数值、`Bool`、`Rune`）用 `f_data_eq_copy` / `f_data_cmp_copy`，其余用 `f_data_eq_local` / `f_data_cmp_local`。白名单用 `VarDecl.declType` 的文本判断，和现有 `generateHash` 判断集合类型的方式一致；无法识别时按非 Copyable 处理（走模态 helper）。
-- `generateCompare` 在现有非模态函数之后追加模态 `compare`，body 与非模态同构，只把 helper 换成 `_local` / `_copy` 版本。
-- `normalizeSuperTypes` 不变：模态重载不新增父接口。
-- 宏注释补充 `local` 的语义、使用前提和 `refEq`/哈希快筛的取舍。
-
-生成结果示例（节选）：
+#### 生成示例
 
 ```cangjie
-@DataAssist[equal compare local]
+@DataAssist[equal compare]
 class Item {
     var id: Int64
     var name: String
-    init(id: Int64, name: String) { ... }
+    init(id: Int64, name: String) {
+        this.id = id
+        this.name = name
+    }
     exclave init(this @ local!, id: Int64, name: String @ local!) {
         this.id = id
         this.name = name
     }
 
-    // 生成：非模态版本照旧（省略）
-    public operator func ==(this @ local?, other: Item @ local?): Bool {
+    // 另外还会生成普通 == / != / compare（沿用原非模态逻辑，此处省略）
+    // local 路径只生成这两个 hook；local/local! 的运算符由 Local* 默认实现转调
+    public func localEq(this @ local?, other: Item @ local?): Bool {
         refEq(this, other) ||
             (f_data_eq_copy(this.id, other.id) && f_data_eq_local(this.name, other.name))
     }
-    public func compare(this @ local?, other: Item @ local?): Ordering {
+    public func localCompare(this @ local?, other: Item @ local?): Ordering {
         var result = Ordering.EQ
         result = f_data_cmp_copy(this.id, other.id)
         if (result != EQ) {
@@ -606,20 +665,31 @@ class Item {
 }
 ```
 
+调用链：
+
+- 普通实例 `c1 == c2` → `LocalEquatable.==(other: T)` 默认 → `@ local?` `==` 默认 → `localEq`；
+- local 实例 `a == b` → 同一 `localEq`；
+- `a == c` / `c == a` → 普通或 local? 重载，最终都落到 `localEq`；
+- `a < b` → `LocalComparable.<` 默认 → `compare(local?)` 默认 → `localCompare`；
+- `a.compare(b)` → `compare(local?)` 默认 → `localCompare`。
+
 #### 测试（严格 RED）
 
-新增用例必须先编译失败，再实现宏：
+先写用例，实现前必须编译失败（local 实例无法调用没有 local 重载的 `==` / `compare`），再实现接口与宏：
 
 - 两个 local 实例：`a == b`、`a.compare(b) == EQ`、`!(a != b)`；
-- local 与普通混合：`a == c`、`c == a`（后者依赖 `~local` 实例可调用 `this @ local?`）；
-- `@DataExclude[equal]` / `[compare]` 的字段在两个版本都生效；
+- local 与普通混合：`a == c`、`c == a`；
+- 比较运算符：`a < b`、`a <= b`、`a > b`、`a >= b` 的 GT/LT/EQ 三组；
+- `@DataExclude[equal]` / `[compare]` 字段在两个 hook 都生效；
 - 普通路径回归：`c1 == c2`、`c1.compare(c2)`；
-- 字段类型矩阵：`Int64`、`Bool`、`String`、至少一个集合字段（确认集合是否实现模态 `==`/`compare`；不支持就写进限制）。
+- 字段类型矩阵：`Int64`、`Bool`、`String`、集合、嵌套 `@DataAssist` 类；
+- 接口断言：equal-only 类 `is Equatable` **且** `is LocalEquatable`；equal + compare 类 `is Equatable` / `is Comparable`，但 `is LocalEquatable` 为 false；
+- 既有 `DataAssist_test.cj` 里对 `is Equatable` / `is Comparable` 的断言保持不变（方案 B 保留 std 接口）。
 
 构造 local 实例需要 local 构造，且非 `Copyable` 参数要传 local 值：
 
 ```cangjie
-@DataAssist[equal compare local]
+@DataAssist[equal compare]
 class LocalItem {
     var id: Int64
     var name: String
@@ -648,32 +718,74 @@ main() {
 }
 ```
 
-命令：
+命令（`f_base` / `f_data` 的 `cjpm.toml` 已开启 local mode）：
 
 ```shell
-cd f_data
-cjpm build
-cjpm test
+cd f_base && cjpm build
+cd ../f_data && cjpm build && cjpm test
 ```
 
-`f_data/cjpm.toml` 需要开启 local mode（见下）。
-
-额外加一条“契约测试”：如果 std 的模态签名变化，宏生成的 `==`/`compare` 不再是接口实现，运行时会落到默认体抛 `UnimplementedException`；一条 `@Assert(a == b)` 就能把这种“编译通过、运行期抛”的情况抓出来。
+额外加一条“契约测试”：普通实例的 `==` 必须走到 `localEq`。如果接口默认实现没有正确转调，普通路径会编译失败或行为不一致，这条断言能覆盖。
 
 #### 发布与兼容
 
-- `local` 是 opt-in：现有用户不写 `local`，展开结果不变，不受影响。
-- 写了 `local` 的使用方必须开启 local mode；要在宏文档、`f_data/README.md` 和变更日志里写清楚。
-- `f_data` 自身因为 `data_cmp.cj` 含模态签名，需要开启 local mode 编译。导入 f_data 的普通代码仍然不受影响（官方文档：导入含模态声明的包不受影响，调用相关 API 才需要开启），但按官方规则，用了 local mode 的包与其依赖方要用同一版本 SDK 编译；fountain 本来就按 SDK 版本发版，需在发版说明中注明。
-- 如果不想让 `f_data` 换编译模式，备选方案 B：在宏展开的类里生成 `private static` 模态 helper，或新增可选模块 `f_data.local`；代价是生成代码变多或用户多一个依赖。方案 A（`f_data` 开启 + 公共 helper）实现最简单，建议先用 A 做探针再定。
+- `1.3.10xx` 是最后一个兼容无 local mode SDK 的版本；本设计用于后续 local-mode 版本。`f_base` 与使用 `@DataAssist[equal]` / `[compare]` 的模块默认开启 local mode，不再提供 opt-in 或旧展开。
+- 方案 B 保留 std `Equatable` / `Comparable` 兼容：DataAssist 类仍可用在 `where T <: Equatable<T>` / `Comparable<T>` 的泛型代码中；`is Equatable` / `is Comparable` 不受影响。
+- 新增的 hook `localEq` / `localCompare` 是公开 API 名称。`LocalComparable` 只有 `localCompare` 是必须实现的；`localEq` 默认由 `compare == EQ` 提供。
+- `f_base` 新增两个含模态声明的接口，必须开启 local mode 编译；依赖 `f_base` 且使用 Local* 的模块也要开启。按仓库约定，只改各模块的 `compile-option`，**不修改 `override-compile-option`**。
+- WSL 实测：只给 `f_base` / `f_data` 的 `compile-option` 加 `--experimental --enable-local-mode`，`f_base` 构建成功、`f_data` 依赖构建与全量测试通过；`override-compile-option` 保持 `--dy-std` 不变。
+- ohos：std 的模态成员都带 `@When[env != "ohos"]`，local mode 在 ohos 不可用；Local* 接口含模态声明，ohos 构建需要条件编译排除，或保留独立非 local 路径。
 
 #### 边界与风险
 
-- 字段类型必须实现模态 `==`/`compare`，否则运行时抛 `UnimplementedException`；宏无法在编译期判定。数值类型、`String` 已实现（已核对 std 源码）；`Bool` 没有模态 `==`，必须走 `f_data_eq_copy` 的 demode 路径；集合/`JsonValue` 需用测试确认。
-- 保留 `refEq` 的 `@ local?` 快路，不做哈希快筛：结果仍由 `refEq` + 逐字段比较决定；`Hashable` 的 local 实例若要进哈希容器，仍需额外生成 `hashCode(this @ local?)`。
-- `this @ local?` 方法内部字段是 `@ local?`；不要把字段再塞回 `@ ~local` 容器或作为 `@ ~local` 返回值。
-- `equal` 与 `compare` 的 `@DataExclude` 集合如果不同，模态 `==`（equal 版）与 `Comparable` 派生的 `==`（compare 版）可能给出不同结果——与非模态版本的既有行为一致，但建议保持一致。
-- 宏展开后的模态签名属于使用方类的公开 API；使用这些 API 的模块必须开启 local mode，且不能跨 SDK 版本混编。
+- **hook 必须是抽象成员**：`localEq` / `localCompare` 无默认实现；`@ local?` 的 `==` / `compare` 是有默认实现的转调层。这样既绕开“不能把默认成员重新声明为抽象”的限制，又保证真正比较逻辑由实现类提供。
+- **`LocalComparable` 不继承 `LocalEquatable`**：两者各自继承 std 接口，避免 `Equatable` 双路径；`LocalComparable` 自带 `localEq` 默认实现。equal + compare 同时存在时类只实现 `LocalComparable`，`is LocalEquatable` 为 false。
+- **多默认实现冲突**：类不要同时直接实现 `LocalEquatable` 与 `LocalComparable`；`Equatable` 会出现两条路径。宏通过 normalize 只保留 `LocalComparable`，手写类也必须遵守。
+- **递归风险**：`localEq` 的实现不能调用普通 `==`（会绕回 hook），只能逐字段比较或调用字段的比较函数。
+- **`@ local!` 转发**：所有 `@ local!` 默认实现都必须先转 `@ local?` 视图；直接转发外部 local! 会报 `cannot pass argument of external @local! to @local! parameter`。
+- **字段支持**：Copyable 字段走 `_copy`；非 Copyable 字段按具体类型匹配 `Equatable<FieldType>` / `Comparable<FieldType>`，不可比时退回 `refEq` / `EQ`；集合 / `JsonValue` 需测试；没有模态成员的字段会在 local 比较时命中 std 默认体抛 `UnimplementedException`。
+- **普通路径必须非模态**：普通 `==` / `compare` 由 DataAssist 生成，不能转调 local hook；普通实例没有 local region，会报 `alloc native local object without local object region`。这是本次实现踩过并修正的关键点。
+- **性能**：普通比较保持原路径；local 比较多一层接口派发，不产生堆分配，需用基准确认。
+- **哈希**：本设计不生成 `hashCode(this @ local?)`；local 实例作为 `HashSet` / `HashMap` 键仍不可用，后续可新增 `LocalHashable` 或给 `generateHash` 生成模态版本。
+- **`refEq` 快路**：local `localEq` 与普通生成的 `==` 都保留 `refEq` 快路。
+
+#### 实测记录（2026-11-21，SDK 1.3.0-alpha.20261112001016）
+
+在 **WSL Ubuntu 24.04 + Linux SDK 1.3.0-alpha.20261112001016 + stdx 1.3.0** 上编译并运行了探针（Windows 只用于早期初步探针，最终结论以 WSL 为准）：
+
+| 探针 | 内容 | 结果 |
+| --- | --- | --- |
+| p1 | 子接口把父接口的默认函数重新声明为抽象 | 失败：`cannot override implemented interface function 'f' with abstract function` |
+| p2 | `interface LE<T> <: Equatable<T>` 声明抽象 `==(local?)` | 失败：`cannot override implemented interface function '==' with abstract function` |
+| p5 | 继承 std + 抽象 hook `localEq(local?)`，局部 `==(local?)` 默认转调 hook | 通过；`a is Equatable<P>` 为 true |
+| p6 | 方案 B 完整版：`LocalEquatable` / `LocalComparable` + 普通/local/混合比较 + 泛型 `where T <: Equatable<T>` / `Comparable<T>` helper | 通过；`is Equatable` / `is Comparable` 均为 true，`eq(local, local)`、`cmp(local, local)` 正常 |
+
+p3/p4 也验证过“独立接口 + 抽象 local? 重载”的方案 A，但该方案会失去 std `Equatable` / `Comparable` 兼容性，已放弃。
+
+p5/p6 验证的是接口形态；其中“普通 `==` 也转调 local?”在后续 DataAssist 实测中暴露了无 local region 问题，最终实现已改为普通路径非模态（见落地状态）。
+
+p6 第一次编译还发现一个坑：`!=(this @ local!, other: T @ local!)` 的默认实现如果直接写 `!(this == other)`，会报 `cannot pass argument of external @local! to @local! parameter`；必须先转成 `@ local?` 视图再比较（本文代码已按此修正）。
+
+##### 落地状态（2026-11-21，WSL Ubuntu 24.04）
+
+已完成并通过测试：
+
+- `f_base/src/LocalEquatable.cj`、`f_base/src/LocalComparable.cj` 按方案 B 实现：`localEq` / `localCompare` 为抽象 hook；`@ local?` / `@ local!` 的运算符默认转调 hook；普通路径保持非模态。
+- `f_data` 的 `@DataAssist` 已接线：
+  - `equal` 生成普通 `==` / `!=` 与 `localEq(local?)`；
+  - `compare` 生成普通 `compare` 与 `localCompare(local?)`；
+  - 字段比较：普通路径用 `f_data_eq` / `f_data_cmp`；local 路径 Copyable 字段用 `_copy`，非 Copyable 字段按具体类型内联 `match`；
+  - `normalizeSuperTypes` 处理 `LocalComparable` → `LocalEquatable` / `Comparable` / `Equatable` 的冗余。
+- 在 **WSL Ubuntu 24.04 + Linux SDK 1.3.0-alpha.20261112001016 + stdx 1.3.0** 上：
+  - `f_base`：`cjpm build` 成功，`cjpm test` **35/35 通过**；
+  - `f_data`：`cjpm test` **166/166 通过**，包含新增的 `LocalDataAssistTest`（local/local、local/普通、普通/local、`==` / `!=` / `compare` / `<` 全部覆盖）。
+
+关于之前的 `OutOfMemoryError`：
+
+- 根因不是 SDK 的 Windows 缺陷，而是**普通实例被路由进了 local hook**。普通实例没有 local region，把 `this` / `other` 当 `@ local?` 视图去调 `localEq` / `localCompare`，访问非 Copyable 字段时就会报：
+  `alloc native local object without local object region`
+- 修正方式：普通 `==` / `compare` 不经过 local 视图，由 DataAssist 生成非模态实现；只有 `@ local!` / `@ local?` 才转调 hook。修正后 Linux/WSL 全量测试通过。
+- 因此后续不要为了“统一”把普通重载改写成转调 hook；普通路径必须保持非模态。
 
 ### 3.5 一眼判断
 
@@ -681,8 +793,9 @@ cjpm test
 | --- | --- |
 | 首批试点 | f_svg、f_llm（仅 rune 缓冲） |
 | 第二批（先结构优化） | f_excel、f_rule、f_egraph、f_cache、f_jsonrpc、f_mcp、f_httpclient、f_xml |
-| 需前置设施（f_data/f_io 的 local 能力） | f_jsonrpc、f_mcp、f_data、f_codec、f_http、f_chart、f_orm、f_dbd、f_mq、f_ticktock、f_zip |
-| 宏能力（opt-in） | f_data.macros.DataAssist：`@DataAssist[equal compare local]`，见 3.4 |
+| 基础能力改造 | f_base（LocalEquatable / LocalComparable）、f_data（DataAssist + 字段 helper）、f_io（ByteBuffer / RotatableBuffer） |
+| 需前置设施的下游模块 | f_jsonrpc、f_mcp、f_codec、f_http、f_chart、f_orm、f_dbd、f_mq、f_ticktock、f_zip |
+| 宏能力（local-mode 版本默认） | f_base.LocalEquatable / LocalComparable 与 f_data.macros.DataAssist 均已落地，WSL 测试通过，见 3.4 |
 | 待采样 | f_store、f_hydra、f_jit、f_tui、f_protocol、f_time |
 | 明确不做 | 其余模块（见 3.3） |
 
@@ -707,7 +820,7 @@ cjpm test
 - `InputStream.read`、`OutputStream.write` 是否有 `@ local?` 形参；
 - `f_io.ByteBuffer`、`f_base.StringGenerator` 加 local 构造后的可用性；
 - `f_data.JsonObject`/`JsonArray`/`JsonValue` 是否支持 local；
-- `@DataAssist[equal compare local]` 展开后，模态 `==`/`compare` 是否命中生成的实现；
+- `f_base.LocalEquatable` / `LocalComparable` 的 `@ local?` `==` / `compare` 是否确实转调到 `localEq` / `localCompare`（而非抛异常），普通路径是否保持非模态；`@DataAssist[equal compare]` 是否同时生成普通 `==` / `compare` 与 `localEq` / `localCompare`；
 - `ArrayList.toArray()`、`HashMap` 迭代器的返回 mode；
 - `Regex.find/findAll`。
 
@@ -737,10 +850,10 @@ func makeSquares(n: Int64): Array<Int64> @ local! {
 
 ### 4.5 第 4 步：按模块推进
 
-- 只给真正写了 local 代码的模块加 `--experimental --enable-local-mode`；
+- 增量阶段只给真正写了 local 代码的模块加 `--experimental --enable-local-mode`；
 - 每次只改一个模块，`cjpm build` + `cjpm test` + 基准三件套；
-- 公开 API 保持 `@ ~local`，不新增模态签名；
-- 不使用 `override-compile-option`。
+- 性能优化类改动保持公开 API `@ ~local`；`LocalEquatable`/`LocalComparable` 与 `@DataAssist` 按 3.4 的接口设计新增模态签名；
+- 不修改 `override-compile-option`（仓库约定）；local-mode 发版也只加各模块的 `compile-option`。
 
 ### 4.6 第 5 步：前置设施（可选）
 
@@ -758,11 +871,12 @@ func makeSquares(n: Int64): Array<Int64> @ local! {
 5. **泛型入口不可 local**：`publish<T>`、`decode<T>`、`extract<T>`、`BarrierTask<G>`、`ConcHashMapIterator<V>`；只能在内部非泛型段做。
 6. **跨线程**：spawn/Future/异步日志不能捕获外层 local；f_mvc、f_log、f_ticktock、f_cache 都撞这条。
 7. **FFI/native 堆**：zlib、crypto、encoding 的内存不在 local region，local 无法降低这部分峰值。
-8. **ABI/发布**：local 产物不保证跨 SDK 兼容；公开模态签名会迫使调用方开启 local mode 并同 SDK 编译。这是“只在模块内部用”的根本原因。
+8. **ABI/发布**：local 产物不保证跨 SDK 兼容；`@DataAssist` 默认生成的公开模态签名要求使用方开启 local mode 并同 SDK 编译。local-mode 发版按此基线统一处理，`1.3.10xx` 之后不再保留无 local mode 的展开。
 9. **工具链**：实验特性，cjfmt/cjlint/LSP/cjdb 不保证支持。
-10. **宏边界**：宏参数/返回值只能 `@ ~local`；`@DataAssist[... local]` 只给 `equal`/`compare` 开了口子，序列化、字段复制、`toString` 仍无法接 local 值。
-11. **继承/接口重复路径**：std 的 `Equatable`/`Comparable` 已带模态重载，类型声明里重复列出祖先接口会报 `must be implemented ... @local!`；不要通过补 `@ local!` 解决，去掉重复父接口即可。详见 `f_data/doc/spec/fix-dataassist-local-mode/`。
+10. **宏边界**：宏参数/返回值只能 `@ ~local`；`@DataAssist` 默认生成的 hook 实现要求使用方按 local-mode 基线编译，序列化、字段复制、`toString` 仍无 local 版本。
+11. **继承/接口重复路径**：std 的 `Equatable`/`Comparable` 已带模态重载，类型声明里重复列出祖先接口会报 `must be implemented ... @local!`；不要通过补 `@ local!` 解决，去掉重复父接口即可。`@DataAssist` 的 `normalizeSuperTypes` 同时处理 `LocalEquatable` / `LocalComparable` 与 std 祖先的冗余（保留 `LocalComparable` 时删掉 `LocalEquatable`、`Comparable`、`Equatable`）。详见 `f_data/doc/spec/fix-dataassist-local-mode/`。
 12. **ohos**：std 的 local 模态成员都带 `@When[env != "ohos"]`（`equatable.cj`、`comparable.cj`、`hashable.cj`、`object.cj` 均如此），ohos 构建没有这些重载；跨平台模块不能把 local 重载作为唯一实现路径，需要用条件编译或保留普通路径。
+13. **std 接口兼容性**：方案 B 保留 `is Equatable` / `is Comparable`，泛型 `T <: Equatable<T>` / `Comparable<T>` 继续可用；但 `LocalComparable` 不继承 `LocalEquatable`，equal + compare 同时存在时类只实现 `LocalComparable`，`is LocalEquatable` 为 false。不要手动同时实现两个接口（`Equatable` 双路径会报错）。
 
 ---
 
@@ -805,10 +919,14 @@ cjc --experimental --enable-local-mode probe.cj -o probe && ./probe
 | P8 | `JsonObject() @ local!` / `JsonValue.fromStr`（f_data） |
 | P9 | 自有 class 加 `exclave init` 后，能否构造 `@ local!` 实例并调用非接口方法 |
 | P10 | 接口方法加 `this @ local?` 后，实现类是否必须同步改 |
-| P11 | `func eq<T>(a: T @ local?, b: T @ local?): Bool where T <: Equatable<T> { a == b }`；`compare` 同理 |
-| P12 | `@DataAssist[equal compare local]` 展开后，`@ local!` 实例的 `==` / `compare` 是否走到生成实现（不抛 `UnimplementedException`） |
-| P13 | `refEq` 的 `@ local?` 重载（`Object @local?`）能否接收 `T @ local?`（类实例）；不行就退回纯字段比较 |
-| P14 | `f_data_eq_local<Bool>` 是否抛 `UnimplementedException`；`f_data_eq_copy<Bool>`（demode 后普通 `==`）是否正常 |
+| P11 | `LocalEquatable` 的 `@ local?` `==` 是否转调 `localEq`（不递归、不抛异常）；普通 / `@ local!` 是否再转调 local? |
+| P12 | `LocalComparable` 的 `@ local?` `compare` 是否转调 `localCompare`；普通 / `@ local!` 与 `<`/`>`/`<=`/`>=` 是否都转调到 local? 版本 |
+| P13 | `@DataAssist[equal compare]` 是否只生成 `localEq(local?)` / `localCompare(local?)`；普通 `==` / `compare` / `!=` 是否走接口默认实现 |
+| P14 | `refEq` 的 `@ local?` 重载（`Object @local?`）能否接收 `T @ local?`（类实例） |
+| P15 | `f_data_eq_copy<Bool>` / `f_data_cmp_copy<Bool>`（demode 后非模态 helper）是否正常；`Bool` 的 `compare` 是否按旧语义返回 `EQ` |
+| P16 | `f_data_eq_local<T> where T <: Equatable<T>` / `f_data_cmp_local<T> where T <: Comparable<T>` 对 DataAssist 字段是否命中 Local* 的默认转调 |
+
+P11~P16 已在 2026-11-21 的 p5/p6 探针中验证通过（见 3.4「实测记录」）；保留为后续回归检查项。p3/p4 验证过已放弃的方案 A（独立接口）。
 
 ## 附录 B：关键代码位置
 
@@ -827,9 +945,12 @@ cjc --experimental --enable-local-mode probe.cj -o probe && ./probe
 | `f_mcp/src/server/McpServer.cj:1140-1164` | `truncateUtf8`；`toRuneArray()` 放大 |
 | `f_httpclient/src/sse/SseReader.cj:145-175` | `readLine`；`ArrayList<Byte>` + `toArray()` 双份 |
 | `f_data/src/json/DataJson.cj:92-110` | `toJsonString`；每字段中间 `valStr` |
+| `f_base/src/LocalEquatable.cj`（新增） | `LocalEquatable <: Equatable`：`localEq(local?)` 抽象；`==(local?)` 默认转调 hook |
+| `f_base/src/LocalComparable.cj`（新增） | `LocalComparable <: Comparable`：`localCompare(local?)` 抽象；`compare(local?)` 与运算符默认转调；自带 `localEq` 默认 |
 | `f_data/src/macros/DataAssist.cj:88-139` | `assist`；attr 解析与 `equal`/`compare` 生成入口 |
-| `f_data/src/macros/DataAssist.cj:349-401` | `generateEqual` / `generateCompare`；本节的改造点 |
-| `f_data/src/base/data_cmp.cj:18-65` | `f_data_eq` / `f_data_hash_eq` / `f_data_cmp`；模态 helper 的位置 |
+| `f_data/src/macros/DataAssist.cj:349-401` | `generateEqual` / `generateCompare`；改为只生成 `localEq` / `localCompare` |
+| `f_data/src/base/data_cmp.cj:18-65` | `f_data_eq` / `f_data_cmp`；新增 `_copy` / `_local` 模态 helper |
+| `dev-guide/source_zh_cn/class_and_interface/interface.md:397` | 子接口不能把父接口的默认成员重新声明为抽象（方案 B 用 hook 的原因） |
 | `std/core/equatable.cj:11-48` | `Equal` / `NotEqual` / `Equatable` 的 `@ local?` 成员与默认实现 |
 | `std/core/comparable.cj:229-310` | `Comparable` 的 `compare(this @ local?, ...)` 与派生运算符 |
 | `std/core/hashable.cj:11-21` | `Hashable.hashCode(this @ local?)`（后续扩展哈希时用） |

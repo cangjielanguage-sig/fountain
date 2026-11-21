@@ -11,7 +11,7 @@
   "fountain::f_time" = {path = "../f_time"}
 [package]
   cjc-version = "1.2.0"
-  compile-option = "--dy-std"
+  compile-option = "--dy-std --experimental --enable-local-mode"
   override-compile-option = "--dy-std"
   description = "数据复制、数据验证"
   link-option = ""
