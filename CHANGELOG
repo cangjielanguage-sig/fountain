@@ -1,4 +1,9 @@
 2026-11-21
+    feat(f_llm): KnowledgeChunker.split 全文 rune 缓冲启用 local mode——2 MiB 内容字节门限
+      （8 MiB 预算 ÷ 4 字节/Rune）、精确容量构造、local/堆分档开关 splitImpl；公开 API 与切块
+      输出不变
+    docs(f_llm): 补 perf-baseline 记录 local/堆峰值口径与实测（参考值、非门禁）；中英文 README
+      注明编译期 local mode 要求与 ohos 不支持
     feat(f_svg): 解析覆盖率累加器启用 local mode——8 MiB 尺寸门限（除法防溢出）、local/堆分档开关
       analyticCoverageImpl；行内事件列表固定 local 并新增 exclave 排序；公开 API 不变
     docs(f_svg): perf-baseline 补 local mode 试点口径与实测（参考值、非门禁）；中英文 README 注明

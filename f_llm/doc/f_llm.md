@@ -311,6 +311,7 @@ f_llm:evo-state:kn:{docId}                            → 已消费的知识
 ### 4.8 知识切块与检索
 
 - `KnowledgeChunker.split(content, maxChars: 400, overlap: 50)`：按字符滑窗，`overlap` 必须落在 `[0, maxChars)`；
+- 内部全文 rune 缓冲按内容字节门限分档：内容不超过 2 MiB 时走线程 local region（单次预算 8 MiB），超过走普通堆；公开 API、`maxChars` / `overlap` 语义与返回的 chunk 不变；
 - `KnowledgeSearch`：块级向量召回，返回 `KnowledgeHit`（带块与所属文档）；
 - 写入路径：`knowledge.upsert` → 切块 → 逐块编码 → 落 `llm_document_chunk`。
 
