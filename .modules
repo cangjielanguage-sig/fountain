@@ -59,9 +59,9 @@ f_llm
 fboot
 fmq
 fdbm
-fprobe
 f_svg
 f_chart
+fprobe
 .
 
 [exclude]
