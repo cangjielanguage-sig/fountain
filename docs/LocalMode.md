@@ -322,7 +322,7 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 | f_xml | `Escaper` 非 ASCII 追加 | `StringGenerator.append(r)` 每字符新建 4 B 暂存（68 B/rune） | 已改：复用 `ByteScratch.putCp` 暂存（7 B/rune） |
 | f_xml | `EntityExpander.checkReplacement` | 每次新建 `Lexer`/`LineWindow` | 优先复用单个 Lexer；不改 |
 | f_data | `DataJson.toJsonString`（92-110） | 每字段中间 `valStr`（逃逸，不可 local）；叶子转义 840 B/次 | 已改：`escapeJsonString` 无转义快路径（64 B/次）；sink 暂不做 |
-| f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转 | `@ local!`（不再逃逸时） |
+| f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转（占单次 UPDATE 分配约 9%） | 不改：local 化被 `Any` 的 local 限定阻断；已补 Column 键等价回归 |
 | f_orm | `RootDAO.arg`（323-389） | `Any` 装箱进 executor | 不改（逃逸） |
 | f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 两层临时包装 | `@ local!` |
 | f_mq | `candidateNodes` | `ArrayList<Int64>` | `@ local!` |
