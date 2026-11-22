@@ -99,12 +99,11 @@ internal class FileSource <: EntrySource {
         file.seek(Begin(offset))
         var got: Int64 = 0
         while (got < want) {
-            let tmp = Array<Byte>(want - got, repeat: 0)
-            let n = file.read(tmp)
+            // 直接读入目标切片，去掉「整块临时数组 + 再拷贝」的中转
+            let n = file.read(dst[got..want])
             if (n <= 0) {
                 break
             }
-            tmp[0..n].copyTo(dst, 0, got, n)
             got += n
         }
         got
