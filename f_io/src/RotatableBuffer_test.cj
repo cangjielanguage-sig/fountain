@@ -17,6 +17,12 @@ package fountain::f_io
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_base.UnsafeBytes
+
+/** 分隔符统一用 `\r\n--B`（5 B），便于把起始位置摆到半窗边界上。 */
+private func sectionBoundary(): Array<Byte> {
+    [0x0Du8, 0x0Au8, 0x2Du8, 0x2Du8, 0x42u8]
+}
 
 @Test
 class RotatableBufferTest {
@@ -58,5 +64,92 @@ class RotatableBufferTest {
         @Expect(first, 8)
         let (second, _, _) = buffer.read(out)
         @Expect(second, 0)
+    }
+
+    /** 读到 sectionEnd 当次只停住，不消费分隔符：offset 不动，indexOf 仍能找到分隔符。 */
+    @TestCase
+    func readStopsAtSectionEnd(): Unit {
+        let payload = "ABC\r\n--B\r\nDEF"
+        let buffer = RotatableBuffer(ByteBuffer(payload.unsafeBytes(), toOverwriteOnClearing: false), sectionBoundary())
+        let out = Array<Byte>(8, repeat: 0)
+
+        let (size, _, partEnd) = buffer.read(out)
+        @Expect(size, 3)
+        @Expect(partEnd, true)
+        @Expect(buffer.offset, 3)
+        @Expect(buffer.indexOf(sectionBoundary()), 3)
+    }
+
+    /** 下一次 read 才跳过分隔符，返回内容不含分隔符本身。 */
+    @TestCase
+    func nextReadSkipsSeparator(): Unit {
+        let payload = "ABC\r\n--B\r\nDEF"
+        let buffer = RotatableBuffer(ByteBuffer(payload.unsafeBytes(), toOverwriteOnClearing: false), sectionBoundary())
+        let out = Array<Byte>(8, repeat: 0)
+
+        let (first, _, _) = buffer.read(out)
+        @Expect(first, 3)
+        @Expect(buffer.offset, 3)
+
+        let (second, _, _) = buffer.read(out)
+        @Expect(second, 5)
+        let expected: Array<Byte> = [0x0Du8, 0x0Au8, 0x44u8, 0x45u8, 0x46u8]
+        for (i in 0..second) {
+            @Expect(out[i], expected[i])
+        }
+    }
+
+    /** 分隔符跨半窗：下一次 read 先旋转再跳过，返回下一段的字节。 */
+    @TestCase
+    func separatorAcrossHalfWindow(): Unit {
+        let payload = "ABCDEFG\r\n--B\r\nHI"
+        let buffer = RotatableBuffer(
+            ByteBuffer(payload.unsafeBytes(), toOverwriteOnClearing: false),
+            sectionBoundary(),
+            halfBufferSize: 8
+        )
+        let out = Array<Byte>(8, repeat: 0)
+
+        let (first, _, _) = buffer.read(out)
+        @Expect(first, 7)
+        @Expect(buffer.offset, 7)
+        @Expect(buffer.indexOf(sectionBoundary()), 7)
+
+        let (second, _, _) = buffer.read(out)
+        @Expect(second, 4)
+        let expected: Array<Byte> = [0x0Du8, 0x0Au8, 0x48u8, 0x49u8]
+        for (i in 0..second) {
+            @Expect(out[i], expected[i])
+        }
+    }
+
+    /** 连续 3 个 section 顺序读取，最后读到 0。 */
+    @TestCase
+    func threeSectionsReadSequentially(): Unit {
+        let payload = "A\r\n--B\r\nBB\r\n--B\r\nCCC"
+        let buffer = RotatableBuffer(ByteBuffer(payload.unsafeBytes(), toOverwriteOnClearing: false), sectionBoundary())
+        let out = Array<Byte>(8, repeat: 0)
+
+        let (s1, _, _) = buffer.read(out)
+        @Expect(s1, 1)
+        @Expect(out[0], 0x41u8)
+        @Expect(buffer.offset, 1)
+
+        let (s2, _, _) = buffer.read(out)
+        @Expect(s2, 4)
+        let second: Array<Byte> = [0x0Du8, 0x0Au8, 0x42u8, 0x42u8]
+        for (i in 0..s2) {
+            @Expect(out[i], second[i])
+        }
+
+        let (s3, _, _) = buffer.read(out)
+        @Expect(s3, 5)
+        let third: Array<Byte> = [0x0Du8, 0x0Au8, 0x43u8, 0x43u8, 0x43u8]
+        for (i in 0..s3) {
+            @Expect(out[i], third[i])
+        }
+
+        let (s4, _, _) = buffer.read(out)
+        @Expect(s4, 0)
     }
 }

@@ -164,9 +164,11 @@ public class MultipartFormDataParser {
                     }else if (filename.isEmpty()){
                         let byteList = ArrayList<Byte>()
                         let buf = chunkBuffer()
-                        while(let (len, _, _) <- stream.read(buf)){
+                        while(let (len, _, partEnd) <- stream.read(buf)){
                             byteList.add(all: buf[0 .. len])
-                            if(len < buf.size){
+                            // partEnd 表示本次读正好停在 sectionEnd；内容长度恰为块整数倍时
+                            // 不会出现短读，必须用它退出，否则会把分隔符后的字节当成内容。
+                            if(partEnd || len < buf.size){
                                 break
                             }
                         }
@@ -195,14 +197,10 @@ public class MultipartFormDataParser {
                         }
                         let file = File(path.join(filename), ReadWrite)
                         let buf = chunkBuffer()
-                        var l = 0
-                        while(let (len, _, _) <- stream.read(buf)){
-                            l += len
-                            if(len < buf.size){
-                                file.write(buf[0..len])
+                        while(let (len, _, partEnd) <- stream.read(buf)){
+                            file.write(buf[0 .. len])
+                            if(partEnd || len < buf.size){
                                 break
-                            }else{
-                                file.write(buf)
                             }
                         }
                         file.seek(Begin(0))
