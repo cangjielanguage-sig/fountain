@@ -7,8 +7,8 @@
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  compile-option = "--dy-std --experimental --enable-local-mode"
+  override-compile-option = "--dy-std --experimental --enable-local-mode"
   link-option = ""
   package-configuration = {}
   category = ["Utility", "Data Encapsulation and Transfer", "Developer Tools"]
