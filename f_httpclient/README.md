@@ -259,3 +259,4 @@ resource(response.sseReader(maxLineBytes: 1 << 20, idleTimeout: Duration.second 
 | 8 | **返回 `data` 原文**，不解释 `[DONE]`、不解析 JSON |
 | 9 | `close()` 关闭底层流（能关的才关），`Resource` 保证 `resource(...)` 可用 |
 | 10 | 不做自动重连、不消费 `Last-Event-ID`（LLM 的流断了只能重发请求） |
+| 11 | 行读取复用实例字节缓冲：缓冲按需增长、上界 `maxLineBytes`，每行不新建集合（`F_HTTPCLIENT_SSE_BENCH=1` 下有分配上界基准） |

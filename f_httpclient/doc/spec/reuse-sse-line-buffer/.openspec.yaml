@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-22
+x-scope: sse-reader-line-buffer
+x-design-doc: f_httpclient/README.md
+x-precedent: f_jsonrpc/doc/spec/reuse-jsonrpc-read-buffer
+x-gate: equivalence-and-allocation
+x-runtime-env: default (no cjHeapSize / cjGCInterval / cjRegionSize)
