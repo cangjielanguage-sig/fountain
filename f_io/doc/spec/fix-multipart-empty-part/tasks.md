@@ -38,9 +38,9 @@
 
 - [x] 5.1 镜像 `openspec/changes/fix-multipart-empty-part/` 到 `f_io/doc/spec/fix-multipart-empty-part/`，两份逐文件一致（验证：`diff -r` 无输出）
 - [x] 5.2 `openspec validate fix-multipart-empty-part --strict` 通过（验证：输出 `is valid`）
-- [x] 5.3 提交到 `fix/multipart-empty-part`，提交信息说明「延迟跳过分隔符」（验证：`git log -1 --stat` 只含预期文件）
+- [x] 5.3 提交到 `feature/fix-multipart-empty-part`，提交信息说明「延迟跳过分隔符」（验证：`git log -1 --stat` 只含预期文件）
 
 ## Workflow follow-up
 
-- 推送 `fix/multipart-empty-part`，合并回 `sts/1.3.x-LocalMode`，合并后再跑 `f_io` / `f_http` 回归。
+- 推送 `feature/fix-multipart-empty-part`，合并回 `sts/1.3.x-LocalMode`，合并后再跑 `f_io` / `f_http` 回归。
 - 执行 `opsx:verify`，通过后 `opsx:archive` 并同步主规格。
