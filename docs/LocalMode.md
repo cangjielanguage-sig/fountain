@@ -324,7 +324,7 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 | f_data | `DataJson.toJsonString`（92-110） | 每字段中间 `valStr`（逃逸，不可 local）；叶子转义 840 B/次 | 已改：`escapeJsonString` 无转义快路径（64 B/次）；sink 暂不做 |
 | f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转（占单次 UPDATE 分配约 9%） | 不改：local 化被 `Any` 的 local 限定阻断；已补 Column 键等价回归 |
 | f_orm | `RootDAO.arg`（323-389） | `Any` 装箱进 executor | 不改（逃逸） |
-| f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 两层临时包装 | `@ local!` |
+| f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 泛型装箱（8 参数 payload 2,321 B/次） | 已改：`add<Data>` 单层包装（1,744 B/次，-25%） |
 | f_mq | `candidateNodes` | `ArrayList<Int64>` | `@ local!` |
 | f_rule | `AlphaMemory.range/select`（147-188） | `ArrayList<FactHandle>` + `toArray()` | 结果逃逸，不改；改调用方 buffer |
 | f_egraph | `takeBatchLocked`（218-248） | 整队列快照 | 逃逸，不改 |
