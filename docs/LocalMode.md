@@ -331,7 +331,7 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 | f_cache | `HeapCache.checkOverSize`（179-224） | `segmentIterators`/`tops` | 字段复用，不改 |
 | f_ticktock | `Ticktock.emit`（236-268） | `batch` 被 `spawn` 捕获 | 不改（跨线程） |
 | f_log | 格式化链路 | 闭包/异步/接口 | 不改 |
-| f_mvc | `PathPattern.extract` | `split("/")` + `HashMap` | 内部 helper 可 `@ local!`；接口 `extract` 不改 |
+| f_mvc | `PathPattern.extract` | `split("/")` + `HashMap<Int64, Any>` | 不改：local 映射的下标/`add` 在 `Any` 上无匹配重载；每变量全量解析被抽象接口锁死 |
 | f_security / f_email | JWT 两次解析 / Base64 三重实体化 | 中间 String/数组 | 先做结构性优化，不改 local |
 | f_jwt / f_crypto / f_zip | Base64/HMAC/zlib 中间对象 | stdx/FFI | 不改（native 堆） |
 | f_base / f_io | `StringGenerator` / `ByteBuffer` | 接口方法锁死 | 不改；`RotatableBuffer` 可先加 `exclave init` |
@@ -465,7 +465,7 @@ private func accumulateAnalyticRow(
 | **f_net** | Socket/网络 | `SocketBuffer`/`MessageFuture` 线程绑定、构造里直接 spawn；不做。 |
 | **f_util** | PathPattern/TextTemplate/Fnv | `PathPattern` 是注册期只读结构（多处声明初始化），`TextTemplate` 有静态模板缓存，都不是热 new；不做。 |
 | **f_log** | 日志 | 格式化链路是“`()->String` 闭包 + 泛型 + 虚方法 + 异步队列 + `OutputStream` 接口”，local 收益吃不到；但每条日志重新 `TextTemplate.compile`（`f_log/src/base/Logger.cj:47-51`）、每个片段 `toArray()` 是明确的结构性浪费，先修这个。 |
-| **f_mvc** | MVC/路由 | `PathPattern.extract` 每个路径变量一次全量 `split("/")` + 建 `HashMap<String,String>` 只取一个键；改成每请求解析一次/复用容器。`HttpRequestPathPatterns.extract` 是抽象成员，this mode 锁死。 |
+| **f_mvc** | MVC/路由 | `PathPattern.extract` 每个路径变量一次全量 `split("/")` + 建 `HashMap<String,String>` 只取一个键；改成每请求解析一次需要抽象成员 `HttpRequestPathPatterns.extract` 携带已解析容器，this mode 锁死。中转的 `HashMap<Int64, Any>` 也无法 local 化（`Any` 值在 `@ local?` 集合上没有 `add`/下标重载）。 |
 | **f_security** | 鉴权/JWT 上下文 | `JWTSecurityContext.checkAndGet`（`f_security/src/JWTSecurityContext.cj:67`）每请求把同一个 JWT 解析两次（`check` 一次、`getPricinpal` 又一次）；把 verifier 传下去即可，结构收益远大于 local。 |
 | **f_email** | 邮件/MIME | `f_email/src/mime/MimeWriter.cj:181-184` 把正文 Base64 编码成 String 再 `toArray()`，峰值约 3~4 倍原文；改走已有的流式 `Base64Encoder`/`QuotedPrintable.encoder` 即可。 |
 | **f_jwt** | JWT | Base64/HMAC/JSON 大头在 stdx；`sign()` 的中间对象全不逃逸但被 FFI 和返回值夹住；不做。 |
