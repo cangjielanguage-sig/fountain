@@ -148,8 +148,7 @@ class MultipartFormDataParser_test {
         @Assert("Hello", valueOf(parseForm(payload), "title"))
     }
 
-    // 已知缺陷：空内容 part 仍会因 RotatableBuffer 在 sectionEnd 处提前旋转、吞掉分隔符而失败；
-    // 由后续 fix/multipart-empty-part 变更处理，本套件暂不覆盖。
+    // 空内容 part 的回归见 MultipartEmptyPart_test。
 
     @TestCase
     public func testMultipleFormFields(): Unit {
@@ -182,11 +181,6 @@ class MultipartFormDataParser_test {
             case _ => @Fail('重名字段应返回 DataIterable')
         }
     }
-
-    // TODO(缺陷): 空内容 part 现状会死循环 —— header 读取耗尽 sectionEnd 后 RotatableBuffer
-    // 已经吞掉分隔符，parse() 落到流式分支，而 read 不按 bufferEnd 截断，永远返回满长度。
-    // 修它要改 f_io 的读边界或 parse 的 EOF 判定，超出本变更（缓冲复用）范围。
-    // 见 design.md §10「过程中发现的既有缺陷」。
 
     @TestCase
     public func testUtf8FieldValue(): Unit {
