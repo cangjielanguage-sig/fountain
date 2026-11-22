@@ -116,10 +116,8 @@ private func fileOf(data: Data, name: String): MultipartFile {
 }
 
 /**
- * 落盘 part 不能用 `MultipartFile.bytes()`：它内部的 `copyTo` 与自身各调一次 `close()`，
- * 第二次 close 会对已删除的父目录调 `Directory.isEmpty` 而抛 FSFException；
- * `copyTo` 又按 4096 B 整块写，超出 `ByteBuffer` 的即时容量。
- * 这里自己按块读，读完只调一次 `close()`（文件与空目录由它删除）。
+ * 落盘 part 的字节：自己按块读，读完只调一次 `close()`（文件与空目录由它删除）。
+ * 这样能单独覆盖 `MultipartFile.read()`；`bytes()` 路径由 `testSpilledFileBytes` 覆盖。
  */
 private func readSpilled(part: MultipartFile): Array<Byte> {
     let out = ArrayList<Byte>()

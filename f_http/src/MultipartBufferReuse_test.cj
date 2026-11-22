@@ -82,7 +82,7 @@ private func reuseValue(data: Data, name: String): String {
     reuseTuples(data).get(name).toString()
 }
 
-/** 落盘 part 的字节：`MultipartFile.bytes()` 有既有缺陷（见回归套件的 `readSpilled`）。 */
+/** 落盘 part 的字节：自己按块读，单独覆盖 `MultipartFile.read()`。 */
 private func reuseSpilledBytes(part: MultipartFile): Array<Byte> {
     let out = ArrayList<Byte>()
     let buffer = Array<Byte>(256, repeat: 0)

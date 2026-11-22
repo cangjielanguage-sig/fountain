@@ -45,7 +45,7 @@
 ## T6 产物与提交
 
 - [x] 6.1 镜像 `openspec/changes/reuse-multipart-parse-buffers/` 到 `f_http/doc/spec/reuse-multipart-parse-buffers/`，两份一致
-- [x] 6.2 分支 `feature/reuse-multipart-parse-buffers`，按「回归套件」「f_io EOF + f_http 修复」分次提交
+- [x] 6.2 分支 `feature/reuse-multipart-parse-buffers`，单次提交涵盖回归套件、f_io EOF 修复与 f_http 缓冲复用/缺陷修复
 - [x] 6.3 提交完成；合并回 `sts/1.3.x-LocalMode` 与推送由交付步骤在 verify 通过后执行
 
 ## 后续（不在本变更）
