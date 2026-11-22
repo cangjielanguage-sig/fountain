@@ -23,12 +23,26 @@ public interface ToJsonString {
 
 private let JSON_HEX_DIGITS: Array<Rune> = [r'0', r'1', r'2', r'3', r'4', r'5', r'6', r'7', r'8', r'9', r'a', r'b', r'c', r'd', r'e', r'f']
 
+/** 是否需要 JSON 转义：`"`、`\` 或码点小于 `0x20`。 */
+private func jsonNeedsEscape(s: String): Bool {
+    for (r in s.runes()) {
+        if (r == r'"' || r == r'\\' || r.position() < 0x20) {
+            return true
+        }
+    }
+    false
+}
+
 /**
  * 按 JSON 字符串规则转义：双引号、反斜杠、换行/回车/制表符，以及其余码位 < 0x20 的字符。
  * 修复历史缺陷：`ToJsonString` 这条「Data → JSON 文本」路径此前直接拼引号，
  * 含 `"`/`\`/换行的数据会生成非法 JSON（走 JsonWriter 的 JsonValue.toJsonString 路径不受影响）。
  */
 internal func escapeJsonString(s: String): String {
+    // 无需转义的字符串原样返回：String 不可变，省去整块缓冲与一次拷贝。
+    if (!jsonNeedsEscape(s)) {
+        return s
+    }
     let builder = StringGenerator()
     for (r in s.runes()) {
         if (r == r'"') {
