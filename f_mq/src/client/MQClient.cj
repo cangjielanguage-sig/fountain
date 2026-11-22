@@ -504,18 +504,7 @@ public class MQClient <: Resource {
             case Some(owners) => owners
             case None => Array<Int64>()
         }
-        let result = ArrayList<Int64>()
-        for (node in preferred) {
-            if (!result.contains(node)) {
-                result.add(node)
-            }
-        }
-        for (node in all) {
-            if (!result.contains(node)) {
-                result.add(node)
-            }
-        }
-        result.toArray()
+        candidateNodesOf(preferred, all)
     }
 }
 
@@ -529,4 +518,34 @@ internal enum TransferOutcome {
     | Response(Message)
     | Timeout
     | Rejected(Exception)
+}
+
+/** 候选节点：owner 优先、各自去重、其余节点兜底。包内可见，便于测试直接驱动。 */
+func candidateNodesOf(preferred: Array<Int64>, all: Array<Int64>): Array<Int64> {
+    // 一次分配到上界，前缀去重后返回切片：避免 ArrayList 增长与 toArray 拷贝
+    let buf = Array<Int64>(preferred.size + all.size, repeat: 0)
+    var len: Int64 = 0
+    for (node in preferred) {
+        if (!candidateContains(buf, len, node)) {
+            buf[len] = node
+            len++
+        }
+    }
+    for (node in all) {
+        if (!candidateContains(buf, len, node)) {
+            buf[len] = node
+            len++
+        }
+    }
+    buf[0..len]
+}
+
+/** 在 `buf[0..len)` 前缀内查找；节点数为集群规模，线性扫描足够。 */
+private func candidateContains(buf: Array<Int64>, len: Int64, node: Int64): Bool {
+    for (i in 0..len) {
+        if (buf[i] == node) {
+            return true
+        }
+    }
+    false
 }

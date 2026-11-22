@@ -325,7 +325,7 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 | f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转（占单次 UPDATE 分配约 9%） | 不改：local 化被 `Any` 的 local 限定阻断；已补 Column 键等价回归 |
 | f_orm | `RootDAO.arg`（323-389） | `Any` 装箱进 executor | 不改（逃逸） |
 | f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 泛型装箱（8 参数 payload 2,321 B/次） | 已改：`add<Data>` 单层包装（1,744 B/次，-25%） |
-| f_mq | `candidateNodes` | `ArrayList<Int64>` | `@ local!` |
+| f_mq | `candidateNodes` | `ArrayList<Int64>`（n=8 时 5,120 B/次） | 已改：预分配数组 + 切片（1,280 B/次，4×）；local 因 `toArray` 无法返回堆数组 |
 | f_rule | `AlphaMemory.range/select`（147-188） | `ArrayList<FactHandle>` + `toArray()` | 结果逃逸，不改；改调用方 buffer |
 | f_egraph | `takeBatchLocked`（218-248） | 整队列快照 | 逃逸，不改 |
 | f_cache | `HeapCache.checkOverSize`（179-224） | `segmentIterators`/`tops` | 字段复用，不改 |
@@ -443,7 +443,7 @@ private func accumulateAnalyticRow(
 | **f_data** | 数据对象/JSON | `f_data/src/json/DataJson.cj:92-110` 的 `toJsonString` 每字段先生成中间 `valStr`，再拼进父 builder，峰值约为最终 JSON 的 2 倍。收益最大的是改成写入式 sink（父 builder 直接接收子节点），不是 local；`DataObject<T>` 是泛型 + `ToJsonString` 接口实现，模态改不动。`@DataAssist` 面向 local-mode 发版：`equal` / `compare` 实现 `f_base.LocalEquatable` / `LocalComparable`，同时生成普通 `==` / `compare` 与 `localEq` / `localCompare` hook；local 路径由接口默认转调，普通路径保持非模态；详见 3.4。 |
 | **f_orm** | ORM/SQL DSL | `RootDAO.arg`（`323-389`）的 `Any` 装箱会逃逸进 executor 参数表，local 无效；`SqlPartial.UPDATE`（`123-143`）的 `HashMap<String, Any>` 纯中转，直接删掉/直接调另一重载即可。`RootDAO` 是 40+ 默认成员的接口，加 `this @ local?` 会牵连整棵 DAO 体系，不做。 |
 | **f_dbd** | 数据库驱动 | `DbdStatement.sqlPayload`（`158-175`）每参数两层 `DataAny` 包装，是结构性浪费；`QueryResultImpl.get<T>` 实现 std `QueryResult`，this mode 锁死。 |
-| **f_mq** | 消息队列客户端 | `publish<T>`、`MQProtocol.encodePayload<T>` 都是泛型，local 不支持类型参数；`candidateNodes` 的 `ArrayList<Int64>` 可以 local，但规模小、收益低。 |
+| **f_mq** | 消息队列客户端 | `publish<T>`、`MQProtocol.encodePayload<T>` 都是泛型，local 不支持类型参数；`candidateNodes` 原 `ArrayList<Int64>` 调用频繁，已改预分配数组（4×）；local 仅 4.5× 且受 `toArray` 返回类型限制。 |
 | **f_ticktock** | 定时任务调度 | `Ticktock.emit`（`236-268`）每 tick 一个 `ArrayList<TicktockEntry> batch`，但 `spawn { executeOne(entry) }` 不允许捕获外层 local；`TicktockEntry` 是普通类型。建议字段复用 buffer，不做 local。 |
 | **f_zip** | zip 读写 | 峰值主因是 `stdx.compress.zlib` 的 native 堆（deflate/inflate 状态），local mode 碰不到；`memoryEntryThreshold`/spill 策略才是杠杆。`ByteBuffer` 中间缓冲可 local，但收益有限。 |
 | **f_store** | LSM-Tree KV | 待采样。优先看 key/value 编码缓冲、WAL/SSTable 写路径的临时字节数组；如果最终写入文件/字段，逃逸后 local 无收益。 |
