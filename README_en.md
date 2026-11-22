@@ -25,6 +25,10 @@ The version number has three parts, a.b.c. a.b must strictly match the first two
 
 For example, starting from 2026.11.09, SDK nightly 1.3.0 no longer allows a subtype to implement or inherit an interface already implemented or inherited by its parent type. Judging from the compiler errors, this seems to be caused by local mode. Therefore the version number was changed to 1.3.1019.
 
+1.3.10xx is the last SDK version compatible with SDKs that have no local mode feature, and also the earliest SDK version compatible with SDKs that have local mode.
+
+1.3.20xx is the earliest version that uses local mode.
+
 ## Demo Video
 
 > 🎥 [Watch the full demo video](https://www.bilibili.com/video/BV1rtpT62Eaz/?vd_source=29618d9ddd46963c9eabd64d9e362fb4)
