@@ -71,11 +71,23 @@ public class RotatableBuffer {
         this.offset += off
     }
     public func read(bytes: Array<Byte>): (length: Int64, remainder: Bool, partEnd: Bool) {
-        let size = min(bytes.size, if (sectionEnd > 0 && sectionEnd < bufferSize) {
+        let windowEnd = if (sectionEnd > 0 && sectionEnd < bufferSize) {
             sectionEnd
         } else {
             bufferSize
-        } - offset)
+        }
+        // bufferEnd < bufferSize 表示底层流已读完；必须以真实数据末尾截断，
+        // 否则空 part / 截断报文会从旧窗口里读出满长度，调用方永远等不到 0。
+        let dataEnd = if (bufferEnd < 0) {
+            0
+        } else if (bufferEnd < bufferSize) {
+            bufferEnd
+        } else {
+            bufferSize
+        }
+        let limit = if (windowEnd < dataEnd) { windowEnd } else { dataEnd }
+        let rawSize = if (bytes.size < limit - offset) { bytes.size } else { limit - offset }
+        let size = if (rawSize < 0) { 0 } else { rawSize }
         for (i in 0..size) {
             bytes[i] = this[offset + i]
         }
