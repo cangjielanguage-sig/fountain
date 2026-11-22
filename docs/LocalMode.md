@@ -308,16 +308,16 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 
 | 模块 | 函数/位置 | 实例 | 结论 |
 | --- | --- | --- | --- |
-| f_svg | `SvgAnalyticRasterizer.analyticCoverage`（124-180） | `accumulated: Array<Float64>`、每行 `events` | `@ local!`；`accumulateAnalyticRow(accumulated: ... @ local?)` |
-| f_llm | `KnowledgeChunker.split`（33-68） | 全文 `ArrayList<Rune>` | `@ local!`；内部 helper 参数 `@ local?` |
-| f_excel | `PackageWriter`（125-218） | `ByteBuffer(256 * 1024)` | 先给 `ByteBuffer` 加 `exclave init`；中间缓冲 `@ local!` |
+| f_svg | `SvgAnalyticRasterizer.analyticCoverage`（124-180） | `accumulated: Array<Float64>`、每行 `events` | 已改：`@ local!`（门限 8 MiB），events 固定 local |
+| f_llm | `KnowledgeChunker.split`（33-68） | 全文 `ArrayList<Rune>` | 已改：`@ local!` + local/heap 双路径（8 MiB 预算） |
+| f_excel | `PackageWriter`（125-218） | `ByteBuffer(256 * 1024)` | 已改：复用 256 KB 部件缓冲（未 local 化） |
 | f_excel | `SheetXmlWriter.writeCell`（112-160） | 单元格属性列表/小字符串 | 不改（小对象负收益） |
-| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | `@ local!`；请求体 String 仍普通 |
-| f_jsonrpc | `JsonRpcClient.readCapped`（308-332） | 8 KB 读缓冲 | 优先字段复用；每次新建则 `@ local!` |
-| f_mcp | `McpServer.truncateUtf8`（1140-1164） | `toRuneArray()` 结果 | `@ local!`；更优是改 UTF-8 字节切片 |
-| f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | `@ local!` |
+| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | 待办：集合元素为接口类型（同 `Any` 限制），需先测 local 可行性 |
+| f_jsonrpc | `JsonRpcClient.readCapped`（308-332） | 8 KB 读缓冲 | 已改：线程私有 8 KiB 缓冲复用 |
+| f_mcp | `McpServer.truncateUtf8`（1140-1164） | `toRuneArray()` 结果 | 已改：`runes()` 迭代 + 按字节截断（1 MiB ASCII 51× 分配下降） |
+| f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | 已改：复用 1 KB 流式块与 CRLF；header 仍精确分配 |
 | f_http | `ContentDisposition.parse`（280-358） | 1~7 元素 `ArrayList<String>` | 不改（小对象） |
-| f_httpclient | `SseReader.readLine`（145-175） | `ArrayList<Byte>` + `toArray()` | `@ local!`，或复用字段缓冲 |
+| f_httpclient | `SseReader.readLine`（145-175） | `ArrayList<Byte>` + `toArray()` | 已改：复用行缓冲（`-O2` strict 门控） |
 | f_xml | `XmlWriter` flush | 16 KB 编码数组 | 不改：实测 `unsafeBytes()` 为数组视图（313 B/次） |
 | f_xml | `Escaper` 非 ASCII 追加 | `StringGenerator.append(r)` 每字符新建 4 B 暂存（68 B/rune） | 已改：复用 `ByteScratch.putCp` 暂存（7 B/rune） |
 | f_xml | `EntityExpander.checkReplacement` | 每次新建 `Lexer`/`LineWindow` | 优先复用单个 Lexer；不改 |
