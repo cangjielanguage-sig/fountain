@@ -312,7 +312,7 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 | f_llm | `KnowledgeChunker.split`（33-68） | 全文 `ArrayList<Rune>` | 已改：`@ local!` + local/heap 双路径（8 MiB 预算） |
 | f_excel | `PackageWriter`（125-218） | `ByteBuffer(256 * 1024)` | 已改：复用 256 KB 部件缓冲（未 local 化） |
 | f_excel | `SheetXmlWriter.writeCell`（112-160） | 单元格属性列表/小字符串 | 不改（小对象负收益） |
-| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | 待办：集合元素为接口类型（同 `Any` 限制），需先测 local 可行性 |
+| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | 不改：`requests` 逃逸进 `JsonArray`、`responses.toArray()` 不能返回堆数组；仅 `ids`/`byId` 可 local，相对 HTTP 往返可忽略 |
 | f_jsonrpc | `JsonRpcClient.readCapped`（308-332） | 8 KB 读缓冲 | 已改：线程私有 8 KiB 缓冲复用 |
 | f_mcp | `McpServer.truncateUtf8`（1140-1164） | `toRuneArray()` 结果 | 已改：`runes()` 迭代 + 按字节截断（1 MiB ASCII 51× 分配下降） |
 | f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | 已改：复用 1 KB 流式块与 CRLF；header 仍精确分配 |
