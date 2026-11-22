@@ -71,11 +71,41 @@ public class RotatableBuffer {
         this.offset += off
     }
     public func read(bytes: Array<Byte>): (length: Int64, remainder: Bool, partEnd: Bool) {
-        let size = min(bytes.size, if (sectionEnd > 0 && sectionEnd < bufferSize) {
+        // 分隔符延迟跳过：上一次读停在 sectionEnd，本次入口才消费 `\r\n--boundary`。
+        // 读到 sectionEnd 的当次不越过分隔符，调用方仍可用 indexOf 定位它（空 part 依赖此语义）。
+        if (offset == sectionEnd) {
+            if (sectionEnd + boundaryBytes.size >= halfBufferSize) {
+                buffer = (buffer[1], buffer[0])
+                offset += boundaryBytes.size - halfBufferSize
+                if (bufferEnd < bufferSize) {
+                    bufferEnd -= halfBufferSize
+                    sectionEnd -= halfBufferSize
+                } else {
+                    bufferEnd = halfBufferSize + input.read(buffer[1])
+                    sectionEnd = indexOf(boundaryBytes)
+                }
+            } else {
+                offset = sectionEnd + boundaryBytes.size
+                sectionEnd = indexOf(boundaryBytes)
+            }
+        }
+        let windowEnd = if (sectionEnd > 0 && sectionEnd < bufferSize) {
             sectionEnd
         } else {
             bufferSize
-        } - offset)
+        }
+        // bufferEnd < bufferSize 表示底层流已读完；必须以真实数据末尾截断，
+        // 否则空 part / 截断报文会从旧窗口里读出满长度，调用方永远等不到 0。
+        let dataEnd = if (bufferEnd < 0) {
+            0
+        } else if (bufferEnd < bufferSize) {
+            bufferEnd
+        } else {
+            bufferSize
+        }
+        let limit = if (windowEnd < dataEnd) { windowEnd } else { dataEnd }
+        let rawSize = if (bytes.size < limit - offset) { bytes.size } else { limit - offset }
+        let size = if (rawSize < 0) { 0 } else { rawSize }
         for (i in 0..size) {
             bytes[i] = this[offset + i]
         }
@@ -107,19 +137,6 @@ public class RotatableBuffer {
             if (bufferEnd == halfBufferSize) {
                 bufferEnd += input.read(buffer[1])
             }
-            sectionEnd = indexOf(boundaryBytes)
-        } else if (offset == sectionEnd && sectionEnd + boundaryBytes.size >= halfBufferSize) {
-            buffer = (buffer[1], buffer[0])
-            offset += boundaryBytes.size - halfBufferSize
-            if (bufferEnd < bufferSize) {
-                bufferEnd -= halfBufferSize
-                sectionEnd -= halfBufferSize
-            } else {
-                bufferEnd = halfBufferSize + input.read(buffer[1])
-                sectionEnd = indexOf(boundaryBytes)
-            }
-        } else if (offset == sectionEnd){
-            offset = sectionEnd + boundaryBytes.size
             sectionEnd = indexOf(boundaryBytes)
         }
         (size, bufferEnd > halfBufferSize, partEnd)

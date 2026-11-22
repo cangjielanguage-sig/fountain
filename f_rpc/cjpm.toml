@@ -7,8 +7,8 @@
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"
-  compile-option = "--dy-std --enable-eh --experimental --debug-macro"
-  override-compile-option = "--dy-std --debug-macro"
+  compile-option = "--dy-std --enable-eh --experimental --debug-macro --enable-local-mode"
+  override-compile-option = "--dy-std --debug-macro --experimental --enable-local-mode"
   link-option = ""
   package-configuration = {}
   category = ["Utility", "Developer Tools", "Infrastructure", "Programming Framework", "Distributed"]

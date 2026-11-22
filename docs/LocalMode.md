@@ -308,29 +308,30 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 
 | 模块 | 函数/位置 | 实例 | 结论 |
 | --- | --- | --- | --- |
-| f_svg | `SvgAnalyticRasterizer.analyticCoverage`（124-180） | `accumulated: Array<Float64>`、每行 `events` | `@ local!`；`accumulateAnalyticRow(accumulated: ... @ local?)` |
-| f_llm | `KnowledgeChunker.split`（33-68） | 全文 `ArrayList<Rune>` | `@ local!`；内部 helper 参数 `@ local?` |
-| f_excel | `PackageWriter`（125-218） | `ByteBuffer(256 * 1024)` | 先给 `ByteBuffer` 加 `exclave init`；中间缓冲 `@ local!` |
+| f_svg | `SvgAnalyticRasterizer.analyticCoverage`（124-180） | `accumulated: Array<Float64>`、每行 `events` | 已改：`@ local!`（门限 8 MiB），events 固定 local |
+| f_llm | `KnowledgeChunker.split`（33-68） | 全文 `ArrayList<Rune>` | 已改：`@ local!` + local/heap 双路径（8 MiB 预算） |
+| f_excel | `PackageWriter`（125-218） | `ByteBuffer(256 * 1024)` | 已改：复用 256 KB 部件缓冲（未 local 化） |
 | f_excel | `SheetXmlWriter.writeCell`（112-160） | 单元格属性列表/小字符串 | 不改（小对象负收益） |
-| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | `@ local!`；请求体 String 仍普通 |
-| f_jsonrpc | `JsonRpcClient.readCapped`（308-332） | 8 KB 读缓冲 | 优先字段复用；每次新建则 `@ local!` |
-| f_mcp | `McpServer.truncateUtf8`（1140-1164） | `toRuneArray()` 结果 | `@ local!`；更优是改 UTF-8 字节切片 |
-| f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | `@ local!` |
+| f_jsonrpc | `JsonRpcClient.batch`（107-152） | `ids`、`byId`、请求临时集合 | 不改：`requests` 逃逸进 `JsonArray`、`responses.toArray()` 不能返回堆数组；仅 `ids`/`byId` 可 local，相对 HTTP 往返可忽略 |
+| f_jsonrpc | `JsonRpcClient.readCapped`（308-332） | 8 KB 读缓冲 | 已改：线程私有 8 KiB 缓冲复用 |
+| f_mcp | `McpServer.truncateUtf8`（1140-1164） | `toRuneArray()` 结果 | 已改：`runes()` 迭代 + 按字节截断（1 MiB ASCII 51× 分配下降） |
+| f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | 已改：复用 1 KB 流式块与 CRLF；header 仍精确分配 |
 | f_http | `ContentDisposition.parse`（280-358） | 1~7 元素 `ArrayList<String>` | 不改（小对象） |
-| f_httpclient | `SseReader.readLine`（145-175） | `ArrayList<Byte>` + `toArray()` | `@ local!`，或复用字段缓冲 |
-| f_xml | `XmlWriter` flush | 16 KB 编码数组 | `@ local!`，或复用编码缓冲 |
+| f_httpclient | `SseReader.readLine`（145-175） | `ArrayList<Byte>` + `toArray()` | 已改：复用行缓冲（`-O2` strict 门控） |
+| f_xml | `XmlWriter` flush | 16 KB 编码数组 | 不改：实测 `unsafeBytes()` 为数组视图（313 B/次） |
+| f_xml | `Escaper` 非 ASCII 追加 | `StringGenerator.append(r)` 每字符新建 4 B 暂存（68 B/rune） | 已改：复用 `ByteScratch.putCp` 暂存（7 B/rune） |
 | f_xml | `EntityExpander.checkReplacement` | 每次新建 `Lexer`/`LineWindow` | 优先复用单个 Lexer；不改 |
-| f_data | `DataJson.toJsonString`（92-110） | 每字段中间 `valStr` | `@ local!`；更优是写入式 sink |
-| f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转 | `@ local!`（不再逃逸时） |
+| f_data | `DataJson.toJsonString`（92-110） | 每字段中间 `valStr`（逃逸，不可 local）；叶子转义 840 B/次 | 已改：`escapeJsonString` 无转义快路径（64 B/次）；sink 暂不做 |
+| f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转（占单次 UPDATE 分配约 9%） | 不改：local 化被 `Any` 的 local 限定阻断；已补 Column 键等价回归 |
 | f_orm | `RootDAO.arg`（323-389） | `Any` 装箱进 executor | 不改（逃逸） |
-| f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 两层临时包装 | `@ local!` |
-| f_mq | `candidateNodes` | `ArrayList<Int64>` | `@ local!` |
+| f_dbd | `DbdStatement.sqlPayload`（158-175） | `DataAny` 泛型装箱（8 参数 payload 2,321 B/次） | 已改：`add<Data>` 单层包装（1,744 B/次，-25%） |
+| f_mq | `candidateNodes` | `ArrayList<Int64>`（n=8 时 5,120 B/次） | 已改：预分配数组 + 切片（1,280 B/次，4×）；local 因 `toArray` 无法返回堆数组 |
 | f_rule | `AlphaMemory.range/select`（147-188） | `ArrayList<FactHandle>` + `toArray()` | 结果逃逸，不改；改调用方 buffer |
 | f_egraph | `takeBatchLocked`（218-248） | 整队列快照 | 逃逸，不改 |
 | f_cache | `HeapCache.checkOverSize`（179-224） | `segmentIterators`/`tops` | 字段复用，不改 |
 | f_ticktock | `Ticktock.emit`（236-268） | `batch` 被 `spawn` 捕获 | 不改（跨线程） |
 | f_log | 格式化链路 | 闭包/异步/接口 | 不改 |
-| f_mvc | `PathPattern.extract` | `split("/")` + `HashMap` | 内部 helper 可 `@ local!`；接口 `extract` 不改 |
+| f_mvc | `PathPattern.extract` | `split("/")` + `HashMap<Int64, Any>` | 不改：local 映射的下标/`add` 在 `Any` 上无匹配重载；每变量全量解析被抽象接口锁死 |
 | f_security / f_email | JWT 两次解析 / Base64 三重实体化 | 中间 String/数组 | 先做结构性优化，不改 local |
 | f_jwt / f_crypto / f_zip | Base64/HMAC/zlib 中间对象 | stdx/FFI | 不改（native 堆） |
 | f_base / f_io | `StringGenerator` / `ByteBuffer` | 接口方法锁死 | 不改；`RotatableBuffer` 可先加 `exclave init` |
@@ -442,7 +443,7 @@ private func accumulateAnalyticRow(
 | **f_data** | 数据对象/JSON | `f_data/src/json/DataJson.cj:92-110` 的 `toJsonString` 每字段先生成中间 `valStr`，再拼进父 builder，峰值约为最终 JSON 的 2 倍。收益最大的是改成写入式 sink（父 builder 直接接收子节点），不是 local；`DataObject<T>` 是泛型 + `ToJsonString` 接口实现，模态改不动。`@DataAssist` 面向 local-mode 发版：`equal` / `compare` 实现 `f_base.LocalEquatable` / `LocalComparable`，同时生成普通 `==` / `compare` 与 `localEq` / `localCompare` hook；local 路径由接口默认转调，普通路径保持非模态；详见 3.4。 |
 | **f_orm** | ORM/SQL DSL | `RootDAO.arg`（`323-389`）的 `Any` 装箱会逃逸进 executor 参数表，local 无效；`SqlPartial.UPDATE`（`123-143`）的 `HashMap<String, Any>` 纯中转，直接删掉/直接调另一重载即可。`RootDAO` 是 40+ 默认成员的接口，加 `this @ local?` 会牵连整棵 DAO 体系，不做。 |
 | **f_dbd** | 数据库驱动 | `DbdStatement.sqlPayload`（`158-175`）每参数两层 `DataAny` 包装，是结构性浪费；`QueryResultImpl.get<T>` 实现 std `QueryResult`，this mode 锁死。 |
-| **f_mq** | 消息队列客户端 | `publish<T>`、`MQProtocol.encodePayload<T>` 都是泛型，local 不支持类型参数；`candidateNodes` 的 `ArrayList<Int64>` 可以 local，但规模小、收益低。 |
+| **f_mq** | 消息队列客户端 | `publish<T>`、`MQProtocol.encodePayload<T>` 都是泛型，local 不支持类型参数；`candidateNodes` 原 `ArrayList<Int64>` 调用频繁，已改预分配数组（4×）；local 仅 4.5× 且受 `toArray` 返回类型限制。 |
 | **f_ticktock** | 定时任务调度 | `Ticktock.emit`（`236-268`）每 tick 一个 `ArrayList<TicktockEntry> batch`，但 `spawn { executeOne(entry) }` 不允许捕获外层 local；`TicktockEntry` 是普通类型。建议字段复用 buffer，不做 local。 |
 | **f_zip** | zip 读写 | 峰值主因是 `stdx.compress.zlib` 的 native 堆（deflate/inflate 状态），local mode 碰不到；`memoryEntryThreshold`/spill 策略才是杠杆。`ByteBuffer` 中间缓冲可 local，但收益有限。 |
 | **f_store** | LSM-Tree KV | 待采样。优先看 key/value 编码缓冲、WAL/SSTable 写路径的临时字节数组；如果最终写入文件/字段，逃逸后 local 无收益。 |
@@ -464,7 +465,7 @@ private func accumulateAnalyticRow(
 | **f_net** | Socket/网络 | `SocketBuffer`/`MessageFuture` 线程绑定、构造里直接 spawn；不做。 |
 | **f_util** | PathPattern/TextTemplate/Fnv | `PathPattern` 是注册期只读结构（多处声明初始化），`TextTemplate` 有静态模板缓存，都不是热 new；不做。 |
 | **f_log** | 日志 | 格式化链路是“`()->String` 闭包 + 泛型 + 虚方法 + 异步队列 + `OutputStream` 接口”，local 收益吃不到；但每条日志重新 `TextTemplate.compile`（`f_log/src/base/Logger.cj:47-51`）、每个片段 `toArray()` 是明确的结构性浪费，先修这个。 |
-| **f_mvc** | MVC/路由 | `PathPattern.extract` 每个路径变量一次全量 `split("/")` + 建 `HashMap<String,String>` 只取一个键；改成每请求解析一次/复用容器。`HttpRequestPathPatterns.extract` 是抽象成员，this mode 锁死。 |
+| **f_mvc** | MVC/路由 | `PathPattern.extract` 每个路径变量一次全量 `split("/")` + 建 `HashMap<String,String>` 只取一个键；改成每请求解析一次需要抽象成员 `HttpRequestPathPatterns.extract` 携带已解析容器，this mode 锁死。中转的 `HashMap<Int64, Any>` 也无法 local 化（`Any` 值在 `@ local?` 集合上没有 `add`/下标重载）。 |
 | **f_security** | 鉴权/JWT 上下文 | `JWTSecurityContext.checkAndGet`（`f_security/src/JWTSecurityContext.cj:67`）每请求把同一个 JWT 解析两次（`check` 一次、`getPricinpal` 又一次）；把 verifier 传下去即可，结构收益远大于 local。 |
 | **f_email** | 邮件/MIME | `f_email/src/mime/MimeWriter.cj:181-184` 把正文 Base64 编码成 String 再 `toArray()`，峰值约 3~4 倍原文；改走已有的流式 `Base64Encoder`/`QuotedPrintable.encoder` 即可。 |
 | **f_jwt** | JWT | Base64/HMAC/JSON 大头在 stdx；`sign()` 的中间对象全不逃逸但被 FFI 和返回值夹住；不做。 |

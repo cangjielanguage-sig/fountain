@@ -405,18 +405,17 @@ public struct SqlTypes {
     public static func readChunk(stream: InputStream, size: Int64): Array<Byte> {
         let toEnd = size <= 0
         let out = ArrayList<Byte>()
+        // 一块缓冲跨轮复用：不再为每块新建临时数组，也不逐字节 add
+        let buf = Array<Byte>(DEFAULT_STREAM_CHUNK, repeat: 0u8)
         var got = 0i64
         while (toEnd || got < size) {
             let remaining = if (toEnd) { DEFAULT_STREAM_CHUNK } else { size - got }
             let want = if (remaining < DEFAULT_STREAM_CHUNK) { remaining } else { DEFAULT_STREAM_CHUNK }
-            let tmp = Array<Byte>(want, repeat: 0u8)
-            let n = stream.read(tmp)
+            let n = stream.read(buf[0..want])
             if (n <= 0) {
                 break
             }
-            for (i in 0..n) {
-                out.add(tmp[i])
-            }
+            out.add(all: buf[0..n])
             got += n
         }
         out.toArray()

@@ -128,26 +128,24 @@ internal class SharedStringIndex <: SharedStringsLookup {
         }
         let handle = this.ensureFile()
         handle.seek(SeekPosition.Begin(this.offsets[index]))
-        var remaining = this.lengths[index]
-        let collected = ArrayList<UInt8>()
-        let buffer = Array<UInt8>(4096, repeat: 0)
-        while (remaining > 0) {
-            let n = handle.read(buffer)
+        let total = this.lengths[index]
+        if (total <= 0) {
+            return None<String>
+        }
+        // 长度已知：一次分配到精确大小，直接读入切片，避免 4 KB 块 + 逐字节 ArrayList
+        let bytes = Array<UInt8>(total, repeat: 0)
+        var got: Int64 = 0
+        while (got < total) {
+            let n = handle.read(bytes[got..total])
             if (n <= 0) {
                 break
             }
-            let take = if (n < remaining) { n } else { remaining }
-            var k: Int64 = 0
-            while (k < take) {
-                collected.add(buffer[k])
-                k++
-            }
-            remaining -= take
+            got += n
         }
-        if (collected.size == 0) {
+        if (got == 0) {
             return None<String>
         }
-        Some(String.fromUtf8(collected.toArray()))
+        Some(String.fromUtf8(bytes[0..got]))
     }
 
     private func parseItem(index: Int64): ?SharedStringTable {

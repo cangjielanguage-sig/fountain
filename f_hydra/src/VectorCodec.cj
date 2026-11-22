@@ -53,6 +53,27 @@ public class VectorCodec {
         bytes
     }
 
+    /**
+     * 解码到调用方缓冲：成功返回维数，输入非法或缓冲不足返回 `-1`。
+     *
+     * 供检索循环复用同一块缓冲；`decodeDense` 也转调这里，避免两套解析逻辑漂移。
+     */
+    internal static func decodeDenseInto(bytes: Array<Byte>, out: Array<Float64>): Int64 {
+        if(bytes.size < 4){
+            return -1
+        }
+        let count = Int64(readUInt32(bytes, 0))
+        if(count <= 0 || bytes.size < 4 + count * 4 || out.size < count){
+            return -1
+        }
+        var offset = 4
+        for(index in 0..count){
+            out[index] = readFloat32(bytes, offset)
+            offset += 4
+        }
+        count
+    }
+
     public static func decodeDense(bytes: Array<Byte>): Array<Float64> {
         if(bytes.size < 4){
             return Array<Float64>()
@@ -62,10 +83,8 @@ public class VectorCodec {
             return Array<Float64>()
         }
         let values = Array<Float64>(count, repeat: 0.0f64)
-        var offset = 4
-        for(index in 0..count){
-            values[index] = readFloat32(bytes, offset)
-            offset += 4
+        if(decodeDenseInto(bytes, values) < 0){
+            return Array<Float64>()
         }
         values
     }
