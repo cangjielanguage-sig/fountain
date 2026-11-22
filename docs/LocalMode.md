@@ -318,7 +318,8 @@ private func consume(buf: ArrayList<Int64> @ local?): Unit {
 | f_http | `MultipartFormDataParser.parse` | header 块、1 KB 缓冲 | `@ local!` |
 | f_http | `ContentDisposition.parse`（280-358） | 1~7 元素 `ArrayList<String>` | 不改（小对象） |
 | f_httpclient | `SseReader.readLine`（145-175） | `ArrayList<Byte>` + `toArray()` | `@ local!`，或复用字段缓冲 |
-| f_xml | `XmlWriter` flush | 16 KB 编码数组 | `@ local!`，或复用编码缓冲 |
+| f_xml | `XmlWriter` flush | 16 KB 编码数组 | 不改：实测 `unsafeBytes()` 为数组视图（313 B/次） |
+| f_xml | `Escaper` 非 ASCII 追加 | `StringGenerator.append(r)` 每字符新建 4 B 暂存（68 B/rune） | 已改：复用 `ByteScratch.putCp` 暂存（7 B/rune） |
 | f_xml | `EntityExpander.checkReplacement` | 每次新建 `Lexer`/`LineWindow` | 优先复用单个 Lexer；不改 |
 | f_data | `DataJson.toJsonString`（92-110） | 每字段中间 `valStr` | `@ local!`；更优是写入式 sink |
 | f_orm | `SqlPartial.UPDATE`（123-143） | `HashMap<String, Any>` 中转 | `@ local!`（不再逃逸时） |
