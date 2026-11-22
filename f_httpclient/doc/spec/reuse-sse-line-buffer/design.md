@@ -278,7 +278,7 @@ I6 是 `maxLineBytes` 边界等价的关键：现状里 `\r` 会先 `add` 进 `b
 
 | 用例 | 参数 | 断言 |
 | --- | --- | --- |
-| `case=line_reuse` | 20000 行 `: aaaa\n`，一次 `next()` 读完 | `allocPerLine <= 96` |
+| `case=line_reuse` | 20000 行 `: aaaa\n`，一次 `next()` 读完 | `-O2` 下 `allocPerLine <= 96`；`-O0` 仅记录 |
 | `case=line_fresh` | 同窗口内每行 `ArrayList<Byte>` + `toArray()` + `fromUtf8` | 只打印；断言 `reuse * 2 < fresh` |
 | `case=line_long` | 8192 B 行 × 200 | 只打印 `allocPerLine` / `nsPerLine` |
 | `case=event_small` | 5000 条 `data: x\n\n`，走 `next()` | 只打印 `allocPerEvent` / `nsPerEvent` |

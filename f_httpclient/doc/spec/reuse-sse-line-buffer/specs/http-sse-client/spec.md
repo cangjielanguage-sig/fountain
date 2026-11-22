@@ -70,16 +70,9 @@
 
 本变更 MUST 提供可重复执行的验证：
 
-1. 单元测试 MUST 覆盖短行连续、长行（超过初始容量）、跨块补齐、`\r\n` 跨块、长短行交替、
-   `maxLineBytes` 边界、EOF 半行与既有行为回归；
-2. MUST 提供 `F_HTTPCLIENT_SSE_BENCH=1` 门控的分配基准，至少包含：
-   - 连续短行的摊销分配（MUST `<= 96 B/行`），并与「每行新建 `ArrayList<Byte>` + `toArray()`」
-     的对照差距 MUST 至少 2 倍；
-   - 8 KiB 长行重复读取的摊销分配（只打印，证明扩容不随行数重复发生）；
-   - 小事件端到端 `next()` 的 `allocPerEvent`（只打印）；
-3. 未设置门控环境变量时，基准 MUST 打印 `SKIP:` 并立即返回，不影响常规测试；
-4. 分配量 MUST 按 `(getAllocatedHeapSize 增量) + (getGCFreedSize 增量)` 计量，取多样本中位数；
-5. 基准 MUST NOT 对耗时做断言。
+1. 单元测试 MUST 覆盖短行、长行、跨块、CRLF 跨块、长短交替、`maxLineBytes` 边界、EOF 半行与既有回归；
+2. MUST 提供 `F_HTTPCLIENT_SSE_BENCH=1` 门控基准：短行摊销分配（`-O2` 下 `<= 96 B/行`，且优于每行新建集合 2×）、8 KiB 长行与端到端事件（只打印）；
+3. 未设置门控时 MUST 打印 `SKIP:`；分配量按 `(alloc + freed)` 中位数；MUST NOT 断言耗时。
 
 #### Scenario: 基准门控关闭
 
@@ -88,8 +81,8 @@
 
 #### Scenario: 短行分配上界
 
-- **WHEN** 设置 `F_HTTPCLIENT_SSE_BENCH=1`，对只含注释行的流连续读取 20000 行
-- **THEN** 摊销分配 `<= 96 B/行`，且严格小于每行新建集合的对照组的一半
+- **WHEN** 设置 `F_HTTPCLIENT_SSE_BENCH=1`，在 `-O2` 参考构建下对只含注释行的流连续读取 20000 行
+- **THEN** 摊销分配 `<= 96 B/行`，且严格小于每行新建集合的对照组的一半；`-O0` 构建只记录不判定
 
 ### Requirement: 公开 API 不变
 

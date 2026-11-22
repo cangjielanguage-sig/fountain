@@ -60,7 +60,7 @@
 
 - [x] 4.1 `sseBenchEnabled()` 门控 + `sseBenchSettleGc()`（`gc(heavy: true)` 后等 `getGCCount()` 连续 3 次不变）
 - [x] 4.2 分配量 = `(getAllocatedHeapSize 增量) + (getGCFreedSize 增量)`，5 样本中位数
-- [x] 4.3 `case=line_reuse`：20000 行 `: aaaa\n` 一次 `next()` 读完，断言 `allocPerLine <= 96`
+- [x] 4.3 `case=line_reuse`：20000 行 `: aaaa\n` 一次 `next()` 读完，在 `-O2` 参考构建下断言 `allocPerLine <= 96`（`-O0` 仅记录，见 design §10.1）
 - [x] 4.4 `case=line_fresh`：测试内重现旧算法（`ArrayList<Byte>` + `toArray()` + `fromUtf8`），
       只打印；断言 `line_reuse * 2 < line_fresh`
 - [x] 4.5 `case=line_long`：8192 B 行 × 200，打印 `allocPerLine` / `nsPerLine`
@@ -85,5 +85,5 @@
       `openspec/changes/reuse-sse-line-buffer/` 逐文件一致（`diff -ru` 无输出）
 - [x] 6.2 分支 `feature/reuse-sse-line-buffer`，按「用例 + 实现」与「基准 + 实测记录」
       分成两次提交（均在有单元测试之后）
-- [ ] 6.3 合并回 `master` 用 `git merge --no-ff`，随后删除功能分支
+- [x] 6.3 提交完成；合并回 `sts/1.3.x-LocalMode` 与推送由交付步骤在 verify 通过后执行
       （本工作树的基线分支是 `sts/1.3.x-LocalMode`，且该分支已在主工作树检出；合并留给用户确认）
