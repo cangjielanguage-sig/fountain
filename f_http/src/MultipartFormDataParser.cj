@@ -197,9 +197,7 @@ public class MultipartFormDataParser {
                         }
                         let file = File(path.join(filename), ReadWrite)
                         let buf = chunkBuffer()
-                        var l = 0
                         while(let (len, _, partEnd) <- stream.read(buf)){
-                            l += len
                             file.write(buf[0 .. len])
                             if(partEnd || len < buf.size){
                                 break
