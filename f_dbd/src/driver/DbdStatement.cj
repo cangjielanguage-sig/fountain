@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_dbd.driver
 
-import std.collection.HashMap
+import std.collection.{HashMap, Map}
 import std.database.sql.*
 import std.io.InputStream
 import std.math.numeric.Decimal
@@ -154,24 +154,8 @@ public class DbdStatement <: Statement {
         connection.ensureNoOpenResult('executing another statement on this connection')
     }
 
-    /** 参数组装：缺的位置（空洞）补 `DataNone`，保持与 `?` 的位置一一对应。 */
     private func sqlPayload(): SqlPayload {
-        let payload = SqlPayload(sql)
-        var max: Int64 = -1
-        for ((index, _) in parameters) {
-            if (index > max) {
-                max = index
-            }
-        }
-        var i: Int64 = 0
-        while (i <= max) {
-            match (parameters.get(i)) {
-                case Some(data) => payload.add<DataAny>(DataAny(data))
-                case None => payload.addNull()
-            }
-            i += 1
-        }
-        payload
+        sqlPayloadOf(this.sql, this.parameters)
     }
 
     private static func timeoutOf(configured: ?Duration): Duration {
@@ -259,4 +243,24 @@ public class DbdStatement <: Statement {
             case None => setNull(index)
         }
     }
+}
+
+/** 参数组装：缺的位置（空洞）补 `DataNone`，保持与 `?` 的位置一一对应。包内可见，便于测试直接驱动。 */
+func sqlPayloadOf(sql: String, parameters: Map<Int64, Data>): SqlPayload {
+    let payload = SqlPayload(sql)
+    var max: Int64 = -1
+    for ((index, _) in parameters) {
+        if (index > max) {
+            max = index
+        }
+    }
+    var i: Int64 = 0
+    while (i <= max) {
+        match (parameters.get(i)) {
+            case Some(data) => payload.add<Data>(data)
+            case None => payload.addNull()
+        }
+        i += 1
+    }
+    payload
 }
