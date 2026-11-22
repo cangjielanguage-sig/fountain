@@ -33,6 +33,7 @@
 - [x] 2.8 Red：`testMaxLineBytesExactlyAtLimit` —— `maxLineBytes = 16`，16 B 行不抛
 - [x] 2.9 Red：`testMaxLineBytesOverLimit` —— 同配置，17 B 行抛 `SseLineTooLongException`
 - [x] 2.10 Red：`testHalfLineAtEof` —— 流 `data: abc`，断言 `data == "abc"`
+- [x] 2.11 Red：`testRetainedEventsAreIndependent` —— 连续读三个事件并保留 String 后再比对，确保 `fromUtf8` 复制、行缓冲复用不污染旧事件
 - [x] 2.11 运行：`cd f_httpclient && cjpm test --filter '*SseReaderLineBuffer*'`，
       确认用例可编译、行为用例通过、仅有基准用例因门控打印 `SKIP:`
 
@@ -60,13 +61,14 @@
 
 - [x] 4.1 `sseBenchEnabled()` 门控 + `sseBenchSettleGc()`（`gc(heavy: true)` 后等 `getGCCount()` 连续 3 次不变）
 - [x] 4.2 分配量 = `(getAllocatedHeapSize 增量) + (getGCFreedSize 增量)`，5 样本中位数
-- [x] 4.3 `case=line_reuse`：20000 行 `: aaaa\n` 一次 `next()` 读完，在 `-O2` 参考构建下断言 `allocPerLine <= 96`（`-O0` 仅记录，见 design §10.1）
+- [x] 4.3 `case=line_reuse`：20000 行 `: aaaa\n` 一次 `next()` 读完，在 `-O2 + F_HTTPCLIENT_SSE_BENCH_STRICT=1` 下断言 `allocPerLine <= 96`；仅 `BENCH=1` 时只记录（`-O0` 见 design §10.1）
 - [x] 4.4 `case=line_fresh`：测试内重现旧算法（`ArrayList<Byte>` + `toArray()` + `fromUtf8`），
       只打印；断言 `line_reuse * 2 < line_fresh`
 - [x] 4.5 `case=line_long`：8192 B 行 × 200，打印 `allocPerLine` / `nsPerLine`
 - [x] 4.6 `case=event_small`：5000 条 `data: x\n\n` 走 `next()`，打印 `allocPerEvent` / `nsPerEvent`
 - [x] 4.7 未设 `F_HTTPCLIENT_SSE_BENCH=1` 时打印 `SKIP:` 并返回，默认 `cjpm test` 不受影响
-- [x] 4.8 按 `design.md` §10.2 的 `-O2` 口径运行
+- [x] 4.8 按 `design.md` §10.2 的 `-O2 + F_HTTPCLIENT_SSE_BENCH_STRICT=1` 口径运行
+- [x] 4.9 `-O0` 仅 `BENCH=1` 时只打印、不断言，测试通过
       `F_HTTPCLIENT_SSE_BENCH=1 cjpm test --filter '*SseReaderLineBuffer*' --show-all-output`
       （临时给 `f_httpclient/cjpm.toml` 追加 `-O2`，测完回退），输出写入 `design.md` §10
 

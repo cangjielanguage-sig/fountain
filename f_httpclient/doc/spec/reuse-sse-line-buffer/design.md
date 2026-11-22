@@ -257,6 +257,7 @@ I6 是 `maxLineBytes` 边界等价的关键：现状里 `\r` 会先 `add` 进 `b
 | `testMaxLineBytesExactlyAtLimit` | `maxLineBytes = 16`，构造 16 B 行；不抛，正常返回 |
 | `testMaxLineBytesOverLimit` | 同一配置，构造 17 B 行；抛 `SseLineTooLongException` |
 | `testHalfLineAtEof` | 流为 `data: abc`（无 `\n`）；断言 `data == "abc"` |
+| `testRetainedEventsAreIndependent` | 连续读三个事件并保留 String 后再比对，确保 `fromUtf8` 复制、行缓冲复用不污染旧事件 |
 | `testBenchGateDefaultsOff` | 未设门控时打印 `SKIP:` |
 
 ### 6.2 边界构造
@@ -272,13 +273,14 @@ I6 是 `maxLineBytes` 边界等价的关键：现状里 `\r` 会先 `add` 进 `b
 沿用 `f_jsonrpc` / `f_mcp` 的门控与测量写法（`f_jsonrpc/src/client/ReadBufferReuse_test.cj:363-419`）：
 
 - `sseBenchEnabled()`：`getVariable("F_HTTPCLIENT_SSE_BENCH") == Some("1")`；
+- `sseBenchStrict()`：`F_HTTPCLIENT_SSE_BENCH_STRICT == "1"`；只有 `-O2` 参考构建下才设置，`-O0` 下只记录；
 - `settleGc()`：`gc(heavy: true)` + 等 `getGCCount()` 连续 3 次不变；
 - 分配量 = `(getAllocatedHeapSize 增量) + (getGCFreedSize 增量)`，5 样本中位数；
 - 输出前缀 `SSE_LINEBUF_BENCH`。
 
 | 用例 | 参数 | 断言 |
 | --- | --- | --- |
-| `case=line_reuse` | 20000 行 `: aaaa\n`，一次 `next()` 读完 | `-O2` 下 `allocPerLine <= 96`；`-O0` 仅记录 |
+| `case=line_reuse` | 20000 行 `: aaaa\n`，一次 `next()` 读完 | `-O2 + STRICT` 下 `allocPerLine <= 96`；`-O0` 仅记录 |
 | `case=line_fresh` | 同窗口内每行 `ArrayList<Byte>` + `toArray()` + `fromUtf8` | 只打印；断言 `reuse * 2 < fresh` |
 | `case=line_long` | 8192 B 行 × 200 | 只打印 `allocPerLine` / `nsPerLine` |
 | `case=event_small` | 5000 条 `data: x\n\n`，走 `next()` | 只打印 `allocPerEvent` / `nsPerEvent` |
@@ -301,9 +303,9 @@ SSE 每行至少 7 次流缓冲读取，因此 `-O0` 下「摊销分配 `<= 96 B
 
 | 项 | 标准 |
 | --- | --- |
-| 等价性 | 新增 9 条行为用例全部通过；`SseReader_test.cj` 8 条既有用例一字不改、通过 |
+| 等价性 | 新增 10 条行为用例全部通过；`SseReader_test.cj` 8 条既有用例一字不改、通过 |
 | 边界 | 恰好 `maxLineBytes` 通过、`+1` 抛 `SseLineTooLongException`；EOF 半行保留 `\r` |
-| 分配 | 门控下 `line_reuse allocPerLine <= 96`，且 `reuse * 2 < fresh` |
+| 分配 | `-O2 + STRICT` 下 `line_reuse allocPerLine <= 96`，且 `reuse * 2 < fresh`；`-O0` 只记录 |
 | 回归 | `cd f_httpclient && cjpm test` 全绿；`cjpm build` 不新增 WARNING |
 | 契约 | `git diff` 无 `public` 符号变化；仅新增私有常量 / 字段 / 辅助函数并替换 `readLine` 函数体 |
 
@@ -356,7 +358,7 @@ SSE 每行至少 7 次流缓冲读取，因此 `-O0` 下「摊销分配 `<= 96 B
 
 ```bash
 # f_httpclient/cjpm.toml 的 [package] compile-option / override-compile-option 追加 -O2
-cd f_httpclient && F_HTTPCLIENT_SSE_BENCH=1 cjpm test --filter '*SseReaderLineBuffer*' --show-all-output
+cd f_httpclient && F_HTTPCLIENT_SSE_BENCH=1 F_HTTPCLIENT_SSE_BENCH_STRICT=1 cjpm test --filter '*SseReaderLineBuffer*' --show-all-output
 # 测完恢复 cjpm.toml
 ```
 

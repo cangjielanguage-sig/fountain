@@ -71,7 +71,7 @@
 本变更 MUST 提供可重复执行的验证：
 
 1. 单元测试 MUST 覆盖短行、长行、跨块、CRLF 跨块、长短交替、`maxLineBytes` 边界、EOF 半行与既有回归；
-2. MUST 提供 `F_HTTPCLIENT_SSE_BENCH=1` 门控基准：短行摊销分配（`-O2` 下 `<= 96 B/行`，且优于每行新建集合 2×）、8 KiB 长行与端到端事件（只打印）；
+2. MUST 提供 `F_HTTPCLIENT_SSE_BENCH=1` 门控基准：短行摊销分配（`F_HTTPCLIENT_SSE_BENCH_STRICT=1` + `-O2` 下 MUST `<= 96 B/行`，且优于每行新建集合 2×）、8 KiB 长行与端到端事件（只打印）；仅设置 `F_HTTPCLIENT_SSE_BENCH=1` 时只记录、不断言；
 3. 未设置门控时 MUST 打印 `SKIP:`；分配量按 `(alloc + freed)` 中位数；MUST NOT 断言耗时。
 
 #### Scenario: 基准门控关闭
@@ -81,8 +81,13 @@
 
 #### Scenario: 短行分配上界
 
-- **WHEN** 设置 `F_HTTPCLIENT_SSE_BENCH=1`，在 `-O2` 参考构建下对只含注释行的流连续读取 20000 行
-- **THEN** 摊销分配 `<= 96 B/行`，且严格小于每行新建集合的对照组的一半；`-O0` 构建只记录不判定
+- **WHEN** 设置 `F_HTTPCLIENT_SSE_BENCH=1` 与 `F_HTTPCLIENT_SSE_BENCH_STRICT=1`，在 `-O2` 参考构建下对只含注释行的流连续读取 20000 行
+- **THEN** 摊销分配 `<= 96 B/行`，且严格小于每行新建集合的对照组的一半
+
+#### Scenario: `-O0` 只记录
+
+- **WHEN** 只设置 `F_HTTPCLIENT_SSE_BENCH=1`，在默认 `-O0` 测试构建下运行
+- **THEN** 打印两条路径的分配与耗时，不断言分配上界，测试通过
 
 ### Requirement: 公开 API 不变
 
