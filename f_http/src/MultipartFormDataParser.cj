@@ -65,8 +65,16 @@ multipart/form-data multipart/mixed
  */
 public class MultipartFormDataParser {
     private static let DOUBLE_CRLF = [b'\r', b'\n', b'\r', b'\n']
+    /** 流式分支的块大小；与改造前的 `Array<Byte>(1024)` 同值，不改分块口径。 */
+    private static let STREAM_CHUNK_BYTES: Int64 = 1024
     private let stream: RotatableBuffer
     private let seperatorBoundaryBytes: Array<Byte>
+    /**
+     * part 级复用缓冲：`crlf` 构造时创建，`chunkBuf` 惰性创建（0 长度占位）。
+     * parser 天然每请求一个实例、单线程单次使用，复用不引入新的共享面。
+     */
+    private let crlf = Array<Byte>(2, repeat: 0)
+    private var chunkBuf = Array<Byte>(0, repeat: 0)
     
     public MultipartFormDataParser(input: InputStream, private let mediaType: String, private let boundary: String){
         seperatorBoundaryBytes = '\r\n--${boundary}'.unsafeBytes()
@@ -77,10 +85,20 @@ public class MultipartFormDataParser {
         let boundary = contentType[contentType.indexOf('boundary=').getOrThrow() + 'boundary='.size ..]
         MultipartFormDataParser(ctx.request.body, contentType, boundary)
     }
+    /**
+     * 流式分支共用的 1024 B 块，首次进入流式分支时创建。
+     *
+     * 仅供 `parse()` 与同包的测试/分配基准使用，不属于公开 API。
+     */
+    func chunkBuffer(): Array<Byte> {
+        if (chunkBuf.size == 0) {
+            chunkBuf = Array<Byte>(STREAM_CHUNK_BYTES, repeat: 0)
+        }
+        chunkBuf
+    }
     public func parse(): Data {
         let boundaryBytes = seperatorBoundaryBytes[2 ..]
         let path = Path(HttpConfig.uploadDir).join(UUID.random().toString())
-        let crlf = Array<Byte>(2, repeat: 0)
         let parts = if(mediaType.startsWith('multipart/form-data')){
             DataMultipartTuples()
         }else if(mediaType.startsWith('multipart/mixed')){
@@ -95,19 +113,25 @@ public class MultipartFormDataParser {
         stream.addOffset(boundaryBytes.size)
         start += boundaryBytes.size
         while(true){
+            // 复用缓冲：读前归零，短读时尾部必须与「新建数组」的零尾部一致
+            crlf[0] = 0
+            crlf[1] = 0
             let (l, _, _) = stream.read(crlf)
             match((crlf[0], crlf[1])){
                 case (b'\r', b'\n') =>
                     start = stream.offset
                     var end = stream.indexOf(DOUBLE_CRLF, from: start)
-                    var buf = Array<Byte>(end - start + DOUBLE_CRLF.size, repeat: 0)
-                    stream.read(buf)
-                    let partHeader = String.unsafeUtf8(buf).split('\r\n')
+                    let headerBuf = Array<Byte>(end - start + DOUBLE_CRLF.size, repeat: 0)
+                    stream.read(headerBuf)
+                    // 首部 String / split 出的 key/name/filename 会逃逸到 Data，
+                    // 因此这里必须每次按精确长度新建数组，不能用可复用缓冲 + unsafeUtf8。
+                    let partHeader = String.unsafeUtf8(headerBuf).split('\r\n')
                     let contentDisposition = ContentDisposition.parse(partHeader[0]['Content-Disposition: '.size ..])
                     let filename = contentDisposition.getFilename()
                     end = stream.indexOf(seperatorBoundaryBytes)
                     if(end > 0){
-                        buf = Array<Byte>(end - stream.offset, repeat: 0)
+                        // 整块分支：内容逃逸进 Data / MultipartFile，按精确长度新建，不复用
+                        let buf = Array<Byte>(end - stream.offset, repeat: 0)
                         stream.read(buf)
                         if(filename.isEmpty()){
                             let value = if(let Some(charset) <- contentDisposition.getCharset()){
@@ -139,7 +163,7 @@ public class MultipartFormDataParser {
                         }
                     }else if (filename.isEmpty()){
                         let byteList = ArrayList<Byte>()
-                        buf = Array<Byte>(1024, repeat: 0)
+                        let buf = chunkBuffer()
                         while(let (len, _, _) <- stream.read(buf)){
                             byteList.add(all: buf[0 .. len])
                             if(len < buf.size){
@@ -166,9 +190,11 @@ public class MultipartFormDataParser {
                             p.add(value.toData())
                         }
                     }else{
-                        Directory.create(path, recursive: true)
+                        if(!exists(path)){
+                            Directory.create(path, recursive: true)
+                        }
                         let file = File(path.join(filename), ReadWrite)
-                        buf = Array<Byte>(1024, repeat: 0)
+                        let buf = chunkBuffer()
                         var l = 0
                         while(let (len, _, _) <- stream.read(buf)){
                             l += len
