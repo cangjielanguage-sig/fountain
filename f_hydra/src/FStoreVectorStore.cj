@@ -191,35 +191,38 @@ public class FStoreVectorStore <: VectorStore {
         let hits = ArrayList<VectorHit>()
         let prefix = if(field == 'dense'){ densePrefix(query.collection) }
                      else { fieldPrefix(query.collection, field) }
+        // 候选循环复用一块：decodeDense 每次新建 dim×8，全量扫描时是 N 倍
+        let denseBuf = Array<Float64>(query.dense.size, repeat: 0.0)
         for((key, value) in store.prefix(prefix.toArray())){
             let text = String.fromUtf8(key)
             let id = text[Int64(prefix.size)..Int64(text.size)]
             if(!isReady(query.collection, id) || !permitted(allowed, id)){
                 continue
             }
-            let dense = VectorCodec.decodeDense(value)
-            if(dense.size != query.dense.size){
+            let count = VectorCodec.decodeDenseInto(value, denseBuf)
+            if(count != query.dense.size){
                 continue
             }
-            hits.add(VectorHit(id, payloadOf(query.collection, id), VectorMath.cosine(query.dense, dense)))
+            hits.add(VectorHit(id, payloadOf(query.collection, id), VectorMath.cosine(query.dense, denseBuf)))
         }
         hits
     }
 
     private func scoreIds(query: VectorQuery, ids: ArrayList<String>, allowed: ?HashMap<String, Bool>): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
+        let denseBuf = Array<Float64>(query.dense.size, repeat: 0.0)
         for(id in ids){
             if(!isReady(query.collection, id) || !permitted(allowed, id)){
                 continue
             }
             match(store.get(denseKey(query.collection, id).toArray())){
                 case Some(bytes) =>
-                    let dense = VectorCodec.decodeDense(bytes)
-                    if(dense.size != query.dense.size){
+                    let count = VectorCodec.decodeDenseInto(bytes, denseBuf)
+                    if(count != query.dense.size){
                         continue
                     }
                     hits.add(VectorHit(id, payloadOf(query.collection, id),
-                                       VectorMath.cosine(query.dense, dense)))
+                                       VectorMath.cosine(query.dense, denseBuf)))
                 case None => ()
             }
         }
