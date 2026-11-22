@@ -17,7 +17,6 @@ package fountain::f_xml
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_base.StringGenerator
 
 /** 把 DOM 用给定选项写成字符串。 */
 internal func writeText(doc: XmlDocument, options!: XmlWriterOptions = XmlWriterOptions()): String {
@@ -39,15 +38,15 @@ internal func writeElementText(element: XmlElement, options!: XmlWriterOptions =
 @Test
 public class Escaper_test {
     private func escapeAll(text: String): String {
-        let gen = StringGenerator()
-        Escaper.escapeText(text, "a", gen)
-        gen.toString()
+        let scratch = ByteScratch()
+        Escaper.escapeText(text, "a", scratch)
+        scratch.toUtf8String()
     }
 
     private func escapeAttr(text: String, name!: String = "x"): String {
-        let gen = StringGenerator()
-        Escaper.escapeAttribute(text, name, gen)
-        gen.toString()
+        let scratch = ByteScratch()
+        Escaper.escapeAttribute(text, name, scratch)
+        scratch.toUtf8String()
     }
 
     /** 逐格转义表。 */
