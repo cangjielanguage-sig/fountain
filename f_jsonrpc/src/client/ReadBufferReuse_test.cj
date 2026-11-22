@@ -241,7 +241,6 @@ class ReadBufferReuse_test {
             println("SKIP: F_JSONRPC_BENCH=1，门控用例在开启态不做断言")
             return
         }
-        @Assert(!jsonrpcBenchEnabled())
         println("SKIP: 未设置 F_JSONRPC_BENCH=1，读缓冲分配基准不执行")
     }
 
