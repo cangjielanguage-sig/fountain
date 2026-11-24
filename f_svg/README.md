@@ -23,14 +23,14 @@ f_svg
 └── f_base    BaseException / StringGenerator
 ```
 
-模块随 fountain 仓库发布，版本与仓库一致（当前 `1.3.1020`）：
+模块随 fountain 仓库发布，版本与仓库一致（当前 `1.3.2021`）：
 
 ```toml
 [dependencies]
   "fountain::f_svg" = { path = "../fountain/f_svg" }
 ```
 
-或在已配置中心仓时使用 `"fountain::f_svg" = "1.3.1020"`，并在仓库根 `.modules` 登记 `f_svg`。
+或在已配置中心仓时使用 `"fountain::f_svg" = "1.3.2021"`，并在仓库根 `.modules` 登记 `f_svg`。
 
 ### 编译期要求（local mode）
 
