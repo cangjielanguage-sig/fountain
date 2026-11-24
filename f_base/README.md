@@ -608,6 +608,19 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
 }
 ```
 
+## local 实例的相等与比较（`LocalEquatable` / `LocalComparable`）
+
+std 的 `Equatable` / `Comparable` 对 `@ local?` / `@ local!` 实例给的是会抛 `UnimplementedException` 的默认体，
+而子接口不允许把父接口的默认成员重新声明为抽象。f_base 因此提供两个接口：
+
+- `LocalEquatable<T> <: Equatable<T>`：唯一抽象成员是 `localEq(this @ local?, other: T @ local?)`，
+  local 路径的 `==` / `!=` 默认实现转调它；普通 `==` 仍由实现类提供（普通实例没有 local region，
+  把它当 `@ local?` 视图访问非 Copyable 字段会报 `alloc native local object without local object region`）。
+- `LocalComparable<T> <: LocalEquatable<T> & Comparable<T>`：排序比较放在抽象 hook `localCompare` 上，
+  local 路径的 `<` / `<=` / `>` / `>=` 默认实现转调它。它已继承 `LocalEquatable`，实现类不要再把
+  `LocalEquatable` 显式写进同一个类的父接口列表（否则 `Equatable` 出现两条继承路径，`==` 产生歧义）。
+
+`@DataAssist` 生成的类型会按需实现这两个接口；使用方仍按 `where T <: Equatable<T>` 写泛型即可复用。
 
 ## `FutureTask<T>`
 1. 父任务结束时可以选择是否结束子任务
@@ -751,7 +764,7 @@ public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): 
 
 以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
 
-- 模块级：`ExtendAddableOption`（interface）、`ExtendBigInt`（interface）、`ExtendBitAndableOption`（interface）、`ExtendBitNotableOption`（interface）、`ExtendBitOrableOption`（interface）、`ExtendBitXorableOption`（interface）、`ExtendDecimal`（interface）、`ExtendDivableOption`（interface）、`ExtendExpableOption`（interface）、`ExtendFloat16`（interface）、`ExtendFloat32`（interface）、`ExtendFloat64`（interface）、`ExtendInt16`（interface）、`ExtendInt32`（interface）、`ExtendInt64`（interface）、`ExtendInt8`（interface）、`ExtendIterator`（interface）、`ExtendLeftShiftableOption`（interface）、`ExtendModableOption`（interface）、`ExtendMulableOption`（interface）、`ExtendRange`（interface）、`ExtendRightShiftableOption`（interface）、`ExtendRune`（interface）、`ExtendString`（interface）、`ExtendSubableOption`（interface）、`ExtendThreadLocal`（interface）、`ExtendUInt16`（interface）、`ExtendUInt32`（interface）、`ExtendUInt64`（interface）、`ExtendUInt8`（interface）、`Powerable`（interface）、`public func resetSignalHandler(_: Array<Signal>): Unit{}`
+- 模块级：`ExtendAddableOption`（interface）、`ExtendBigInt`（interface）、`ExtendBitAndableOption`（interface）、`ExtendBitNotableOption`（interface）、`ExtendBitOrableOption`（interface）、`ExtendBitXorableOption`（interface）、`ExtendDecimal`（interface）、`ExtendDivableOption`（interface）、`ExtendExpableOption`（interface）、`ExtendFloat16`（interface）、`ExtendFloat32`（interface）、`ExtendFloat64`（interface）、`ExtendInt16`（interface）、`ExtendInt32`（interface）、`ExtendInt64`（interface）、`ExtendInt8`（interface）、`ExtendIterator`（interface）、`ExtendLeftShiftableOption`（interface）、`ExtendModableOption`（interface）、`ExtendMulableOption`（interface）、`ExtendRange`（interface）、`ExtendRightShiftableOption`（interface）、`ExtendRune`（interface）、`ExtendString`（interface）、`ExtendSubableOption`（interface）、`ExtendThreadLocal`（interface）、`ExtendUInt16`（interface）、`ExtendUInt32`（interface）、`ExtendUInt64`（interface）、`ExtendUInt8`（interface）、`LocalComparable`（interface）、`LocalEquatable`（interface）、`Powerable`（interface）、`public func resetSignalHandler(_: Array<Signal>): Unit{}`
 - `BigInt`：`static prop one: BigInt`、`static prop oneHundred: BigInt`、`static prop ten: BigInt`、`static prop zero: BigInt`
 - `Decimal`：`static prop E: Decimal`、`static prop PI: Decimal`、`static prop one: Decimal`、`static prop oneHundred: Decimal`、`static prop ten: Decimal`、`static prop zero: Decimal`
 - `EmptyCollection`：`isEmpty`（func）
@@ -766,6 +779,8 @@ public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): 
 - `Int32`：`static prop BYTES: Int64`
 - `Int64`：`static prop BYTES: Int64`
 - `Int8`：`static prop BYTES: Int64`
+- `LocalComparable`：`localCompare`（func）
+- `LocalEquatable`：`localEq`（func）
 - `NoneOrder`：`prop isGreatest: Bool`、`prop isLeast: Bool`
 - `Options`：`isEmpty`（func）、`static func isEmptyOrUnit(current: Option<T>): Bool`、`static func isEmptyOrZero(current: Option<T>): Bool`、`static func isEmptyOrZeroOrBlank(current: Option<T>): Bool`、`static func isNotEmpty(current: Option<T>): Bool`、`static func isNotEmptyOrBlank(current: Option<T>): Bool`、`static func isNotEmptyOrUnit(current: Option<T>): Bool`、`static func isNotEmptyOrZeroOrBlank(current: Option<T>): Bool`
 - `ResultMapper`：`func error(f: (E) -> Result<U, E>): ResultMapper<T, U, E>`、`func map(): Result<U, E>`、`func ok(f: () -> Result<U, E>): ResultMapper<T, U, E>`
