@@ -532,7 +532,8 @@ public enum ExcelWarningKind {
 
 ## 测试与夹具
 
-- `cjpm test` 全绿（183 条）。
+- `cjpm test` 全绿（192 条）。
+- `cjpm bench` 可跑：`Package_bench` 对照「复用 XML 部件缓冲」与「每部件新建缓冲」两条路径（参考值，不作 CI 性能判定）。
 - 夹具用 `f_zip.ZipWriter` 现场拼最小 xlsx（`fixtures.cj`），不依赖外部样本文件。
 - 「真实 Excel 打开不报修复」属人工验收项，记录见 `doc/spec/implement-f-excel-m1/verification.md`。
 

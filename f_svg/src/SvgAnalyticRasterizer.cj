@@ -78,6 +78,23 @@ private func analyticMinReal(left: Float64, right: Float64): Float64 {
 internal let ANALYTIC_COVERAGE_SCALE: Int64 = 65535
 /** 事件去重与零宽度判定阈值。 */
 private let ANALYTIC_EPSILON: Float64 = 1e-9
+/** 单次解析覆盖率累加器允许进入 local 分配的上限（字节）。 */
+internal let ANALYTIC_LOCAL_ACCUMULATOR_BYTES: Int64 = 8 * 1024 * 1024
+/** 上限对应的 `Float64` 元素个数（8 MiB / 8）。 */
+internal let ANALYTIC_LOCAL_ACCUMULATOR_ELEMENTS: Int64 =
+    ANALYTIC_LOCAL_ACCUMULATOR_BYTES / 8
+
+/**
+ * 按像素数判断累加器能否进入 local 分配。
+ *
+ * 用 `width <= 上限 / height` 的除法形式比较，避免 `width * height` 在极端尺寸下溢出；
+ * 宽高非正时一律走堆，保持既有空数组与异常行为。
+ */
+internal func analyticUsesLocalAccumulator(width: Int64, height: Int64): Bool {
+    width > 0 && height > 0 &&
+        height <= ANALYTIC_LOCAL_ACCUMULATOR_ELEMENTS &&
+        width <= ANALYTIC_LOCAL_ACCUMULATOR_ELEMENTS / height
+}
 
 /**
  * 一条有向边，按 `x = xAtMin + (y - yMin) * slope` 参数化，[yMin, yMax] 为 y 覆盖区间。
@@ -127,6 +144,23 @@ internal func analyticCoverage(
     height: Int64,
     fillRule: SvgFillRule
 ): Array<Int64> {
+    analyticCoverageImpl(contours, width, height, fillRule,
+        analyticUsesLocalAccumulator(width, height))
+}
+
+/**
+ * 解析覆盖率实现。`useLocal` 只决定累加器的分配位置，不改变任何计算。
+ *
+ * 单独暴露档位开关，使测试能对同一几何跑 local / 堆两条路径做逐元素等价断言，
+ * 也为将来 local region 耗尽时的回退预留落点。
+ */
+internal func analyticCoverageImpl(
+    contours: Array<Array<SvgPoint>>,
+    width: Int64,
+    height: Int64,
+    fillRule: SvgFillRule,
+    useLocal: Bool
+): Array<Int64> {
     let coverage = Array<Int64>(width * height, repeat: 0)
     if (contours.size == 0) {
         return coverage
@@ -163,7 +197,11 @@ internal func analyticCoverage(
     if (firstRow > lastRow) {
         return coverage
     }
-    let accumulated = Array<Float64>(width * height, repeat: 0.0)
+    let accumulated: Array<Float64> @ local? = if (useLocal) {
+        Array<Float64>(width * height, repeat: 0.0) @ local!
+    } else {
+        Array<Float64>(width * height, repeat: 0.0)
+    }
     var row = firstRow
     while (row <= lastRow) {
         accumulateAnalyticRow(edges, accumulated, width, row, fillRule)
@@ -182,7 +220,7 @@ internal func analyticCoverage(
 /** 处理一行：收集顶点与交点事件，逐子区间积分到像素列。 */
 private func accumulateAnalyticRow(
     edges: ArrayList<SvgAnalyticEdge>,
-    accumulated: Array<Float64>,
+    accumulated: Array<Float64> @ local?,
     width: Int64,
     row: Int64,
     fillRule: SvgFillRule
@@ -198,7 +236,9 @@ private func accumulateAnalyticRow(
     if (active.size == 0) {
         return
     }
-    let events = ArrayList<Float64>()
+    // 本行事件随行释放，始终放 local region：SDK 未给 `ArrayList<T> @ local?` 提供
+    // 变更重载（`add` / 下标赋值都要求 `this @ local!`），无法随累加器档位切换。
+    let events = ArrayList<Float64>() @ local!
     events.add(rowTop)
     events.add(rowBottom)
     for (edge in active) {
@@ -225,7 +265,7 @@ private func accumulateAnalyticRow(
         }
         first++
     }
-    sortAnalyticValues(events)
+    sortAnalyticLocalValues(events)
     var index = 0
     while (index + 1 < events.size) {
         let ya = events[index]
@@ -240,7 +280,7 @@ private func accumulateAnalyticRow(
 /** 在一个左右次序不变的子区间内按填充规则求内部区间并积分。 */
 private func accumulateAnalyticBand(
     active: ArrayList<SvgAnalyticEdge>,
-    accumulated: Array<Float64>,
+    accumulated: Array<Float64> @ local?,
     width: Int64,
     row: Int64,
     ya: Float64,
@@ -291,7 +331,7 @@ private func accumulateAnalyticBand(
 
 /** 对 [ya, yb] 区间，把左右边界之间的面积精确累加到像素列。 */
 private func accumulateAnalyticEdges(
-    accumulated: Array<Float64>,
+    accumulated: Array<Float64> @ local?,
     width: Int64,
     row: Int64,
     leftEdge: SvgAnalyticEdge,
@@ -400,6 +440,26 @@ private func sortAnalyticHits(hits: ArrayList<SvgAnalyticHit>): Unit {
 }
 
 private func sortAnalyticValues(values: ArrayList<Float64>): Unit {
+    var index = 1
+    while (index < values.size) {
+        let value = values[index]
+        var position = index - 1
+        while (position >= 0 && values[position] > value) {
+            values[position + 1] = values[position]
+            position--
+        }
+        values[position + 1] = value
+        index++
+    }
+}
+
+/**
+ * 对 local 事件列表做插入排序。
+ *
+ * `ArrayList<T> @ local?` 没有变更重载，local 列表只能以 `@ local!` 传入；
+ * `exclave` 让排序在调用者的 local region 里完成，不影响调用链其余部分。
+ */
+private exclave func sortAnalyticLocalValues(values: ArrayList<Float64> @ local!): Unit {
     var index = 1
     while (index < values.size) {
         let value = values[index]

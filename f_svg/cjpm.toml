@@ -4,7 +4,7 @@
 
 [package]
   cjc-version = "1.2.0"
-  compile-option = "--dy-std -O2"
+  compile-option = "--dy-std -O2 --experimental --enable-local-mode"
   override-compile-option = "--dy-std -O2"
   description = "SVG 1.1 静态文档：值类型、类型化 DOM、解析与生成、安全过滤"
   link-option = ""

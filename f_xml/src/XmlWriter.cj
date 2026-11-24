@@ -18,7 +18,6 @@ package fountain::f_xml
 import std.collection.ArrayList
 import std.io.OutputStream
 import cangjie_tpc::charset4cj.charset.encoding.{Encoder, Decoder}
-import fountain::f_base.StringGenerator
 
 /**
  * 增量写入时的元素栈帧：记录待闭合的 start tag 与是否已有子元素（缩进用）。
@@ -43,13 +42,13 @@ internal class IncrementalFrame {
  * **`close()` 之后不得再调用任何方法**（未定义行为）。
  *
  * 两条实现约定：
- * 1. UTF-8 路径不经过 `String` 包装：`StringGenerator.unsafeBytes()` 直接给字节；
+ * 1. UTF-8 路径不经过 `String` 包装：字节直接写入复用暂存，非 ASCII 码点复用 4 B 编码区；
  * 2. 输出先攒在 8~64 KB 的缓冲里，攒满再写底层，不是一个 token 一次 `write`。
  */
 public class XmlWriter {
     private let output: OutputStream
     private let options: XmlWriterOptions
-    private let buffer = StringGenerator()
+    private let buffer = ByteScratch()
     private let encoder: Encoder
     private let decoder: Decoder
     private let ns = NamespaceScope()
@@ -298,7 +297,7 @@ public class XmlWriter {
     // ---------------------------------------------------------------- 输出
 
     private func appendText(text: String): Unit {
-        this.buffer.append<String>(text)
+        this.buffer.append(text)
         if (this.buffer.size >= XmlWriter.FLUSH_THRESHOLD) {
             this.flushBuffer()
         }
@@ -309,12 +308,12 @@ public class XmlWriter {
             return
         }
         if (this.isUtf8()) {
-            this.output.write(this.buffer.unsafeBytes())
-            this.buffer.clear()
+            this.output.write(this.buffer.bytes()[0 .. this.buffer.size])
+            this.buffer.reset()
             return
         }
-        let text = this.buffer.toString()
-        this.buffer.clear()
+        let text = this.buffer.toUtf8String()
+        this.buffer.reset()
         this.output.write(this.encodeChecked(text))
     }
 

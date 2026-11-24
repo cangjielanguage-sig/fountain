@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_excel
 
 import std.collection.ArrayList
-import std.io.OutputStream
+import std.io.{ByteBuffer, OutputStream}
 import fountain::f_zip.ZipWriter
 
 /**
@@ -68,13 +68,14 @@ public class ExcelWriter {
         this.names = sheetNames
         this.options = options
         this.zip = ZipWriter(output)
-        zip.add("[Content_Types].xml", PackageWriter.contentTypes(Int64(sheetNames.size)))
-        zip.add("_rels/.rels", PackageWriter.rootRels())
+        let parts = ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY)
+        zip.add("[Content_Types].xml", PackageWriter.contentTypes(Int64(sheetNames.size), buffer: parts))
+        zip.add("_rels/.rels", PackageWriter.rootRels(parts))
         zip.add(
             "xl/workbook.xml",
-            PackageWriter.workbookXmlFromNames(sheetNames, options.date1904 ?? false)
+            PackageWriter.workbookXmlFromNames(sheetNames, options.date1904 ?? false, parts)
         )
-        zip.add("xl/_rels/workbook.xml.rels", PackageWriter.workbookRels(Int64(sheetNames.size)))
+        zip.add("xl/_rels/workbook.xml.rels", PackageWriter.workbookRels(Int64(sheetNames.size), parts))
     }
 
     /** 本 sheet 已写行数（每次 `writeSheet` 归零）。 */
@@ -150,7 +151,8 @@ public class ExcelWriter {
             fail("还有 ${names.size - nextSheet} 个 sheet 未写")
         }
         try {
-            zip.add("xl/styles.xml", StylesWriter.write(styles))
+            let parts = ByteBuffer(OPC_PART_BUFFER_INITIAL_CAPACITY)
+            zip.add("xl/styles.xml", StylesWriter.write(styles, parts))
             zip.close()
         } catch (e: Exception) {
             fail(e.message)

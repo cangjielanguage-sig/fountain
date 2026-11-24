@@ -27,6 +27,10 @@ a.b.c三位版本号，a.b 与仓颉SDK版本前两位严格一致，c的格式�
 
 比如SDK nightly 1.3.0在2026.11.09开始不再允许子类型实现或继承父类型已经实现或继承过的接口。从编译器报错看好像是local mode的原因。因此版本号改为1.3.1019。
 
+1.3.10xx是最后的兼容无local mode 特性的SDK版本，也是最早的兼容有local model的sdk版本。
+
+1.3.20xx是最早的使用local mode的版本。
+
 ## 运行视频
 
 > 🎥 [查看完整演示视频](https://www.bilibili.com/video/BV1rtpT62Eaz/?vd_source=29618d9ddd46963c9eabd64d9e362fb4)

@@ -121,16 +121,16 @@ public class MultipartFile <: Multipart & InputStream & Resource & DataFields<Mu
         }
     }
     public func bytes(): Array<Byte> {
-        try {
-            match (content) {
-                case input: ByteBuffer => input.bytes()
-                case _ =>
-                    let buffer = ByteBuffer()
-                    copyTo(buffer)
-                    buffer.bytes()
-            }
-        } finally {
-            close()
+        match (content) {
+            case input: ByteBuffer => input.bytes()
+            case file: File =>
+                let buffer = ByteBuffer(initialCapacity: file.length)
+                copyTo(buffer)
+                buffer.bytes()
+            case _ =>
+                let buffer = ByteBuffer(initialCapacity: 64 * 1024)
+                copyTo(buffer)
+                buffer.bytes()
         }
     }
     prop directory: ?Path {

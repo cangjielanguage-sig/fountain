@@ -32,6 +32,14 @@ f_svg
 
 或在已配置中心仓时使用 `"fountain::f_svg" = "1.3.1020"`，并在仓库根 `.modules` 登记 `f_svg`。
 
+### 编译期要求（local mode）
+
+`f_svg` 的 `[package].compile-option` 开启了 `--experimental --enable-local-mode`：解析覆盖率的浮点累加器在 8 MiB 以内使用线程 local region，超过门限回落普通堆分配。
+
+- 调用方无需开启 local mode，`SvgRenderer` / `SvgRenderOptions` / `SvgBitmap` 等公开 API 不带模态。
+- `f_svg` 及其依赖必须用同一 SDK 版本重新编译（local 产物不保证跨 SDK 兼容）。
+- `aarch64-linux-ohos` / `x86_64-linux-ohos` 的 SDK 不支持该开关，鸿蒙目标暂不构建本模块（与 `f_base` / `f_data` 的 local-mode 基线一致）。
+
 ## 快速开始
 
 ### 1. 解析 → 渲染 PNG

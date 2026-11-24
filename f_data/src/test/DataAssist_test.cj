@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_data.test
 
 import fountain::f_data.*
+import fountain::f_base.*
 import fountain::f_data.macros.DataAssist
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -49,6 +50,8 @@ public class DataAssistSuperTypesTest {
         let b = OrderedItem()
         @Assert(a is Comparable<OrderedItem>)
         @Assert(a is Equatable<OrderedItem>)
+        @Assert(a is LocalComparable<OrderedItem>)
+        @Assert(a is LocalEquatable<OrderedItem>)
         @Assert(a == b)
         @Assert(!(a != b))
         @Assert(a.compare(b) == Ordering.EQ)
@@ -77,5 +80,47 @@ public class DataAssistSuperTypesTest {
         @Assert(a.toString() == b.toString())
         a.id = 7
         @Assert(!(a == b))
+    }
+}
+
+/** 同时支持普通构造与 local 构造，用于验证 DataAssist 生成的 localEq / localCompare。 */
+@DataAssist[equal compare]
+public class LocalItem {
+    public var id: Int64
+    public var name: String
+
+    public init(id: Int64, name: String) {
+        this.id = id
+        this.name = name
+    }
+
+    public exclave init(this @ local!, id: Int64, name: String @ local!) {
+        this.id = id
+        this.name = name
+    }
+}
+
+@Test
+public class LocalDataAssistTest {
+    @TestCase
+    public func testLocalEqualityAndCompare(): Unit {
+        let a = LocalItem(1, "a")
+        let b = LocalItem(1, "a")
+        let c = LocalItem(2, "a")
+        @Assert(a is LocalComparable<LocalItem>)
+        @Assert(a is LocalEquatable<LocalItem>)
+        @Assert(a == b)
+        @Assert(a.compare(b) == Ordering.EQ)
+        @Assert(a < c)
+
+        let la = LocalItem(1, String("a") @local!) @local!
+        let lb = LocalItem(1, String("a") @local!) @local!
+        let lc = LocalItem(2, String("a") @local!) @local!
+        @Assert(la == lb)
+        @Assert(!(la != lb))
+        @Assert(la.compare(lb) == Ordering.EQ)
+        @Assert(la < lc)
+        @Assert(la == b)
+        @Assert(a == lb)
     }
 }
