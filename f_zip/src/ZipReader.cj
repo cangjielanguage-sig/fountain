@@ -241,7 +241,7 @@ public class ZipReader {
         match (method) {
             case 0 => raw
             case 8 => DecompressInputStream(raw, wrap: WrapType.DeflateFormat, bufLen: 8192)
-            case _ => throw ZipException("不支持压缩方法 ${method}（${name}）")
+            case _ => throw ZipException("${method}(${name}) is not be supported")
         }
     }
 
