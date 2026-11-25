@@ -18,5 +18,5 @@ package fountain::f_version
 import std.time.MonoTime
 
 public let AppStarts: MonoTime = MonoTime.now()
-public const Version = "1.3.1020"
+public const Version = "1.3.2021"
 public const FountainVersion: String = "fountain(" + Version + ")"
