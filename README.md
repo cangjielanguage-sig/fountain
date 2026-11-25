@@ -35,7 +35,7 @@ a.b.c三位版本号，a.b 与仓颉SDK版本前两位严格一致，c的格式�
 
 ## 运行视频
 
-> 🎥 [查看完整演示视频](https://www.bilibili.com/video/BV1rtpT62Eaz/?vd_source=29618d9ddd46963c9eabd64d9e362fb4)
+> 🎥 [查看完整演示视频](https://space.bilibili.com/52589854/upload/video)
 
 ## STDX依赖
 
