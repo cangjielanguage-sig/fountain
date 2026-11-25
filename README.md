@@ -2,6 +2,8 @@
 ![stars](https://gitcode.com/Cangjie-TPC/fountain/star/badge.svg?style=flat-square&logoSize=14)
 ![star](https://gitcode.com/Cangjie-TPC/fountain/star/2025top.svg)
 
+恳请填写调查问卷：<https://wj.qq.com/s2/28815878/mwbj/>
+
 ```
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____
