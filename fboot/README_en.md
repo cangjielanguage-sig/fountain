@@ -1,6 +1,6 @@
 ## Installation
 ```bash
-cjpm install "fountain::fboot"="a.b.c" --root /path/to/install # replace a.b.c with the actual version number
+cjpm install "fountain::fboot-a.b.c" --root /path/to/install # replace a.b.c with the actual version number; the version follows the name after a hyphen
 export PATH=$PATH:/path/to/install/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
 ```
@@ -30,10 +30,11 @@ Add any module the project needs to the cjpm.toml in the project root directory.
 6.  fboot module initializes the current directory as a Cangjie dynamic project
 7.  fboot module <module_name> creates a subdirectory named <module_name> in the current directory, initializes it as a Cangjie dynamic module, and adds the module to the cjpm.toml of the current directory
 8.  fboot build compiles an application project developed with fountain
-9.  fboot count counts the number of Cangjie code modules, packages, files and lines in the current directory, and the time taken
-10. fboot pub <version> publishes the Cangjie module under the current path
-11. fboot <subcmd> --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME> runs a subcommand that implements `fountain::f_app.SubCommand`
+9.  fboot cleanUpdate cleans build outputs, removes cjpm.lock and re-resolves dependencies; same as cjpm clean && rm cjpm.lock && cjpm update
+10. fboot count counts the number of Cangjie code modules, packages, files and lines in the current directory, and the time taken
+11. fboot pub <version> publishes the Cangjie module under the current path
+12. fboot <subcmd> --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME> runs a subcommand that implements `fountain::f_app.SubCommand`
 ==============The commands below manage fountain itself===================
-12. fboot version shows the current fountain version number
-13. fboot help shows the command list
+13. fboot version shows the current fountain version number
+14. fboot help shows the command list
 ```
