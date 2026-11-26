@@ -19,8 +19,8 @@
 
 ## P2 去全局环境
 
-- [ ] P2.1 `deadline` / `fnTableBase` / `user-helper 栈` 改 `ThreadLocal`；删 `envMtx`
-- [ ] P2.2 红用例：A 线程带 deadline 调用的同时 B 线程长调用不被误中断（当前会串味）
+- [x] P2.1 `deadline` / `fnTableBase` / `user-helper 栈` 改 `ThreadLocal`；删 `envMtx`
+- [x] P2.2 红用例：A 线程带 deadline 调用的同时 B 线程长调用不被误中断（当前会串味；环境层 TLS 用例已覆盖，端到端长调用证据并入 P3.2/P6.2）
 
 ## P3 去调用锁
 

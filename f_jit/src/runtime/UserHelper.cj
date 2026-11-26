@@ -17,7 +17,6 @@ package fountain::f_jit.runtime
 
 import std.collection.ArrayList
 import std.collection.HashMap
-import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.TypeToken
@@ -47,8 +46,21 @@ public class UserHelperEntry {
  * （如宿主闭包内重入）按栈顶优先查找，退出时弹回外层。
  */
 public class UserHelperTable {
-    private static let mtx = Mutex()
-    private static let stack = ArrayList<HashMap<Int64, UserHelperEntry>>()
+    /**
+     * helper 栈是**调用级**资源（并行调用 D4）：同一 `hid` 在不同单元里含义不同，且嵌套调用
+     * 按栈顶优先。改为线程私有后，并发调用不再互相看到对方的 helper 表，锁随之消失。
+     */
+    private static let tls = ThreadLocal<ArrayList<HashMap<Int64, UserHelperEntry>>>()
+
+    private static func stack(): ArrayList<HashMap<Int64, UserHelperEntry>> {
+        match (tls.get()) {
+            case Some(s) => s
+            case None =>
+                let s = ArrayList<HashMap<Int64, UserHelperEntry>>()
+                tls.set(Some(s))
+                s
+        }
+    }
 
     /** 压入一次调用单元的 helper 表（`base` 通常为 0，表示 hid 从 0x0100 起）。 */
     public static func push(base: UInt16, entries: Array<UserHelperEntry>): Unit {
@@ -58,40 +70,34 @@ public class UserHelperTable {
             table.add(Int64(HelperId.USER_BASE) + Int64(base) + Int64(i), entries[i])
             i = i + 1
         }
-        synchronized(mtx) {
-            stack.add(table)
-        }
+        stack().add(table)
     }
 
     /** 弹出顶层表；空栈幂等。 */
     public static func pop(): Unit {
-        synchronized(mtx) {
-            if (stack.size > 0) {
-                stack.remove(at: stack.size - 1)
-            }
+        let s = stack()
+        if (s.size > 0) {
+            s.remove(at: s.size - 1)
         }
     }
 
     /** 查找 hid：栈顶优先，向下回退。 */
     public static func find(hid: Int64): ?UserHelperEntry {
-        synchronized(mtx) {
-            var i = stack.size - 1
-            while (i >= 0) {
-                match (stack[i].get(hid)) {
-                    case Some(e) => return Some(e)
-                    case None => ()
-                }
-                i = i - 1
+        let s = stack()
+        var i = s.size - 1
+        while (i >= 0) {
+            match (s[i].get(hid)) {
+                case Some(e) => return Some(e)
+                case None => ()
             }
-            None
+            i = i - 1
         }
+        None
     }
 
-    /** 测试专用：清空活动栈。 */
+    /** 测试专用：清空**当前线程**的活动栈。 */
     public static func resetForTest(): Unit {
-        synchronized(mtx) {
-            stack.clear()
-        }
+        stack().clear()
     }
 }
 

@@ -18,7 +18,6 @@ package fountain::f_jit.backend
 import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
-import std.sync.Mutex
 import fountain::f_base.Arch
 import fountain::f_base.OS
 import fountain::f_jit.runtime.HandleTable
@@ -33,8 +32,6 @@ import fountain::f_jit.runtime.MachineEnv
  * 生命周期：`release()` 幂等，按「码内存最后释放」的顺序回收。
  */
 public class JitExecutor {
-    /** `MachineEnv.fnTableBase` 是进程级全局；序列化 JIT 调用，避免多单元并发串表。 */
-    private static let envMtx = Mutex()
     private let buf: CodeBuffer
     private let table: FnTable
     private let mirror: ConstMirror
@@ -123,13 +120,7 @@ public class JitExecutor {
 
     /** 以 `cells` 为实参执行入口函数；入参按「最深实参在高地址」的共享 ABI 排列。 */
     public func invoke(ctx: JitContext, cells: Array<Int64>): Int64 {
-        synchronized (JitExecutor.envMtx) {
-            return this.invokeLocked(ctx, cells)
-        }
-    }
-
-    private func invokeLocked(ctx: JitContext, cells: Array<Int64>): Int64 {
-        this.invokeOffLocked(ctx, this.entryOff, cells)
+        this.invokeOff(ctx, this.entryOff, cells)
     }
 
     /**
@@ -147,12 +138,12 @@ public class JitExecutor {
         if (off < 0) {
             return None
         }
-        synchronized (JitExecutor.envMtx) {
-            return Some(this.invokeOffLocked(ctx, off, cells))
-        }
+        Some(this.invokeOff(ctx, off, cells))
     }
 
-    private func invokeOffLocked(ctx: JitContext, entryOff: Int64, cells: Array<Int64>): Int64 {
+    private func invokeOff(ctx: JitContext, entryOff: Int64, cells: Array<Int64>): Int64 {
+        // 线程私有基址（D4）：保存/恢复以支持宿主闭包重入（外层恢复自己的表）。
+        let savedBase = MachineEnv.fnTableBase
         MachineEnv.setFnTableBase(this.table.base())
         let n = cells.size
         let p = if (n == 0) {
@@ -173,12 +164,14 @@ public class JitExecutor {
         }
         let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
             CPointer<Unit>(unsafe { this.buf.rawPointer() + entryOff }))
-        let r = unsafe { f(CPointer<Unit>(ctx.cp()), p, n) }
-        if (n > 0) {
-            unsafe { LibC.free<Int64>(rawAlloc) }
+        try {
+            unsafe { f(CPointer<Unit>(ctx.cp()), p, n) }
+        } finally {
+            if (n > 0) {
+                unsafe { LibC.free<Int64>(rawAlloc) }
+            }
+            MachineEnv.setFnTableBase(savedBase)
         }
-        MachineEnv.reset()
-        r
     }
 
     /** 释放码内存/入口表/常量镜像（幂等；码内存最后释放）。 */

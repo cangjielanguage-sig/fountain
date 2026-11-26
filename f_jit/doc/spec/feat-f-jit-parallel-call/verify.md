@@ -1,21 +1,22 @@
-# Verify（P0 + P1 主体，2026-11-26）
+# Verify（P0 + P1 主体 + P2，2026-11-26）
 
-> 本变更分阶段实施；本文件只覆盖 **P0 与 P1 主体**，P1.2d/P1.5/P2–P6 尚未完成。
+> 本变更分阶段实施；本文件覆盖 **P0、P1 主体与 P2**；P1.2d/P1.5/P3–P6 尚未完成。
 
 ## 全量回归
 
 | 项 | 数值 |
 | --- | --- |
 | 基线 | 1178 用例 / 1178 通过 / 0 失败 |
-| 终态 | **1181 用例 / 1181 通过 / 0 失败 / 0 error / 0 skipped** |
-| 新增 | 3 条（`WindowIsolation_test`） |
+| P1 终态 | 1181 用例 / 1181 通过 |
+| P2 终态 | **1184 用例 / 1184 通过 / 0 失败 / 0 error / 0 skipped** |
+| 新增 | 6 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3） |
 | 回归 | 0 |
 
 命令：`unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress`。
 
-> 期间有一次全量运行唯一失败为既有性能用例 `PerfOverride_test.overrideBeatsReflectionEndToEnd`
-> （高负载下净成本 3324 ns > 阈值；单跑通过）——属已知环境噪声，与本次改动无关。
-> 最终代码复跑全量 **1181/1181 / 0 失败**。
+> P1/P2 各有一次全量运行唯一失败为既有性能用例 `PerfOverride_test.overrideBeatsReflectionEndToEnd`：
+> 一次净成本 3324 ns 超阈值，另一次反射耗时低于基线导致净成本被钳成 1 ns；两次单跑均通过。
+> 属已知环境噪声，与本次改动无关。最终代码复跑全量 **1184/1184 / 0 失败**。
 
 ## 实施内容
 
@@ -28,6 +29,8 @@
 | P1.2c | `pin/pinHostObject/pinHostClosure` 去重收窄到本窗口（路径 C + 路径 B 清单），删除全表线性扫描 |
 | P1.3 | 重入窗口栈线程私有 |
 | P1.4 | `IterTable` 改 `ThreadLocal<IterState>`，去掉全局锁 |
+| P2.1 | `RuntimeEnv.deadlineNanos` / `MachineEnv.fnTableBase` 改 `ThreadLocal`（`static mut prop` 保持读法不变）；`UserHelperTable.stack` 线程私有；删 `JitExecutor.envMtx` |
+| P2.2 | 新增 `ThreadLocalEnv_test` 3 条（deadline / 函数表基址 / helper 栈），并做变异验证 |
 
 ## 关键实现决策（与设计文档的差异）
 
@@ -42,6 +45,8 @@
    或宿主释放；窗口 `pins` 清单只用于本窗口去重。
 3. **登记存 ID（含 gen）而非索引**。`CallMarshal.cleanup` 可能先归还、槽可能被别的线程复用；
    收尾按索引盲放会误杀新槽（见下方变异 3）。
+4. **JitExecutor 的函数表基址改为保存/恢复**：`invokeOff` 进入时记下本线程旧值，`finally` 恢复；
+   这样宿主闭包重入时外层单元的表基址不会被内层清掉（旧实现直接 `reset()` 为 0）。
 
 ## 变异验证（证明用例真的能红）
 
@@ -50,14 +55,16 @@
 | `IterTable.state()` 改回全局单例 | `iterTablesAreThreadPrivate` **FAILED**：主线程 `liveCount` left=1 / right=0 |
 | 窗口栈改回全局单例 | `concurrentWindowsKeepSeparateAccounting` **FAILED**：`x.get()` left=131000 / right=0 |
 | `resetWindow` 去掉 gen 校验（按索引释放） | `resetWindowDoesNotKillSlotReusedByAnotherThread` **FAILED**：`isLiveHandle(bId)` left=false / right=true |
+| deadline/fnTableBase/helper 栈三处 TLS 同时改回全局 | `deadlineIsThreadLocal`、`fnTableBaseIsThreadLocal`、`userHelperStackIsThreadLocal` **三条全 FAILED** |
 
-三次变异均已回滚；回滚后全量 1181/1181。
+四次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2）。
 
 ## 未完成 / 风险
 
 - **P1.2d**：`freeSlots` 仍是全局 `ArrayList` + `mtx`（只保护分配/回收，临界区短）。
   并行度证据要等 P3 删 `callMtx` 后的 P6 基准；若分配成为瓶颈再切片私有化。
 - **P1.5**：`NativeMem.mallocCount/freeCount` 仍为普通静态计数（诊断口径）。
+- **端到端 deadline 隔离**：`callMtx` 仍在，真正「A 带 deadline、B 长调用并行」要等 P3 删锁后补测。
 - **API 漂移仍未解决**：主规格与 `design-parallel-call.md` 使用 `unloadFn`/`unload`，当前代码是
   `close(timeoutMs)` / `close()` / `isClosed()`。本阶段不触碰，P4/P5 前必须单独立项对齐。
 - `resetForTest` 只清当前线程的窗口栈；其它线程的 TLS 无法追溯（测试线程均已 join，风险可接受）。

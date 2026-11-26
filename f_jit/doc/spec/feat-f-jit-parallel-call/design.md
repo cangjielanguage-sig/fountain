@@ -108,8 +108,9 @@
 
 ## 实施状态（2026-11-26）
 
-已落地 P0 + P1 主体：分块存储；窗口记账/窗口栈线程私有；读路径（`getAny/getAs/isType/tagOfHandle/tagOrZero/fetch*`）去锁；
-`pin/pinHostObject/pinHostClosure` 去重收窄到本窗口；`IterTable` 线程私有。
-新增 `WindowIsolation_test`（3 条）并做变异验证（改回全局实现即变红）；全量 1181/1181。
+已落地 P0 + P1 主体 + P2：分块存储；窗口记账/窗口栈线程私有；读路径（`getAny/getAs/isType/tagOfHandle/tagOrZero/fetch*`）去锁；
+`pin/pinHostObject/pinHostClosure` 去重收窄到本窗口；`IterTable` 线程私有；
+`deadline`/`fnTableBase`/helper 栈 TLS、删 `envMtx`（函数表基址保存/恢复）。
+新增 `WindowIsolation_test`（3 条）与 `ThreadLocalEnv_test`（3 条），均做变异验证（改回全局实现即变红）；全量 1184/1184。
 
-未完成：P1.2d（`freeSlots` 仍为全局表 + 短锁）、P1.5（`NativeMem` 计数未原子化）、P2–P6。
+未完成：P1.2d（`freeSlots` 仍为全局表 + 短锁）、P1.5（`NativeMem` 计数未原子化）、P3–P6。

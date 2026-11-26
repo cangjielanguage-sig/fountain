@@ -26,17 +26,31 @@ import std.time.DateTime
  * 64 B 布局已冻结），故它挂在调用级环境上。
  */
 public class RuntimeEnv {
-    /** 绝对截止时刻（epoch 纳秒）；`< 0` = 无期限。 */
-    public static var deadlineNanos: Int64 = -1
+    /**
+     * 绝对截止时刻（epoch 纳秒）；`< 0` = 无期限。
+     *
+     * **线程私有**（并行调用 D4）：期限是「本次调用」的属性，进程级读写会让 A 线程的
+     * deadline 误中断 B 线程的长调用。重入时由 `JitFunction` 栈式保存/恢复。
+     */
+    private static let tls = ThreadLocal<Int64>()
+
+    public static mut prop deadlineNanos: Int64 {
+        get() {
+            tls.get() ?? -1
+        }
+        set(v) {
+            tls.set(Some(v))
+        }
+    }
 
     /** 置一个绝对截止时刻（epoch 纳秒）。 */
     public static func setDeadline(nanos: Int64): Unit {
         deadlineNanos = nanos
     }
 
-    /** 清除期限（默认状态）。 */
+    /** 清除期限（默认状态；TLS 槽一并清空）。 */
     public static func clearDeadline(): Unit {
-        deadlineNanos = -1
+        tls.set(None)
     }
 
     /**
@@ -79,13 +93,26 @@ public class RuntimeEnv {
  * 恒为 0 —— H57 由此返回 0，三形态的接口一致、语义由桥按引擎解释。
  */
 public class MachineEnv {
-    public static var fnTableBase: Int64 = 0
+    /**
+     * 函数入口表基址（H57 `fn_table` 读）。**线程私有**（并行调用 D4）：
+     * 每个线程执行的是自己的单元入口，进程级全局会让并发执行串表。
+     */
+    private static let tls = ThreadLocal<Int64>()
+
+    public static mut prop fnTableBase: Int64 {
+        get() {
+            tls.get() ?? 0
+        }
+        set(v) {
+            tls.set(Some(v))
+        }
+    }
 
     public static func setFnTableBase(base: Int64): Unit {
         fnTableBase = base
     }
 
     public static func reset(): Unit {
-        fnTableBase = 0
+        tls.set(None)
     }
 }
