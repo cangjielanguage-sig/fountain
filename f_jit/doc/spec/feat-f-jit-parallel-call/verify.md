@@ -1,6 +1,6 @@
-# Verify（P0–P4，2026-11-26）
+# Verify（P0–P5，2026-11-26）
 
-> 本变更分阶段实施；本文件覆盖 **P0–P4**；P1.2d/P1.5/P5–P6 尚未完成。
+> 本变更分阶段实施；本文件覆盖 **P0–P5**；P1.2d/P1.5/P6 尚未完成。
 
 ## 全量回归
 
@@ -10,8 +10,9 @@
 | P1 终态 | 1181 用例 / 1181 通过 |
 | P2 终态 | 1184 用例 / 1184 通过 |
 | P3 终态 | 1184 用例 / 1184 通过（真实并发） |
-| P4 终态 | **1185 用例 / 1185 通过 / 0 失败 / 0 error / 0 skipped** |
-| 新增 | 7 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3 + `PromotionGroupConcurrency_test` 1） |
+| P4 终态 | 1185 用例 / 1185 通过 |
+| P5 终态 | **1187 用例 / 1186 通过 / 1 已知性能假失败**（`PerfOverride`，单跑通过） |
+| 新增 | 9 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3 + `PromotionGroupConcurrency_test` 1 + `UnloadConcurrency_test` 2） |
 | 回归 | 0 |
 
 命令：`unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress`。
@@ -19,6 +20,7 @@
 > P1/P2 各有一次全量运行唯一失败为既有性能用例 `PerfOverride_test.overrideBeatsReflectionEndToEnd`：
 > 一次净成本 3324 ns 超阈值，另一次反射耗时低于基线导致净成本被钳成 1 ns；两次单跑均通过。
 > 属已知环境噪声，与本次改动无关。P3/P4 代码均一次全量通过（P3 1184/1184，P4 1185/1185）。
+> P5 的两次全量均只有该性能用例失败（净成本 5429/6710 ns），单跑通过；其余 1186 条全绿。
 
 ## 实施内容
 
@@ -37,6 +39,8 @@
 | P3.2 | `ParallelCall_test`（6 条）在**真实并发**下跑通，连续 3 轮无失败；`CallForFnConcurrency_test` 2/2 |
 | P4.1 | 包装「A 创建 → B/C 调用 → D 释放」：`ParallelCall_test.wrapperCreatedOnOneThreadIsCallableFromOthers` 扩展为异线程 `close()` |
 | P4.2 | `PromotionGroup` 全方法加锁（`add/release/contains/size/snapshot/releaseAll`），新增单热槽 4 线程 × 2000 次释放用例 |
+| P5.1 | `state/active` 由单元 `mtx` 保证（`close` 置 state=1 → 轮询 active==0 → 终态；超时回退 state=0）；未改原子，留作 P6 性能项 |
+| P5.2 | 新增 `UnloadConcurrency_test` 2 条：4 线程在飞时 `close` 排空并拒新（19）；`close(0)` 超时回退后单元仍可用；连续 3 轮稳定 |
 
 ## 关键实现决策（与设计文档的差异）
 
@@ -65,6 +69,7 @@
 | `PromotionGroup.release` 去掉锁 | `concurrentReleasesDropRefcountExactly` **连续 3 轮全 FAILED**：`g.size()` left=1 / right=0（丢一次 −1 即泄漏） |
 
 五次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2/P3）、1185/1185（P4）。
+P5 的两条用例未做变异（生命周期语义由既有 `close` 状态机保证，测试覆盖其可观察结果）。
 
 ## 未完成 / 风险
 

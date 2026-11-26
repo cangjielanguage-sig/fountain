@@ -108,11 +108,11 @@
 
 ## 实施状态（2026-11-26）
 
-已落地 P0–P4：分块存储；窗口记账/窗口栈线程私有；读路径（`getAny/getAs/isType/tagOfHandle/tagOrZero/fetch*`）去锁；
+已落地 P0–P5：分块存储；窗口记账/窗口栈线程私有；读路径（`getAny/getAs/isType/tagOfHandle/tagOrZero/fetch*`）去锁；
 `pin/pinHostObject/pinHostClosure` 去重收窄到本窗口；`IterTable` 线程私有；
 `deadline`/`fnTableBase`/helper 栈 TLS、删 `envMtx`（函数表基址保存/恢复）；
-删 `callMtx`、`callForFn` 改读本次调用的 `CallOut.escaped`；`PromotionGroup` 全方法加锁。
+删 `callMtx`、`callForFn` 改读本次调用的 `CallOut.escaped`；`PromotionGroup` 全方法加锁；并发 `close` 排空在飞调用、超时回退可用。
 新增 `WindowIsolation_test`（3 条）与 `ThreadLocalEnv_test`（3 条），均做变异验证（改回全局实现即变红）；
-P3 后 `ParallelCall_test` 真实并发连续 3 轮 6/6；P4 新增提升组并发用例；全量 1185/1185。
+P3 后 `ParallelCall_test` 真实并发连续 3 轮 6/6；P4 新增提升组并发用例；P5 新增并发卸载用例；全量 1187（1 条已知性能假失败）。
 
-未完成：P1.2d（`freeSlots` 仍为全局表 + 短锁）、P1.5（`NativeMem` 计数未原子化）、P5–P6。
+未完成：P1.2d（`freeSlots` 仍为全局表 + 短锁）、P1.5（`NativeMem` 计数未原子化）、P6。
