@@ -129,6 +129,13 @@ public class HandleTable {
     private static const SEG_SIZE: Int64 = 1024
     /** 目录上限：4096 段 = 4M 槽（`capacityLimit` 默认 1M，留足扩容余量）。 */
     private static const MAX_SEGS: Int64 = 4096
+    /**
+     * 世代号上限：`gen` 占 ID 的最高 16 位，最高位是符号位 ⇒ 只能用到 `0x7FFF`。
+     * 到达上限的槽**退休**（不再 +1、不进空闲表、永不复用），否则 `makeId` 的受检转换会溢出。
+     */
+    private static const GEN_MAX: UInt16 = 0x7FFFu16
+    /** 退休槽数（诊断/审计）：这些槽保持失效但永久占用索引空间。 */
+    private static var retiredSlots: Int64 = 0
 
     /** 目录占位段：未分配的段一律指向它（`alive` 恒 false ⇒ 读即失效）。 */
     private static let EMPTY_SEG: SlotSeg = SlotSeg(SEG_SIZE)
@@ -539,8 +546,7 @@ public class HandleTable {
             seg.escapeFlags[off] = false
             seg.frozenFlags[off] = false
             seg.constRefs[off] = 0
-            seg.gens[off] = seg.gens[off] + UInt16(1)
-            freeSlots.add(i)
+            freeOrRetireLocked(seg, off, i)
         }
     }
 
@@ -875,8 +881,7 @@ public class HandleTable {
                 seg.objs[off] = Int64(0)
                 seg.escapeFlags[off] = false
                 seg.frozenFlags[off] = false
-                seg.gens[off] = seg.gens[off] + UInt16(1)
-                freeSlots.add(i)
+                freeOrRetireLocked(seg, off, i)
             }
         }
     }
@@ -897,8 +902,7 @@ public class HandleTable {
             seg.objs[off] = Int64(0)
             seg.escapeFlags[off] = false
             seg.frozenFlags[off] = false
-            seg.gens[off] = seg.gens[off] + UInt16(1)
-            freeSlots.add(i)
+            freeOrRetireLocked(seg, off, i)
         }
     }
 
@@ -944,8 +948,7 @@ public class HandleTable {
                     !seg.escapeFlags[off] && !seg.constFlags[off]) {
                     seg.alive[off] = false
                     seg.objs[off] = Int64(0)
-                    seg.gens[off] = seg.gens[off] + UInt16(1)
-                    freeSlots.add(i)
+                    freeOrRetireLocked(seg, off, i)
                 }
                 k = k + 1
             }
@@ -1011,6 +1014,25 @@ public class HandleTable {
 
     // ---- 内部 ----
 
+    /**
+     * 释放槽位的统一收尾：世代号 +1 并归还空闲表；到达 `GEN_MAX` 则**退休**。
+     *
+     * 退休是保证「标识恒正」的唯一处置：`gen = 0x8000` 会让拼装值越过 `Int64.Max`
+     * ——`makeId` 的受检转换抛 `OverflowException`，若换成非受检位转换则得到负 ID，
+     * 会被全库的 `id <= 0` 判空当成空句柄。退休槽保持 `alive=false` 且不进 `freeSlots`，
+     * 代价是每 32767 次复用占 1 个索引位（相对 4M 目录可忽略）。
+     *
+     * 调用方必须持有 `mtx`。
+     */
+    private static func freeOrRetireLocked(seg: SlotSeg, off: Int64, i: Int64): Unit {
+        if (seg.gens[off] >= GEN_MAX) {
+            retiredSlots = retiredSlots + 1
+            return
+        }
+        seg.gens[off] = seg.gens[off] + UInt16(1)
+        freeSlots.add(i)
+    }
+
     /** 分配一个槽并写入（路径 A/B/C 共用；分配与写入在锁内，槽一经返回即只由 owner 写）。 */
     private static func newSlot(obj: Any, tok: UInt16, isConst: Bool): Int64 {
         synchronized(mtx) {
@@ -1066,6 +1088,13 @@ public class HandleTable {
         }
     }
 
+    /** 用例/宿主审计：因世代号耗尽而退休的槽数（退休槽永久失效、不可复用）。 */
+    public static func retiredCount(): Int64 {
+        synchronized(mtx) {
+            retiredSlots
+        }
+    }
+
     /** 测试专用：清空整张表并复位窗口（不用于生产路径）。 */
     public static func resetForTest(): Unit {
         synchronized(mtx) {
@@ -1091,6 +1120,7 @@ public class HandleTable {
                 c = c + 1
             }
             freeSlots.clear()
+            retiredSlots = 0
             totalSlots = 1
             let s0 = ensureSegLocked(0)
             s0.tags[0] = TypeToken.RESERVED

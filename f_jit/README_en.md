@@ -257,7 +257,8 @@ Bytecode is **architecture-neutral**.
 
 **③ Object model (handles)**: machine code never holds object pointers — only **Int64 handles** encoded as
 `idx:u32 | tag:u16 | gen:u16` (`runtime/HandleTable.cj`). Objects live in a Cangjie `ArrayList<Any>` on the
-managed heap; every access re-reads through a helper.
+managed heap; every access re-reads through a helper. `gen` is capped at `0x7FFF`: a slot that reaches
+the cap is **retired** and never reused, which keeps every handle positive (the sign bit stays 0).
 
 **④ Helpers and ABI**: machine code may only call a **closed whitelist** of helpers (H01–H83,
 `runtime/HelperId.cj`) through the `@C` entry `h_dispatch(hid, ctx, args, argc)`. `ctx` is an 8×Int64

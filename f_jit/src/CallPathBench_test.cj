@@ -193,7 +193,7 @@ public class CallPathBench_test {
         let f = CallPathBench_test.allocUnit()
         println('CP-BENCH scene=B3 metric=jitBacked value=' +
             (if (f.isJitBacked()) { 1 } else { 0 }).toString() + ' unit=bool')
-        let n = Int64(5000)
+        let n = Int64(15000)
         @Assert(f.call<Int64>([Int64(1)]), 6)
         let t0 = CallPathBench_test.now()
         var i = 0

@@ -243,7 +243,8 @@ c.registerClass(desc)
 
 **③ 对象模型（句柄）**：机器码不持有对象指针，只持 **Int64 句柄** =
 `idx:u32 | tag:u16 | gen:u16`（`runtime/HandleTable.cj`）。对象本体存放在仓颉堆的
-`ArrayList<Any>` 里，由 GC 管理；机器码每次访问都经 helper 现取。
+`ArrayList<Any>` 里，由 GC 管理；机器码每次访问都经 helper 现取。`gen` 上限为 `0x7FFF`：
+到达上限的槽**退休**、不再复用（保证句柄恒为正数，符号位永远为 0）。
 
 **④ helper 与 ABI**：机器码只能调用**封闭白名单**里的 helper（H01–H83，`runtime/HelperId.cj`），
 入口是 `@C` 函数 `h_dispatch(hid, ctx, args, argc)`；`ctx` 是 8×Int64 的非托管块
