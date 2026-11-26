@@ -174,7 +174,9 @@ public class ParallelCall_test {
         let f2 = spawn { w.call<Int64>([Int64(10)]) }
         @Assert(f1.get(), 2)
         @Assert(f2.get(), 11)
-        w.close()
+        // P4：释放也换一个线程（包装的创建/调用/释放分属三个线程）。
+        let f3 = spawn { w.close() }
+        f3.get()
         var code: Int64 = 0
         var site: Int64 = 0
         try {

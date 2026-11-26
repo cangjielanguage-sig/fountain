@@ -1,6 +1,6 @@
-# Verify（P0 + P1 主体 + P2 + P3，2026-11-26）
+# Verify（P0–P4，2026-11-26）
 
-> 本变更分阶段实施；本文件覆盖 **P0、P1 主体、P2 与 P3**；P1.2d/P1.5/P4–P6 尚未完成。
+> 本变更分阶段实施；本文件覆盖 **P0–P4**；P1.2d/P1.5/P5–P6 尚未完成。
 
 ## 全量回归
 
@@ -9,15 +9,16 @@
 | 基线 | 1178 用例 / 1178 通过 / 0 失败 |
 | P1 终态 | 1181 用例 / 1181 通过 |
 | P2 终态 | 1184 用例 / 1184 通过 |
-| P3 终态 | **1184 用例 / 1184 通过 / 0 失败 / 0 error / 0 skipped**（真实并发） |
-| 新增 | 6 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3） |
+| P3 终态 | 1184 用例 / 1184 通过（真实并发） |
+| P4 终态 | **1185 用例 / 1185 通过 / 0 失败 / 0 error / 0 skipped** |
+| 新增 | 7 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3 + `PromotionGroupConcurrency_test` 1） |
 | 回归 | 0 |
 
 命令：`unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress`。
 
 > P1/P2 各有一次全量运行唯一失败为既有性能用例 `PerfOverride_test.overrideBeatsReflectionEndToEnd`：
 > 一次净成本 3324 ns 超阈值，另一次反射耗时低于基线导致净成本被钳成 1 ns；两次单跑均通过。
-> 属已知环境噪声，与本次改动无关。P3 代码一次全量即 **1184/1184 / 0 失败**。
+> 属已知环境噪声，与本次改动无关。P3/P4 代码均一次全量通过（P3 1184/1184，P4 1185/1185）。
 
 ## 实施内容
 
@@ -34,6 +35,8 @@
 | P2.2 | 新增 `ThreadLocalEnv_test` 3 条（deadline / 函数表基址 / helper 栈），并做变异验证 |
 | P3.1 | 删 `JitFunction.callMtx`；`callForFn` 改读本次调用的 `CallOut.escaped`，`lastEscaped` 只留作单线程诊断访问器 |
 | P3.2 | `ParallelCall_test`（6 条）在**真实并发**下跑通，连续 3 轮无失败；`CallForFnConcurrency_test` 2/2 |
+| P4.1 | 包装「A 创建 → B/C 调用 → D 释放」：`ParallelCall_test.wrapperCreatedOnOneThreadIsCallableFromOthers` 扩展为异线程 `close()` |
+| P4.2 | `PromotionGroup` 全方法加锁（`add/release/contains/size/snapshot/releaseAll`），新增单热槽 4 线程 × 2000 次释放用例 |
 
 ## 关键实现决策（与设计文档的差异）
 
@@ -59,8 +62,9 @@
 | 窗口栈改回全局单例 | `concurrentWindowsKeepSeparateAccounting` **FAILED**：`x.get()` left=131000 / right=0 |
 | `resetWindow` 去掉 gen 校验（按索引释放） | `resetWindowDoesNotKillSlotReusedByAnotherThread` **FAILED**：`isLiveHandle(bId)` left=false / right=true |
 | deadline/fnTableBase/helper 栈三处 TLS 同时改回全局 | `deadlineIsThreadLocal`、`fnTableBaseIsThreadLocal`、`userHelperStackIsThreadLocal` **三条全 FAILED** |
+| `PromotionGroup.release` 去掉锁 | `concurrentReleasesDropRefcountExactly` **连续 3 轮全 FAILED**：`g.size()` left=1 / right=0（丢一次 −1 即泄漏） |
 
-四次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2）；P3 后仍为 1184/1184。
+五次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2/P3）、1185/1185（P4）。
 
 ## 未完成 / 风险
 

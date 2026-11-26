@@ -29,8 +29,8 @@
 
 ## P4 跨线程包装
 
-- [ ] P4.1 红用例：A 线程 `callForFn` 创建包装，B/C 线程调用；`unloadFn` 在 D 线程释放
-- [ ] P4.2 `PromotionGroup` 引用计数原子化；提升/释放并发安全
+- [x] P4.1 红用例：A 线程 `callForFn` 创建包装，B/C 线程调用；`unloadFn` 在 D 线程释放
+- [x] P4.2 `PromotionGroup` 引用计数原子化；提升/释放并发安全
 
 ## P5 生命周期
 

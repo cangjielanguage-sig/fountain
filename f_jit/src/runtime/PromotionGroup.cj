@@ -17,6 +17,7 @@ package fountain::f_jit.runtime
 
 import std.collection.ArrayList
 import std.collection.HashMap
+import std.sync.Mutex
 
 /**
  * 逃逸闭包回桥的**提升组**（m2 §14.1/§14.2、design-m2 §5.1.3）。
@@ -34,6 +35,13 @@ import std.collection.HashMap
 public class PromotionGroup {
     private let ids = ArrayList<Int64>()
     private let refs = HashMap<Int64, Int64>()
+    /**
+     * 跨线程包装（P4）：A 线程创建、B/C 调用、D 线程释放 ⇒ 清单与引用计数必须互斥。
+     *
+     * 锁序：`PromotionGroup.mtx` → `HandleTable.mtx`（`releaseLocked` 会归还槽）。
+     * 反向不存在：句柄表从不回调提升组。
+     */
+    private let mtx = Mutex()
 
     public init() {}
 
@@ -44,6 +52,12 @@ public class PromotionGroup {
      * 首次 `add` 即执行原地提升（`moveOutGroup`：迁出窗口记账、ID/gen 不变、不参与重用）。
      */
     public func add(id: Int64): Unit {
+        synchronized(this.mtx) {
+            this.addLocked(id)
+        }
+    }
+
+    private func addLocked(id: Int64): Unit {
         if (id <= 0 || HandleTable.isConst(id) || !HandleTable.isLiveHandle(id)) {
             return
         }
@@ -57,6 +71,12 @@ public class PromotionGroup {
 
     /** 计数 −1；归零 ⇒ 从清单移除并释放（gen+1、可复用）。 */
     public func release(id: Int64): Unit {
+        synchronized(this.mtx) {
+            this.releaseLocked(id)
+        }
+    }
+
+    private func releaseLocked(id: Int64): Unit {
         if (id <= 0 || HandleTable.isConst(id)) {
             return
         }
@@ -75,25 +95,33 @@ public class PromotionGroup {
 
     /** 是否在组内（`close` / `try/finally` 豁免判定）。 */
     public func contains(id: Int64): Bool {
-        this.ids.contains(id)
+        synchronized(this.mtx) {
+            this.ids.contains(id)
+        }
     }
 
     /** 组规模（诊断 / 容量对账）。 */
     public func size(): Int64 {
-        this.ids.size
+        synchronized(this.mtx) {
+            this.ids.size
+        }
     }
 
     /** 组内条目快照（桥侧清理豁免对账用）。 */
     public func snapshot(): Array<Int64> {
-        this.ids.toArray()
+        synchronized(this.mtx) {
+            this.ids.toArray()
+        }
     }
 
     /** 释放整组（`close` 的遍历 −1 语义）：每个条目各减 1，归零释放。 */
     public func releaseAll(): Unit {
-        let snapshot = this.ids.toArray()
-        for (id in snapshot) {
-            while (this.countOf(id) > 0) {
-                this.release(id)
+        synchronized(this.mtx) {
+            let snapshot = this.ids.toArray()
+            for (id in snapshot) {
+                while (this.countOf(id) > 0) {
+                    this.releaseLocked(id)
+                }
             }
         }
     }
