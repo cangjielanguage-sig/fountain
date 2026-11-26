@@ -15,8 +15,8 @@
 
 [package]
   cjc-version = "1.2.0"
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "消息队列服务端（fmq server / fmq manager）"
   link-option = ""
   name = "fmq"

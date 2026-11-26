@@ -27,8 +27,8 @@
 
 [package]
   cjc-version = "1.2.0"
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "服务器监控节点代理与多节点监督端"
   link-option = ""
   name = "fprobe"
