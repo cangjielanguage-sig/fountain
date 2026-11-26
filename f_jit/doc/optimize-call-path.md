@@ -1,10 +1,10 @@
 # 调用路径去串行优化（数据驱动）
 
-> 状态：**Phase 1 已实施并归档**（`2026-11-27-optimize-call-path-phase1`）：P1.1/P1.2 数据达标并保留，
-> P1.3 无收益已回滚；Phase 2/3 待做。
-> 本文只定义实验与判定规则，不代表任何改动已被采纳。
-> 关联：`doc/design-parallel-call.md` §9（P0–P6 已完成并归档）、归档变更
-> `2026-11-26-feat-f-jit-parallel-call`、未完成项 P1.2d（`freeSlots`）。
+> 状态：**全部阶段已判定并归档**。
+> P1.1、P1.2、P2.1 数据达标并保留；P1.3 无收益已回滚；P3.1/P3.2 经成本分解判定收益上限低于 MOV，**不做**。
+> 本文只定义实验与判定规则；每项的最终数据与决策见 §6/§7/§11/§12。
+> 关联归档：`2026-11-26-feat-f-jit-parallel-call`、`2026-11-27-optimize-call-path-phase1`、
+> `2026-11-27-optimize-call-path-phase2`。
 
 ## 0. 一句话结论
 
@@ -175,7 +175,7 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
   （`releasedSlotIsReusableWithNewGen`、`AnyHostCast` 的 `slotCount` 断言）。
 - **前提**：分配策略必须保留"单线程刚释放的槽下一次复用"的行为；`resetForTest` 清全部 stripe。
 
-### P3.1 JitContext 池化
+### P3.1 JitContext 池化（**评估后不做**：收益上限 5.0% < MOV 8.4%，见 §12）
 
 - **现状**：每次调用 `LibC.malloc(64B)` + `LibC.free`，并各做一次 `NativeMem` 原子计数。
 - **改动**：`ThreadLocal<ArrayList<CPointer<Int64>>>` 池，`create` 取、`free` 还（上限 8）；
@@ -188,7 +188,7 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
 - **回滚条件**：未达门槛；或出现 ctx 复用导致的旧 fault/旧 errCode 串味。
 - **前提**：P1.1 已完成；NativeMem 口径变更已归档。
 
-### P3.2 SignatureTable / AdapterRegistry 改 COW
+### P3.2 SignatureTable / AdapterRegistry 改 COW（**评估后不做**：不在调用路径上，见 §12）
 
 - **现状**：`SignatureTable.getOrBuild` 与 `AdapterRegistry.lookup` 都在全局锁内；
   前者在封送宿主闭包时用，后者在编译/注册/查适配器时用。
@@ -227,8 +227,8 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
 | P1.2 | F1 848 / F4 1710 | F1 507 / F4 219 | **−40.2% / −87.2%** | Q4 +6.8%、Q1 0%、C1 −9.3% | 全绿 | **keep** |
 | P1.3 | Q4 475096 / L1 5180 / S4 2.22 | Q4 480830 / L1 5175 / S4 2.00 | +1.2% / −0.1% / −9.9% | 无 | 全绿 | **revert（未达 MOV，代码/测试/钩子已删除）** |
 | P2.1 | A4 0.79×（76/138/79） | A4 2.64×（237/264/241/275/266） | **+234%** | S4 2.40→2.17、Q4 最好值持平、Q1 +7.4%、F1/F4 最好值持平 | 全绿 | **keep** |
-| P3.1 | | | | | | keep / revert |
-| P3.2 | | | | | | keep / revert |
+| P3.1 JitContext 池化 | ctx 429 ns / 调用 8583 ns（5.0%） | 未实施 | 收益上限 5.0% < MOV 8.4% | — | — | **不做（数据不支持）** |
+| P3.2 Signature/Adapter COW | 不在调用路径上（仅封送宿主闭包/建计划） | 未实施 | — | — | — | **不做（无路径证据）** |
 
 ## 7. 决策日志（实施时填写）
 
@@ -311,3 +311,41 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
   中位数会被抬高/压低；判定时应同时看「最好值」与「全部 5 次的分布」。
 - **B1 单次调用仍 ~5 µs**：说明桥接层（封送、ctx malloc/free、错误检查）仍是主开销，
   下一步应做 Phase 3（`JitContext` 池化 + 封送分配），而不是继续动句柄表。
+
+## 12. Phase 3 评估：不做（2026-11-27，数据结论）
+
+### 12.1 单次调用成本分解（临时探针，已删除；release 构建，100k 次 × best-of-3）
+
+| 场景 | ns/call | 与 0 参之差 |
+| --- | --- | --- |
+| 0 参数单元 `{ => 1 }` | 8583 | — |
+| 1 参数单元 `{ n => n + 1 }` | 8977 | +394（实参路径） |
+| 4 参数单元 | 9990 | +1407（约 350/实参） |
+| `JitContext.create` + `free` | 429 | — |
+
+### 12.2 结论
+
+- **P3.1（ctx 池化）收益上限 = 429 / 8583 ≈ 5.0%**，低于 L1 的 MOV（8.4%）；
+  而它需要改 `NativeMem` 计数口径（T27 断言「create 一次 = 一次 malloc」），属规格变更。
+  **按硬规则不做**：收益不足以支付规格与泄漏账目的复杂度。
+- **P3.2（Signature/Adapter COW）不在调用路径上**（只在封送宿主闭包/建计划时用），无收益证据，不做。
+- **实参路径**每个约 350–400 ns（malloc 一次 + 反向拷贝）：改线程私有暂存区可省下这部分，
+  但同样只占 ~4–5%，且引入重入分级缓冲的复杂度 ⇒ **不做**。
+
+### 12.3 剩余 8.6 µs 在哪：已知与未知
+
+已知每次调用包含：2 次 `Mutex` 配对（P1.3 已证明去掉无收益）、窗口开合（`Win` + 2 个 `ArrayList`）、
+`CallMarshal` + 2 个 `ArrayList`、`cells` 数组、1 次 `malloc/free`、`CFunc` 构造、一次机器码调用。
+合计约 8–9 次 GC 分配 + 1 次原生分配。
+
+**未验证的假设**：在这台共享 7 核 A53（load 常驻 3+）上，8.6 µs 很可能由 GC 与缓存未命中主导，
+而非某个具体锁。要证实需要 `perf`/GC 计数——构建机**没有 perf**（`perf_event_paranoid=2`），
+共享 VM 的噪声也让 <10% 的改动无法判定。
+
+### 12.4 停止条件
+
+`optimize-call-path.md` §8 的停止条件已满足：连续两项（P3.1/P3.2）无数据支持。
+**调用路径优化到此为止**；后续若要把单次调用从 µs 级降到亚 µs，需要：
+1. 专用 ≥8 核机器 + `perf`（或仓颉运行时 GC 统计）；
+2. 按 profile 决定是减少每调用分配（Win/Marshal 复用）还是消除 `malloc`；
+3. 在此之前不再做「猜热点」式的微优化。
