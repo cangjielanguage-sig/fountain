@@ -66,11 +66,19 @@ public class TextTemplate <: ToString {
         compile(template, prefix: placeholder, suffix: placeholder)
     }
     public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}"): TextTemplate {
-        templates.computeIfAbsent(template){
+        let key = cacheKey(template, prefix, suffix)
+        templates.computeIfAbsent(key){
             let instance = TextTemplate(template)
             instance.doCompile(template, prefix, suffix)
             instance
         }
+    }
+    /**
+     * 缓存键 = 模板串 + 分隔符三元组。前缀/后缀用长度前缀编码，
+     * 避免 `prefix="a", suffix="bc"` 与 `prefix="ab", suffix="c"` 之类的拼接碰撞。
+     */
+    private static func cacheKey(template: String, prefix: String, suffix: String): String {
+        "${prefix.size}:${prefix}${suffix.size}:${suffix}${template}"
     }
     private func doCompile(template: String, prefix: String, suffix: String) {
         let prefixLength = prefix.size
