@@ -45,19 +45,19 @@
 
 ## P3 P1.2 HostFieldTable 不可变快照
 
-- [ ] P3.1 **基线**：重采 `F1/F4`（辅助 `Q1/Q4`）各 5 次，写入文档 §6 的 P1.2 行
-- [ ] P3.2 **护栏用例先行（characterization）**：本项是纯性能重构，**没有行为 Red**（设计「TDD 与验证策略」已声明例外）：
+- [x] P3.1 **基线**：重采 `F1/F4`（辅助 `Q1/Q4`）各 5 次，写入文档 §6 的 P1.2 行
+- [x] P3.2 **护栏用例先行（characterization）**：本项是纯性能重构，**没有行为 Red**（设计「TDD 与验证策略」已声明例外）：
   - 同 index 注册 A、B 两个类，按注册序各自命中一次（顺序语义锁定）；
   - 一线程反复 `find`、另一线程并发 `register` 新 index ⇒ 不崩、不空表、不死锁（3 轮）；
   - 访问器的 `accepts` 内部再 `register` ⇒ 不死锁、本次查找仍按已取快照完成；
   - `resetForTest()` 后 `find` 返回 `None`；
   - 这些用例在实现前也应通过；**keep/revert 只由 P3.5 的 `F1/F4` 数据决定**
-- [ ] P3.3 **实现**：`FieldSnapshot{ buckets: HashMap<UInt16, Array<HostFieldAccessor>> }`；
+- [x] P3.3 **实现**：`FieldSnapshot{ buckets: HashMap<UInt16, Array<HostFieldAccessor>> }`；
   注册在 `writeMtx` 内 COW 并发布；`find` 只 `load()` + 取数组 + 逐条 `accepts`，删除锁内拷贝与临时 `ArrayList`；
   `resetForTest` 发布空快照
-- [ ] P3.4 **回归**：`HostFieldGet_test`、`HostFieldSet_test`、`HostFieldAccessor` 相关注册期用例全绿；P3.2 用例 3 轮全绿
-- [ ] P3.5 **复测**：`F1/F4` 各 5 次（门槛 **≥10%**，高于 MOV），同时抄 `Q1/Q4` 与 `C1`
-- [ ] P3.6 **判定**：`F1` 或 `F4` 提升 ≥ 10%，且其它回退 ≤2%，且全量零失败 ⇒ **keep**；
+- [x] P3.4 **回归**：`HostFieldGet_test`、`HostFieldSet_test`、`HostFieldAccessor` 相关注册期用例全绿；P3.2 用例 3 轮全绿
+- [x] P3.5 **复测**：`F1/F4` 各 5 次（门槛 **≥10%**，高于 MOV），同时抄 `Q1/Q4` 与 `C1`
+- [x] P3.6 **判定**：`F1` 或 `F4` 提升 ≥ 10%，且其它回退 ≤2%，且全量零失败 ⇒ **keep**；
   `F1/F4` < 10% 或字段/注册用例失败 ⇒ **revert**
 
 ## P4 P1.3 JitFunction / EscapedClosure state/active 原子化

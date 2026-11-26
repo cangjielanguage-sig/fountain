@@ -18,6 +18,7 @@ package fountain::f_jit.runtime
 import std.collection.ArrayList
 import std.collection.HashMap
 import std.sync.Mutex
+import std.sync.AtomicReference
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.TypeToken
@@ -65,9 +66,26 @@ public class HostFieldAccessor {
  * 只看到 `(obj, index)`，故用 index 分桶 + `accepts` 判定实际类。表项在注册后不再变更
  * （快照语义由编译期描述符承担；本表只服务已编译单元的运行期访问）。
  */
+/** 不可变字段表快照：注册期整表替换，查找期只读。 */
+private class FieldSnapshot {
+    let buckets: HashMap<UInt16, Array<HostFieldAccessor>>
+
+    init(buckets: HashMap<UInt16, Array<HostFieldAccessor>>) {
+        this.buckets = buckets
+    }
+}
+
+/**
+ * 运行期字段表（进程级；宿主侧注册、执行期只读查找）。
+ *
+ * 注册来源：手工类注册（§12.4）与反射自动注册（§12.5）都会把访问器登记到这里；H64/H65
+ * 只看到 `(obj, index)`，故用 index 分桶 + `accepts` 判定实际类。表项在注册后不再变更，
+ * 因此用**不可变快照 + 原子发布**：`find` 只读当前快照，不取锁、不拷贝、不分配。
+ */
 public class HostFieldTable {
-    private static let mtx = Mutex()
-    private static let buckets = HashMap<UInt16, ArrayList<HostFieldAccessor>>()
+    private static let writeMtx = Mutex()
+    private static let current = AtomicReference<FieldSnapshot>(
+        FieldSnapshot(HashMap<UInt16, Array<HostFieldAccessor>>()))
 
     /** 登记一个字段访问器（同 index 可登记多个类；查找按注册序 + `accepts`）。 */
     public static func register(index!: UInt16, `type`!: UInt16, mutable!: Bool,
@@ -75,45 +93,49 @@ public class HostFieldTable {
         setter!: (Object, Any) -> Unit): Unit {
         let acc = HostFieldAccessor(`type`: `type`, mutable: mutable, accepts: accepts,
             getter: getter, setter: setter)
-        synchronized(mtx) {
-            match (buckets.get(index)) {
-                case Some(list) => list.add(acc)
-                case None =>
-                    let list = ArrayList<HostFieldAccessor>()
-                    list.add(acc)
-                    buckets.add(index, list)
+        synchronized(writeMtx) {
+            let old = current.load()
+            let next = HashMap<UInt16, Array<HostFieldAccessor>>()
+            for ((k, v) in old.buckets) {
+                next.add(k, v)
             }
-        }
-    }
-
-    /**
-     * 按 index + 实际对象定位访问器；未命中 ⇒ `None`（由 helper 转 99，运行期防御）。
-     *
-     * `accepts` 在锁外求值：访问器是宿主闭包，可能重入字段表（不得持锁调用）。
-     */
-    public static func find(obj: Object, index: UInt16): ?HostFieldAccessor {
-        var list = ArrayList<HostFieldAccessor>()
-        synchronized(mtx) {
-            match (buckets.get(index)) {
+            let list = ArrayList<HostFieldAccessor>()
+            match (old.buckets.get(index)) {
                 case Some(src) =>
                     for (e in src) {
                         list.add(e)
                     }
                 case None => ()
             }
+            list.add(acc)
+            next.add(index, list.toArray())
+            current.store(FieldSnapshot(next))
         }
-        for (e in list) {
-            if (e.accepts(obj)) {
-                return Some(e)
-            }
-        }
-        None
     }
 
-    /** 测试专用：清空字段表。 */
+    /**
+     * 按 index + 实际对象定位访问器；未命中 ⇒ `None`（由 helper 转 99，运行期防御）。
+     *
+     * 只读快照；`accepts` 在任何锁之外求值 ⇒ 宿主闭包可重入注册。
+     */
+    public static func find(obj: Object, index: UInt16): ?HostFieldAccessor {
+        let snap = current.load()
+        match (snap.buckets.get(index)) {
+            case Some(src) =>
+                for (e in src) {
+                    if (e.accepts(obj)) {
+                        return Some(e)
+                    }
+                }
+                None
+            case None => None
+        }
+    }
+
+    /** 测试专用：发布空快照。 */
     public static func resetForTest(): Unit {
-        synchronized(mtx) {
-            buckets.clear()
+        synchronized(writeMtx) {
+            current.store(FieldSnapshot(HashMap<UInt16, Array<HostFieldAccessor>>()))
         }
     }
 }
