@@ -48,6 +48,8 @@ public class ParallelThroughput_test {
         let f = ParallelThroughput_test.spinUnit()
         let n = Int64(2000000)
         @Assert(f.call<Int64>([n]), n)
+        // T0 观测：若为 0，说明基线跑的是解释器，S2/S4/S8 不能代表机器码并行度。
+        println('PAR-BENCH jitBacked=' + (if (f.isJitBacked()) { 1 } else { 0 }).toString())
         let baseLive = HandleTable.liveCount()
 
         let t0 = ParallelThroughput_test.now()
