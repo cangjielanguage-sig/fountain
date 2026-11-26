@@ -25,7 +25,7 @@
   记录 `Q1/Q4/L1/F1/F4/A4/C1/S2/S4/S8` 的 5 个原始值与中位数，计算 `d` 与 `MOV = max(3%, 2d)`，写入文档 §6
 - [x] P1.4 **工具门槛**：Phase 1 使用的 Q1/Q4/L1/F1/F4/C1/S4 均已 `d < 10%`（见文档 §3.1）；
   A4 仍不稳定，**按 §10 的 gen 阻断暂不作为 Phase 1 指标**，Phase 2 修复后重测
-- [ ] P1.5 提交 T0（只含测试文件，无产品代码改动）
+- [x] P1.5 提交 T0（只含测试文件，无产品代码改动）
 
 ## P2 P1.1 HostFault 线程本地化
 
@@ -97,7 +97,7 @@
 
 ## 不做（本变更边界）
 
-- [ ] 不做 `JitContext` 池化（依赖 P1.1，且需先改 `NativeMem` 计数口径 → 独立 OpenSpec）
-- [ ] 不做 `HandleTable` 分片空闲表 / 原子 `totalSlots`
-- [ ] 不做 `SignatureTable` / `AdapterRegistry` 的 COW
-- [ ] 不改公开 API、错误码、计数口径、窗口与提升语义、编译管线与缓存锁
+- 不做 `JitContext` 池化（依赖 P1.1，且需先改 `NativeMem` 计数口径 → 独立 OpenSpec）
+- 不做 `HandleTable` 分片空闲表 / 原子 `totalSlots`
+- 不做 `SignatureTable` / `AdapterRegistry` 的 COW
+- 不改公开 API、错误码、计数口径、窗口与提升语义、编译管线与缓存锁

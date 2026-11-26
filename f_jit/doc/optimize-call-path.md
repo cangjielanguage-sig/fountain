@@ -1,6 +1,7 @@
 # 调用路径去串行优化（数据驱动）
 
-> 状态：**Phase 1 已实施（部分保留）**：P1.1/P1.2 数据达标并保留，P1.3 无收益已回滚；Phase 2/3 待做。
+> 状态：**Phase 1 已实施并归档**（`2026-11-27-optimize-call-path-phase1`）：P1.1/P1.2 数据达标并保留，
+> P1.3 无收益已回滚；Phase 2/3 待做。
 > 本文只定义实验与判定规则，不代表任何改动已被采纳。
 > 关联：`doc/design-parallel-call.md` §9（P0–P6 已完成并归档）、归档变更
 > `2026-11-26-feat-f-jit-parallel-call`、未完成项 P1.2d（`freeSlots`）。

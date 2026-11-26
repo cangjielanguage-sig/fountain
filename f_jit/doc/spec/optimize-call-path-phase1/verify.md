@@ -47,6 +47,11 @@ P1.3 相关的 `f-jit-facade-bridge` 增量已从变更中移除（未实施，�
 | `15f5e1dc1` | P1.2 HostField 快照（keep，带数据） |
 | （无） | P1.3 已回滚，不留提交 |
 
+## 归档
+
+`openspec archive optimize-call-path-phase1 --yes`：runtime 增量 ~2 modified，
+归档名 `2026-11-27-optimize-call-path-phase1`。
+
 ## 未做 / 后续
 
 - `JitContext` 池化（需先改 `NativeMem` 计数口径，独立 OpenSpec）；
