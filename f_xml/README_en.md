@@ -459,3 +459,13 @@ layer (name interning, three reused buffers, batched text/attribute scanning, ev
 reuse) landed via
 [`doc/spec/optimize-f-xml-semantic-layer/`](doc/spec/optimize-f-xml-semantic-layer/) with zero
 public API change.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `BufferedRuneSource` (class), `advanceCp` (func), `exhausted` (func), `next` (func), `nextCp` (func), `origin` (func), `peekCp` (func), `read` (func), `remaining` (func)
+- `LineWindow`: `isEof` (func)
+- `PrefixStream`: `read` (func)

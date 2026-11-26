@@ -80,7 +80,7 @@ public class SearchRPC {
 | 路径 | 行为 |
 | --- | --- |
 | `/rpc` | 不过滤命名空间 |
-| `/rpc/{topic}` | 只允许 `topic` 命名空间下的方法；该 topic 没有任何方法时返回 `-32004` |
+| `/rpc/{topic}` | 只允许 `topic` 命名空间下的方法；topic 未注册时返回 `-32004`，topic 已注册但方法不存在时返回 `-32601` |
 
 **命名空间是「方法名的前缀」，不是「路由的别名」**。这个区分决定了很多行为：
 
@@ -165,7 +165,7 @@ JsonRpcMethodMeta(
 
 **脏 schema 在启动时就报错**，而不是等第一次请求打进来才发现。失败返回 `-32602`，`error.data` 是 `ValidationResult.toJson()`——客户端能拿到「哪个字段、哪条规则没过」。
 
-不支持 `$ref` / `allOf` / `anyOf` / `oneOf` / `not`，对这些是 fail-closed（直接判失败）。理由和前面一致：**宁可拒绝，也不要给一个「看起来通过了」的错误结果**。
+不支持 `$ref` / `allOf` / `anyOf` / `oneOf` / `not`：编译期只做关键字类型检查和 `pattern` 预编译，这些关键字在**请求期校验**时按 fail-closed 处理（直接判失败）。理由和前面一致：**宁可拒绝，也不要给一个「看起来通过了」的错误结果**。
 
 ---
 
@@ -301,7 +301,7 @@ mcp_rateLimit 配置  →  Builder.rateLimit  →  每工具 ToolRateLimit
 调用方标识按优先级取：
 
 ```
-X-Forwarded-For 第一段（需信任配置）
+X-Forwarded-For 第一段（仅在 mcp_trustForwardedFor=true 或 Builder.trustForwardedFor 时）
   → Authorization 的 SHA-256 前 16 字节
   → remoteAddr（去端口）
   → anonymous（本地调用为 local）

@@ -243,7 +243,7 @@ private func defaultMemoryEntryThreshold(): Int64 { 16 * 1024 * 1024 }
 - 成本：6 个反射 32 位变体（`isoHdlc` / `jamcrc` / `crc32c` / `koopman` / `base91D` / `autosar`）各多 3 张 256 项 `Array<UInt64>` 表；**+6 KB/引擎、合计 +36 KB**，一次性静态分配；构造期多 768 次查表。其余变体（`crc16` / `crc64` / 非反射 32 位）不建切片表，`slice1..3` 是空数组且不会被索引。
 - **只做 ① 不够**（21 MB/s），**①+② 也不够**（下标访问成本主导），④ 才是决定性的一步。
 
-**明确不做**：不改 `Crc32` / `crc32*` 的公开签名、不改变体列表、不改 `finish` / `initRegister` 的语义、不引 FFI 与硬件指令（CRC32C 的 SSE4.2 / ARMv8 `crc32` 另议）、不新增 `update(ptr, len)` 之类重载、不动 `f_zip` 的任何压缩参数。**唯一的 `unsafe` 是 ④ 的数组裸指针只读访问**（`acquireArrayRawData` / `releaseArrayRawData`），不涉及跨模块 ABI。
+**明确不做**：不改 `Crc32` / `crc32*` 的公开签名、不改变体列表、不改 `finish` / `initRegister` 的语义、不新增 `update(ptr, len)` 之类重载、不动 `f_zip` 的任何压缩参数。**不引 C / FFI / native 链接**；硬件加速走 `f_util` 既有的生成式机器码（`CodeBuffer` + `CFunc`，`mmap` RW → `mprotect` RX），CRC-32 见 `crc32-hw-cfunc`，CRC-16/64 见 `f_util/doc/spec/accelerate-f-util-crc/`。**唯一的 `unsafe` 是 ④ 的数组裸指针只读访问**（`acquireArrayRawData` / `releaseArrayRawData`），不涉及跨模块 ABI。
 
 ## 模块与文件布局
 

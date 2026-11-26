@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-22
+x-scope: jsonrpc-client-read-buffer
+x-design-doc: f_jsonrpc/doc/f_jsonrpc模块设计.md
+x-predecessor: f_jsonrpc/doc/spec/fix-jsonrpc-mcp-review-findings
+x-gate: equivalence-and-allocation
+x-runtime-env: default (no cjHeapSize / cjGCInterval / cjRegionSize)

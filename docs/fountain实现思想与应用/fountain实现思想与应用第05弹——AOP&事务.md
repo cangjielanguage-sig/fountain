@@ -14,13 +14,15 @@
 
 #### Aspects
 
-Aspects是AOP的中枢，宏@Pointcut把被它修饰的函数体包装成嵌套函数，用函数参数构造`Array<Any>`。获得函数参数的类型，再用函数所在类的TypeInfo、函数名和函数参数类型获得InstanceTypeInfo，每次函数调用都会用以上这些信息构造一个新的InvocationFuncInfo实例，这是判定是否织入切面的依据。
+Aspects是AOP的中枢，宏@Pointcut把被它修饰的函数体包装成嵌套函数`callee(args: Array<Any>)`。函数所在类的TypeInfo、函数名和函数参数类型会被用来调用`TypeInfo.getInstanceFunction(funcName, argTypes)`获得`InstanceFunctionInfo`，再与TypeInfo一起组成不可变的`QualifiedFuncInfo`，它是判定是否织入切面的依据，也是切面链的缓存键。类级织入时宏会生成静态元信息复用这个`QualifiedFuncInfo`；每次函数调用只用本次实参新建一个`InvocationFuncInfo`（它有`args`、`typeInfo`、`funcInfo`、`qualifiedFuncInfo`四个只读属性，是struct，按值传递）。
 
-#### RouteRule 、TargetAnnotationRouteRule 、ConfigRouteRule
+#### RouteRule 、TargetAnnotationRouteRule 、FuncAnnotationRouteRule 、ConfigRouteRule
 
 RouteRule是织入规则，典型的就是图中展示的几个RouteRule子类型，各种RouteRule实例可以使用`&` `|` `!`操作符连接起来。
 
-TargetAnnotationRouteRule的初始化参数是注解的全限定名，使用这个规则的切面将被织入符合这个规则的函数。
+TargetAnnotationRouteRule的初始化参数是注解的全限定名（多个注解名用`&`连接），使用这个规则的切面将被织入被这个注解修饰的类型中的函数。
+
+FuncAnnotationRouteRule与它对应，参数是注解的全限定名，匹配被注解修饰的函数本身，事务切面用的就是它。
 
 ConfigRouteRule是从配置项获得规则的抽象父类，ConfigExecutionRouteRule是使用表示成员函数所在类的全限定名、函数名、函数参数、函数返回类型的字符串定义规则，这些规则定义如下：
 
@@ -70,23 +72,22 @@ AspectRoute是一个注解，被它修饰的且实现了Aspect接口的类才是
 
 ### AOP的织入原理。
 
-@Pointcut把它修饰的函数包装成无参嵌套函数`fn`，构造的InvocationFuncInfo和嵌套函数作为实参调用`Aspects.proceed`函数。proceed函数从IOC获得全部Aspect实现的切面列表，遍历切面对象，获得声明切面的AspectRoute，用InvocationFuncInfo调用AspectRoute的matches函数，AspectRoute会调用RouteRule，从RouteRule返回true的表示当前函数符合织入规则。
+@Pointcut把它修饰的函数体包装成嵌套函数`callee(args: Array<Any>)`，再用本次的InvocationFuncInfo和嵌套函数作为实参调用`Aspects.proceed`函数。proceed函数在**首次**调用某个切点时从IOC获得全部Aspect实现的切面列表，遍历这些BeanManager，取得声明切面的AspectRoute，用InvocationFuncInfo调用AspectRoute的matches函数，AspectRoute会调用RouteRule，返回true的表示当前函数符合织入规则。
 
-嵌套函数包装成`var f: (Array<Any>) -> Any = {args => fn(args)}`。
-
-所有符合规则的切面bean name填入一个`ArrayList<String>`，倒序遍历这个ArrayList，每一个切面都包装成如下的闭包：
+切面链只计算一次，并按`QualifiedFuncInfo`缓存：匹配结果只取决于切点函数的签名（类型 + 函数），与实例无关，所以同一类型的多个实例共享同一条链。链上的层闭包不保存调用数据——每层都用本次调用的args新建一个`InvocationFuncInfo`，因此并发调用之间不共享可变状态。单例切面在建链时就解析好实例，prototype 切面则在每次调用时重新取 bean：
 
 ```cj
+var f: (Array<Any>) -> Any = {args => fn(args)}
 for (i in list.size - 1..=0 : -1) {
     let aspected = f
+    let aspectGetter = /* singleton 时直接捕获实例，否则每次从 BeanManager 取 bean */
     f = {args =>
-	    funcInfo.setArgs(args)//funcInfo的类型就是InvocationFuncInfo
-		BeanFactory.instance.get<Aspect>(list[i]).getOrThrow().proceed(funcInfo, aspected)
-	}
+        aspectGetter().proceed(InvocationFuncInfo(qualifiedFuncInfo, args), aspected)
+    }
 }
 ```
 
-以上这些过程都在Aspects类的`public static func proceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T `函数完成。Aspects.proceed函数会由被@Pointcut展开的代码调用。由于编译器可以完成泛型实参的类型推断，即使原函数没有声明返回类型，原函数体包装的嵌套函数的类型也会被推断出来，进而推断出proceed函数的泛型实参。
+以上这些过程都在Aspects类的`public static func proceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T `函数完成。Aspects.proceed函数会由被@Pointcut展开的代码调用。由于编译器可以完成泛型实参的类型推断，即使原函数没有声明返回类型，原函数体包装的嵌套函数的类型也会被推断出来，进而推断出proceed函数的泛型实参。没有任何切面命中时会走空链快路径，直接执行本次调用的原函数体，返回值不经过Any。
 
 当切面层层调用最后返回才从包装函数的返回值从Any类型转换为proceed的泛型实参类型。
 
@@ -95,7 +96,7 @@ for (i in list.size - 1..=0 : -1) {
 事务的关键类型就是TransactionAspect，它的声明如下：
 
 ```cj
-@AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
+@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect
 ```
@@ -141,7 +142,7 @@ public enum Propagation {
 
 每次调用受事务控制的函数，不论当前函数是否需要创建事务都会用外层函数的TransactionWrap创建一个新的TransactionWrap，TransactionWrap包装着真实的事务实例，如果当前函数需要创建新的事务就用新建的事务，如果不需要创建新事务会使用DummyTransaction顶替。
 
-TransactionWrap的实例是SqlExecution的成员，发生一次事务函数的调用就包一层新的TransactionWrap的皮，事务函数返回时就脱一层。
+TransactionWrap的实例是SqlExecutor的成员，发生一次事务函数的调用就包一层新的TransactionWrap的皮，事务函数返回时就脱一层。
 
 ### WeavedBean
 
@@ -178,6 +179,7 @@ public macro WeavedBean(attr: Tokens, input: Tokens): Tokens {
 ```cj
 public interface TransactionHook {
     func beforeTx(): Unit {}//事务开启前
+    func inTx(): Unit {}//接口中已声明，当前实现没有调用点
     func beforeCommit(readOnly: Bool): Unit {}//事务提交前
     func afterCommit(): Unit {}//事务提交后
     func afterThrowing(e: Exception): Unit {}//抛出异常后
@@ -225,10 +227,10 @@ public class UserServiceImpl <: UserService {
 定义一个事务钩子：
 
 ```cj
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.log.*
-import fountain.orm.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_log.*
+import fountain::f_orm.*
 
 @Bean
 public class TransactionHookImpl <: TransactionHook {

@@ -62,6 +62,15 @@
 | WebSocket | 核对 `f_mvc` README（仓库有 WS 相关示例） | 先核对再定状态 |
 | 健康检查 | `f_health` | — |
 | 自定义工具/加密/UUID 等 | `f_util` / `f_crypto` / stdx | 先查 `f_util` README 的公开 API 清单 |
+| Excel 读写（openpyxl / Apache POI / pandas） | `f_excel` | xlsx / OOXML：流式解析与生成、日期识别、合并单元格 |
+| XML 解析（lxml / ElementTree / JAXB） | `f_xml` | 流式事件（推 / 拉）+ DOM + 命名空间；XPath / XSLT 等按 README 核对后再定状态 |
+| ZIP 打包（zipfile / Commons Compress / adm-zip） | `f_zip` | ZIP64 双向、流式写入；加密压缩包按 README 核对 |
+| 图表生成（matplotlib / ECharts / Chart.js） | `f_chart` | 服务端生成静态 SVG（百余种图，JSON 描述）；不是交互式前端图表，底层 `f_svg` |
+| 发邮件（smtplib / JavaMail / nodemailer） | `f_email` | SMTP / POP3 / IMAP + MIME，统一 `Email` 门面 |
+| JSON-RPC 服务 / 客户端 | `f_jsonrpc` | 建在 `f_mvc` 上，方法表运行期注册；SSE 走流式 |
+| MCP 服务端 / 客户端（给 LLM 暴露能力） | `f_mcp`（`@Mcp` 宏） | 消息层复用 `f_jsonrpc`；示例 `fmcpdemo` |
+| 规则引擎（Drools / Easy Rules / json-rules-engine） | `f_rule` | Rete + 决策表 + 决策流；规则与决策表按 `f_rule` 的形态重写 |
+| 向量检索（FAISS / Milvus 客户端） | `f_hydra` | 进程内向量库、无独立服务；远程部署用 `fhydra`（JSON-RPC） |
 
 **缺口表**（每个缺口一条）：缺口描述、影响的需求点、可选方案（简单替代 / 第三方依赖 / 不实现 /
 在项目内自行实现完整功能和要求的基础设施代码、工具代码）、等待用户决定。用户选定前不要开工对应部分。

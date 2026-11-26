@@ -76,8 +76,11 @@ func readUInt64LE(buf: Array<Byte>, offset: Int64): UInt64 {
 // === 定位读取 ===
 // pread 避免 seek+read 的并发竞争，单 syscall 完成定位与读取
 
-@When[os == "Linux"]
-foreign func pread(fd: Int32, buf: CPointer<Byte>, count: Int64, offset: Int64): Int64
+@FastNative
+foreign{
+    @When[os == "Linux"]
+    func pread(fd: Int32, buf: CPointer<Byte>, count: Int64, offset: Int64): Int64
+}
 
 @When[os == "Linux"]
 func positionedRead(fd: Int32, buf: CPointer<Byte>, bufSize: Int64, offset: Int64): Bool {

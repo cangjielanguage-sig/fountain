@@ -34,9 +34,9 @@
    └───────┴───────┘
 ```
 
-高 4 位正好放得下 16 种类型：
+高 4 位正好放得下 16 种类型（类型枚举叫`DataType`，`DataType.value`是含类型号的完整head字节，取类型号用`DataType.lowValue`，即`value >> 4`）：
 
-| 值 | 类型 | 值 | 类型 |
+| lowValue | 类型 | lowValue | 类型 |
 | --- | --- | --- | --- |
 | 0 | `NONE` | 8 | `DURATION1` |
 | 1 | `STRING` | 9 | `DURATION2` |
@@ -58,10 +58,12 @@
 | 类型族 | 低 4 位含义 |
 | --- | --- |
 | `INT` / `FLOAT` | **bit3 = 符号位**（0 正、1 负），**bit0..2 = body 字节数**（1..7）；长度位为 `0` 表示 8 字节 |
-| `INPUTSTREAM` / `BIGINT` / `DECIMAL*` / `DURATION*` / `DATETIME*` | body 字节数（1..7）；`0` 表示 8 字节 |
+| `DECIMAL1` / `DURATION1` / `DATETIME1` | **bit3 = 符号位**，**bit0..2 = body 字节数**（1..7）；`0` 表示 8 字节 |
+| `DECIMAL2` / `DURATION2` / `DATETIME2` / `BIGINT` | 长度字段的**字节数**（1..7）；`0` 表示 8 字节 |
+| `INPUTSTREAM` | 长度字段的**字节数**（1..7）；bit3 表示是否为文件（isFile） |
 | `STRING` / `COLLECTION` / `MAP` | 长度**字节数**（1..8，按实际长度取最小值）；`0` 表示「空值，后面不跟长度字节」 |
 
-第一行是文档里容易漏掉的一层：**符号位是借来的**。`Int64(1)` 的 head 低半字节是 `1`，`Int64(-1)` 则是 `9`（`1 | 0b1000`）——符号不额外占字节，而是塞进了原本要表示长度的 4 位里。解码侧对应地取 `sign = (head & 0x08) == 0`，还会校验「符号位与实际值是否矛盾」，矛盾就抛 `CodecException`。
+第一行是文档里容易漏掉的一层：**符号位是借来的**。`Int64(1)` 的 head 低半字节是 `1`，`Int64(-1)` 则是 `9`（`1 | 0b1000`）——符号不额外占字节，而是塞进了原本要表示长度的 4 位里。解码侧对应地取 `sign = (head & 0x08) == 0`；`parseInt64`（长度字段和 `BIGINT` 的 body）还会校验「符号位与实际值是否矛盾」，矛盾就抛 `CodecException`；`INT`/`FLOAT` 的解码分支没有这道校验。
 
 数值类型走「实际字节数」，是因为小整数太常见——`Int64(1)` 只写 2 个字节（head + 1 字节 body），而不是固定 9 字节。这是典型的「为高频小对象省带宽」。
 
@@ -93,6 +95,7 @@ public interface Encoder {
     func encode(value: Duration): Encoder
     func encode(value: DateTime): Encoder
     func encode(value: Array<Byte>): Encoder
+    func encode(value: ArrayList<Byte>): Encoder
     func encode(data: InputStream, size: Int64): Encoder
     func encode(data: File): Encoder
     func finish(): BytesCopyTo
@@ -109,7 +112,7 @@ public interface Codec <: Encoder & Decoder {}
 接口有两处设计细节：
 
 1. **`Encoder` 返回自身**，所以可以一路 `.encode(a).encode(b).encode(c)` 写成一帧。编码顺序就是协议顺序，没有字段名、没有分隔符。
-2. **`decode<T>` 的 `T` 只是「期望类型」**，不是「唯一类型」。同一个字节流，按 `Int64` 解出来是整数，按 `DataAny` 解出来是一个 `Data` 对象——后者叫中性解码，RPC 和 `f_net` 的读取循环用的就是这一档，因为它们在读的那一刻还不知道载荷该是什么类型。
+2. **`decode<T>` 的 `T` 只是「期望类型」**，不是「唯一类型」。同一个字节流，按 `Int64` 解出来是整数，按 `DataAny` 解出来是一个 `Data` 对象——后者叫中性解码，RPC 和 `f_net` 的读取循环用的就是这一档，因为它们在读的那一刻还不知道载荷该是什么类型。中性解码在`DefaultCodec`上还有一个便捷函数`decodeData(input): Data`，但它不属于`Decoder`接口，静态类型是`DefaultCodec`时才能调用。
 
 ### 三个防御性设计
 
@@ -139,7 +142,7 @@ DefaultCodec.registerType(qualifiedName: String, creator: () -> SimpleDataObject
 
 **三、大载荷落盘**
 
-payload 超过 `fileThreshold`（默认 4096，随 `setBytesPool(arraySize:)` 变化）时，编码器把它写进 `/tmp/tmpFile<UUID>`，帧里只带文件名。这样大对象不会全量驻留内存，代价是多一次磁盘往返——所以阈值可配。
+`INPUTSTREAM` 的 head 里有一个 isFile 位：编码一个 `File` 时置位并把文件名写在 body 前面，帧里只带文件名，解码方把它落到 `/tmp/tmpFile<UUID>/<fileName>`。另外 `fileThreshold`（默认 4096，随 `setBytesPool(arraySize:)` 变化）在**解码侧**决定内存缓冲还是流式落盘：声明长度不超过阈值就读进内存，超过就一边读一边写进 `/tmp/tmpFile<UUID>` 下的临时文件并返回 `File`。这样大对象不会全量驻留内存，代价是多一次磁盘往返——所以阈值可配。
 
 ### 池与 `release()`：借了就要还
 
@@ -147,7 +150,7 @@ payload 超过 `fileThreshold`（默认 4096，随 `setBytesPool(arraySize:)` �
 
 ```cj
 DefaultCodec.setBufferPool(initSize!: 1024, minSize!: 1024, maxSize!: 1024,
-    maxWaiting!: Duration.second * 30)
+    maxWaiting!: Duration.second * 30, localCacheSize!: 2)
 DefaultCodec.setBytesPool(initSize!: 0, minSize!: 1, maxSize!: 1024,
     arraySize!: 4096, maxWaiting!: Duration.second * 30)
 ```
@@ -166,7 +169,7 @@ let bytes = codec
     .encode(Int64(42))
     .encode('hello world')
     .encode(DataList())          // 空集合：只写一个 COLLECTION head 字节
-    .finish()                    // BytesCopyTo（也是 Releasable）
+    .finish()                    // 返回 ChainedBytesCopyTo（<: BytesCopyTo & Releasable）
 
 codec.release()                  // 归还编码期间借出的池项
 
@@ -232,6 +235,8 @@ public enum Command {
 | `CONSUME` | `ONCE` | QoS1 | QoS0 | 0 |
 | `ELECT` | `VOTE` | `APPROVE` | `ASSUME` | `ACK` |
 | `RESP` | 0 | QoS1 | QoS0 | `ACK` |
+| `PING` | `WITHNODE` | 0 | 0 | `ACK` |
+| `DEREGISTER` | 0 | 0 | 0 | `ACK` |
 
 能这么省，是因为命令本身已经确定了上下文的解释框架：`PUBLISH` 的低位只可能是 QoS 和 retain，`ELECT` 的低位只可能是投票语义。**用「命令隐含的语义空间」换取一个字节**，这是协议设计里典型的密度优化。
 
@@ -259,9 +264,9 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 工厂方法都返回 `Message`，因为 `EncodedMessage` 只由 `encode()` 产出：
 
 ```cj
-let req  = Message.publish(dup: false, qos: QoS.AtLeastOnce, retain: false, data!: payload)
+let req  = Message.publish(dup!: false, qos!: QoS.AtLeastOnce, retain!: false, data!: payload)
 let sub  = Message.subscribe(data!: 'topic')
-let resp = Message.resp(id: req.id, qos: QoS.AtMostOnce, ack!: true, data!: result)
+let resp = Message.resp(id: req.id, qos!: QoS.AtMostOnce, ack!: true, data!: result)
 let ack  = Message.ack(id: req.id)
 let ping = Message.ping()
 ```
@@ -314,7 +319,7 @@ public interface MessageCopier {
 ### `Client`：请求-响应配对
 
 ```cj
-public class Client<T> where T <: DataFields<T> {
+public class Client<T> <: Resource where T <: DataFields<T> {
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1,
         address!: String, checkDuration!: Duration, checker!: () -> ?Message): ClientBuilder<T>
 
@@ -379,7 +384,7 @@ for (client in multiClient) {
 ### `Server`：把不该进线程池的东西挡在外面
 
 ```cj
-public class Server<T> where T <: DataFields<T> {
+public class Server<T> <: Resource where T <: DataFields<T> {
     public init(bufferQueueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration,
         executors!: Int64 = 200, unavailableChecked!: Int64 = 3,
         defaultResp!: (MessageID) -> ?Message = {_=> None},
@@ -391,13 +396,13 @@ public class Server<T> where T <: DataFields<T> {
 }
 ```
 
-每条连接的处理循环是固定的五步：
+每条连接的读循环是固定的四步，另有一个独立的巡检定时器：
 
 1. `Message.decode<T>(buffer)` 解一帧；EOF 记 DEBUG `tcp closed`，解码失败记 WARN 并**必须断链**；
 2. `PING` 由 `Server` 内置回 `ACK`，心跳 ACK 也在这一层识别，**都不进 executor**；
 3. 业务消息走 `executors.call(limiter){ executor(buffer, req) }`；
 4. executor 返回 `None` 时用 `defaultResp(req.id)` 兜底，仍为 `None` 就不回包；
-5. 同一连接 ping 计数超过 `unavailableChecked` 判不可用并关闭。
+5. 另一个定时器按 `checkDuration` 巡检连接，同一连接连续不可用次数超过 `unavailableChecked` 就判不可用并关闭。
 
 第 2 步让心跳和业务共享一条连接，但**不共享线程池**。如果 ping 也排队进业务线程池，一次业务洪峰就会让 ping 超时，进而触发客户端拆链，引发重连风暴。
 
@@ -406,7 +411,7 @@ public class Server<T> where T <: DataFields<T> {
 `ServerBuilder` 的参数分两层，这个划分容易搞混：
 
 - 无前缀（`bindToDevice` / `receiveBufferSize` / `sendBufferSize` / `reuseAddress` / `backlogSize`）作用于**监听 socket**；
-- `socket*` 前缀（`socketNoDelay` / `socketLinger` / `socketKeepalive`）作用于 **accept 之后的每条连接**。
+- `socket*` 前缀（`socketNoDelay` / `socketLinger` / `socketBindToDevice` / `socketQuickAcknowledge` / `socketReadTimeout` / `socketWriteTimeout` / `socketReceiveBufferSize` / `socketSendBufferSize`）作用于 **accept 之后的每条连接**。服务端没有暴露 keepalive 参数，keepAlive 只在 `ClientBuilder` / `MultiClientBuilder` 上。
 
 前者是「这个服务器怎么监听」，后者是「每条连接怎么表现」，配错位置会发现「参数没生效」。
 

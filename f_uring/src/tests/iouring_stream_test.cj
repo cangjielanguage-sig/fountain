@@ -19,6 +19,7 @@ import std.unittest.testmacro.*
 import std.fs.*
 import fountain::f_base.*
 import fountain::f_io.*
+import fountain::f_uring.*
 
 /**
  * IOUringStream 单元测试

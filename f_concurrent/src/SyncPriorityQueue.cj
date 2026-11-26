@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_concurrent
 
-public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
+public class SyncPriorityQueue<T> <: Queue<T> & Growable {
     private let mutex = Mutex()
     private let queue: PriorityQueue<T>
     public init(

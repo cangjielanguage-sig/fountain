@@ -84,9 +84,11 @@ Therefore **empty values have their own compact encoding**, and the decoder side
 
 ```cj
 public class DefaultCodec <: Codec & Releasable {
+    /** Reserve `headroom` bytes in the encoding buffer (for the framer to patch the frame header in place; 0 by default) */
+    public init(headroom!: Int64)
     /** Rebuild the "encoding buffer pool" from the configuration (throws if a pool item cannot be obtained before the timeout; the caller records the visible failure) */
     public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
-        maxWaiting!: Duration = Duration.second * 30): Unit
+        maxWaiting!: Duration = Duration.second * 30, localCacheSize!: Int64 = 2): Unit
     /** Rebuild the "byte array pool" from the configuration; also sets fileThreshold to arraySize */
     public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024,
         arraySize!: Int64 = 4096, maxWaiting!: Duration = Duration.second * 30): Unit

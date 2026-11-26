@@ -24,19 +24,18 @@ public class ListeningClient<T> <: Resource where T <: DataFields<T> {
     private let future: Future<Unit> 
     ListeningClient(
         private let buffer: AtomicReference<SocketBuffer>,
-        private var client: Client<T>,
         private let message: Message,
         private let executor: (Message) -> Unit
     ){
-        client.transfer(buffer.load(), message, once: false)
+        buffer.load().transfer(message)
         this.future = spawn{
             while(!Thread.currentThread.hasPendingCancellation && let m <- Message.decode<T>(buffer.load())){
                 spawn{executor(m)}
             }
         }
     }
-    init(buffer: SocketBuffer, client: Client<T>, message: Message, executor: (Message) -> Unit){
-        this(AtomicReference(buffer), client, message, executor)
+    init(buffer: SocketBuffer, message: Message, executor: (Message) -> Unit){
+        this(AtomicReference(buffer), message, executor)
     }
     public func isClosed(): Bool {
         closed.load()

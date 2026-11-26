@@ -29,6 +29,8 @@ import fountain::f_email.model.*
  * `Bcc` **原样写出**——这是通用序列化器（保存草稿要用）；发送路径的剥离由 `SmtpClient` 负责。
  */
 public class MimeWriter {
+    /** 流式正文的采样/读取块大小；一块缓冲贯穿整个 part。 */
+    private static let STREAM_BUFFER_BYTES: Int64 = 65536
     private let output: OutputStream
     private let options: MimeWriteOptions
     private var written: Int64 = 0
@@ -87,24 +89,25 @@ public class MimeWriter {
 
     private func writeLeafStream(part: MimePart, source: BodySource, isText: Bool): Unit {
         let input = source.open()
-        let sampleBuffer = Array<Byte>(65536, repeat: 0)
-        let sampleSize = readUpTo(input, sampleBuffer)
-        let sample = if (sampleSize == sampleBuffer.size) {
-            sampleBuffer
+        // 一块 64 KB 走完：先采样，写完后同一块继续读剩余。
+        // 编码器在 write 内即时消费输入（只保留 carry 的几个字节），因此复用安全。
+        let buf = Array<Byte>(STREAM_BUFFER_BYTES, repeat: 0)
+        let sampleSize = readUpTo(input, buf)
+        let sample = if (sampleSize == buf.size) {
+            buf
         } else {
-            sampleBuffer[0..sampleSize]
+            buf[0..sampleSize]
         }
         let encoding = chooseEncoding(sample, isText)
         writeHeaders(withTransferEncoding(part.headers, encoding))
         let encoded = openEncoder(encoding)
         encoded.write(sample)
-        let rest = Array<Byte>(65536, repeat: 0)
         while (true) {
-            let n = input.read(rest)
+            let n = input.read(buf)
             if (n <= 0) {
                 break
             }
-            encoded.write(rest[0..n])
+            encoded.write(buf[0..n])
         }
         closeEncoder(encoded, encoding)
     }

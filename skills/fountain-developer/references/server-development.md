@@ -193,6 +193,18 @@ public class HelloController {
 - 生命周期：`call` 的返回值与未逃逸对象在调用结束时清理；**逃逸闭包必须 `close()`**（唯一释放路径）；`JitFunction` 不能作 lambda 形参，需要时用宿主闭包包一层。
 - 超出方言子集（或不支持的平台 / 指令）不会有「差不多能用」的实现——按 README §5 退解释器或报错；不要把它当通用脚本引擎。
 
+### 3.13 JSON-RPC 与 MCP（f_jsonrpc / f_mcp）
+
+- JSON-RPC：**一个端点 = 一条 `f_mvc` 路由**（`RequestMeta`），`method` 在请求体内分发；`f_jsonrpc` 只提供消息模型、运行期方法表与错误码，路由 / 鉴权 / 线程池 / 日志 / 异常兜底全部复用 `f_mvc`。流式方法走 SSE（`SseConnection`，事件级 `next(): ?SseEvent`）。
+- MCP：消息层直接复用 `f_jsonrpc`，只实现 MCP 语义（版本与能力、`server/discover`、工具、资源、提示词、订阅、限流与结果处理）。协议版本 `2026-07-28`，**无握手**，逐个请求校验 `_meta`。
+- 注册方式二选一（出处 `f_mcp/README.md`）：
+  - 运行期：`McpRegistry.configure({b => b.serverInfo(...).tool(...).resource(...).prompt(...)})`；
+  - 注解：类上 `@Mcp['kb-server']`（属性 = `serverInfo.name`，不写为 `fountain-mcp`），方法上 `@McpToolMeta` / `@McpResourceMeta` / `@McpPromptMeta`。`@Mcp` 自动补 `@Bean`，模块加载期完成注册并调用 `McpRegistry.build()`（只应在启动阶段调用）。
+- 入参与返回值按 `f_data` 规则转换；`@DataAssist` 类可用 `McpTool.of<T>('name')` 直接生成 schema。`@McpToolMeta` 的 `perCallerRpm` / `perToolRpm` / `maxConcurrency` 等映射为 `ToolRateLimit`（`-1` 沿用服务级、`0` 不限、`>0` 限额）。
+- 配置项：`mcp_publicBaseUrl`、`mcp_rateLimit`、`mcp_rateLimitBackend`、`mcp_trustForwardedFor`（默认值与取值见 `f_mcp/README.md`）。
+- A2A：`f_a2a` 在 `f_jsonrpc` 之上实现 Agent-to-Agent 协议（任务模型、状态机、服务端/客户端）；LLM 侧由 `llm_a2aEnabled` 开关装配（默认关）。
+- 示例：`fjsonrpcdemo`（服务端 + 客户端两进程）、`fmcpdemo`（server / client 两个动态模块）。
+
 ## 4. 构建 / 运行 / 测试
 
 ```bash

@@ -101,7 +101,7 @@ fdemo 则统一用 `fountain::` 前缀（模块目录 `user` 里是 `fountain::u
 - 版本依赖要求**中心仓已发布该版本**：目标版本未发布（或只发布了部分模块）时 `cjpm update`/`fboot build` 会失败——
   改用 path 依赖指向本地 fountain 源码（`"fountain::f_xxx" = {path = "<fountain>/f_xxx"}`），
   或重装一个已发布版本的 fboot（workspace 依赖版本会随之变化）。发布状态以中心仓查询与 `.modules` 为准。
-- `.modules` 的 `[detention]` 段（当前为 `f_llm`、`fleet`）不发布中心仓，不能用版本依赖；需要时用 path/git 依赖并与用户确认。
+- `.modules` 的 `[detention]` 段（当前为 `fleet`）不发布中心仓，不能用版本依赖；需要时用 path/git 依赖并与用户确认。
 - 依赖变更后用 `fboot build`（或 `cjpm update`）验证解析；`fboot cleanUpdate` 可清掉旧缓存重来。
 
 ## 4. fdemo 参考结构（应用范式的完整样本）

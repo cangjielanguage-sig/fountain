@@ -68,6 +68,8 @@ public func crc32(data: String): UInt32
 public func crc32<T>(s: T): UInt16 where T <: ToString 
 ```
 
+**硬件加速（Linux x86_64 / aarch64）**：`Crc32.crc32c` 在 x86_64 用 SSE4.2 `crc32`、在 aarch64 用 `crc32c*`；`Crc32.isoHdlc` / `jamcrc` 在 x86_64 用 PCLMULQDQ 折叠、在 aarch64 用 `crc32*`。首次使用时生成机器码（`mmap` RW → `mprotect` RX，`CFunc` 调用），结果与纯软件逐位一致。CPU 不支持、`mprotect` 被策略拦截或设置 `F_UTIL_CRC_HW=0` 时自动回退纯软件；其它 OS/架构始终纯软件。**无第三方运行时依赖、无 C 垫片**（生成器只依赖 libc 的 `mmap/mprotect` 与 aarch64 的 `getauxval`）。
+
 ## crc64
 ```cj
 
@@ -82,6 +84,12 @@ public func crc64(data: String): UInt64
 @Frozen
 public func crc64<T>(s: T): UInt16 where T <: ToString 
 ```
+
+**硬件加速（Linux x86_64 / aarch64）**：`Crc64` 的 6 个内置变体（`ecma182` / `we` / `xz` / `iso` / `redis` / `jones`）在数据量 ≥ 256 字节时自动走生成式折叠核（x86_64 用 `PCLMULQDQ`、aarch64 用 `PMULL`），结果与纯软件逐位一致；顶层 `crc64()` 指向的 `redis` 同样受益。表路径本身已升级为 64 位 slicing-by-8 与 16 位 slicing-by-2（`UInt16` 表项）。`F_UTIL_CRC_HW=off`（或 `0`）强制回退、`on`（或 `1`）强制尝试、不设或 `auto` 自动判定；其它 OS/架构始终纯软件。无 C 垫片、无第三方运行时依赖。
+
+**实测（aarch64，`cjpm test` 默认构建，1 MiB）**：CRC-64/XZ 表路径 98 MB/s、硬件路径 7450 MB/s；4 KiB 单次 777 ns；CRC-16/MODBUS 表路径 52 MB/s。
+
+**实测（x86_64，WSL Ubuntu 24.04，`-O2`，1 MiB）**：CRC-64/XZ 硬件路径 11.7 GB/s、4 KiB 单次 475 ns；六个变体 11.1~12.6 GB/s、4 KiB 429~483 ns。
 
 ## wyhash
 
@@ -720,3 +728,6 @@ abstract sealed class DiffieHellmanKeyExchanger {
 - `Crc64`：`all`（let）、`checkValue`（let）、`func compute(data: Array<Byte>): UInt64`、`ecma182`（let）、`func initRegister(): UInt64`、`iso`（let）、`jones`（let）、`redis`（let）、`func update(crc: UInt64, data: Array<Byte>): UInt64`、`we`（let）、`xz`（let）
 - `IsUUID`：`prop description: String`、`func validate(value: ?String): Bool`
 - `PathPattern`：`dataByPrefix`（func）、`func extractDataParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: DataParsable<T>`、`func extractParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: Parsable<T>`、`func extractTimeVariableInPath(path: String, name: String, format: String): Option<DateTime>`、`func extractVariablesInPath(path: String): Map<String, String>`、`matches`（func）、`func matchesPrefix(path: String): Bool`
+- 模块级：`Fnv`（class）、`Fnv32`（class）、`Fnv64`（class）、`Fnv128`（class）、`Fnv256`（class）、`Fnv1024`（class）、`FnvHasher`（class）、`FnvVariant`（enum）、`FnvWidth`（enum）
+- `FnvHasher`：`reset`（func）
+- `FnvWidth`：`prop bits`、`prop words`

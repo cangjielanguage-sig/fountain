@@ -1136,14 +1136,21 @@ public class McpServer {
     /**
      * 按 UTF-8 rune 边界截断：结果长度不超过 `limit` 字节，且一定是合法字符串。
      * （按字节切片会把中文 / emoji 切成半个码点，序列化时直接抛异常。）
+     *
+     * 惰性单遍扫描：`runes()` 不物化 `Array<Rune>`，缓冲按输出上界 `limit` 一次预留，
+     * 扫到第一个放不下的 rune 立即停止。输出与旧的全量 rune 数组实现逐字节一致。
      */
     static func truncateUtf8(text: String, limit: Int64): String {
         if (limit <= 0) {
             return ''
         }
-        let builder = StringBuilder()
+        // text.size 是 UTF-8 字节数：放得下就原样返回，零复制。
+        if (limit >= text.size) {
+            return text
+        }
+        let builder = StringBuilder(limit)
         var used: Int64 = 0
-        for (r in text.toRuneArray()) {
+        for (r in text.runes()) {
             let code = UInt32(r)
             let size: Int64 = if (code < 0x80) {
                 1

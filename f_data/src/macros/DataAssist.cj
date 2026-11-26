@@ -36,6 +36,8 @@ import fountain::f_macros.*
  * 如果@DataAssist[fields]修饰的是泛型类，而泛型形参是实例成员变量的类型，则会编译错误。
  * 因为实例成员变量的类型会作为fountain.data.{ReadonlyField, MutableField}类型的泛型实参，而@DataAssist[fields]展开用它们的实例数组声明了静态成员变量。
  * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
+ * 展开末尾会归一化被修饰类的父接口列表（重复项去重、`Comparable<T>` 存在时删掉冗余的 `Equatable<T>`），
+ * 所以类可以同时显式实现 `Comparable<T>` 和 `Equatable<T>`；详见 `normalizeSuperTypes`。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     let (decl, index) = parseDeclFragment(input)
@@ -133,6 +135,7 @@ private func assist(attr: Tokens, input: Decl): Tokens {
             generate('compare', d, excludeCompare, generateCompare)
             generate('tostring', d, excludeToString, generateToString)
             generate('fields', d, excludeFields, generateToFields)
+            normalizeSuperTypes(d)
             d.toTokens()
         case d: MacroExpandDecl => 
             var ind = d
@@ -146,6 +149,68 @@ private func assist(attr: Tokens, input: Decl): Tokens {
             diagReport(ERROR, input.toTokens(), 'input must be class decl', '')
             throw IllegalArgumentException("input must be a class decl")
     }
+}
+
+/**
+ * 归一化被修饰类的父接口列表，消除重复路径。
+ *
+ * 必要性（SDK 1.3.0-alpha，nightly 20261110 起 std 合入 local mode）：std 里 `Comparable<T> <: Equatable<T>`。
+ * 一个类同时列出 `Comparable<X>` 与 `Equatable<X>` 时，`Equatable<X>` 有两条继承路径，编译器会要求实现
+ * 带 `@local!` 模态的 `!=`（普通模式写不出来，补 `@local!` 又报 `is not a subtype of`）；同一父接口列两遍
+ * 则直接报 `duplicate interface`。宏无条件追加父接口，所以这两种形态都必须在这里归一化掉。
+ *
+ * 只删冗余声明，不改变类最终实现的接口集合：`Comparable<X>` 存在时删掉 `Equatable<X>`，类仍是二者的实例。
+ * 因此用户显式写 `<: Comparable<X> & Equatable<X>` 配 `@DataAssist` 合法。
+ */
+private func normalizeSuperTypes(decl: ClassDecl): Unit {
+    let superTypes = decl.superTypes
+    if (superTypes.size < 2) {
+        return
+    }
+    // 子接口/父接口隐含的冗余声明：删掉会被多条路径继承的项。
+    // - `Comparable<X>` 隐含 `Equatable<X>`；
+    // - `LocalEquatable<X>` 隐含 `Equatable<X>`；
+    // - `LocalComparable<X>` 隐含 `Comparable<X>` / `Equatable<X>` / `LocalEquatable<X>`。
+    let implied = HashSet<String>()
+    func implyDerived(text: String, prefix: String, targets: Array<String>): Unit {
+        if (text.startsWith(prefix)) {
+            let rest = text[prefix.size .. text.size]
+            for (target in targets) {
+                implied.add(target + rest)
+            }
+        }
+    }
+    for (t in superTypes) {
+        let text = superTypeText(t)
+        implyDerived(text, 'Comparable<', ['Equatable<'])
+        implyDerived(text, 'LocalEquatable<', ['Equatable<'])
+        implyDerived(text, 'LocalComparable<', ['Comparable<', 'Equatable<', 'LocalEquatable<'])
+    }
+    let kept = ArrayList<TypeNode>()
+    let seen = HashSet<String>()
+    for (t in superTypes) {
+        let text = superTypeText(t)
+        if (seen.contains(text) || implied.contains(text)) {
+            continue
+        }
+        seen.add(text)
+        kept.add(t)
+    }
+    if (kept.size < superTypes.size) {
+        decl.superTypes = kept
+    }
+}
+
+/** 父接口的规范化文本：拼上词法单元的值并跳过换行 / 注释，使 `Comparable<X>` 与 `Comparable< X >` 视为同一项。 */
+private func superTypeText(t: TypeNode): String {
+    var text = ''
+    for (token in t.toTokens()) {
+        if (token.kind == NL || token.kind == COMMENT) {
+            continue
+        }
+        text += token.value
+    }
+    text
 }
 
 func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
@@ -291,17 +356,77 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     ))])
 }
 
+/** 字段声明类型是否为已知的 Copyable 类型；用于选择 demode 版 helper。 */
+private func isCopyableFieldType(d: Decl): Bool {
+    match (d) {
+        case x: VarDecl =>
+            let text = x.declType.toTokens().toString().trimAscii()
+            text == 'Int8' || text == 'Int16' || text == 'Int32' || text == 'Int64' || text == 'IntNative' ||
+                text == 'UInt8' || text == 'UInt16' || text == 'UInt32' || text == 'UInt64' || text == 'UIntNative' ||
+                text == 'Float16' || text == 'Float32' || text == 'Float64' || text == 'Bool' || text == 'Rune'
+        case _ => false
+    }
+}
+
+/** 字段声明类型的 Tokens；用于生成具体的 `Equatable<FieldType>` / `Comparable<FieldType>` 匹配。 */
+private func fieldTypeTokens(d: Decl): Tokens {
+    match (d) {
+        case x: VarDecl => x.declType.toTokens()
+        case _ => quote()
+    }
+}
+
+/**
+ * 生成 `localEq(this @ local?, other: T @ local?)`。
+ *
+ * 非 Copyable 字段不用泛型 helper，而是按字段的具体类型生成 `match`，只走接口的
+ * `@ local?` 成员；不可比时退回 refEq，与非模态 `f_data_eq` 的兜底语义一致。
+ */
 func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
-    d.superTypes.add(RefType(quote(Equatable<$typeName>)))
+    d.superTypes.add(RefType(quote(LocalEquatable<$typeName>)))
+    // 普通路径：保持原实现，不经过 local 视图（普通实例没有 local region）
     var eq = quote(f_data_hash_eq(this, other)$(`nl`))
-    for (d in d.body.decls where d is VarDecl &&
-        !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        eq += `and` + quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
+    for (field in d.body.decls where field is VarDecl &&
+        !(isStatic(field) || exclusion.contains(field.identifier.value) || exclusion.contains('${field.identifier.value}_'))) {
+        eq += `and` + quote(f_data_eq(this.$(field.identifier), other.$(field.identifier))) + `nl`
     }
+    var body = quote(
+        if (refEq(this, other)) {
+            return true
+        }
+    ) + `nl`
+    var idx = 0
+    for (field in d.body.decls where field is VarDecl &&
+        !(isStatic(field) || exclusion.contains(field.identifier.value) || exclusion.contains('${field.identifier.value}_'))) {
+        if (isCopyableFieldType(field)) {
+            body += quote(
+                if (!f_data_eq_copy(this.$(field.identifier), other.$(field.identifier))) {
+                    return false
+                }
+            ) + `nl`
+        } else {
+            let fieldType = fieldTypeTokens(field)
+            let okName = Token(IDENTIFIER, '__eq_ok_${idx}')
+            body += quote(
+                let $(okName) = match (this.$(field.identifier)) {
+                    case __x: Equatable<$fieldType> => __x == other.$(field.identifier)
+                    case _ => match ((this.$(field.identifier), other.$(field.identifier))) {
+                        case (__x: Object, __y: Object) => refEq(__x, __y)
+                        case _ => false
+                    }
+                }
+                if (!$(okName)) {
+                    return false
+                }
+            ) + `nl`
+            idx++
+        }
+    }
+    body += quote(true)
     d.body.decls.add(
             all: [FuncDecl(
                 quote(
@@ -314,34 +439,76 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         public $(openTokens(d)) operator func !=(other: $typeName): Bool {
             !(this == other)
         }
+    )),
+                FuncDecl(
+                quote(
+        public $(openTokens(d)) func localEq(this @ local?, other: $typeName @ local?): Bool {
+            $body
+        }
     ))])
 }
 
+/** 生成 `localCompare`；比较逻辑与 `generateEqual` 同构，不可比字段返回 EQ。 */
 func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
-    d.superTypes.add(RefType(quote(Comparable<$typeName>)))
+    d.superTypes.add(RefType(quote(LocalComparable<$typeName>)))
+    // 普通路径：保持原实现，不经过 local 视图（普通实例没有 local region）
     var cmp = `nl`
-    for (d in d.body.decls where d is VarDecl &&
-        !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        cmp += quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
+    for (field in d.body.decls where field is VarDecl &&
+        !(isStatic(field) || exclusion.contains(field.identifier.value) || exclusion.contains('${field.identifier.value}_'))) {
+        cmp += quote(result = f_data_cmp(this.$(field.identifier), other.$(field.identifier))) + `nl` + quote(
             if(result != EQ){
                 return result
             }
             $(`nl`)
         )
     }
+    var body = quote(var result = Ordering.EQ) + `nl`
+    var idx = 0
+    for (field in d.body.decls where field is VarDecl &&
+        !(isStatic(field) || exclusion.contains(field.identifier.value) || exclusion.contains('${field.identifier.value}_'))) {
+        if (isCopyableFieldType(field)) {
+            // 必须把比较结果写回 `result`：此前只求值不赋值，`compare` 对任何输入都返回 EQ（`@DataAssist[compare]` 实际失效）
+            body += quote(
+                result = f_data_cmp_copy(this.$(field.identifier), other.$(field.identifier))
+                if (result != EQ) {
+                    return result
+                }
+            ) + `nl`
+        } else {
+            let fieldType = fieldTypeTokens(field)
+            let cmpName = Token(IDENTIFIER, '__cmp_ok_${idx}')
+            body += quote(
+                let $(cmpName) = match (this.$(field.identifier)) {
+                    case __x: Comparable<$fieldType> => __x.compare(other.$(field.identifier))
+                    case _ => EQ
+                }
+                if ($(cmpName) != EQ) {
+                    return $(cmpName)
+                }
+            ) + `nl`
+            idx++
+        }
+    }
+    body += quote(result)
     d.body.decls.add(
-            FuncDecl(
+            all: [FuncDecl(
                 quote(
         public $(openTokens(d)) func compare(other: $typeName): Ordering {
             var result = Ordering.EQ
             $cmp
             result
         }
-    )))
+    )),
+                FuncDecl(
+                quote(
+        public $(openTokens(d)) func localCompare(this @ local?, other: $typeName @ local?): Ordering {
+            $body
+        }
+    ))])
 }
 
 func generateToString(d: ClassDecl, exclusion: HashSet<String>) {

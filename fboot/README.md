@@ -1,6 +1,6 @@
 ## 安装
 ```bash
-cjpm install "fountain::fboot"="a.b.c" --root /path/to/install # 把a.b.c换成具体的版本号
+cjpm install "fountain::fboot-a.b.c" --root /path/to/install # 把a.b.c换成具体的版本号，版本号用短横线接在名字后面
 export PATH=$PATH:/path/to/install/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
 ```
@@ -30,10 +30,11 @@ workspace下的每个模块的编译目标务必是**动态链接库**。
 6.  fboot module 将当前目录初始化为仓颉dynamic项目
 7.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
 8.  fboot build 编译使用fountain开发的应用项目
-9.  fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
-10. fboot pub <version> 发布当前路径下的仓颉模块
-11. fboot <subcmd> --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME> 运行实现了`fountain::f_app.SubCommand`的子命令
+9.  fboot cleanUpdate 清掉构建产物、删掉cjpm.lock、重新解析依赖，等价于 cjpm clean && rm cjpm.lock && cjpm update
+10. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+11. fboot pub <version> 发布当前路径下的仓颉模块
+12. fboot <subcmd> --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME> 运行实现了`fountain::f_app.SubCommand`的子命令
 ==============下面的命令用来管理fountain本身===================
-12. fboot version 显示当前fountain版本号
-13. fboot help 显示命令列表
+13. fboot version 显示当前fountain版本号
+14. fboot help 显示命令列表
 ```

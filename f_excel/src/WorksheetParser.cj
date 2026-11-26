@@ -499,6 +499,7 @@ internal class SheetRowHandler {
             case Some("str") => CellValue.Text(text)
             case Some("b") => CellValue.Boolean(text == "1" || text.toAsciiLower() == "true")
             case Some("e") => CellValue.Error(text)
+            case Some("n") => numericValue(text)
             case Some("d") => match (parseDateOrNone(text)) {
                 case Some(v) => CellValue.Date(v)
                 case None =>
@@ -520,22 +521,26 @@ internal class SheetRowHandler {
                     )
                 )
                 CellValue.Text(text)
-            case None => if (text.isEmpty()) {
-                CellValue.Empty
-            } else {
-                match (parseFloatOrNone(text)) {
-                    case Some(v) => numberValue(v)
-                    case None =>
-                        parsed.warnings.add(
-                            ExcelWarning(
-                                ExcelWarningKind.NumberParseFailed,
-                                "数字解析失败：${text}",
-                                sheet: Some(sheetName)
-                            )
-                        )
-                        CellValue.Text(text)
-                }
-            }
+            case None => numericValue(text)
+        }
+    }
+
+    /** 数值单元格：省略 `t` 与显式 `t="n"` 同义（OOXML §18.18.11）。 */
+    private func numericValue(text: String): CellValue {
+        if (text.isEmpty()) {
+            return CellValue.Empty
+        }
+        match (parseFloatOrNone(text)) {
+            case Some(v) => numberValue(v)
+            case None =>
+                parsed.warnings.add(
+                    ExcelWarning(
+                        ExcelWarningKind.NumberParseFailed,
+                        "数字解析失败：${text}",
+                        sheet: Some(sheetName)
+                    )
+                )
+                CellValue.Text(text)
         }
     }
 

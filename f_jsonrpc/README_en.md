@@ -534,3 +534,17 @@ Unit tests are split by package: `client` covers request construction, while `se
 ## License
 
 Apache-2.0
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `JsonRpcSseClient` (class), `SocketSseConnection` (class), `SseConnection` (interface), `public class SseController`, `SseHub` (class), `public class SseMapping <: RequestMapping`, `SseStream` (class), `SseSubscription` (class)
+- `JsonRpcSseClient`: `next` (func)
+- `SocketSseConnection`: `next` (func)
+- `SseController`: `func stream(): InputStream`
+- `SseHub`: `publish` (func), `reset` (func), `subscribe` (func), `subscriberCount` (func)
+- `SseStream`: `dropped` (prop), `isClosed` (prop), `push` (func), `read` (func)
+- `SseSubscription`: `let stream: SseStream`, `let taskId: String`

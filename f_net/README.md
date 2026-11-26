@@ -169,3 +169,7 @@ public class Server<T> where T <: DataFields<T> {
 
 - `MultiClient`：`func iterator(): Iterator<Client<T>>`
 - `ServerBuilder`：`func setSocketOptionBool(level: Int32, option: Int32, value: Bool): This`、`func setSocketOptionIntNative(level: Int32, option: Int32, value: IntNative): This`、`socketBindToDevice`（func）、`func socketQuickAcknowledge(quickAcknowledge: Bool): This`、`func socketReadTimeout(readTimeout: ?Duration): This`、`func socketReceiveBufferSize(receiveBufferSize: Int64): This`、`func socketSendBufferSize(sendBufferSize: Int64): This`、`func socketWriteTimeout(writeTimeout: ?Duration): This`
+
+## 在途请求与断连
+
+每个连接独立管理已发出、尚未收到响应的请求。当连接读取失败、被替换或关闭，对应的 MessageFuture 会唤醒等待者并抛出连接异常。已经完成的响应和其他连接的请求继续有效。带时限的等待在等待预算耗尽时返回 None；连接失败可以更早抛出异常。调用方不能由此判断对端操作是否已执行。

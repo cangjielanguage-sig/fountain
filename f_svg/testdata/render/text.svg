@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <text x="4" y="20" font-family="Hershey" font-size="14" fill="#000000">Hey</text>
+  <text x="32" y="40" font-family="Hershey" font-size="12" text-anchor="middle" fill="#cc0000">SVG</text>
+  <text x="4" y="56" font-family="Hershey" font-size="10" fill="#006600">A<tspan font-size="16">B</tspan>C</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <rect width="64" height="64" fill="#ffffff"/>
+  <rect x="4" y="4" width="20" height="20" fill="#cc3300">
+    <animate attributeName="x" from="4" to="40" dur="4s" fill="freeze"/>
+  </rect>
+</svg>

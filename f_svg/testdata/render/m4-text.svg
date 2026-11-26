@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="64">
+  <rect width="100" height="64" fill="#ffffff"/>
+  <path id="p" d="M 5 40 Q 50 5 95 40"/>
+  <text x="8" y="14" font-family="Hershey" font-size="10" fill="#222222"
+        dominant-baseline="middle" text-decoration="underline">Aa</text>
+  <text x="8" y="34" font-family="Hershey" font-size="10" fill="#222222"
+        text-decoration="line-through overline">Bb</text>
+  <text x="80" y="34" font-family="Hershey" font-size="10" fill="#aa2222"
+        writing-mode="tb-rl">CD</text>
+  <text font-family="Hershey" font-size="9" fill="#006600">
+    <textPath href="#p" side="left" method="stretch" spacing="auto">path</textPath>
+  </text>
+</svg>

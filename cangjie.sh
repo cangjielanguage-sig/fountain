@@ -61,6 +61,7 @@ cangjie_env(){
   export CANGJIE_STDX_PATH=$CANGJIE_ROOT/cangjie-linux-bin/stdx/$2/linux_aarch64_cjnative
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
+  export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
   export CANGJIE_HOME=$CANGJIE_ROOT/cangjie-linux-bin/sdk/$1/cangjie
   export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH

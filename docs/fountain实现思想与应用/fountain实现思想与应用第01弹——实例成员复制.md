@@ -10,20 +10,21 @@
 
 这个功能的核心是两个接口——`Data`和`DataFields<T>` ，所有类型都有一个对应的包装类型，这些包装类型都实现了`Data`，包括集合类型和自定义的类也都有相应的包装类型，这些包装类型仅仅对原类型包装了一层没有任何功能；而所有类型都扩展了`DataFields<T>`，这些扩展实现了原生类型跟Data之间的互相转换。如果待转换的Data与要转换的目标类型不符，转换逻辑可以按照参数决定是立即抛出异常还是尽量完成转换。
 
-另外为类的实例成员声明了`ReadableField`类型，每一个公共实例成员的访问都包装在它和它的子类型`MutableField`实例当中，宏展开的代码会把取值和赋值的代码包装成闭包作为它们的构造函数参数，每一个类的所有公共实例成员的包装类型又都是`ObjectFields`类的成员。类的包装类型`DataObject<T>`除了是类实例的包装类型，它还声明了获取`ObjectFields`的函数。
+另外为类的实例成员声明了`ReadableField`类型，每一个公共实例成员的访问都包装在它和它的子类型`MutableField`实例当中，宏展开的代码会把取值和赋值的代码包装成闭包作为它们的构造函数参数，每一个类的所有公共实例成员的包装类型又都是`ObjectFields`类型的成员。`ObjectFields`由被`@DataAssist[fields]`修饰的类提供：它实现了`ToDataFields`接口的`getDataFields()`，宏还会为它生成静态函数`dataFields()`；而类的包装类型`DataObject<T>`提供的是遍历字段的`fields()`、`mutableFields()`和`size`。
 
 ![DataAssist](.assets/fountain%E5%AE%9E%E7%8E%B0%E6%80%9D%E6%83%B3%E4%B8%8E%E5%BA%94%E7%94%A8%E7%AC%AC%E4%B8%80%E5%BC%B9%E2%80%94%E2%80%94%E5%AE%9E%E4%BE%8B%E6%88%90%E5%91%98%E5%A4%8D%E5%88%B6/DataAssist.jpg)
 
 这是实例成员复制的类图，左边Data开头的几个类是几个包装类。另外也为JSON类型声明了包装类以及扩展接口，可以实现类的实例之间、类实例与字符串做KEY的Map实例之间、类实例与JSON之间的互相转换。下面是一个简单例子：
 
 ```cj
-import fountain.data.*
-import fountain.data.macros.*
+import fountain::f_data.*
+import fountain::f_data.macros.*
 
 //@DataAssist的fields宏会把公共实例成员包装成ReadableField，
-//equal hash tostring compare 分别为被它修饰的类实例Equtable Hashable ToString Comparable
+//equal hash tostring compare 分别为被它修饰的类实例实现Equatable Hashable ToString Comparable
 //props 会将被它修饰的类非公共的实例成员变量包装为公共实例成员属性
-@DataAssist[equal hash tostring props fields]
+//属性名不分大小写，除下面用到的之外还支持compare
+@DataAssist[equal hash tostring compare props fields]
 public open class TestData1 {
     private var a: Int64 = 1
     private var b: String = 'asfd'
@@ -59,7 +60,7 @@ private let _ = {=>
     let json = JsonValue.tryFromData(dobj)
     println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${json}')
     let data = json.toData()//JsonValue也可以转成Data类型
-    data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+    data3 = DataObject<TestData3>.populate(data).getOrThrow()
     println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
 }()
 ```

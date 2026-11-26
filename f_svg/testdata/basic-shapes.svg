@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">
+  <g transform="translate(10,20) scale(1.5)">
+    <rect x="0" y="0" width="20" height="10" fill="#f00" stroke="#000" stroke-width="1"/>
+    <circle cx="30" cy="5" r="4" fill="rgb(0,128,255)"/>
+    <ellipse cx="40" cy="5" rx="6" ry="3" fill="none" stroke="green"/>
+    <line x1="0" y1="20" x2="20" y2="20" stroke="blue" stroke-linecap="round"/>
+    <polyline points="0,30 10,25 20,30" fill="none" stroke="green" stroke-dasharray="2,1"/>
+    <polygon points="30,30 40,25 50,30" fill="yellow" fill-rule="evenodd"/>
+    <path d="M60 30 L70 25 L80 30 Z" fill="purple" opacity="0.75"/>
+  </g>
+</svg>

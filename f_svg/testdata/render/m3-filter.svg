@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="60">
+  <defs>
+    <filter id="blurShift" x="0" y="0" width="80" height="60" filterUnits="userSpaceOnUse">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feOffset in="blur" dx="4" dy="4" result="shifted"/>
+      <feMerge>
+        <feMergeNode in="shifted"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="80" height="60" fill="#f4f4f4"/>
+  <rect x="12" y="10" width="24" height="18" fill="#cc2222" filter="url(#blurShift)"/>
+  <circle cx="56" cy="36" r="12" fill="#2255cc" filter="url(#blurShift)"/>
+</svg>

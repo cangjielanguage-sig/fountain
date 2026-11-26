@@ -18,7 +18,9 @@ package fountain::f_ticktock
 import std.collection.ArrayList
 import fountain::f_time.ExtendDateTime
 
-abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatable<TicktockUnit> {
+// 注：`Currently` 已 `<: ToString`，再显式列 `ToString` 会重复实例化该接口（local mode 报
+// `toString(this @local?)` must be implemented）⇒ 不再列出。
+abstract sealed class TicktockUnit <: Currently & Hashable & Equatable<TicktockUnit> {
     public static let SECONDLY = SecondlyTicktockUnit(0, false, 0..=59, 59..=59)
     public static let MINUTELY = MinutelyTicktockUnit(1, false, 0..=59, 59..=59)
     public static let HOURLY = HourlyTicktockUnit(2, false, 0..=23, 23..=23)

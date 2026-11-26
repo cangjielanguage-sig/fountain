@@ -6,7 +6,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.3.17"
+  version = "1.3.2021"
   package-configuration = {}
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
@@ -20,6 +20,7 @@
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_io" = {path = "../f_io"}
 
 [profile.build]
   incremental = true

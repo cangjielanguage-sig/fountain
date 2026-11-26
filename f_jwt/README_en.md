@@ -101,12 +101,11 @@ public class HMACDigest <: Digest {
      */
     public HMACDigest(private let hmac: HMAC) {}
     /**
-     * @param key Signing key
+     * @param key Signing key, must not be empty
      * @param algorithm HMAC algorithm type stdx.crypto.digest.HashType
+     * @throws JWTException "HMAC key must not be empty" when the key is empty
      */
-    public init(key: Array<Byte>, algorithm: HashType) {
-        this(HMAC(key, algorithm))
-    }
+    public init(key: Array<Byte>, algorithm: HashType)
     public prop size: Int64 {
         get() {
             hmac.size
@@ -542,6 +541,47 @@ public interface JwtIdCache<T> where T <: Equatable<T> {
 - `HeapJwtIdCache<T>`
     - `public class HeapJwtIdCache<T> <: JwtIdCache<T> where T <: ToString & Equatable<T>`
     - Based on `fountain::f_cache.HeapCache`
+
+## Signing and verification contract
+
+### Algorithm entry points and the `alg` header
+
+All 13 algorithm entry points on `JWT` write their algorithm name into the signed token header; the encoder always uses the
+configured algorithm, so a manually set `alg` is overwritten:
+
+| Entry | `alg` | Entry | `alg` |
+|---|---|---|---|
+| `hmacMD5` | `HM5` | `ecdsa224` | `ES224` |
+| `hmacSHA1` | `HS1` | `ecdsa256` | `ES256` |
+| `hmacSHA224` | `HS224` | `ecdsa384` | `ES384` |
+| `hmacSHA256` | `HS256` | `ecdsa512` | `ES512` |
+| `hmacSHA384` | `HS384` | `rsa256` | `RS256` |
+| `hmacSHA512` | `HS512` | `rsa384` | `RS384` |
+| | | `rsa512` | `RS512` |
+
+- HS256 / HS384 / HS512 use SHA256 / SHA384 / SHA512 digests. **Versions up to 1.3.1019 used SHA1 by mistake**;
+  tokens issued by those versions must be re-signed, no backward compatibility is provided.
+- `SM2SignAlgo` exists only as a signature wrapper; `JWT` has no `sm2()` entry point.
+
+### Verification requires an algorithm and a key
+
+`JWTVerifier` extends `JWT`, so the algorithm and key must be configured on the same verifier before verifying:
+
+```cj
+let verifier = JWT.verifier(token).hmacSHA256(key)   // HMAC: shared secret
+verifier.verifySign()
+
+JWT.verifier(token).rsa256(publicKeyPem: pub).verifySign()   // RSA/ECDSA: public key
+```
+
+- No algorithm configured: `verifySign()` throws `JWTException("sign algo was not be specified")`.
+- The token's `alg` header differs from the configured algorithm: `verifySign()` throws
+  `JWTException("sign algo mismatch: token alg is '…', configured algo is '…'")`. This check runs before the real
+  verification, so it never degrades into `false` just because the key differs.
+- Configuring an algorithm on a verifier never overwrites the headers parsed from the token; `getHeader("alg")` always
+  returns the token's own algorithm name.
+- Same algorithm but a different key (public key): returns `false` instead of throwing.
+- An HMAC key must not be empty; an empty key throws `JWTException("HMAC key must not be empty")`.
 
 ## Exceptions
 

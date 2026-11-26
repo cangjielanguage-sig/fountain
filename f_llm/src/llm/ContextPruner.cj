@@ -17,6 +17,8 @@ package fountain::f_llm.llm
 
 import fountain::f_bean.macros.*
 
+import fountain::f_llm.config.*
+
 public interface ContextPruner {
     prop name: String
     func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
@@ -57,32 +59,45 @@ public abstract class ContextLLMPruner <: ContextPruner {
     public ContextLLMPruner(
         protected let llmType!: LLMType,
         protected let model!: ModelName,
-        private let promptsGenerator!: (ArrayList<ChatMessage>) -> String
+        private let promptsGenerator!: (ArrayList<ChatMessage>) -> String,
+        private let llmName!: String = LLMConfig.getPrunerLlmName()
     ){}
     public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
         let params = LLMParams(
             model: model,
             messages: ArrayList<ChatMessage>([UserMessage(promptsGenerator(messages))])
         )
-        let resp = LLMContextMediator.instance.access(agentId, session, llmType, params)
+        let resp = respond(agentId, session, params)
         lookupOption<TokenUsageSaver>()?.saveTokenUsage(resp.usage)
         let msgs = resp.messages
         let msg = msgs[msgs.size - 1]
         msg.role = ROLE_USER
         return msgs
     }
+
+    /**
+     * 真正发请求的那一步。
+     *
+     * 抽成 open 方法只是为了让语义用例能注入假响应——`Summary` / `Keywords` 的输出形状
+     * （一条 user 消息）与具体走哪家模型无关，不该为了测它去连数据库。
+     */
+    protected open func respond(agentId: Int64, session: String, params: LLMParams): LLMResp {
+        // 新门面：按 llmName 选平台；agentId/session 只在本类内部用于日志与命名，不再参与选号
+        LLM.chatByName(llmName, params)
+    }
 }
-public class ContextSummaryPruner <: ContextLLMPruner {
+public open class ContextSummaryPruner <: ContextLLMPruner {
     public init(
         llmType!: LLMType = LLM_TYPE_TEXT,
-        model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
+        model!: ModelName = MODEL_NAME_DEEPSEEK_FLASH,
+        llmName!: String = LLMConfig.getPrunerLlmName(),
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
 - 总结下面的JSON所描述的内容，从中提取内容**要点**、**关键**内容，并以MARKDOWN格式返回。
 ```json
 ${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
 ```'''}
     ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
+        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator, llmName: llmName)
     }
     public prop name: String{
         get(){
@@ -90,17 +105,18 @@ ${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
         }
     }
 }
-public class ContextKeywordsPruner <: ContextLLMPruner {
+public open class ContextKeywordsPruner <: ContextLLMPruner {
     public init(
         llmType!: LLMType = LLM_TYPE_TEXT,
-        model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
+        model!: ModelName = MODEL_NAME_DEEPSEEK_FLASH,
+        llmName!: String = LLMConfig.getPrunerLlmName(),
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
 - 从下面的JSON所描述的内容中提取**关键词**，关键词之间以逗号分隔。
 ```json
 ${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
 ```'''}
     ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
+        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator, llmName: llmName)
     }
     public prop name: String{
         get(){
@@ -139,23 +155,92 @@ public class DRCContextPruner <: ContextPruner {
         pruned
     }
 }
+/**
+ * 饱和裁剪：只在「这条 conf 的阈值」被触及时才执行内层策略。
+ *
+ * 阈值按 conf 取（评审 B4），不再跨平台取最小值——把 A 平台的保守上限扣到 B 平台头上，
+ * 只会白多裁一次上下文。拿不到 conf 或该平台 `tokenThreshold = 0` 时**不裁**。
+ */
 public class SaturationContextPruner <: ContextPruner {
-    public SaturationContextPruner(
-        private let pruner!: ContextPruner
-    ){}
-    public prop name: String{
-        get(){
+    private let pruner: ContextPruner
+    private let confSelector: () -> ?LLMConf
+
+    public init(
+        pruner!: ContextPruner,
+        confSelector!: () -> ?LLMConf = defaultConfSelector
+    ){
+        this.pruner = pruner
+        this.confSelector = confSelector
+    }
+
+    public prop name: String {
+        get() {
             '${CONTEXT_PRUNER_SATURATION}_${pruner.name}'
         }
     }
-    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
-        let agent = lookup<AgentsFinder>().queryAgent(agentId)
-        let saturated = LLMContextMediator.instance.saturated(agent.llmType, agent.llmName, messages)
-        if(saturated){
-            pruner.prune(agentId, session, messages)
-        }else{
-            messages
+
+    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage> {
+        if(let Some(conf) <- confSelector()){
+            let threshold = conf.tokenThreshold
+            if(threshold > 0){
+                let tokens = HeuristicTokenCounter().count(conf, messages)
+                if(tokens >= threshold){
+                    return pruner.prune(agentId, session, messages)
+                }
+            }
         }
+        messages
+    }
+}
+
+func defaultConfSelector(): ?LLMConf {
+    let list = LLMCandidateProvider.candidates()
+    if(list.isEmpty()){
+        None<LLMConf>
+    }else{
+        Some(list[0])
+    }
+}
+
+/**
+ * 按 token 预算从尾部保留消息（新增算法的示例，用来验证策略可扩展）。
+ *
+ * `budget` 计入消息本身与每条 4 token 的开销；至少保留最后一条。
+ */
+public class TokenBudgetContextPruner <: ContextPruner {
+    private let budget: Int64
+
+    public init(budget!: Int64 = 4000) {
+        this.budget = budget
+    }
+
+    public prop name: String {
+        get() {
+            'TokenBudget_${budget}'
+        }
+    }
+
+    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage> {
+        let kept = ArrayList<ChatMessage>()
+        var used = 0
+        var index = messages.size - 1
+        while(index >= 0){
+            let message = messages[index]
+            let cost = estimateTokens(message.content) + 4
+            if(kept.size > 0 && used + cost > budget){
+                break
+            }
+            used += cost
+            kept.add(message)
+            index--
+        }
+        let ordered = ArrayList<ChatMessage>()
+        var i = kept.size - 1
+        while(i >= 0){
+            ordered.add(kept[i])
+            i--
+        }
+        ordered
     }
 }
 public class RetainLastUserPruner <: ContextPruner {

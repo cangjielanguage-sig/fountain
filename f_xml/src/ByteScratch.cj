@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_xml
 
+import fountain::f_base.UnsafeBytes
+
 /**
  * 只增不减的 UTF-8 字节累积器：`reset()` 只把长度置 0，容量留作下次复用。
  *
@@ -62,10 +64,18 @@ internal class ByteScratch {
             capacity *= 2
         }
         let grown = Array<Byte>(capacity, repeat: 0)
-        for (i in 0..this.len) {
-            grown[i] = this.buf[i]
-        }
+        this.buf.copyTo(grown, 0, 0, this.len)
         this.buf = grown
+    }
+
+    /** 整块追加 UTF-8 字节：bulk copy，避免 `-O0` 下逐字节下标的额外开销。 */
+    func append(text: String): Unit {
+        let src = text.unsafeBytes()
+        this.ensure(src.size)
+        if (src.size > 0) {
+            src.copyTo(this.buf, 0, this.len, src.size)
+            this.len += src.size
+        }
     }
 
     /** ASCII 直接写字节（`码点即字节`）。 */

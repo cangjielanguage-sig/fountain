@@ -20,7 +20,7 @@ package fountain::f_http
  */
 public class MultipartMediaType <: MediaType {
     private static const FORM_DATA = "multipart/form-data"
-    private static const MIXED = "multipart/midxed"
+    private static const MIXED = "multipart/mixed"
     public static let formData = MultipartMediaType(FORM_DATA)
     public static let mixed = MultipartMediaType(MIXED)
     private MultipartMediaType(

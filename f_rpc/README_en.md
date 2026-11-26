@@ -616,3 +616,11 @@ The implementation is in `f_rpc/src/base/ControllerTraceAspect.cj` (the source c
 9. A client may depend on RPC servers of different versions for different businesses, so the `exactlyVersion` and `version` attributes of
    `@RPCStub` need to be defined as configuration items by the client developer.
 10. The client configuration item `rpc_currentSkeleton` is used to prevent the stub of the same module from being registered with the IOC.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `registerRPCType` (func)

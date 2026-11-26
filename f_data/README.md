@@ -26,6 +26,13 @@
   （跨模块解码未登记类型会失败；泛型类不登记）
 - 属性名大小写不敏感、可混写；另有配套注解 `@DataExclude[prop|hash|equal|compare|tostring|field]`
   可把成员排除在对应能力之外
+- 展开末尾会**归一化被修饰类的父接口列表**：完全重复的父接口只留一份；存在 `Comparable<T>` 时删掉冗余的
+  `Equatable<T>`（`Comparable` 已隐含 `Equatable`）。因此 `class A <: Comparable<A> & Equatable<A>` 配
+  `@DataAssist[equal compare]` 合法，类仍然同时实现这两个接口。原因：SDK 1.3.0 起 std 带入 local mode，
+  两条到达 `Equatable<A>` 的路径会让编译器要求实现带 `@local!` 模态的 `!=`（普通模式写不出来），
+  同一父接口列两遍则直接报 `duplicate interface`
+- `compare` 按字段声明顺序逐个比较，第一个不等的字段决定返回的 `Ordering`（2026-11-20 之前的展开漏了给
+  `result` 赋值，`compare` 恒返回 `EQ`）
   ```cj
   //假设存在类
   @DataAssist[props]
@@ -825,3 +832,7 @@ depth=n: match(...match(@.name, 'Alice')..., 'Alice')
 - `ObjectFields`：`func create(): Object`、`static func getObjectFields<T>(metas: () -> (Array<ReadableField>, ()->Object)): ObjectFields`、`func isEmpty()`、`func mutableField(name: String): ?MutableField`、`func mutableFields(): Iterator<MutableField>`、`func readableField(name: String): ?ReadableField`
 - `String`：`static func tryParse(s: String): ?String`
 - `JsonNull`：`static let instance = JsonNull()`（JSON null 的单例，模块级的 `JSON_NULL` 就是它）
+- 模块级：`CompiledSchema`（class）、`JsonSchemaValidator`（class）、`UnknownKeyword`（enum）、`ValidationError`（struct）、`ValidationOptions`（struct）、`ValidationResult`（struct）
+- `CompiledSchema`：`compile`（func）、`prop patternCount`、`prop schema`
+- `ValidationOptions`：`let unknownKeyword`
+- `ValidationResult`：`prop isValid`、`let skipped`

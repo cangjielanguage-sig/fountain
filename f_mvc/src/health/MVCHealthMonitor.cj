@@ -23,7 +23,7 @@ import fountain::f_mvc.macros.*
 public class MVCHealthController {
     public init(){}
 
-    @GetMapping[path:"/health", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
+    @GetMapping[path:"/health", produces:'application/json', consumes:'application/x-www-form-urlencoded']
     public func health(): HealthData {
         HealthData()
     }

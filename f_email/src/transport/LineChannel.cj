@@ -33,6 +33,8 @@ import fountain::f_email.model.{IoStage, LimitKind, MailIoException, MailLimitEx
  * 3. `buffered=false` 时按单字节读，供 STARTTLS 升级前使用，避免把 TLS 握手字节吞进缓冲区。
  */
 public class LineChannel <: InputStream & OutputStream & Resource {
+    /** `readExact` 的读取块大小；一块缓冲跨轮复用。 */
+    private static let READ_CHUNK_BYTES: Int64 = 65536
     private let input: InputStream
     private let output: OutputStream
     private let maxLine: Int64
@@ -209,18 +211,17 @@ public class LineChannel <: InputStream & OutputStream & Resource {
             written = take
             compactIfNeeded()
         }
-        // 2. 直接从底层流读：分块读再拷贝，避免 Array 切片是拷贝带来的额外峰值
-        let chunk = Array<Byte>(65536, repeat: 0)
+        // 2. 直接从底层流读：一块 64 KB 缓冲跨轮复用，避免每轮新建
+        let buf = Array<Byte>(READ_CHUNK_BYTES, repeat: 0)
         while (written < count) {
             applyReadTimeout()
-            let want = if (count - written < chunk.size) {
+            let want = if (count - written < READ_CHUNK_BYTES) {
                 count - written
             } else {
-                chunk.size
+                READ_CHUNK_BYTES
             }
-            let tmp = Array<Byte>(want, repeat: 0)
             let n = try {
-                input.read(tmp)
+                input.read(buf[0..want])
             } catch (e: SocketTimeoutException) {
                 throw timeoutException()
             } catch (e: Exception) {
@@ -229,9 +230,7 @@ public class LineChannel <: InputStream & OutputStream & Resource {
             if (n <= 0) {
                 throw ioFailure(IoStage.Read, Exception("literal 读取中断：期望 ${count}，实际 ${written}"))
             }
-            for (i in 0..n) {
-                result[written + i] = tmp[i]
-            }
+            buf[0..n].copyTo(result, 0, written, n)
             written += n
             traceBytes(r'S', n)
         }

@@ -37,6 +37,7 @@
 [dependencies]
   "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_httpclient" = {path = "../f_httpclient"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_mvc" = {path = "../f_mvc"}
@@ -522,3 +523,17 @@ cjpm test
 ## 许可
 
 Apache-2.0
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`JsonRpcSseClient`（class）、`SocketSseConnection`（class）、`SseConnection`（interface）、`public class SseController`、`SseHub`（class）、`public class SseMapping <: RequestMapping`、`SseStream`（class）、`SseSubscription`（class）
+- `JsonRpcSseClient`：`next`（func）
+- `SocketSseConnection`：`next`（func）
+- `SseController`：`func stream(): InputStream`
+- `SseHub`：`publish`（func）、`reset`（func）、`subscribe`（func）、`subscriberCount`（func）
+- `SseStream`：`dropped`（prop）、`isClosed`（prop）、`push`（func）、`read`（func）
+- `SseSubscription`：`let stream: SseStream`、`let taskId: String`

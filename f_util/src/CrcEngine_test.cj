@@ -170,7 +170,7 @@ public class CrcEngine_test {
      * 的表口径与反射 32 位不同，误用切片会整体漂移。
      */
     @TestCase
-    public func slicingOnlyAppliesToReflected32Bit(): Unit {
+    public func otherWidthsAndNonReflectedMatchReference(): Unit {
         let lengths = [0, 1, 3, 4, 5, 4095, 4096, 8193]
         let data = pseudoBytes(8193)
         for (len in lengths) {
@@ -203,6 +203,413 @@ public class CrcEngine_test {
         match (env.getVariable("F_UTIL_PERF")) {
             case Some(v) => v == "1"
             case None => false
+        }
+    }
+
+    /** 24 个 CRC-16 变体的参数表：只给测试参考实现用。 */
+    private func crc16Rows(): Array<(String, Crc16, UInt64, Bool)> {
+        [
+            ('CRC-16/XMODEM', Crc16.xmodem, 0x1021, false),
+            ('CRC-16/CCITT-FALSE', Crc16.ccittFalse, 0x1021, false),
+            ('CRC-16/GENIBUS', Crc16.genibus, 0x1021, false),
+            ('CRC-16/GSM', Crc16.gsm, 0x1021, false),
+            ('CRC-16/PROFIBUS', Crc16.profibus, 0x1DCF, false),
+            ('CRC-16/EN-13757', Crc16.en13757, 0x3D65, false),
+            ('CRC-16/T10-DIF', Crc16.t10Dif, 0x8BB7, false),
+            ('CRC-16/CDMA2000', Crc16.cdma2000, 0xC867, false),
+            ('CRC-16/CMS', Crc16.cms, 0x8005, false),
+            ('CRC-16/BUYPASS', Crc16.buypass, 0x8005, false),
+            ('CRC-16/DECT-R', Crc16.dectR, 0x0589, false),
+            ('CRC-16/DECT-X', Crc16.dectX, 0x0589, false),
+            ('CRC-16/TELEDISK', Crc16.teledisk, 0xA097, false),
+            ('CRC-16/SPI-FUJITSU', Crc16.spiFujitsu, 0x1021, false),
+            ('CRC-16/ARC', Crc16.arc, 0x8005, true),
+            ('CRC-16/MODBUS', Crc16.modbus, 0x8005, true),
+            ('CRC-16/USB', Crc16.usb, 0x8005, true),
+            ('CRC-16/MAXIM-DOW', Crc16.maximDow, 0x8005, true),
+            ('CRC-16/KERMIT', Crc16.kermit, 0x1021, true),
+            ('CRC-16/X-25', Crc16.x25, 0x1021, true),
+            ('CRC-16/MCRF4XX', Crc16.mcrf4xx, 0x1021, true),
+            ('CRC-16/RIELLO', Crc16.riello, 0x1021, true),
+            ('CRC-16/TMS37157', Crc16.tms37157, 0x1021, true),
+            ('CRC-16/DNP', Crc16.dnp, 0x3D65, true)
+        ]
+    }
+
+    /** Scenario: 24 个 CRC-16 变体在任意长度上与逐位参考实现一致。 */
+    @TestCase
+    public func slicingBy2MatchesReferenceForAllCrc16Variants(): Unit {
+        let lengths = [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 255, 256, 257, 4095, 4096, 4097, 65537]
+        for (row in crc16Rows()) {
+            let variant = row[1]
+            let poly = row[2]
+            let refin = row[3]
+            for (n in lengths) {
+                let data = pseudoBytes(n)
+                let c0 = variant.initRegister()
+                let actual = variant.update(c0, data)
+                let expected = refUpdate(16, poly, refin, UInt64(c0), data)
+                @Assert(UInt64(actual), expected)
+            }
+        }
+    }
+
+    /** Scenario: 边界字节（全 0x00 / 0xFF / 0x80 / 0x01）不因 16 位表项而丢高位。 */
+    @TestCase
+    public func slicingBy2EdgeBytesMatchReference(): Unit {
+        let samples: Array<Array<Byte>> = [
+            [0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8],
+            [0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8],
+            [0x80u8],
+            [0x01u8],
+            [0x80u8, 0x01u8, 0x80u8, 0x01u8, 0x80u8],
+            [0x00u8, 0xFFu8, 0x00u8, 0xFFu8, 0x00u8, 0xFFu8, 0x00u8, 0xFFu8, 0x00u8]
+        ]
+        for (row in crc16Rows()) {
+            let variant = row[1]
+            let poly = row[2]
+            let refin = row[3]
+            for (data in samples) {
+                let c0 = variant.initRegister()
+                let actual = variant.update(c0, data)
+                let expected = refUpdate(16, poly, refin, UInt64(c0), data)
+                @Assert(UInt64(actual), expected)
+            }
+        }
+    }
+
+    /** 6 个 CRC-64 变体的参数表：只给测试参考实现用（实现侧不应复制这些常量）。 */
+    private func crc64Rows(): Array<(String, Crc64, UInt64, Bool)> {
+        [
+            ('CRC-64/ECMA-182', Crc64.ecma182, 0x42F0E1EBA9EA3693, false),
+            ('CRC-64/WE', Crc64.we, 0x42F0E1EBA9EA3693, false),
+            ('CRC-64/XZ', Crc64.xz, 0x42F0E1EBA9EA3693, true),
+            ('CRC-64/GO-ISO', Crc64.iso, 0x000000000000001B, true),
+            ('CRC-64/REDIS', Crc64.redis, 0xAD93D23594C935A9, true),
+            ('CRC-64/JONES', Crc64.jones, 0xAD93D23594C935A9, true)
+        ]
+    }
+
+    /** Scenario: 6 个 CRC-64 变体在任意长度上与逐位参考实现一致（覆盖尾部与 8 字节边界）。 */
+    @TestCase
+    public func slicingBy8MatchesReferenceForAllCrc64Variants(): Unit {
+        let lengths = [0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 63, 64, 65, 255, 256, 257, 4095, 4096, 4097, 65537]
+        for (row in crc64Rows()) {
+            let variant = row[1]
+            let poly = row[2]
+            let refin = row[3]
+            for (n in lengths) {
+                let data = pseudoBytes(n)
+                let c0 = variant.initRegister()
+                let actual = variant.update(c0, data)
+                let expected = refUpdate(64, poly, refin, c0, data)
+                @Assert(actual, expected)
+            }
+        }
+    }
+
+    /** Scenario: 任意切分（含 8 字节边界内部）与一次累计等价。 */
+    @TestCase
+    public func slicingBy8SegmentedUpdatesMatchOneShot(): Unit {
+        let data = pseudoBytes(4097)
+        let patterns: Array<Array<Int64>> = [
+            [1, 3, 5],
+            [8, 16, 64],
+            [8, 8, 8],
+            [1],
+            [4096, 1]
+        ]
+        for (row in crc64Rows()) {
+            let variant = row[1]
+            let c0 = variant.initRegister()
+            let expected = variant.update(c0, data)
+            for (pattern in patterns) {
+                var crc = c0
+                var off = 0i64
+                var k = 0i64
+                while (off < data.size) {
+                    let step = pattern[k % pattern.size]
+                    let end = if (off + step > data.size) { data.size } else { off + step }
+                    crc = variant.update(crc, data[off..end])
+                    off = end
+                    k += 1
+                }
+                @Assert(crc, expected)
+            }
+        }
+    }
+
+    /** Scenario: CRC-64 表路径 1 MiB 吞吐达标（≥ 60 MB/s）。 */
+    @TestCase
+    public func throughputCrc64SlicingAtLeastSixtyMegabytesPerSecond(): Unit {
+        if (!perfEnabled()) {
+            println("SKIP: 未设置 F_UTIL_PERF=1，跳过 CRC-64 表路径吞吐用例")
+            return
+        }
+        let data = pseudoBytes(1024 * 1024)
+        // 表路径口径：先关闭生成式路径，避免测到硬件核
+        Crc64Hw.setNativeEnabled(false)
+        Crc64.xz.compute(data)
+        var nanos = Int64.Max
+        var value = 0u64
+        for (_ in 0..3) {
+            let start = MonoTime.now()
+            let v = Crc64.xz.compute(data)
+            let n = (MonoTime.now() - start).toNanoseconds()
+            value = v
+            if (n < nanos) {
+                nanos = n
+            }
+        }
+        let megabytes = Float64(data.size) / (1024.0 * 1024.0)
+        let seconds = Float64(nanos) / 1.0e9
+        let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+        Crc64Hw.setNativeEnabled(true)
+        Crc64Hw.resetForTest()
+        println('1 MiB CRC-64/XZ 表路径（${value}）：${nanos} ns，${mbPerSecond} MB/s')
+        if (mbPerSecond < 60.0) {
+            @Fail('CRC-64 表路径吞吐 ${mbPerSecond} MB/s 低于 60 MB/s 下限（1 MiB 样本）')
+        }
+    }
+
+    /** Scenario: CRC-16 表路径 1 MiB 吞吐达标（≥ 40 MB/s）。 */
+    @TestCase
+    public func throughputCrc16SlicingAtLeastFortyMegabytesPerSecond(): Unit {
+        if (!perfEnabled()) {
+            println("SKIP: 未设置 F_UTIL_PERF=1，跳过 CRC-16 表路径吞吐用例")
+            return
+        }
+        let data = pseudoBytes(1024 * 1024)
+        Crc16.modbus.compute(data)
+        var nanos = Int64.Max
+        var value = 0u16
+        for (_ in 0..3) {
+            let start = MonoTime.now()
+            let v = Crc16.modbus.compute(data)
+            let n = (MonoTime.now() - start).toNanoseconds()
+            value = v
+            if (n < nanos) {
+                nanos = n
+            }
+        }
+        let megabytes = Float64(data.size) / (1024.0 * 1024.0)
+        let seconds = Float64(nanos) / 1.0e9
+        let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+        println('1 MiB CRC-16/MODBUS 表路径（${value}）：${nanos} ns，${mbPerSecond} MB/s')
+        if (mbPerSecond < 40.0) {
+            @Fail('CRC-16 表路径吞吐 ${mbPerSecond} MB/s 低于 40 MB/s 下限（1 MiB 样本）')
+        }
+    }
+
+    /** Scenario: CRC-64/XZ 生成式折叠核与表路径逐位一致（无能力时 SKIP）。 */
+    @TestCase
+    public func crc64HwMatchesSoftwareForXz(): Unit {
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let variants = [Crc64.xz, Crc64.iso, Crc64.redis, Crc64.jones, Crc64.ecma182, Crc64.we]
+        let lengths = [256, 257, 272, 1024, 4095, 4096, 4097, 65537]
+        for (variant in variants) {
+            let c0 = variant.initRegister()
+            for (n in lengths) {
+                let data = pseudoBytes(n)
+                let hw = variant.update(c0, data)
+                Crc64Hw.setNativeEnabled(false)
+                let sw = variant.update(c0, data)
+                Crc64Hw.setNativeEnabled(true)
+                Crc64Hw.resetForTest()
+                @Assert(hw, sw)
+            }
+        }
+    }
+
+    /**
+     * 聚焦回归：XZ 256B 是旧 x86 折叠核最早暴露错误的长度。
+     *
+     * 旧核按 16 字节向量使用常量，而 `CrcGf.reflectX86Constants` 是 8 字节连续布局，
+     * 硬件结果会退化成 `maskF0` 一类常量；修复后必须与表路径逐位一致。
+     */
+    @TestCase
+    public func crc64HwXz256MatchesSoftwareRegression(): Unit {
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let data = pseudoBytes(256)
+        let c0 = Crc64.xz.initRegister()
+        let hw = Crc64.xz.update(c0, data)
+        Crc64Hw.setNativeEnabled(false)
+        let sw = try {
+            Crc64.xz.update(c0, data)
+        } finally {
+            Crc64Hw.setNativeEnabled(true)
+            Crc64Hw.resetForTest()
+        }
+        @Assert(hw, sw)
+    }
+
+    /** Scenario: 任意切分与一次累计等价（硬件路径内部按 16 字节块消费）。 */
+    @TestCase
+    public func crc64HwSegmentedMatchesOneShot(): Unit {
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ 或 F_UTIL_CRC_HW=off")
+            return
+        }
+        let data = pseudoBytes(4097)
+        let c0 = Crc64.xz.initRegister()
+        let expected = Crc64.xz.update(c0, data)
+        for (pattern in [[1i64, 3, 5], [16, 16], [15, 17], [255, 257]]) {
+            var crc = c0
+            var off = 0i64
+            var k = 0i64
+            while (off < data.size) {
+                let step = pattern[k % pattern.size]
+                let end = if (off + step > data.size) { data.size } else { off + step }
+                crc = Crc64.xz.update(crc, data[off..end])
+                off = end
+                k += 1
+            }
+            @Assert(crc, expected)
+        }
+    }
+
+    /** Scenario: `auto|on|off` 三态结果一致；`off` 必然不进折叠核，`auto` 在有能力时必然进。 */
+    @TestCase
+    public func crc64HwThreeStateMatchesReference(): Unit {
+        env.setVariable("F_UTIL_CRC_HW", "auto")
+        Crc64Hw.setNativeEnabled(true)
+        Crc64Hw.resetForTest()
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ")
+            return
+        }
+        let lengths = [256, 4096]
+        try {
+            for (row in crc64Rows()) {
+                let name = row[0]
+                let variant = row[1]
+                for (n in lengths) {
+                    let data = pseudoBytes(n)
+                    let c0 = variant.initRegister()
+                    env.setVariable("F_UTIL_CRC_HW", "off")
+                    Crc64Hw.resetForTest()
+                    let off = variant.update(c0, data)
+                    let offNative = Crc64Hw.lastUsedNativeForTest()
+                    env.setVariable("F_UTIL_CRC_HW", "on")
+                    Crc64Hw.resetForTest()
+                    let on = variant.update(c0, data)
+                    let onNative = Crc64Hw.lastUsedNativeForTest()
+                    env.setVariable("F_UTIL_CRC_HW", "auto")
+                    Crc64Hw.resetForTest()
+                    let auto = variant.update(c0, data)
+                    let autoNative = Crc64Hw.lastUsedNativeForTest()
+                    @Assert(off, on)
+                    @Assert(on, auto)
+                    if (offNative) {
+                        @Fail("${name} len=${n}: off 下仍进了折叠核")
+                    }
+                    if (!autoNative) {
+                        @Fail("${name} len=${n}: auto 下未进折叠核")
+                    }
+                    if (!onNative) {
+                        @Fail("${name} len=${n}: on 下未进折叠核")
+                    }
+                }
+            }
+        } finally {
+            env.setVariable("F_UTIL_CRC_HW", "auto")
+            Crc64Hw.resetForTest()
+        }
+    }
+
+    /** Scenario: 代码页分配/密封失败时静默回退表路径，结果正确且不抛异常。 */
+    @TestCase
+    public func crc64HwFallsBackWhenCodePageAllocationFails(): Unit {
+        env.setVariable("F_UTIL_CRC_HW", "auto")
+        Crc64Hw.setNativeEnabled(true)
+        Crc64Hw.resetForTest()
+        Crc64Hw.forceAllocFailureForTest(true)
+        try {
+            let data = pseudoBytes(4096)
+            let c0 = Crc64.xz.initRegister()
+            let hw = Crc64Hw.update(c0, data, data.size, 0x42F0E1EBA9EA3693u64)
+            if (hw.isSome()) {
+                @Fail("分配失败时 update 仍返回了硬件结果")
+            }
+            let value = Crc64.xz.update(c0, data)
+            Crc64Hw.setNativeEnabled(false)
+            let expected = Crc64.xz.update(c0, data)
+            Crc64Hw.setNativeEnabled(true)
+            @Assert(value, expected)
+        } finally {
+            Crc64Hw.forceAllocFailureForTest(false)
+            Crc64Hw.resetForTest()
+        }
+    }
+
+    /** Scenario: 6 个 CRC-64 变体的硬件路径吞吐（1 MiB ≥ 500 MB/s）与 4 KiB 绝对耗时（≤ 1.34 µs）。 */
+    @TestCase
+    public func throughputCrc64HwAtLeastFiveHundredMegabytesPerSecond(): Unit {
+        if (!perfEnabled()) {
+            println("SKIP: 未设置 F_UTIL_PERF=1，跳过 CRC-64 硬件吞吐用例")
+            return
+        }
+        env.setVariable("F_UTIL_CRC_HW", "auto")
+        Crc64Hw.setNativeEnabled(true)
+        Crc64Hw.resetForTest()
+        if (!Crc64Hw.available()) {
+            println("SKIP: 无 PMULL/PCLMULQDQ")
+            return
+        }
+        let data = pseudoBytes(1024 * 1024)
+        let frame = pseudoBytes(4096)
+        let megabytes = Float64(data.size) / (1024.0 * 1024.0)
+        for (row in crc64Rows()) {
+            let name = row[0]
+            let variant = row[1]
+            let c0 = variant.initRegister()
+            // 1 MiB：预热后取 3 次最小值，降低共享 VM 上抢占带来的抖动
+            variant.update(c0, data)
+            var bestNanos = Int64.Max
+            var value = 0u64
+            for (_ in 0..3) {
+                let start = MonoTime.now()
+                let v = variant.update(c0, data)
+                let n = (MonoTime.now() - start).toNanoseconds()
+                value = v
+                if (n < bestNanos) {
+                    bestNanos = n
+                }
+            }
+            let seconds = Float64(bestNanos) / 1.0e9
+            let mbPerSecond = if (seconds > 0.0) { megabytes / seconds } else { 0.0 }
+            // 4 KiB：预热 200 次，取 3 组 × 1000 次的最小单次耗时
+            for (_ in 0..200) {
+                variant.update(c0, frame)
+            }
+            var bestPerCall = Float64.Max
+            for (_ in 0..3) {
+                var sink = 0u64
+                let start = MonoTime.now()
+                for (_ in 0..1000) {
+                    sink = variant.update(c0, frame)
+                }
+                let perCall = Float64((MonoTime.now() - start).toNanoseconds()) / 1000.0
+                if (perCall < bestPerCall) {
+                    bestPerCall = perCall
+                }
+                if (sink == 0u64 && value == 0u64) {
+                    @Fail('${name}: 测量结果异常')
+                }
+            }
+            println('1 MiB ${name} 硬件路径（${value}）：${bestNanos} ns，${mbPerSecond} MB/s；4 KiB 单次 ${bestPerCall} ns')
+            if (mbPerSecond < 500.0) {
+                @Fail('${name} 硬件路径吞吐 ${mbPerSecond} MB/s 低于 500 MB/s')
+            }
+            if (bestPerCall > 1340.0) {
+                @Fail('${name} 硬件路径 4 KiB 单次 ${bestPerCall} ns 超过 1.34 µs')
+            }
         }
     }
 

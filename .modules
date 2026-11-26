@@ -36,11 +36,11 @@ f_orm
 f_security
 f_ticktock
 f_rpc
-f_egraph
 f_bloom
 f_store
 f_uring
 f_jit
+f_egraph
 f_mq
 f_dbd
 f_dbm
@@ -50,15 +50,21 @@ f_mcp
 f_xml
 f_zip
 f_excel
+f_rule
+f_probe
+f_tui
+f_hydra
+f_a2a
+f_llm
+fboot
 fmq
 fdbm
-fjsonrpcdemo
-fmcpdemo
-fboot
+f_svg
+f_chart
+fprobe
 .
 
 [exclude]
 
 [detention]
-f_llm
 fleet

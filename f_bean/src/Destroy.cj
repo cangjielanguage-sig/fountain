@@ -15,6 +15,6 @@ limitations under the License.
  */
 package fountain::f_bean
 
-public interface Destroy {
+public interface Destroy{
     func destroy(): Unit
 }

@@ -108,11 +108,11 @@ public class HealthRPC_Stub__ <: HealthRPC {
 
 原因是客户端的 `@RPCStub` 可能写 `version='1.0.0'`，也可能不写属性（版本为 `*`）；可能指定 `name=beanName`，也可能不指定。**服务端把「所有合法的匹配组合」都注册一遍，把匹配复杂度从运行期的字符串比较，前移成了注册期的四倍写入。** 注册是一次性的，匹配是每次调用都要做的。
 
-注册时会自动跳过 `std.`、`fountain::` 前缀的接口和 `Equatable` / `Comparable` / `Iterable` 等系统接口，否则每个服务都会多出几百个「方法」。
+注册时会自动跳过 `std.` 前缀的接口、`Any` 自身，以及 `Equatable` / `Comparable` / `Iterable` / `Collection` / `Equal` / `NotEqual` / `Less` / `LessOrEqual` / `Greater` / `GreaterOrEqual` 等系统接口，否则每个服务都会多出几百个「方法」。`fountain::` 前缀的接口不再被跳过，所以框架自己的接口也可以发布为 RPC 服务。
 
 ### 退出也要打招呼
 
-节点退出时向种子节点发 `DEREGISTER`（载荷只有 port），种子回复 `ACK`。如果不发，注册表可能在一段时间内仍然认为这个地址可用——这段时间里客户端会往一个死节点上打，只能靠重试兜底。
+节点退出时向种子节点发 `DEREGISTER`（载荷只有 port），种子收到后回复 `ACK`（客户端只发送，不等待回包）。如果不发，注册表可能在一段时间内仍然认为这个地址可用——这段时间里客户端会往一个死节点上打，只能靠重试兜底。
 
 **能主动注销时，不要让对端靠超时发现节点已退出。**
 
@@ -232,7 +232,7 @@ public class HealthRPCImpl <: HealthRPC {
 }
 ```
 
-每个节点默认提供 `health()`，客户端可以直接远程调用探测。它同时也是 `@RPCStub` / `@RPCSkeleton` 的最小用法示例——想验证环境是否正常，跑这个比读文档快。
+`f_rpc` 内置了 `HealthRPC` 接口（`fountain::f_rpc.health`）和 `HealthRPCImpl` 骨架（`fountain::f_rpc.health.server`），后者被 `@RPCSkeleton` 修饰，包被加载时随静态初始化注册进 `ServiceHub`。它同时也是 `@RPCStub` / `@RPCSkeleton` 的最小用法示例——想验证环境是否正常，跑这个比读文档快。
 
 ---
 
@@ -243,11 +243,12 @@ public class HealthRPCImpl <: HealthRPC {
 ```cj
 @DataAssist[fields props]
 public class RPCMessage {
-    public mut prop meta: ServiceMeta
-    public mut prop params: Array<DataAny>
+    public mut prop meta: ServiceMeta        // 由私有字段 meta 经 props 生成
+    public mut prop params: Array<DataAny>   // 由私有字段 params 经 props 生成
 
-    @DataExclude[prop]              // 不参与序列化
-    public mut prop trace: String
+    @DataExclude[prop]              // 私有字段 trace_ 不生成公共属性
+    private var trace_: String
+    public mut prop trace: String   // 读取时取当前 trace，写入时同时写线程内 currentTrace
 
     public static func currentTrace(): String
     public static func clearCurrentTrace(): Unit
@@ -282,7 +283,7 @@ export rpc_currentSkeleton='^mycompany::order'   # 正则，匹配当前模块
 ```cj
 import fountain::f_data.BreakingCommand
 
-perform BreakingCommand(toDataValue)
+perform BreakingCommand.new(toDataValue)   // 也可以直接传一个 Data 实例：BreakingCommand(data)
 ```
 
 它会立即结束当前业务，`data` 原样返回给客户端。**`data` 必须能转换成 RPC 函数的返回类型**，否则客户端侧转换失败。
@@ -311,7 +312,7 @@ export rpcClient_retryCount=1
 
 1. `rpcServer_port` **只接受端口号**（`UInt16`）。写成 `127.0.0.1:1204` 会解析失败并**静默回落到 1203**，两个节点就撞端口了。
 2. 服务端工作目录的 `cjpm.toml` 必须有 `version=`，否则启动抛 `RPCVersionException`。
-3. `@RPCStub` 只能实现接口**直接声明**的实例方法：不支持属性、不支持父接口方法、接口不能带泛型参数。
+3. `@RPCStub` 只能实现接口**直接声明**的实例方法：接口里没有实现体的属性声明会被宏诊断报错，带泛型参数的接口也会被诊断报错；父接口里的方法宏不会处理，存根类会因为缺少实现而编译失败。
 4. 参数类型要支持 `ToData`，返回类型要满足 `DataFields<R>`（加 `@DataAssist` 即可）。
 5. `rpcClient_discoveryTimeout` 默认 5s，首次调用要等服务发现完成；超时报
    `no available client for <接口>.<方法>(version …) after …`——先确认服务端起没起、地址对不对、版本匹不匹配。

@@ -140,7 +140,7 @@ protected class GroupCursor {
                     continue
                 }
                 let record = try {
-                    log.readAt(entry.position)
+                    log.readAt(entry.position, resume: false)
                 } catch (e: Exception) {
                     // 段被 TTL 清理：跳到现存后继段后重试（本轮直接返回，下次从新位置开始）
                     match (recoverIfSegmentGone(entry.position.seq)) {

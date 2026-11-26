@@ -77,7 +77,7 @@ public func columnLetters(col: Int64): String {
  *
  * 比较与相等只看 `row` / `col`（`$` 是显示属性，不参与身份）。
  */
-public struct CellRef <: Comparable<CellRef> & Equatable<CellRef> & ToString {
+public struct CellRef <: Comparable<CellRef> & ToString {
     public let row: Int64
     public let col: Int64
     public let rowAbs: Bool

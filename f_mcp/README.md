@@ -814,3 +814,19 @@ cd fmcpdemo
 ```
 
 客户端走 HTTP 覆盖 `server/discover`、`tools/list`、`tools/call`、`resources/read`、`prompts/get`，再订阅 `/mcp/sse` 并触发一条 `notifications/tools/list_changed`。服务端启动时还会用两个共享 `RateLimitBackend` 的 `McpServer` 验证第 4 次调用返回 `-32050`。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`LeakingBucketRateLimitBackend`（class）、`public class McpController`、`McpResourceContext`（class）、`McpSseStream`（class）、`SlidingWindowRateLimitBackend`（class）、`TokenBucketRateLimitBackend`（class）、`UnlimitedRateLimitBackend`（class）
+- `ConcurrencyGate`：`sweepNow`（func）
+- `McpController`：`func handle(@RequestBody raw: Array<Byte>): Any`
+- `McpConvert`：`promptMessages`（func）、`resourceContents`（func）、`toolResult`（func）
+- `McpRegistry`：`registerPromptMeta`（func）、`registerResourceMeta`（func）、`registerToolMeta`（func）
+- `McpResourceBuilder`：`validateUri`（func）
+- `McpSseStream`：`poll`（func）
+- `RateLimitPolicy`：`overlay`（func）
+- `ToolResultStore`：`newToken`（func）

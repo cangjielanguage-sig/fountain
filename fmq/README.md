@@ -175,3 +175,16 @@ cd .. && ./scripts/mq_e2e.sh    # 三节点端到端，输出 E2E_OK
 
 单机全流程的最小示例见 [`fmqdemo`](../fmqdemo)：发布端/消费端都是 fboot 加载的动态库，
 `bash fmqdemo/run-demo.sh` 一条命令完成「起 fmq → 注册主题/订阅组 → 发布 → 消费 ack → 校验」。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`MQManager`（class）、`MQManagerArgs`（struct）、`MQManagerOutput`（class）、`MQUsage`（class）、`MetaApplyResult`（enum）、`QueueCorruptionException`（class）、`backupCursors`（func）、`backupStates`（func）、`execute`（func）、`installExitHooks`（func）、`isAlive`（func）、`isClosed`（func）、`isKnownDead`（func）、`next`（func）、`pendingCount`（prop）、`selfIndex`（prop）、`send`（func）、`successors`（func）
+- `MQManager`：`deleteSubscribeGroup`（func）、`deleteTopic`（func）、`registerSubscriber`（func）
+- `MQManagerArgs`：`let command: String`、`helpText`（func）、`let operands: Array<String>`、`parse`（func）
+- `MQManagerOutput`：`EMPTY`（let）、`ERROR_PREFIX`（let）、`STATS_HEADER`（let）、`assignments`（func）、`error`（func）、`registeredTopic`（func）、`table`（func）、`topicList`（func）、`width`（func）
+- `MQServer`：`isClosed`（func）
+- `MQUsage`：`managerHelp`（func）、`root`（func）、`serverHelp`（func）

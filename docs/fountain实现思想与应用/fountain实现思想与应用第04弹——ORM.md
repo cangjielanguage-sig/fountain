@@ -10,7 +10,7 @@
 
 ORM的核心是SqlExecutor，所有增删改查、填充SQL参数都是这个类的API，而且各种高阶API也是它的扩展，数据库访问的接口也通过@DAO宏扩展到SqlExecutor。
 
-SqlArgs是SqlExecutor是SQL参数集合按照调用添加参数的函数顺序添加到SqlArgs实例，每一个参数都被包装成SqlArg实例，访问数据库时遍历SqlArgs将参数添加到Statement。
+SqlArgs是SqlExecutor的SQL参数集合（都在`fountain::f_orm.wrap`包），按照调用添加参数的函数顺序添加到SqlArgs实例，每一个参数都被包装成SqlArg实例，访问数据库时遍历SqlArgs将参数添加到Statement。参数下标从0开始，与SQL中`?`出现的顺序一一对应。
 
 类图中的RootDAO依赖的`Condition`结尾的类是SQL条件函数，MeetCondition执行每一个符合的条件、ChooseCondition执行第一个符合的条件，LoopCondition遍历Iterable实例。比如说可以有这样的SQL构造代码：
 
@@ -26,7 +26,7 @@ ${meet(password.size > 0, ' and "password" like '){
 }.page<UserPO>(10, page: 1)
 ```
 
-SqlHead依赖的Clause类是SQL API的辅助工具，可以帮助开发者构造SQL。比如可以有以下API调用：
+SqlExecutor的API由一组`TableClause<T>`子类（`FromClause`、`UpdateClause`、`IntoClause`、`ExceptInsertClause`等）承担，它们是SQL API的辅助工具，可以帮助开发者构造SQL。比如可以有以下API调用：
 
 ```cj
 executor.FROM<MapperClass>().page<MapperClass>(10/*每页记录数*/, page: 1/*查询的页数*/)
@@ -59,10 +59,10 @@ public class UserPO {
 import std.env
 import opengauss.driver.*
 import opengauss.slog
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.log.LoggerFactory
-import fountain.orm.*
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_log.LoggerFactory
+import fountain::f_orm.*
 //具体可以参考项目里的fdemo/boot/src/boot.cj
 private let _ = {=>
     let logger = LoggerFactory.getLogger("opengauss")
@@ -70,8 +70,9 @@ private let _ = {=>
     let driver = DriverManager.getDriver("opengauss").getOrThrow()//实例化opengauss 驱动
     let url = env.getVariable('POSTGRES') ?? ''//获得opengauss url
     ORM.register(driver, url, [])//将驱动和url注册到ORM
-    //register有一个default!: Bool = true参数，表示当前驱动是不是默认驱动，
-    //如果多次调用ORM.register，而且都使用default默认值，则最后一次调用的驱动是默认驱动
+    //register有一个default!: Bool参数，默认值是ORMConfig.isDefaultDriver(driver)，
+    //即配置项default driver指定的驱动，没配就是orm_drivers列表的首项；
+    //多次注册时，只有default为true的那一次会把该驱动设为ORM的默认驱动
 }()//opengauss有列索引和参数索引从0开始，跟仓颉团队沟通过，回复也是应该从0开始，
 //不过文档没有明确提到，有些驱动实现从1开始。
 //我已经提了ISSUE希望文档能够有明确的说明。
@@ -80,7 +81,7 @@ private let _ = {=>
 然后声明一个Service类的实现。
 
 ```cj
-import fountain.orm.*
+import fountain::f_orm.*
 
 import user.service.UserService
 import user.dao.UserDAO
@@ -91,8 +92,9 @@ public class UserServiceImpl <: UserService & RootService {
         println('username: ${username}, password: ${password}')
         executor().register(username, password)//register是UserDAO的函数，UserDAO是SqlExecutor的扩展。
         //executor()是RootService接口的函数，它有默认实现，
-        //功能是使用默认驱动从fountain.orm.ORM获得fountain.orm.SqlExecutor实例，SqlExecutor内部维持着数据库连接。
-        //这个实例保存在ThreadLocal，同一线程重复调用executor()返回的是同一个SqlExecutor。
+        //功能是使用默认驱动从fountain::f_orm.ORM获得SqlExecutor实例，SqlExecutor内部维持着数据库连接。
+        //SqlExecutor按线程、按驱动名缓存：在事务内或尚未执行SQL时，同一线程重复调用executor()返回同一个SqlExecutor。
+        //非事务语句执行完毕后线程内的实例会被清除，下一次调用executor()会重新创建。
         //另外还有executor(driverName)，使用指定驱动名创建SqlExecutor。
     }
 }
@@ -101,8 +103,8 @@ public class UserServiceImpl <: UserService & RootService {
 最后声明一个DAO。
 
 ```cj
-import fountain.orm.*
-import fountain.orm.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
 
 @DAO//这个宏会将UserDAO扩展到SqlExecutor
 public interface UserDAO <: RootDAO {
@@ -115,7 +117,7 @@ public interface UserDAO <: RootDAO {
                  values(${arg(username)}, 
                         ${arg(password)}) 
             returning id'''
-        ).insert//sqlSql也是返回SqlExecutor自身，insert返回插入的ID。
+        ).insert//setSql也是返回SqlExecutor自身，insert是SqlExecutor的属性，返回插入的ID。
     }
 }
 ```

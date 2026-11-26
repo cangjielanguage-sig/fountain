@@ -52,13 +52,12 @@ internal class BoundedInputStream <: InputStream {
             remaining -= n
             return n
         }
-        let tmp = Array<Byte>(remaining, repeat: 0)
-        let n = input.read(tmp)
+        // 目标缓冲比剩余长度大：直接读入目标前缀，避免按剩余长度新建临时数组再拷贝
+        let n = input.read(buffer[0..remaining])
         if (n <= 0) {
             remaining = 0
             return -1
         }
-        tmp[0..n].copyTo(buffer, 0, 0, n)
         remaining -= n
         n
     }
@@ -129,14 +128,13 @@ internal class FileRangeInputStream <: InputStream {
             remaining -= n
             return n
         }
-        let tmp = Array<Byte>(remaining, repeat: 0)
-        let n = file.read(tmp)
+        // 目标缓冲比剩余长度大：直接读入目标前缀，避免按剩余长度新建临时数组再拷贝
+        let n = file.read(buffer[0..remaining])
         if (n <= 0) {
             remaining = 0
             closeQuietly()
             return -1
         }
-        tmp[0..n].copyTo(buffer, 0, 0, n)
         remaining -= n
         n
     }

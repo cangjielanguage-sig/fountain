@@ -22,6 +22,9 @@ import stdx.net.http.*
 import fountain::f_data.*
 import fountain::f_jsonrpc.base.*
 
+/** 读缓冲大小。沿用改造前的 8192：块大小变化会改变 `read` 次数与超限检测的越限量级，属于可观察行为。 */
+private const READ_BUFFER_BYTES: Int64 = 8192
+
 public struct ClientOptions {
     public ClientOptions(public let timeout!: Duration = Duration.second * 30,
         public let headers!: HashMap<String, String> = HashMap<String, String>(),
@@ -236,15 +239,41 @@ public class JsonRpcClient {
     }
 }
 
+/**
+ * 线程本地读缓冲的持有者。
+ *
+ * `ThreadLocal` 直接存 `Array<Byte>`（值类型）时每次 `get()` 都会把值装箱，实测 55 B/次（`-O0`）；
+ * 改存引用类型后该开销消失（见 `design.md` §10 的归因测量）。缓冲本身仍是同一块 8192 B 数组。
+ */
+private class ReadBufferHolder {
+    ReadBufferHolder(let data: Array<Byte>) {}
+}
+
 class HttpJsonRpcTransport <: JsonRpcTransport {
     private let client: Client
     private let url: String
     private let opts: ClientOptions
+    // 每线程一块读缓冲：`callAsync` 的 `spawn` 调用各自持有独立缓冲，
+    // 长生命周期线程（连接池 worker / 同线程顺序调用）复用同一块。
+    // 静态而非实例字段：缓冲不逃逸、线程内非重入，于是多个 client 共享一块也安全，
+    // 常驻量收敛到「每线程一块」而不是「每 client 每线程一块」。
+    private static let threadReadBuffer = ThreadLocal<ReadBufferHolder>()
 
     HttpJsonRpcTransport(url: String, opts: ClientOptions) {
         this.url = url
         this.opts = opts
         this.client = ClientBuilder().readTimeout(opts.timeout).writeTimeout(opts.timeout).build()
+    }
+
+    /** 取当前线程的读缓冲；首次使用时按固定大小创建。包内可见：仅读路径与同包测试使用，不属于公开 API。 */
+    static func readBuffer(): Array<Byte> {
+        match (threadReadBuffer.get()) {
+            case Some(holder) => holder.data
+            case None =>
+                let holder = ReadBufferHolder(Array<Byte>(READ_BUFFER_BYTES, repeat: 0))
+                threadReadBuffer.set(holder)
+                holder.data
+        }
     }
 
     public func send(body: Array<Byte>): Array<Byte> {
@@ -304,7 +333,14 @@ class HttpJsonRpcTransport <: JsonRpcTransport {
         }
     }
 
-    /** 流式读取并累计字节数，超过 `cap` 立即停止（不分配整包内存）。 */
+    /**
+     * 流式读取并累计字节数，超过 `cap` 立即停止（不分配整包内存）。
+     *
+     * 读缓冲取自当前线程的 `readBuffer()`，同一线程的多次调用复用同一块。
+     * 前提：本函数在单次调用内不执行用户代码，因此同线程不可重入；若将来在
+     * `response.body.read` 的调用链里插入回调并再次发请求，同一线程会拿到同一块缓冲并被覆写。
+     * 结果只由 `buffer[0..size)` 切片复制而来（仓颉 `Array` 切片产生新数组），缓冲不逃逸。
+     */
     private func readCapped(response: HttpResponse, cap: Int64): Array<Byte> {
         var initial: Int64 = 8192
         match (declaredLength(response)) {
@@ -315,7 +351,7 @@ class HttpJsonRpcTransport <: JsonRpcTransport {
             case _ => ()
         }
         let bytes = ArrayList<Byte>(initial)
-        let buffer = Array<Byte>(8192, repeat: 0)
+        let buffer = readBuffer()
         var total: Int64 = 0
         while (true) {
             let size = response.body.read(buffer)
