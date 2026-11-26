@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.collection.HashMap
 import std.math.numeric.Decimal
 import std.sync.Mutex
+import std.sync.AtomicInt64
 import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
@@ -72,6 +73,29 @@ private class SlotSeg {
         this.constRefs = Array<Int64>(cap, repeat: 0)
         this.escapeFlags = Array<Bool>(cap, repeat: false)
         this.frozenFlags = Array<Bool>(cap, repeat: false)
+    }
+}
+
+/**
+ * 空闲索引分片表（Phase 2）。
+ *
+ * 槽索引按 `idx & (n-1)` **固定归属**某个分片：释放只进归属分片，分配可扫描任意分片
+ * （优先本线程上次命中的那个）。这样同一索引的「取出/归还」永远落在同一把锁上，
+ * 同槽双释放被串行化；不同索引最多 1/64 概率争用。
+ */
+private class FreeStripes {
+    let lists: Array<ArrayList<Int64>>
+    let mtxs: Array<Mutex>
+
+    init(n: Int64) {
+        this.lists = Array<ArrayList<Int64>>(n, repeat: ArrayList<Int64>())
+        this.mtxs = Array<Mutex>(n, repeat: Mutex())
+        var i = 0
+        while (i < n) {
+            this.lists[i] = ArrayList<Int64>()
+            this.mtxs[i] = Mutex()
+            i = i + 1
+        }
     }
 }
 
@@ -135,7 +159,7 @@ public class HandleTable {
      */
     private static const GEN_MAX: UInt16 = 0x7FFFu16
     /** 退休槽数（诊断/审计）：这些槽保持失效但永久占用索引空间。 */
-    private static var retiredSlots: Int64 = 0
+    private static let retiredSlots = AtomicInt64(0)
 
     /** 目录占位段：未分配的段一律指向它（`alive` 恒 false ⇒ 读即失效）。 */
     private static let EMPTY_SEG: SlotSeg = SlotSeg(SEG_SIZE)
@@ -146,7 +170,15 @@ public class HandleTable {
      * 索引 0 是哨兵（不可达）：ID 编码里 idx=0 与「空句柄」共用 0 值域。
      */
     private static var totalSlots: Int64 = 1
-    private static let freeSlots: ArrayList<Int64> = ArrayList<Int64>()
+    /** 空闲索引分片数（必须是 2 的幂：按 `idx & (FREE_STRIPES-1)` 固定归属）。 */
+    private static const FREE_STRIPES: Int64 = 64
+    /**
+     * 空闲索引分片（Phase 2）：每个分片一把锁。分配只在自己的分片上摘索引，
+     * 释放只归还到该槽归属的分片 ⇒ 全局 `mtx` 不再参与每次分配/释放。
+     */
+    private static let stripes = FreeStripes(FREE_STRIPES)
+    /** 本线程最近命中的分片（下次优先尝试，减少空扫）。 */
+    private static let freeHint = ThreadLocal<Int64>()
 
     /** 各线程的窗口栈；栈底是**环境窗口**（直接调 helper 的用例没有显式 openWindow）。 */
     private static let winTls = ThreadLocal<ArrayList<Win>>()
@@ -316,7 +348,7 @@ public class HandleTable {
         currentWin().cap
     }
 
-    /** 当前窗口已用数（逻辑计数；槽索引允许复用旧 freeSlots）。 */
+    /** 当前窗口已用数（逻辑计数；槽索引允许复用旧空闲槽）。 */
     public static func windowUsed(): Int64 {
         currentWin().used
     }
@@ -546,7 +578,10 @@ public class HandleTable {
             seg.escapeFlags[off] = false
             seg.frozenFlags[off] = false
             seg.constRefs[off] = 0
-            freeOrRetireLocked(seg, off, i)
+            // 锁序固定 mtx → 分片锁；反向（持分片锁取 mtx）在本文件不存在。
+            synchronized(HandleTable.stripes.mtxs[i & (FREE_STRIPES - 1)]) {
+                freeOrRetire(seg, off, i)
+            }
         }
     }
 
@@ -873,15 +908,16 @@ public class HandleTable {
         if (i <= 0) {
             return
         }
-        synchronized(mtx) {
-            let seg = segAt(i)
-            let off = offOf(i)
+        let seg = segAt(i)
+        let off = offOf(i)
+        // 分片锁覆盖「状态复位 + 世代号 + 归还」：同槽双释放被串行化，后者见 gen 已变即返回。
+        synchronized(HandleTable.stripes.mtxs[i & (FREE_STRIPES - 1)]) {
             if (seg.alive[off] && seg.gens[off] == genOf(id) && !seg.constFlags[off]) {
                 seg.alive[off] = false
                 seg.objs[off] = Int64(0)
                 seg.escapeFlags[off] = false
                 seg.frozenFlags[off] = false
-                freeOrRetireLocked(seg, off, i)
+                freeOrRetire(seg, off, i)
             }
         }
     }
@@ -889,10 +925,13 @@ public class HandleTable {
     /** 显式归还一个逃逸句柄（桥把返回值取成宿主对象后调用；常量槽不回收）。 */
     public static func releaseEscaped(id: Int64): Unit {
         let i = idxOf(id)
-        synchronized(mtx) {
-            let seg = segAt(i)
-            let off = offOf(i)
-            if (i <= 0 || !seg.alive[off] || seg.constFlags[off]) {
+        if (i <= 0) {
+            return
+        }
+        let seg = segAt(i)
+        let off = offOf(i)
+        synchronized(HandleTable.stripes.mtxs[i & (FREE_STRIPES - 1)]) {
+            if (!seg.alive[off] || seg.constFlags[off]) {
                 return
             }
             if (seg.gens[off] != genOf(id)) {
@@ -902,7 +941,7 @@ public class HandleTable {
             seg.objs[off] = Int64(0)
             seg.escapeFlags[off] = false
             seg.frozenFlags[off] = false
-            freeOrRetireLocked(seg, off, i)
+            freeOrRetire(seg, off, i)
         }
     }
 
@@ -933,25 +972,28 @@ public class HandleTable {
         } else {
             Win(1, initialCapacity)
         }
-        synchronized(mtx) {
-            var k = 0
-            // 只释放路径 C（`append`）的槽：路径 B 的 pin 是桥侧资产，跨调用存活，
-            // 由 `CallMarshal.cleanup` / 宿主归还，窗口收尾不得动它。
-            while (k < w.appendIds.size) {
-                let id = w.appendIds[k]
-                let i = idxOf(id)
-                let seg = segAt(i)
-                let off = offOf(i)
+        // 逐槽取所属分片锁（而不是整段持全局 mtx）：窗口槽彼此独立，收尾是释放热点之一。
+        var k = 0
+        // 只释放路径 C（`append`）的槽：路径 B 的 pin 是桥侧资产，跨调用存活，
+        // 由 `CallMarshal.cleanup` / 宿主归还，窗口收尾不得动它。
+        while (k < w.appendIds.size) {
+            let id = w.appendIds[k]
+            let i = idxOf(id)
+            let seg = segAt(i)
+            let off = offOf(i)
+            if (i > 0) {
                 // 只按「代数仍匹配」释放：槽可能已被显式归还并被别的线程复用 ——
                 // 盲目按索引释放会误杀新槽。
-                if (i > 0 && seg.alive[off] && seg.gens[off] == genOf(id) &&
-                    !seg.escapeFlags[off] && !seg.constFlags[off]) {
-                    seg.alive[off] = false
-                    seg.objs[off] = Int64(0)
-                    freeOrRetireLocked(seg, off, i)
+                synchronized(HandleTable.stripes.mtxs[i & (FREE_STRIPES - 1)]) {
+                    if (seg.alive[off] && seg.gens[off] == genOf(id) &&
+                        !seg.escapeFlags[off] && !seg.constFlags[off]) {
+                        seg.alive[off] = false
+                        seg.objs[off] = Int64(0)
+                        freeOrRetire(seg, off, i)
+                    }
                 }
-                k = k + 1
             }
+            k = k + 1
         }
         w.pins.clear()
         w.appendIds.clear()
@@ -1015,54 +1057,100 @@ public class HandleTable {
     // ---- 内部 ----
 
     /**
-     * 释放槽位的统一收尾：世代号 +1 并归还空闲表；到达 `GEN_MAX` 则**退休**。
+     * 释放槽位的统一收尾（**调用方持有该槽归属分片的锁**）：世代号 +1 并归还分片；
+     * 到达 `GEN_MAX` 则**退休**。
      *
      * 退休是保证「标识恒正」的唯一处置：`gen = 0x8000` 会让拼装值越过 `Int64.Max`
      * ——`makeId` 的受检转换抛 `OverflowException`，若换成非受检位转换则得到负 ID，
-     * 会被全库的 `id <= 0` 判空当成空句柄。退休槽保持 `alive=false` 且不进 `freeSlots`，
+     * 会被全库的 `id <= 0` 判空当成空句柄。退休槽保持 `alive=false` 且不进空闲表，
      * 代价是每 32767 次复用占 1 个索引位（相对 4M 目录可忽略）。
-     *
-     * 调用方必须持有 `mtx`。
      */
-    private static func freeOrRetireLocked(seg: SlotSeg, off: Int64, i: Int64): Unit {
+    private static func freeOrRetire(seg: SlotSeg, off: Int64, i: Int64): Unit {
         if (seg.gens[off] >= GEN_MAX) {
-            retiredSlots = retiredSlots + 1
+            let _ = retiredSlots.fetchAdd(1)
             return
         }
         seg.gens[off] = seg.gens[off] + UInt16(1)
-        freeSlots.add(i)
+        HandleTable.stripes.lists[i & (FREE_STRIPES - 1)].add(i)
     }
 
-    /** 分配一个槽并写入（路径 A/B/C 共用；分配与写入在锁内，槽一经返回即只由 owner 写）。 */
-    private static func newSlot(obj: Any, tok: UInt16, isConst: Bool): Int64 {
-        synchronized(mtx) {
-            var idx = 0
-            var reused = false
-            if (freeSlots.size > 0) {
-                idx = freeSlots.remove(at: freeSlots.size - 1)
-                reused = true
-            } else {
-                idx = totalSlots
-                // 全局硬上限：并发窗口各自按 base 记账，可能同时越过同一上限 ⇒ 这里兜底。
-                if (idx >= capacityLimit) {
-                    failWith(ErrCode.HANDLE_WINDOW_FULL)
-                }
-                totalSlots = totalSlots + 1
-            }
-            let seg = ensureSegLocked(idx)
-            let off = offOf(idx)
-            seg.objs[off] = obj
-            seg.tags[off] = tok
-            if (!reused) {
-                seg.gens[off] = 1u16
-            }
-            seg.alive[off] = true
-            seg.constFlags[off] = isConst
-            seg.constRefs[off] = if (isConst) { 1 } else { 0 }
-            seg.escapeFlags[off] = false
-            seg.frozenFlags[off] = false
-            makeId(idx, tok, seg.gens[off])
+    /** 归还一个索引到其归属分片（调用方已释放对该槽的独占）。 */
+    private static func pushFree(i: Int64): Unit {
+        let s = i & (FREE_STRIPES - 1)
+        synchronized(HandleTable.stripes.mtxs[s]) {
+            HandleTable.stripes.lists[s].add(i)
         }
+    }
+
+    /**
+     * 取一个空闲索引：优先本线程上次命中的分片，再顺序扫描其余分片；全空返回 -1。
+     * 返回时该索引已从分片摘除 ⇒ 调用方对它独占，后续写入无需加锁。
+     */
+    private static func popFree(): Int64 {
+        let start = match (freeHint.get()) {
+            case Some(v) => v
+            case None => 0
+        }
+        var k = 0
+        while (k < FREE_STRIPES) {
+            let s = (start + k) & (FREE_STRIPES - 1)
+            let got = synchronized(HandleTable.stripes.mtxs[s]) {
+                let list = HandleTable.stripes.lists[s]
+                if (list.size > 0) {
+                    list.remove(at: list.size - 1)
+                } else {
+                    -1
+                }
+            }
+            if (got > 0) {
+                freeHint.set(Some(s))
+                return got
+            }
+            k = k + 1
+        }
+        -1
+    }
+
+    /** 表尾增长（全局 `mtx`；每 1024 槽一次，冷路径）。 */
+    private static func growSlot(): Int64 {
+        synchronized(mtx) {
+            let idx = totalSlots
+            // 全局硬上限：并发窗口各自按 base 记账，可能同时越过同一上限 ⇒ 这里兜底。
+            if (idx >= capacityLimit) {
+                failWith(ErrCode.HANDLE_WINDOW_FULL)
+            }
+            let _ = ensureSegLocked(idx)
+            totalSlots = idx + 1
+            idx
+        }
+    }
+
+    /**
+     * 分配一个槽并写入（路径 A/B/C 共用）。
+     *
+     * 索引从分片摘除后即由本线程独占（不可达、`alive=false`），故**槽写入不再持全局锁**；
+     * 新 ID 尚未交给调用方，持旧 ID 的读者会被 `gens` 不匹配拒绝。
+     */
+    private static func newSlot(obj: Any, tok: UInt16, isConst: Bool): Int64 {
+        var idx = popFree()
+        var reused = true
+        if (idx <= 0) {
+            reused = false
+            idx = growSlot()
+        }
+        let seg = segAt(idx)
+        let off = offOf(idx)
+        seg.objs[off] = obj
+        seg.tags[off] = tok
+        if (!reused) {
+            seg.gens[off] = 1u16
+        }
+        seg.alive[off] = true
+        seg.constFlags[off] = isConst
+        seg.constRefs[off] = if (isConst) { 1 } else { 0 }
+        seg.escapeFlags[off] = false
+        seg.frozenFlags[off] = false
+        makeId(idx, tok, seg.gens[off])
     }
 
     /** 用例/宿主审计：当前活槽数。 */
@@ -1090,9 +1178,7 @@ public class HandleTable {
 
     /** 用例/宿主审计：因世代号耗尽而退休的槽数（退休槽永久失效、不可复用）。 */
     public static func retiredCount(): Int64 {
-        synchronized(mtx) {
-            retiredSlots
-        }
+        retiredSlots.load()
     }
 
     /** 测试专用：清空整张表并复位窗口（不用于生产路径）。 */
@@ -1119,8 +1205,14 @@ public class HandleTable {
                 }
                 c = c + 1
             }
-            freeSlots.clear()
-            retiredSlots = 0
+            var st = 0
+            while (st < FREE_STRIPES) {
+                synchronized(HandleTable.stripes.mtxs[st]) {
+                    HandleTable.stripes.lists[st].clear()
+                }
+                st = st + 1
+            }
+            retiredSlots.store(0)
             totalSlots = 1
             let s0 = ensureSegLocked(0)
             s0.tags[0] = TypeToken.RESERVED
