@@ -18,7 +18,6 @@ package fountain::f_jit.runtime
 import std.collection.ArrayList
 import std.collection.ConcurrentModificationException
 import std.collection.HashMap
-import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
 import fountain::f_jit.bytecode.CanonKey
@@ -37,10 +36,24 @@ import fountain::f_jit.bytecode.ConstMapKey
  * - **不占用句柄窗口**（记账零新增），条目数 ≤ 嵌套深度。
  */
 public class IterTable {
-    private static let entries: ArrayList<?IterEntry> = ArrayList<?IterEntry>()
-    private static let gens: ArrayList<UInt32> = ArrayList<UInt32>()
-    /** 表状态锁（A5/P2-2b）：桥调用虽串行，但宿主多线程可直接调 H49/H62。 */
-    private static let mtx = Mutex()
+    /**
+     * 迭代器表是**调用级**资源：游标含 `gen`、不跨调用，更没有跨线程语义。
+     * 并行调用下改为**线程私有**（D8）——锁随表一起消失，`for (k in map)` 的每次
+     * `next` 不再争全局锁。
+     *
+     * 状态类型见文件末尾的 `IterState`（仓颉不支持类内嵌套类型声明）。
+     */
+    private static let tls = ThreadLocal<IterState>()
+
+    private static func state(): IterState {
+        match (tls.get()) {
+            case Some(s) => s
+            case None =>
+                let s = IterState()
+                tls.set(Some(s))
+                s
+        }
+    }
 
     /**
      * 建立迭代器（H49 `map_iter_begin`）。
@@ -49,34 +62,27 @@ public class IterTable {
      */
     public static func open(h: Int64, elementKind: UInt8): Int64 {
         let m = HandleTable.fetchMap(h)
-        synchronized(mtx) {
-            let e = IterEntry(h, m)
-            let idx = entries.size
-            entries.add(Some(e))
-            gens.add(1u32)
-            makeCursor(idx, 1u32)
-        }
+        let st = state()
+        let e = IterEntry(h, m)
+        let idx = st.entries.size
+        st.entries.add(Some(e))
+        st.gens.add(1u32)
+        makeCursor(idx, 1u32)
     }
 
     /** 推进（mode 0）：返回 0/1 —— **终止判定的唯一来源**（1 = 已推进至有效条目）。 */
     public static func next(cur: Int64): Bool {
-        synchronized(mtx) {
-            entryOf(cur).advance()
-        }
+        entryOf(cur).advance()
     }
 
     /** 取键（mode 1）：未推进 / 已关闭 ⇒ 99 防御。 */
     public static func key(cur: Int64): Int64 {
-        synchronized(mtx) {
-            entryOf(cur).keyCellLocked()
-        }
+        entryOf(cur).keyCellLocked()
     }
 
     /** 取值（mode 2）：未推进 / 已关闭 ⇒ 99 防御。 */
     public static func value(cur: Int64): Int64 {
-        synchronized(mtx) {
-            entryOf(cur).valueCellLocked()
-        }
+        entryOf(cur).valueCellLocked()
     }
 
     /** 关闭（mode 3）：幂等。 */
@@ -85,40 +91,37 @@ public class IterTable {
         if (idx < 0) {
             return
         }
-        synchronized(mtx) {
-            if (idx >= entries.size) {
-                return
-            }
-            match (entries[idx]) {
-                case Some(e) =>
-                    if (gens[idx] == genOfCursor(cur)) {
-                        e.close()
-                    }
+        let st = state()
+        if (idx >= st.entries.size) {
+            return
+        }
+        match (st.entries[idx]) {
+            case Some(e) =>
+                if (st.gens[idx] == genOfCursor(cur)) {
+                    e.close()
+                }
+            case None => ()
+        }
+    }
+
+    /** 调用结束与 DEOPT 交接两点清空（旧游标一律失效 ⇒ 99；只清本线程）。 */
+    public static func clearAll(): Unit {
+        let st = state()
+        st.entries.clear()
+        st.gens.clear()
+    }
+
+    /** 当前线程的活跃条目数（≤ 嵌套深度；审计用）。 */
+    public static func liveCount(): Int64 {
+        let st = state()
+        var n = 0
+        for (i in 0..st.entries.size) {
+            match (st.entries[i]) {
+                case Some(e) => if (!e.closed) { n = n + 1 }
                 case None => ()
             }
         }
-    }
-
-    /** 调用结束与 DEOPT 交接两点清空（旧游标一律失效 ⇒ 99）。 */
-    public static func clearAll(): Unit {
-        synchronized(mtx) {
-            entries.clear()
-            gens.clear()
-        }
-    }
-
-    /** 当前活跃条目数（≤ 嵌套深度；审计用）。 */
-    public static func liveCount(): Int64 {
-        synchronized(mtx) {
-            var n = 0
-            for (i in 0..entries.size) {
-                match (entries[i]) {
-                    case Some(e) => if (!e.closed) { n = n + 1 }
-                    case None => ()
-                }
-            }
-            n
-        }
+        n
     }
 
     // ---- 游标编解码 ----
@@ -144,19 +147,26 @@ public class IterTable {
     }
 
     private static func entryOf(cur: Int64): IterEntry {
+        let st = state()
         let idx = idxOfCursor(cur)
-        if (idx < 0 || idx >= entries.size) {
+        if (idx < 0 || idx >= st.entries.size) {
             failWith(ErrCode.HELPER_PANIC)
         }
-        match (entries[idx]) {
+        match (st.entries[idx]) {
             case Some(e) =>
-                if (gens[idx] != genOfCursor(cur)) {
+                if (st.gens[idx] != genOfCursor(cur)) {
                     failWith(ErrCode.HELPER_PANIC)
                 }
                 e
             case None => failWith(ErrCode.HELPER_PANIC)
         }
     }
+}
+
+/** 线程私有的迭代器表状态（`IterTable` 的 TLS 载荷）。 */
+private class IterState {
+    let entries: ArrayList<?IterEntry> = ArrayList<?IterEntry>()
+    let gens: ArrayList<UInt32> = ArrayList<UInt32>()
 }
 
 /** 迭代器表项：持有 Map 的宿主迭代器 + 相位 / 关闭标记。 */
