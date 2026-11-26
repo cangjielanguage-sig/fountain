@@ -220,7 +220,7 @@
 
 ## 9. 实施状态（2026-11-26）
 
-已落地（P0–P5）：
+已落地（P0–P6）：
 
 - **P0 存储选型**：分块存储（1024 槽/段，定长目录），见 D3「P0 结论」。
 - **P1.2 / P1.3**：窗口记账与窗口栈改线程私有；`ctx.hwBase/hwCap/hwTop` 是每线程真值。
@@ -230,6 +230,8 @@
 - **P1.4**：`IterTable` 改线程私有（`ThreadLocal<IterState>`），锁随表消失。
 - **P2**：`deadline` / `fnTableBase` / helper 栈改线程私有，删 `JitExecutor.envMtx`；
   `invokeOff` 对函数表基址做保存/恢复（重入不再把外层清 0）。
+- **P6**：`NativeMem` 计数原子化；`ParallelThroughput_test` 实测 2/4/8 线程 = 1.27×/2.40×/1.91×
+  （共享 7 核 VM，8 线程超订）；并发后 `liveCount`/`outstanding()` 回基线；README 增并发 Q8。
 - **P5**：`close` 在并行调用下排空全部在飞调用后再进终态（新调用 19），`close(0)` 超时回退到可用态；
   新增 `UnloadConcurrency_test` 2 条（4 线程在飞 + 超时回退），连续 3 轮稳定。
 - **P4**：`PromotionGroup` 全方法加锁（跨线程释放安全）；包装「A 创建 → B/C 调用 → D 释放」用例通过。
@@ -244,7 +246,7 @@
 - **P1.5**：`NativeMem.mallocCount/freeCount` 仍是普通静态计数（诊断口径，暂未原子化）。
 - **P6**：基准、泄漏、文档。
 
-验收：全量 **1187 用例**；1186 条稳定通过，`PerfOverride_test` 在高负载下间歇假失败（单跑通过）。
+验收：全量 **1188 用例 / 1188 通过 / 0 失败**（含基准用例）；`PerfOverride_test` 在高负载下仍可能间歇假失败（单跑通过）。
 单线程路径行为不变。
 新增 `ThreadLocalEnv_test`（3 条，三处 TLS 同时改回全局时三条全红）。
 P3 后 `ParallelCall_test` 在真实并发下连续 3 轮 6/6，`CallForFnConcurrency_test` 2/2。

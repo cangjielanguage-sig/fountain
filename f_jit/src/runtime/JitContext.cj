@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_jit.runtime
 
+import std.sync.AtomicInt64
+
 /**
  * 非托管内存的分配 / 释放计数 —— design D6、plan-m1 S4.1（T27 泄漏断言）。
  *
@@ -23,18 +25,41 @@ package fountain::f_jit.runtime
  * 就是让「全路径配对、无泄漏」能被**计数断言**证明。本类就是这个计数器的落点。
  */
 public class NativeMem {
-    public static var mallocCount: Int64 = 0
-    public static var freeCount: Int64 = 0
+    /** 并行调用下 ctx/转储的分配来自任意线程：计数必须原子（P1.5）。 */
+    private static let mallocs = AtomicInt64(0)
+    private static let frees = AtomicInt64(0)
+
+    /** 累计分配数（只读；用例断言用）。 */
+    public static prop mallocCount: Int64 {
+        get() {
+            mallocs.load()
+        }
+    }
+
+    /** 累计释放数（只读；用例断言用）。 */
+    public static prop freeCount: Int64 {
+        get() {
+            frees.load()
+        }
+    }
+
+    internal static func bumpMalloc(): Unit {
+        let _ = mallocs.fetchAdd(1)
+    }
+
+    internal static func bumpFree(): Unit {
+        let _ = frees.fetchAdd(1)
+    }
 
     /** 计数归零（用例内断言用）。 */
     public static func resetCounters(): Unit {
-        mallocCount = 0
-        freeCount = 0
+        mallocs.store(0)
+        frees.store(0)
     }
 
     /** 未配对数（> 0 即泄漏）。 */
     public static func outstanding(): Int64 {
-        mallocCount - freeCount
+        mallocs.load() - frees.load()
     }
 }
 
@@ -145,7 +170,7 @@ public class JitContext {
             p.write(6, 0)
             p.write(7, dbgBase)
         }
-        NativeMem.mallocCount = NativeMem.mallocCount + 1
+        NativeMem.bumpMalloc()
         JitContext(p)
     }
 
@@ -153,7 +178,7 @@ public class JitContext {
     public static func free(ctx: JitContext): Unit {
         HostFault.clear(ctx)
         unsafe { LibC.free<Int64>(ctx.p) }
-        NativeMem.freeCount = NativeMem.freeCount + 1
+        NativeMem.bumpFree()
     }
 
     /** 裸指针（传给机器码：`rdi` / `x0`）。 */

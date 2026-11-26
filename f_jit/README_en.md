@@ -620,6 +620,22 @@ Container captures are **slot-level, no cascade** (§14.6): element handles need
 elements are converted to host references on write (`cellToAny` = `getAny`) and live as long as the
 container.
 
+### Q7 Can multiple threads call the same `JitFunction` concurrently?
+
+Yes. `call` / `callForFn` no longer take a process-wide call lock: each call owns its window accounting
+and `JitContext`; `deadline`, the function-table base, and the user-helper stack are thread-local, while
+code memory, constants, and the entry table are shared read-only. A wrapper returned by `callForFn` may
+be created on thread A, called from B/C, and released with `close()` on thread D.
+
+Three constraints:
+
+- once `close(timeoutMs)` starts, new calls fail with 19 (contract error); in-flight calls finish first,
+  and a timeout restores the unit to the usable state;
+- `IterTable` cursors (`for (k in map)`) are thread-local; do not pass them across threads;
+- scaling depends on cores and load: on the shared 7-core build VM (load 3+) the measured speedups for
+  2/4/8 threads are 1.27× / 2.40× / 1.91×; 8 threads are oversubscribed, so a dedicated 8-core host
+  should do better (numbers in `doc/spec/feat-f-jit-parallel-call/verify.md`).
+
 ---
 
 ## 8. Known limitations

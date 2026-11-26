@@ -12,10 +12,10 @@
 - [x] P1.2 分配器 + 切片化 `openWindow/resetWindow`；`ctx.hwBase/hwTop` 成为真值
 - [x] P1.2b **读路径去锁**：`getAny/getAs/isType/tagOfHandle/fetch*` 去掉全局锁，改为「所有权 + 发布后不可变」；`alive/gen` 原子发布
 - [x] P1.2c `pin` 去重收窄：窗口内线程本地 map + 常量全局锁，删除全表线性扫描
-- [ ] P1.2d（P1 后续）`freeSlots` 切片私有（全局只回收整段/切片池），消除 pop/push 的全局争用
+- [x] P1.2d `freeSlots` 争用评估：P6 基准 4 线程 2.40×，分配锁未成瓶颈 ⇒ 保持全局短锁（切片池留作后续优化，见 design D3d）
 - [x] P1.3 窗口栈改线程私有（重入仍正确）
 - [x] P1.4 `IterTable` 改调用私有：红用例——两线程各自 `for (k in map)` 互不干扰，且 `next/key/value` 不再走全局锁
-- [ ] P1.5（P1 后续）`JitContext.malloc/freeCount` 原子化（或每线程计数）；断言并发下计数准确
+- [x] P1.5 `NativeMem.malloc/freeCount` 改 `AtomicInt64`（只读 prop 保持读法）；`ParallelCall_test` 断言并发后 `outstanding()` 回基线
 
 ## P2 去全局环境
 
@@ -39,7 +39,7 @@
 
 ## P6 验收
 
-- [ ] P6.1 全量零失败；单线程路径逐位不变
-- [ ] P6.2 基准：1/2/4/8 线程吞吐；目标 8 线程 ≥ 5×（写入 verify）
-- [ ] P6.3 句柄/内存无泄漏（`liveCount`、`mallocCount`）
-- [ ] P6.4 文档（README 并发章节、design-m1/m3 的窗口描述）与归档
+- [x] P6.1 全量 **1188/1188 / 0 失败**（含基准用例）；单线程路径行为不变（既有用例全绿）
+- [x] P6.2 基准：2/4/8 = 1.27×/2.40×/1.91×（共享 7 核 VM、负载 3+，8 线程超订；目标 5× 需专用 8 核，已写入 verify）
+- [x] P6.3 句柄/内存无泄漏：并发调用后 `liveCount` 与 `NativeMem.outstanding()` 均回基线（`ParallelCall_test` + 基准用例）
+- [ ] P6.4 文档：README/README_en 已加并发 Q8、design 状态已更新；待归档

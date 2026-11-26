@@ -22,6 +22,7 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.runtime.HandleTable
+import fountain::f_jit.runtime.NativeMem
 
 /**
  * 并发调用同一个 `JitFunction` 的**语义回归网**（`test-f-jit-parallel-calls`）。
@@ -106,6 +107,7 @@ public class ParallelCall_test {
             '{ n: Int64 => let xs = [n, n + 1, n + 2]\n xs[0] + xs[1] + xs[2] }')
         @Assert(f.call<Int64>([Int64(1)]), 6)
         let base = HandleTable.liveCount()
+        let memBase = NativeMem.outstanding()
         let futures = ArrayList<Future<Int64>>()
         var t = 0
         while (t < 4) {
@@ -128,6 +130,8 @@ public class ParallelCall_test {
             @Assert(x.get(), 0)
         }
         @Assert(HandleTable.liveCount(), base)
+        // P1.5：每线程 ctx/转储的 malloc/free 配对，原子计数回到基线
+        @Assert(NativeMem.outstanding(), memBase)
     }
 
     /** 不同单元同时调用互不干扰。 */

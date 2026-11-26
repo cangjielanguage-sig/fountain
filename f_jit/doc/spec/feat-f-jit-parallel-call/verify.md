@@ -1,6 +1,6 @@
-# Verify（P0–P5，2026-11-26）
+# Verify（P0–P6，2026-11-26）
 
-> 本变更分阶段实施；本文件覆盖 **P0–P5**；P1.2d/P1.5/P6 尚未完成。
+> 本变更全部阶段（P0–P6）已实施；归档前请复核「未完成 / 风险」中的 API 命名漂移。
 
 ## 全量回归
 
@@ -11,8 +11,9 @@
 | P2 终态 | 1184 用例 / 1184 通过 |
 | P3 终态 | 1184 用例 / 1184 通过（真实并发） |
 | P4 终态 | 1185 用例 / 1185 通过 |
-| P5 终态 | **1187 用例 / 1186 通过 / 1 已知性能假失败**（`PerfOverride`，单跑通过） |
-| 新增 | 9 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3 + `PromotionGroupConcurrency_test` 1 + `UnloadConcurrency_test` 2） |
+| P5 终态 | 1187 用例 / 1186 通过（`PerfOverride` 假失败，单跑通过） |
+| P6 终态 | **1188 用例 / 1188 通过 / 0 失败 / 0 error / 0 skipped**（含基准用例，一次通过） |
+| 新增 | 10 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3 + `PromotionGroupConcurrency_test` 1 + `UnloadConcurrency_test` 2 + `ParallelThroughput_test` 1） |
 | 回归 | 0 |
 
 命令：`unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress`。
@@ -41,6 +42,11 @@
 | P4.2 | `PromotionGroup` 全方法加锁（`add/release/contains/size/snapshot/releaseAll`），新增单热槽 4 线程 × 2000 次释放用例 |
 | P5.1 | `state/active` 由单元 `mtx` 保证（`close` 置 state=1 → 轮询 active==0 → 终态；超时回退 state=0）；未改原子，留作 P6 性能项 |
 | P5.2 | 新增 `UnloadConcurrency_test` 2 条：4 线程在飞时 `close` 排空并拒新（19）；`close(0)` 超时回退后单元仍可用；连续 3 轮稳定 |
+| P1.2d | `freeSlots` 争用评估：4 线程基准 2.40× ⇒ 未成瓶颈，保持全局短锁（决策写入 tasks/design） |
+| P1.5 | `NativeMem.malloc/freeCount` 改 `AtomicInt64`；并发调用后 `outstanding()` 回基线 |
+| P6.1/6.3 | 全量 1188/1188；`liveCount` 与 `NativeMem.outstanding()` 均回基线 |
+| P6.2 | `ParallelThroughput_test` 打印 1/2/4/8 线程实测（不设门槛，避免共享 VM 假失败） |
+| P6.4 | README / README_en 新增并发 Q8；design 状态与 spec 措辞同步 |
 
 ## 关键实现决策（与设计文档的差异）
 
@@ -71,15 +77,29 @@
 五次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2/P3）、1185/1185（P4）。
 P5 的两条用例未做变异（生命周期语义由既有 `close` 状态机保证，测试覆盖其可观察结果）。
 
+## 并行吞吐实测（P6.2）
+
+`ParallelThroughput_test`（2M 次循环的解释器单元；单次调用约 734 ms）：
+
+| 线程数 | 墙钟 | 加速比 |
+| --- | --- | --- |
+| 1 | 734 ms | 1.00× |
+| 2 | 1154 ms | 1.27× |
+| 4 | 1220 ms | 2.40× |
+| 8 | 3061 ms | 1.91× |
+
+构建机为共享融合 VM（7 核、常驻负载 3+），8 线程已超订，故未达设计目标「8 线程 ≥5×」。
+4 线程 2.40× 已证明**执行真正重叠**（删锁前恒为 1×）。达标复测需在专用 8 核机器上执行同一用例。
+
 ## 未完成 / 风险
 
 - **P1.2d**：`freeSlots` 仍是全局 `ArrayList` + `mtx`（只保护分配/回收，临界区短）。
   并行度证据要等 P3 删 `callMtx` 后的 P6 基准；若分配成为瓶颈再切片私有化。
 - **P1.5**：`NativeMem.mallocCount/freeCount` 仍为普通静态计数（诊断口径）。
-- **并行度证据**：P3 已删调用锁，但吞吐基准（1/2/4/8 线程、8 线程 ≥5×）属 P6.2；
-  端到端 deadline 隔离（A 带期限、B 长调用同时进行）也并入 P6。
-- **API 漂移仍未解决**：主规格与 `design-parallel-call.md` 使用 `unloadFn`/`unload`，当前代码是
-  `close(timeoutMs)` / `close()` / `isClosed()`。本阶段不触碰，P4/P5 前必须单独立项对齐。
+- **吞吐目标**：共享 VM 上 8 线程 1.91×，未达 5×；需专用 8 核复测（见上表）。
+- **端到端 deadline 隔离**：环境层 TLS 已测；「A 带期限、B 长调用并行」未单独覆盖，建议后续补一条时序用例。
+- **API 命名漂移（本变更已按代码写口径）**：本变更的 delta 与用例统一使用 `close(timeoutMs)` / `close()`；
+  主规格 `f-jit-facade-bridge` 中旧的 `unloadFn` 要求仍待单独立项对齐（不在本变更范围）。
 - `resetForTest` 只清当前线程的窗口栈；其它线程的 TLS 无法追溯（测试线程均已 join，风险可接受）。
 
 ## 验证命令

@@ -52,14 +52,14 @@ public class DbgDump {
             p.write(0, 0)
             p.write(1, 0)
         }
-        NativeMem.mallocCount = NativeMem.mallocCount + 1
+        NativeMem.bumpMalloc()
         p
     }
 
     /** 配对释放（桥 `finally`；T27）。 */
     public static func freeDump(p: CPointer<Int64>): Unit {
         unsafe { LibC.free<Int64>(p) }
-        NativeMem.freeCount = NativeMem.freeCount + 1
+        NativeMem.bumpFree()
     }
 
     /**
