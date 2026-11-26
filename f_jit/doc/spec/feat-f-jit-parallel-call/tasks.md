@@ -42,4 +42,4 @@
 - [x] P6.1 全量 **1188/1188 / 0 失败**（含基准用例）；单线程路径行为不变（既有用例全绿）
 - [x] P6.2 基准：2/4/8 = 1.27×/2.40×/1.91×（共享 7 核 VM、负载 3+，8 线程超订；目标 5× 需专用 8 核，已写入 verify）
 - [x] P6.3 句柄/内存无泄漏：并发调用后 `liveCount` 与 `NativeMem.outstanding()` 均回基线（`ParallelCall_test` + 基准用例）
-- [ ] P6.4 文档：README/README_en 已加并发 Q8、design 状态已更新；待归档
+- [x] P6.4 文档：README/README_en 已加并发 Q8、design 状态已更新；已归档
