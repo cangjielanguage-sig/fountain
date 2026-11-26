@@ -62,37 +62,37 @@
 
 ## P4 P1.3 JitFunction / EscapedClosure state/active 原子化
 
-- [ ] P4.1 **基线**：重采 `L1/Q1/Q4/S4` 各 5 次，写入文档 §6 的 P1.3 行；同时记录 `S4` 是否来自机器码路径（P1.2 的 `jitBacked` 结论）
-- [ ] P4.2 **确定性竞态用例先行（Red）**：
+- [x] P4.1 **基线**：重采 `L1/Q1/Q4/S4` 各 5 次，写入文档 §6 的 P1.3 行；同时记录 `S4` 是否来自机器码路径（P1.2 的 `jitBacked` 结论）
+- [x] P4.2 **确定性竞态用例先行（Red）**：
   - 在 `enter` 的 `state.load()` 与 `active+1` 之间加 package-internal 测试钩子 `enterPauseHook`（默认 `None`，生产零成本）；
   - 用例：钩子内阻塞 → 另一线程 `close` 到终态 → 放行 → 该调用必须 19，且单元/闭包 `active` 均归零（旧实现无复读，此处会带入已释放单元 ⇒ 必红）；
   - 并发 `close` 4 线程 ⇒ 全部成功、`release` 回调只发生一次、终态后调用 19；
   - 包装实例在闭包已释放时调用 ⇒ 19 且两处 `active` 不残留
-- [ ] P4.3 **实现**：
+- [x] P4.3 **实现**：
   - `state/active` 改 `AtomicInt64`（单元与 `EscapedClosure` 各一组）；
   - `enter`：「读 state → `active+1` → 复读 state」，变化则 `active−1` 抛 19；
   - `exit`：`active−1`；
   - `close`：CAS 0→1 决出胜者，轮询 `active==0`，胜者 `store 2` 并做冷路径收尾；超时 CAS 1→0 返回 false；败者只等终态；
   - 包装实例对单元与本闭包各做一次双检，失败按相反顺序撤销；
   - `escaped` / `escapedSeq` / `lastEscaped` / `cacheKey` / `release` **仍留在 `mtx`**（冷路径）
-- [ ] P4.4 **变异验证**（硬要求）：临时去掉 `enter` 的「复读 state」后，P4.2 的**钩子阻塞晚到用例**必须变红；
+- [x] P4.4 **变异验证**（硬要求）：临时去掉 `enter` 的「复读 state」后，P4.2 的**钩子阻塞晚到用例**必须变红；
   不变红说明用例没覆盖到，先补用例再继续。验证完恢复实现
-- [ ] P4.5 **并发回归**：`ParallelCall_test`、`UnloadConcurrency_test`、`PromotionGroupConcurrency_test`、
+- [x] P4.5 **并发回归**：`ParallelCall_test`、`UnloadConcurrency_test`、`PromotionGroupConcurrency_test`、
   `WindowIsolation_test` 各 3 轮全绿
-- [ ] P4.6 **复测**：`L1/Q1/Q4/S4` 各 5 次
-- [ ] P4.7 **判定**：`Q4` 或 `S4` 提升 ≥ MOV，且 `UnloadConcurrency_test` 3 轮全绿，且其它回退 ≤2%，且全量零失败 ⇒ **keep**；
-  任何指标未达 MOV ⇒ **revert**；出现 close 与晚到 enter 的竞态 ⇒ **revert** 并记录
+- [x] P4.6 **复测**：`L1/Q1/Q4/S4` 各 5 次
+- [x] P4.7 **判定（revert）**：`Q4` 或 `S4` 提升 ≥ MOV，且 `UnloadConcurrency_test` 3 轮全绿，且其它回退 ≤2%，且全量零失败 ⇒ **keep**；
+  任何指标未达 MOV ⇒ **revert**；出现 close 与晚到 enter 的竞态 ⇒ **revert** 并记录。**实测：Q4 +1.2%、L1 −0.1%、S4 −9.9%，无指标达 MOV ⇒ 已回滚；代码、测试、`enterPauseHook` 全部删除**
 
 ## P5 收口
 
-- [ ] P5.1 **全量**：`unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress` 零失败
+- [x] P5.1 **全量**：`unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress` 零失败
   （条数不再写死：基线 1188，T0 后 +4，各护栏用例再递增；判定标准是 0 失败）
-- [ ] P5.2 **用户面门禁**：`f-jit-facade-bridge` 的「用户面再导出与冒烟」用例全绿，确认无 API 面扩散
-- [ ] P5.3 **决策日志回填**：文档 §6 表逐行填「基线中位数 / 改动后中位数 / Δ% / 其它回退 / 全量 / 结论」，
+- [x] P5.2 **用户面门禁**：`f-jit-facade-bridge` 的「用户面再导出与冒烟」用例全绿，确认无 API 面扩散
+- [x] P5.3 **决策日志回填**：文档 §6 表逐行填「基线中位数 / 改动后中位数 / Δ% / 其它回退 / 全量 / 结论」，
   §7 填日期、项、指标、基线→改后、决策、提交号
-- [ ] P5.4 **停止条件**：若连续 **2 项**未达 MOV ⇒ 停止继续堆优化，改用 `perf`/火焰图定位真实热点（文档 §8）
-- [ ] P5.5 **文档状态**：`f_jit/doc/optimize-call-path.md` 的状态行按实际结果更新（已实施/部分实施 + 保留与回滚清单）
-- [ ] P5.6 **提交拆分**：T0 / P1.1 / P1.2 / P1.3 各自独立提交，每个提交可单独 `git revert`；
+- [x] P5.4 **停止条件**：若连续 **2 项**未达 MOV ⇒ 停止继续堆优化，改用 `perf`/火焰图定位真实热点（文档 §8）
+- [x] P5.5 **文档状态**：`f_jit/doc/optimize-call-path.md` 已更新为「部分实施：P1.1/P1.2 keep、P1.3 revert」，并写入 §6/§7 数据
+- [x] P5.6 **提交拆分**：T0 / P1.1 / P1.2 / P1.3 各自独立提交，每个提交可单独 `git revert`；
   被 revert 的项在 §7 留痕，不在代码里留「注释掉的旧实现」
 
 ## 不做（本变更边界）

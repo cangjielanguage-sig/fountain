@@ -21,6 +21,17 @@
 `isJitBacked` 未在吞吐基准中断言（`ParallelThroughput_test.cj:47-85` 只打印），所以 734 ms / 2M 次的
 `S*` 数据**可能来自解释器**——这决定了 T0 必须先补观测，否则后续「锁的收益」测的是错误的对象。
 
+## 结论（数据定稿，2026-11-26）
+
+| 项 | 目标指标 | 基线 → 改动后（5 次中位数） | 判定 |
+| --- | --- | --- | --- |
+| P1.1 HostFault TLS | Q4 | 195595 → 444715 calls/s（+127.4%） | **keep** |
+| P1.2 HostField 快照 | F1/F4 | 848/1710 → 507/219 ns（−40.2% / −87.2%） | **keep** |
+| P1.3 生命周期原子化 | Q4/L1/S4 | 475096/5180/2.22 → 480830/5175/2.00（+1.2% / −0.1% / −9.9%） | **revert** |
+
+P1.3 的代码、测试与 `enterPauseHook` 已全部回滚；D3 保留为「此路不通」的分析记录。
+剩余瓶颈更可能在每次调用的窗口开合/分配锁，而不是 `enter/exit` 两把锁——留待 Phase 2 验证。
+
 ## 测量协议（T0，不参与 keep/revert）
 
 ### 指标与场景
@@ -91,7 +102,7 @@ design 风险表登记。
 | --- | --- | --- |
 | P1.1 HostFault | **真实行为差**：旧全局表下「A 线程记录、B 线程以同一 ctx 查询」会读到 Some；新语义要求 None | 该用例在实现前必须失败；失败原因是断言不满足，不是编译错误 |
 | P1.2 HostFieldTable | **无行为 Red**（纯性能重构） | 语义用例是 characterization 护栏，实现前后都应绿；keep/revert **只由 `F1/F4` 数据决定**。这是本变更显式声明的 TDD 例外：不为了制造 Red 而引入人为的行为变化 |
-| P1.3 state/active | **确定性竞态**：需要把「读 state 之后、`active+1` 之前」的窗口固定下来 | 增加 package-internal 测试钩子 `enterPauseHook`（默认 `None`，仅测试设置）在 `state.load()` 后调用；测试在钩子里阻塞，另一线程 `close`，放行后该调用必须 19 且 `active` 归零。去掉「复读 state」后该用例必须变红 |
+| P1.3 state/active | 已用 `enterPauseHook` 做确定性竞态 + 变异验证 | **数据不达标已回滚**：Q4 +1.2%、L1 −0.1%、S4 −9.9%，无指标达 MOV；钩子与测试一并删除，不留生产脚手架 |
 
 > P1.2 的例外需要用户在评审时明确接受；不接受则本项不进入 apply。
 
@@ -119,7 +130,10 @@ private static let current = AtomicReference<FieldSnapshot>(empty)   // 仅写�
   `AtomicInt64.compareAndSwap(old, new)` 存在；`ThreadLocal` 写法与 `runtime/RuntimeEnv.cj` 一致。
   探针若与文档不符，停下来回报，**不自行发明**替代发布机制。
 
-### D3 生命周期：原子量 + 双检，冷路径仍留在 `mtx`
+### D3 生命周期：原子量 + 双检（**评估后否决，未保留**）
+
+> 本节保留为分析记录。实现与变异验证均通过，但 5 次复测无指标达 MOV（Q4 +1.2%、L1 −0.1%、
+> S4 −9.9%），按 §1 硬规则回滚；代码、测试、`enterPauseHook` 均已删除。
 
 `JitFunction.mtx` 现在同时守三类状态，只有第一类在执行路径上：
 
@@ -202,7 +216,7 @@ T0   CallPathBench_test（B1–B4）+ ParallelThroughput 观测
      ↓ 5 次基线、算 MOV、写 §6/§7
 P1.1 HostFault TLS        → 基线 → 改 → 复测 Q1/Q4/L1/C1 → keep/revert（独立提交）
 P1.2 HostFieldTable 快照  → 基线 → 改 → 复测 F1/F4（≥10%） → keep/revert（独立提交）
-P1.3 state/active 原子化  → 基线 → 改 → 变异验证 → 复测 L1/Q1/Q4/S4 → keep/revert（独立提交）
+P1.3 state/active 原子化  → 基线 → 改 → 变异验证 → 复测 L1/Q1/Q4/S4 → **revert（无收益）**
      ↓
 收口：全量零失败、决策日志回填、文档状态更新
 ```
