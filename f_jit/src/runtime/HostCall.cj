@@ -18,7 +18,6 @@ package fountain::f_jit.runtime
 import std.collection.ArrayList
 import std.collection.HashMap
 import std.math.numeric.Decimal
-import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
@@ -207,68 +206,100 @@ internal func asObj(c: Int64): Object {
     HandleTable.fetchHostObject(c)
 }
 
+/** 一次调用的异常记录（文本 + 原始异常对象合并，避免两次查找）。 */
+private class FaultEntry {
+    let text: String
+    let ex: Exception
+
+    init(text: String, ex: Exception) {
+        this.text = text
+        this.ex = ex
+    }
+}
+
 /**
- * 宿主异常 cause 通道（**调用私有**）。
+ * 宿主异常 cause 通道（**调用私有 + 线程本地**）。
  *
  * ctx 布局冻结（64 B 无 cause 字段），故按 ctx 地址做调用级旁路：记录原始异常全文
  * （message + causedBy 链）与异常对象（桥可据此 `printStackTrace` 打印完整仓颉栈）。
- * 条目随 `takeCause`/`clear` 销毁，不跨调用、不跨线程共享。
+ *
+ * `create` / `record` / `causeOf` / `free` 都发生在调用线程（桥的 try/finally 结构保证），
+ * 因此表放 `ThreadLocal`：健康路径（无异常）`free` 不取锁、不分配；跨线程读得到「无记录」。
  */
 public class HostFault {
-    private static let mtx = Mutex()
-    private static let texts = HashMap<UInt64, String>()
-    private static let exceptions = HashMap<UInt64, Exception>()
+    private static let tls = ThreadLocal<HashMap<UInt64, FaultEntry>>()
 
     private static func keyOf(ctx: JitContext): UInt64 {
         UInt64(ctx.cp().toUIntNative())
     }
 
+    private static func tableForWrite(): HashMap<UInt64, FaultEntry> {
+        match (tls.get()) {
+            case Some(m) => m
+            case None =>
+                let m = HashMap<UInt64, FaultEntry>()
+                tls.set(Some(m))
+                m
+        }
+    }
+
     /** 记录一次宿主异常（后写覆盖——同一调用内最后一次失败为准）。 */
     public static func record(ctx: JitContext, e: Exception): Unit {
         let k = HostFault.keyOf(ctx)
-        synchronized(mtx) {
-            texts.add(k, HostFault.describe(e))
-            exceptions.add(k, e)
-        }
+        HostFault.tableForWrite().add(k, FaultEntry(HostFault.describe(e), e))
     }
 
     /** 读取 cause 文本（不销毁；供断言/诊断）。 */
     public static func causeOf(ctx: JitContext): ?String {
         let k = HostFault.keyOf(ctx)
-        synchronized(mtx) {
-            texts.get(k)
+        match (tls.get()) {
+            case Some(m) =>
+                match (m.get(k)) {
+                    case Some(e) => Some(e.text)
+                    case None => None
+                }
+            case None => None
         }
     }
 
     /** 读取原始异常对象（不销毁；桥据此打印完整栈）。 */
     public static func exceptionOf(ctx: JitContext): ?Exception {
         let k = HostFault.keyOf(ctx)
-        synchronized(mtx) {
-            exceptions.get(k)
+        match (tls.get()) {
+            case Some(m) =>
+                match (m.get(k)) {
+                    case Some(e) => Some(e.ex)
+                    case None => None
+                }
+            case None => None
         }
     }
 
     /** 取走 cause 文本并清空本次调用的记录（桥构造 `JitException` 时调用）。 */
     public static func takeCause(ctx: JitContext): ?String {
         let k = HostFault.keyOf(ctx)
-        synchronized(mtx) {
-            let v = texts.get(k)
-            texts.remove(k)
-            exceptions.remove(k)
-            v
+        match (tls.get()) {
+            case Some(m) =>
+                let v: ?String = match (m.get(k)) {
+                    case Some(e) => Some(e.text)
+                    case None => None
+                }
+                m.remove(k)
+                v
+            case None => None
         }
     }
 
-    /** 清空本次调用的记录（无 cause 的文件收尾/测试复位）。 */
+    /** 清空本次调用的记录（无 cause 的文件收尾/测试复位；无表时零成本）。 */
     public static func clear(ctx: JitContext): Unit {
         let k = HostFault.keyOf(ctx)
-        synchronized(mtx) {
-            texts.remove(k)
-            exceptions.remove(k)
+        match (tls.get()) {
+            case Some(m) => m.remove(k)
+            case None => ()
         }
     }
 
-    /** 异常全文：`toString` + `causedBy` 链 + **完整仓颉异常栈**（帧序 = 抛出点在前）。 */
+/** 异常全文：`toString` + `causedBy` 链 + **完整仓颉异常栈**（帧序 = 抛出点在前）。 */
     private static func describe(e: Exception): String {
         var s = HostFault.describeOne(e)
         var cur = e.causedBy

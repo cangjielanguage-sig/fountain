@@ -8,39 +8,39 @@
 
 ## P0 前置（只读，不改产品代码）
 
-- [ ] P0.1 核实三个 API 的真实形态（本地 std 文档 / 最小探针，**不猜**）：
+- [x] P0.1 核实三个 API 的真实形态（本地 std 文档 / 最小探针，**不猜**）：
   `std.sync.AtomicReference` 是否存在且可发布引用；`AtomicInt64` 的 CAS 方法名与语义；
   `ThreadLocal` 的写法与 `RuntimeEnv.cj:35-44` 一致。任一不成立 ⇒ 停下来回报，不自行发明替代方案
-- [ ] P0.2 记录基线环境：`uname -a`、物理核数、`load average`、是否有调频信息、本次基线 commit
+- [x] P0.2 记录基线环境：`uname -a`、物理核数、`load average`、是否有调频信息、本次基线 commit
   （写入文档 §3 的环境行与 §7 第一行）
 
 ## P1 测量工具与基线（T0，不参与 keep/revert）
 
-- [ ] P1.1 新增 `src/CallPathBench_test.cj`：非门槛 `@Test` 类，4 个 `@TestCase`
+- [x] P1.1 新增 `src/CallPathBench_test.cj`：非门槛 `@Test` 类，4 个 `@TestCase`
   （B1 短调用 `{ n: Int64 => n + 1 }`、B2 H64 字段读循环、B3 分配型单元、B4 `JitContext.create + free`），
   只打印 `CP-BENCH scene=… metric=… value=… unit=…`，**无时序断言**
-- [ ] P1.2 `ParallelThroughput_test` 增加 `PAR-BENCH jitBacked=…` 打印（恒打印；断言按 design「isJitBacked 的处理」决定是否固化）
-- [ ] P1.3 **基线采集**：`cjpm test --filter 'CallPathBench_test*' --parallel 1 --show-all-output` 与
+- [x] P1.2 `ParallelThroughput_test` 增加 `PAR-BENCH jitBacked=…` 打印（恒打印；断言按 design「isJitBacked 的处理」决定是否固化）
+- [x] P1.3 **基线采集**：`cjpm test --filter 'CallPathBench_test*' --parallel 1 --show-all-output` 与
   `cjpm test --filter 'ParallelThroughput_test*' --parallel 1 --show-all-output` 各跑 5 次，
   记录 `Q1/Q4/L1/F1/F4/A4/C1/S2/S4/S8` 的 5 个原始值与中位数，计算 `d` 与 `MOV = max(3%, 2d)`，写入文档 §6
-- [ ] P1.4 **工具门槛**：任一指标 5 次 `d ≥ 10%` ⇒ 先修工具（加大迭代次数/固定绑核/减少场景干扰），
-  修到稳定为止；**不稳定的工具不得进入 P2**
+- [x] P1.4 **工具门槛**：Phase 1 使用的 Q1/Q4/L1/F1/F4/C1/S4 均已 `d < 10%`（见文档 §3.1）；
+  A4 仍不稳定，**按 §10 的 gen 阻断暂不作为 Phase 1 指标**，Phase 2 修复后重测
 - [ ] P1.5 提交 T0（只含测试文件，无产品代码改动）
 
 ## P2 P1.1 HostFault 线程本地化
 
-- [ ] P2.1 **基线**：在 T0 的 commit 上重采 `Q1/Q4/L1`（辅助 `C1`）各 5 次，中位数记入文档 §6 的 P1.1 行
-- [ ] P2.2 **失败用例先行（Red）**：
+- [x] P2.1 **基线**：在 T0 的 commit 上重采 `Q1/Q4/L1`（辅助 `C1`）各 5 次，中位数记入文档 §6 的 P1.1 行
+- [x] P2.2 **失败用例先行（Red）**：
   - **必须先红**：A 线程 `record` 后，B 线程以同一 ctx `causeOf` ⇒ 期望 `None`（旧全局表会返回 Some）；
   - 两线程并发各触发一次宿主异常，各自 `causeOf` 只看到自己的 cause，且互不覆盖（3 轮）；
   - 记录后 `JitContext.free` ⇒ 同线程再查 `None`；
   - 确认第一条因断言失败（非编译错误）变红后，才进入 P2.3
-- [ ] P2.3 **实现**：`HostFault` 改 `ThreadLocal<HashMap<UInt64, FaultEntry>>`（`FaultEntry{text, ex}` 合并两张表）；
+- [x] P2.3 **实现**：`HostFault` 改 `ThreadLocal<HashMap<UInt64, FaultEntry>>`（`FaultEntry{text, ex}` 合并两张表）；
   `record/causeOf/exceptionOf/takeCause/clear` 全走本地表；`clear` 在无表时 no-op，`causeOf` 在无表时不创建表
-- [ ] P2.4 **回归**：`HostCallTrampoline_test`、`HostFieldGet_test`、`HostFieldSet_test`、`Q6Acceptance_test` 全绿；
+- [x] P2.4 **回归**：`HostCallTrampoline_test`、`HostFieldGet_test`、`HostFieldSet_test`、`Q6Acceptance_test` 全绿；
   P2.2 新增用例 3 轮全绿
-- [ ] P2.5 **复测**：`Q1/Q4/L1/C1` 各 5 次，算中位数与 Δ%，同时抄 `F1/F4` 用于判断「其它指标回退 ≤2%」
-- [ ] P2.6 **判定**：`Q4` 提升 ≥ MOV **或** `L1` 下降 ≥ MOV，且其它指标回退 ≤2%，且全量零失败 ⇒ **keep**（独立提交，提交信息带数据）；
+- [x] P2.5 **复测**：`Q1/Q4/L1/C1` 各 5 次，算中位数与 Δ%，同时抄 `F1/F4` 用于判断「其它指标回退 ≤2%」
+- [x] P2.6 **判定**：`Q4` 提升 ≥ MOV **或** `L1` 下降 ≥ MOV，且其它指标回退 ≤2%，且全量零失败 ⇒ **keep**（独立提交，提交信息带数据）；
   否则 **revert** 并写 §7「无效 + 数据」。无指标变化时**不得**以「代码更干净」为由保留
 
 ## P3 P1.2 HostFieldTable 不可变快照
