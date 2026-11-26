@@ -26,7 +26,7 @@
 
 - 同一 `JitFunction` 被 N 个线程并发 `call`，真正并行；结果/错误码/site 与串行逐位一致。
 - 每次调用独占窗口切片与 `JitContext`；线程私有 `deadline`、函数表基址、user-helper 栈。
-- 跨线程包装：A 线程 `callForFn` → B/C 线程调用 → D 线程 `unloadFn`。
+- 跨线程包装：A 线程 `callForFn` → B/C 线程调用 → D 线程 `close()`。
 - `unload` 语义不变：等所有线程在飞调用排空，期间新调用 → 19。
 
 **非目标**
@@ -123,7 +123,7 @@
 
 - `state`/`active` 改原子；`unload` 不再借 `callMtx`，靠 `active` 排空：
   `state=1` 拒新调用（19）→ 等 `active==0` → 终态；超时回退可用。
-- `unloadFn` 对提升组的释放需原子（同一包装可能被多线程同时释放）。
+- `close()` 对提升组的释放需原子（同一包装可能被多线程同时释放）。
 
 ### D7 缓存与常量
 
@@ -205,15 +205,15 @@
 | `iterTablePerCallIsolation` | 两线程各遍历 Map 1000 项，结果正确、游标互不可见 | P1 |
 | `deadlineIsThreadLocal` | A 带 10ms deadline，B 长调用不被中断；A 按时中断 | P2 |
 | `sameUnitParallelCalls` | 4 线程 × 500 次同单元，结果/错误码/site 与串行一致 | P3 |
-| `wrapperCrossThread` | A 建包装 → B/C 调用 → D `unloadFn`；无 UAF | P4 |
-| `unloadDuringParallelCalls` | 并行中 `unload(timeout)`：在飞完成、新调用 19、超时回退 | P5 |
+| `wrapperCrossThread` | A 建包装 → B/C 调用 → D `close()`；无 UAF | P4 |
+| `unloadDuringParallelCalls` | 并行中 `close(timeout)`：在飞完成、新调用 19、超时回退 | P5 |
 | `parallelThroughput` | 1/2/4/8 线程；8 线程 ≥ 5× 单线程 | P6 |
 
 门槛：全量零失败；单线程路径与 `9357e98f` 逐位一致；无句柄/内存泄漏。
 
 ## 8. 与现有契约的关系
 
-- **不变**：ID/gen 布局与「提升 ID 不变」；`unload`/`unloadFn` 语义；`CompileCache` 键与命中规则；
+- **不变**：ID/gen 布局与「提升 ID 不变」；`close` 语义；`CompileCache` 键与命中规则；
   错误码与 site；单线程行为。
 - **变化**：并发不再串行；`deadline` 从「进程级」变「线程级」（并发语义修正）；
   `IterTable` 从全局表变调用私有（游标本就不跨调用，外部不可见）。

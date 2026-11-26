@@ -40,7 +40,7 @@
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
 | `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（**大类名呈现**：13 记 `<HostClosure>#idx`、14 记 `<HostObject>#idx`——2026-10-11 裁定） | ctx、迭代器、既有 helper 语义 |
-| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callForFn<Fn>`、闭包包装的 `unloadFn`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
+| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callForFn<Fn>`、闭包包装的 `close`/`isClosed()`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
 
 ---
 
@@ -253,8 +253,8 @@
 |---|---|---|
 | （桥内部）包装构造 | 绑定单元 + 闭包 ID | `CallMarshal` 解包 `retType=12` 与 `callForFn<Fn>` 两条路径产出——**产物类型一致** |
 | `func call<T>(args: Array<Any>): T` | **闭包包装实例上**：新桥调用（新 ctx + `locals[0]` = 闭包句柄 → **闭包帧格式**）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1）。**入口实例上语义不变**（M1 §8.2 六步，M1 零回归）——**帧格式由实例的绑定内容决定** | m2 §14.3/§14.4 |
-| `func close(timeoutMs): Bool` | **包装实例**：释放该函数值的提升组（计数 −1、归零释放、幂等），单元与编译缓存不受影响；先排空**本闭包**在飞调用，超时回退为可用并返回 `false`。`unloadFn(timeoutMs)` 为**私有**实现，不对外暴露。**单元进入终态时级联释放登记在册的全部逃逸闭包（含未承接的组）** | m2 §14.2/§14.3 |
-| `prop isClosed: Bool` | 闭包包装：是否已 `unloadFn`（属性名保留旧称，描述状态而非操作）；**非闭包包装实例恒 `false`** | — |
+| `func close(timeoutMs): Bool` | **包装实例**：释放该函数值的提升组（计数 −1、归零释放、幂等），单元与编译缓存不受影响；先排空**本闭包**在飞调用，超时回退为可用并返回 `false`。`closeClosure(timeoutMs)` 为**私有**实现，不对外暴露。**单元进入终态时级联释放登记在册的全部逃逸闭包（含未承接的组）** | m2 §14.2/§14.3 |
+| `func isClosed(): Bool` | 闭包包装：本闭包是否已释放（含单元卸载级联）；入口实例：单元是否已卸载（`Resource` 契约，见下一行） | — |
 | `close` / `isClosed` | **`Resource` 契约**（`std.core.Resource`）：入口实例 `close(timeoutMs)` 卸载**单元**（闭包逃逸**不阻止**卸载，§14.4）；包装实例 `close(timeoutMs)` 释放本闭包；`close()` 为不等待版本（Unit） | m1 §8.7 |
 
 #### 6.1.5 `JitFunction.callForFn<Fn>`（返回闭包的强类型入口，条件启用）
@@ -283,7 +283,7 @@
 |---|---|---|
 | `Compiler` | `func registerClass(desc: ClassDescriptor): Unit`；`func registerType<T>(): Unit where T <: Object`（内部转 `ReflectRegistrar`） | m2 §12.4/§12.5 |
 | `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签（**单次 `is (T1..Tn) -> R`**，§4）→ 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
-| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callForFn<Fn>` 公开变体；**`unloadFn`/`isClosed`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
+| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callForFn<Fn>` 公开变体；**`close`/`isClosed()`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
 | `CompileOptions` | `cpuFeatures` 启用（显式 ISA 开关：如 SSE4.1/4.2 优化；默认 0） | m1 §12.1（`CompileOptions.cpuFeatures` 定义处）+ m2 §2 |
 
 ---
