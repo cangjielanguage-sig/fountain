@@ -11,13 +11,15 @@
 日志格式由LogPattern定义，日志格式由%开头的标记定义日志字段，每个字段都实现接口LogPart，现在支持以下格式：
 
 -   %level——日志级别。
--   %app——当前应用的名称，应用项目使用`fboot build`时会把项目根目录cjpm.toml的name和version节点读取出来，并创建一个新的模块，用项目名称和项目版本号调用`fountain.app.AppVersion`。%app对应的AppLogPart会从AppVersion获取应用名称。
+-   %app——当前应用的名称，应用项目使用`fboot build`时会把项目根目录cjpm.toml的name和version节点读取出来，并创建一个新的模块，用项目名称和项目版本号调用`fountain::f_version.AppVersion.set`。%app对应的AppLogPart会从AppVersion获取应用名称。
 -   %appver——当前应用的版本号。版本来源如前所述。
 -   %name——当前日志的名称。日志实例初始化时都会指定名称作为日志实例的唯一标识。
 -   %fver——fountain的版本号。
 -   %tname——当前线程的名称。
 -   %tid——当前线程的ID。
 -   %pid——当前进程的ID。
+-   %d——日志时间，可以用花括号指定格式，比如`%d{yyyy/MM/dd,HH:mm:ss.SSS}`。
+-   %m——日志消息文本。
 -   除此之外日志模板中的其它内容都初始化为OriginLogPart，日志记录器会原样输出这些文本。
 
 默认的格式为`"[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"`。
@@ -66,51 +68,46 @@ log.error('user.login:{}', e, [userId])
 
 ### AsyncLogger
 
-定义了一个以`ArrayBlockingQueue<ArrayList<Array<Byte>>>`模拟的输出流SyncQueueOutputStream，AsyncLogger劫持了具体的日志记录器（比如ConsoleLoggerAppender、FileLoggerAppender）创建的日志输出流，并以SyncQueueOutputStream的实例代替实际日志输出流作为它的父类AbstractLogger的初始化参数。AsyncLogger的实例维持着实际的日志输出流。
+定义了一个以`ArrayBlockingQueue<ArrayDeque<Array<Byte>>>`模拟的输出流SyncQueueOutputStream，AsyncLogger劫持了具体的日志记录器（比如ConsoleLoggerAppender、FileLoggerAppender）创建的日志输出流，并以SyncQueueOutputStream的实例代替实际日志输出流作为它的父类AbstractLogger的初始化参数。AsyncLogger的实例维持着实际的日志输出流。
 
-调用日志记录器的日志函数时实际都写到了SyncQueueOutputStream，为了避免多线程将不同的日志乱序推入ArrayBlockingQueue，SyncQueueOutputStream内部有一个`ThreadLocal<ArrayList<Array<Byte>>>`，从AbstractLogger写入SyncQueueOutputStream时都会从同步队列获取ArrayList，并把它填充到ThreadLocal，直到写`\0`之前都从ThreadLocal获取这个ArrayList。每一个LogPart转化的字节数组都会推入这个ArrayList。当遇到`\0`这个ArrayList将被推入异步日志队列。SyncQueueOutputStream的核心代码如下：
+调用日志记录器的日志函数时实际都写到了SyncQueueOutputStream，为了避免多线程将不同的日志乱序推入ArrayBlockingQueue，SyncQueueOutputStream内部有一个`ThreadLocal<ArrayDeque<Array<Byte>>>`，从AbstractLogger写入SyncQueueOutputStream时都会从静态的缓冲对象池获取ArrayDeque，并把它填充到ThreadLocal，直到写`\0`之前都从ThreadLocal获取这个ArrayDeque。每一个LogPart转化的字节数组都会推入这个ArrayDeque。当遇到`\0`这个ArrayDeque将被推入异步日志队列。SyncQueueOutputStream的核心代码如下：
 
 ```cj
-	public func write(bytes: Array<Byte>): Unit {
-        let buf: ArrayList<Array<Byte>> = if(let Some(buf) <- buffer.get()){
+    private static let pool: ArrayBlockingQueue<ArrayDeque<Array<Byte>>>
+    private let buffer = ThreadLocal<ArrayDeque<Array<Byte>>>()
+    public func write(bytes: Array<Byte>): Unit {
+        let buf = if(let Some(buf) <- buffer.get()){
             buf
-        }else{
-            let buf = pool.remove()
+        }else if (let Some(buf) <- pool.remove(LoggerConfig.getAsyncWaitTimeout())) {
             buffer.set(buf)
             buf
+        } else {
+            Console.writeln('AsyncLogger.SyncQueueOutputStream.EmptyPool')
+            return
         }
-        if(bytes[bytes.size - 1] == b'\0'){//todo 这个做法性能有些低，但是性能高的做法会导致BUG。
-            let b = bytes[0 .. bytes.size - 1]
-            buf.add(b)
+        if(bytes[0] == b'\0'){//行结束标记本身不写入文件
             queue.add(buf)
             buffer.set(None)
         }else{
-            buf.add(bytes)
+            buf.addLast(bytes)
         }
     }
 ```
 
-AsyncLogger线程从线程安全队列获得`ArrayList<Array<Byte>>`，将ArrayList中的字节数组写到实际的日志输出流。核心的代码如下：
+AsyncLogger线程从线程安全队列获得`ArrayDeque<Array<Byte>>`，将ArrayDeque中的字节数组写到实际的日志输出流。核心的代码如下：
 
 ```cj
     private func append() {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
         if (buffer.size > 0) {
             append {//这个闭包被推入AsyncLogger内部的一个队列
-                while(let Some(buf) <- buffer.tryRemove() && let s <- buf.size && s > 0){
-                    try{//buf就是ArrayList<Array<Byte>>
-                        for(bytes in buf where bytes.size > 0){
-                            this.actualOutput.write(bytes)
-                        }//actualOutput就是实际的日志输出流
-                        this.actualOutput.flush()
-                    }finally{//将ArrayList归还SyncQueueOutputStream
-                        buffer.returnBuffer(buf)
-                    }
-                }
+                buffer.writeTo(actualOutput)//actualOutput就是实际的日志输出流
             }
         }
     }
 ```
+
+`SyncQueueOutputStream.writeTo` 会按 FIFO 顺序取出每一个ArrayDeque，把其中非空的字节数组逐个写到实际的日志输出流并flush，最后把ArrayDeque归还缓冲对象池。
 
 AsyncLogger内部维持一个队列：`private let queue: ArrayBlockingQueue<() -> Unit>`。AsyncLogger内部线程一直监听并消费这个队列：
 
@@ -130,7 +127,7 @@ private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
 
 ### LoggerAppenderFacade
 
-本类维持着每一个实际的日志记录器，`private let appenders = Array<AbstractLogger>`。
+本类维持着每一个实际的日志记录器，`private let appenders: AtomicReference<Box<Array<AbstractLogger>>>`（支持运行期增删）。
 
 本类覆盖了AsyncLogger的以下函数。
 
@@ -186,7 +183,7 @@ public class LoggerAppenderCreator {
 
 ### LoggerWrapper与LoggerFactory
 
-LoggerFactory的功能就是用指定的日志实例名称实例化LoggerWrapper。LoggerWrapper的构造函数会调用LoggerAppenderCreator初始化LoggerAppenderFacade。
+LoggerFactory的功能就是用指定的日志实例名称实例化LoggerWrapper并缓存。getLogger的返回类型声明为AbstractLogger，实际实例是LoggerWrapper，它的构造函数会调用LoggerAppenderCreator初始化LoggerAppenderFacade。
 
 ### ConsoleLoggerAppender
 
@@ -198,7 +195,7 @@ let _ = ConsoleLoggerAppender.register() //将本实现注册到LoggerAppenderCr
 
 ### FileLoggerAppender
 
-内部维持一个RotabableFile实例。RotatableFile实现了OutputStream，每次执行write函数时都会按照配置指定的周期和日志文件大小检查是否需要切分日志文件。判断逻辑如下：
+内部维持一个RotatableFile实例。RotatableFile实现了OutputStream，每次执行write函数时都会按照配置指定的周期和日志文件大小检查是否需要切分日志文件。判断逻辑如下：
 
 ```cj
     private func needRotate(current: DateTime, appended: Int64) {

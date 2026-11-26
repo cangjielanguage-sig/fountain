@@ -1,4 +1,4 @@
-# fountain实现思想与应用第八弹
+# fountain实现思想与应用第九弹
 
 ##### ——响应式编程
 
@@ -214,8 +214,8 @@ public interface Observer<T> {
 ```
 
 ```
-observable.subscribe('test',FuncObserver<Int64>.setNextFunc{v => println(v)})
-          .subscribe('test2', {o => o.setNextFunc{v => println(v * 2)}})
+observable.subscribe('test', FuncObserver<Int64>('test').setNext{v => println(v)})
+          .subscribe('test2', {o => o.setNext{v => println(v * 2)}})
 ```
 
 从这段代码可以看出来一个被观察者可以注册多个观察者。
@@ -271,7 +271,7 @@ private func schedule(state: SingleSchedulerState<T>): Unit {
 单线程执行器与后面的多线程执行器深度耦合，多线程执行器完全依赖单线程执行器完成功能。执行器自身任务队列空闲时会从其他执行器的任务队列盗窃任务：
 
 ```cj
-while (toSteal && this.queue.size == 0 && let Some(w) <- wrapper) {//wrapping是多线程执行器Option<FiexedScheduler>
+while (toSteal && this.queue.size == 0 && let Some(w) <- wrapper) {//wrapper是多线程执行器Option<FixedScheduler>
 	//this.queue.size == 0 表示当前执行器自身任务队列已空
 	let queues = w.queues//得到所有单线程执行器
     let qsize = queues.size
@@ -344,6 +344,8 @@ let threads = 10
 observer.withFixed(threads)
 ```
 
+`withFixed` 的第一个参数名是`threads`，还有`queueSize`和`policy`两个可选参数（`withSingle` 同理只有`queueSize`和`policy`）。
+
 执行观察者的线程跟被观察者的线程不同，并且每个数据在指定数量的线程之间轮换执行
 
 -   观察者执行器使用指定数量的单线程执行器
@@ -352,9 +354,9 @@ observer.withFixed(threads)
     
 -   并行执行每个观察者
 
-    以上每一个初始化方式都有一个命名参数`asyncCombined!: Bool = false`
+    以上每一个初始化函数（iterable、single、maybe、emitter、empty、concat）都有一个命名参数`asyncCombined!: Bool = false`（`with*` 执行策略函数没有这个参数）。
 
-    每个数据经过执行策略后，如果此参数是`true`，每个观察者会为每个数据启动新线程。
+    如果此参数是`true`，每个观察者在注册时会启动一条常驻线程消费自己的队列，而不是为每个数据都新建线程。
 
 ## 背压策略
 
@@ -365,8 +367,9 @@ observer.withFixed(threads)
 -   直接丢弃（Discarding）
 -   丢弃队列中最早的数据（ToDropOldest）
 -   一直阻塞（AlwaysBlocking）
+-   阻塞指定时长后按另一个策略处理（AfterBlocking）
 -   立即抛出异常（Throwing）
--   当前线程（Current）
+-   当前线程（CurrentThread）
 -   新线程（NewThread）
 -   使用指定函数（Action((() -> Unit) -> Unit)）
 -   限流策略（RateLimited）
@@ -383,13 +386,15 @@ observer.withFixed(threads)
 
 创建的新Observable会启动新线程延迟启动。
 
--   `setErrorResumer(resumer: (Exception) -> ?Iterable<T>)`
+-   `setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?Iterable<T>)`
 
-    resumer如果返回了None就不会创建新的Observable
+    resumer返回Some时用返回的迭代器创建新的Observable；返回None时，resumeIfNone为true则用空迭代器恢复，否则不创建新的Observable。
 
--   `setErrorResumer(resumer: (Exception) -> Unit)`
+-   `setErrorResumer(resumeWithEmpty: Bool, resumer: (Exception) -> Unit)`
 
-    执行这个恢复器后会使用当前的Observable全部成员创建新的Observable
+    执行这个恢复器后会使用当前的Observable全部成员创建新的Observable；resumeWithEmpty为true时用空迭代器，否则用当前迭代器。
+
+-   另外还有`(Exception) -> ?T`、`(Exception) -> ?(Emitter<T>) -> Unit`和`(Exception) -> Bool`三个重载，语义相同，只是恢复数据的形态不同。
 
 ## 暂停
 

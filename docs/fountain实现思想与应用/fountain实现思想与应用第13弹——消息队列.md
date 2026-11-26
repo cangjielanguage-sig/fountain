@@ -79,7 +79,7 @@ export mqServer_deadMsgThreshold=3
 export mqServer_deadMsgTTL=72h
 ```
 
-一条消息投递超过 3 次（默认）就进死信，死信段按 72h 保留。**死信不是「丢弃」，是「隔离」**——它还在盘上，只是不再阻塞正常消费。没有死信队列的 MQ，一条毒消息就能让整个组停摆。
+`mqServer_deadMsgThreshold` 的语义是**重试次数**（默认 3）：同一条消息总投递 N+1 次仍未确认，下一次扫描就把它写进死信，死信段按 72h 保留。**死信不是「丢弃」，是「隔离」**——它还在盘上，只是不再阻塞正常消费。没有死信队列的 MQ，一条毒消息就能让整个组停摆。
 
 ### 组游标的三个细节
 
@@ -135,7 +135,7 @@ at-least-once 意味着**重复是常态，不是异常**。业务侧的写法�
 ## 四、备份：先明确它不是什么
 
 ```bash
-export mqServer_backup=2    # 每条消息异步推送给环形后续的 2 个节点
+export mqServer_backup=2    # 默认 0（不备份）；每条消息异步推送给环形后续的 2 个节点
 ```
 
 - 副本节点是**环形的后续 N 个**（不含自身，最多 `节点数-1`）；
@@ -285,7 +285,7 @@ export mqServer_deadMsgDir=/data/fmq/deadMsgs
 ```
 
 - `mqClient_hosts` 是**同一份表**给两端用：服务端按 `mqServer_port` 在表里匹配本机下标，端口不在表中或重复出现会启动报错；
-- 默认日志目录在 `/var/log/fmq` 下，普通用户先改成可写目录；
+- 默认目录是 `/var/log/fmq/segmentedLogs` 和 `/var/log/fmq/deadMsgs`，普通用户先改成可写目录；
 - `protocol_hostId` **必填且每台机器唯一**（脚本里默认导出 `1`）：它是 `MessageID` 身份的一部分，配 0 直接抛异常；`(pid, tid, 时间戳)` 跨机器会重复，集群维度只能靠它。
 
 **限制（照抄前先看）**

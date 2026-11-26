@@ -21,7 +21,7 @@
         │   URL: fdbm://user:pwd@host:8112/order
         ▼
    f_dbd   驱动层：只发 SQL 和参数、按需拉结果
-        │   CONSUME(SqlPayload) / NEXT_ROW / UNSUBSCRIBE
+        │   CONSUME(SqlPayload) / CONSUME(QueryResultColumnPayload(index = NEXT_ROW)) / UNSUBSCRIBE
         ▼
    fdbm    代理层：解析 SQL → 路由 → 改写 → 下推 → 汇总
         │   物理驱动（driver/ 目录里恰好一个）
@@ -65,7 +65,7 @@ export dbd_driverName=postgres
 
 不能写成 `fdbm`：**fdbm 是代理，它自己没有方言**。SQL 方言（标识符要不要用双引号、`LIMIT` 怎么写、`RETURNING` 支不支持）最终由物理库决定；而 `f_orm` 这类上层是按**驱动名**选方言的。
 
-所以这个配置项的本质是：「**告诉上层，这个连接背后是哪种方言**」。名字取错，SQL 渲染就会用错规则——这是接入时第一个要检查的地方。
+所以这个配置项的本质是：「**告诉上层，这个连接背后是哪种方言**」。名字取错，SQL 渲染就会用错规则——这是接入时第一个要检查的地方。代码本身不校验这个值（任意非空串都会注册，注册时还会额外注册兼容别名 `fdbm`），写错不会被启动拦住。
 
 未配置或为空时，包初始化只记 INFO 并跳过注册，**不结束进程**；真正取用 `dbdDriver()` 时才抛 `DbdException(CONFIG)`。这个「晚失败」的选择是为了让「同一个二进制里既有数据库业务、也有不碰数据库的命令」的场景不至于起不来。
 
@@ -103,7 +103,8 @@ export fdbm_db_logicalDatabase_order=order_0,order_1
 
 1. **只有显式声明的名字才是逻辑库**，物理库不会自动变成逻辑库；
 2. 被 `fdbm_partition__<table>` 引用但没声明的逻辑库，隐式包含**全部**物理库；
-3. **全局表不创建逻辑库**——这是刻意的，避免 `fdbm_global__<table>` 的值拼错时，启动阶段发现不了。
+3. **全局表不创建逻辑库**——这是刻意的，避免 `fdbm_global__<table>` 的值拼错时，启动阶段发现不了；
+4. 一条 `fdbm_db_logicalDatabase_*` 都没配时，以排序后的第一个物理库作为唯一命名空间，并记 WARN。
 
 第 3 条体现了一个一致的原则：**能启动自检发现的问题，不要留到运行期**。fdbm 在 accept 第一个连接之前会做完整自检（驱动唯一性、扩展加载与重名、跨项引用、算法参数、超时取值），任一失败直接退出：
 
@@ -128,17 +129,17 @@ fdbm 把一条 SQL 的路由结果分成五态（`RouteKind`）：
 | `Multi` | 命中多个物理库 | 不带分库键但可枚举的查询 |
 | `Broadcast` | 广播到逻辑库全部物理库 | 全局表写入、DDL |
 | `Empty` | 结果必然为空 | 分库键落在不存在的库 |
-| `Unroutable` | 无法路由 | 没有分库键条件的 `UPDATE` / `DELETE` |
+| `Unroutable` | 无法路由 | 没有分库键条件的 `UPDATE` / `DELETE`；`SELECT` 无法定位逻辑库 |
 
 这个五态划分比「路由成功/失败」有用得多，因为它直接决定了执行策略：
 
-- `Single`：原语句下推，一次往返；
+- `Single`：去掉逻辑库限定后下推，一次往返；
 - `Multi`：逐库执行，游标按库顺序拼接结果；`count(*)` 求和，但 **`ORDER BY` / `LIMIT` 是按分片下推的**，不是全局排序、全局分页；
 - `Broadcast`：写全部下推（全局表），读只取一份副本；
-- `Empty`：直接返回空结果，**不碰数据库**；
-- `Unroutable`：报 `ROUTE_FAILED`，**不做全分片删除**。
+- `Empty`：`UPDATE`/`DELETE`/`INSERT` 直接返回 `0`，**不碰数据库**；`SELECT` 仍会到第一个物理库执行一次以取回列信息，但不返回数据行；
+- `Unroutable`：`UPDATE`/`DELETE` 报 `ROUTE_FAILED`，**不做全分片删除**；`SELECT` 则在逻辑库的物理库范围内广播执行。
 
-`DELETE` 在没有分库键条件时，fdbm 的做法是「先按条件查出受影响行的分库键，再逐库删除」，而不是「广播删除」。这不是能力不足，而是**拒绝执行危险的默认行为**：一条不带条件的 `delete from t` 广播到分片环境，无法回滚。
+`DELETE` 在没有分库键条件时直接是 `Unroutable` → `ROUTE_FAILED`，不会「先查出受影响行再逐库删除」。带分库键的 `DELETE` 才会逐库执行，执行前按条件查一次受影响行的分库键**只是为了失效分库缓存**。这不是能力不足，而是**拒绝执行危险的默认行为**：一条不带条件的 `delete from t` 广播到分片环境，无法回滚。
 
 ### 分库算法
 
@@ -154,7 +155,7 @@ export fdbm_partition_substr__order="0,4,crc32"
 算法本身没什么可讲的，值得讲的是**分库缓存**：
 
 ```bash
-export fdbm_cache=true
+export fdbm_cache=true          # 默认 true
 export fdbm_cache_expire=30s     # 留空 = 永不过期
 export fdbm_cache_size=0         # 0 = 不限；超限后不再写入新键（既有键照常命中）
 export fdbm_cachePath=./cache
@@ -195,7 +196,7 @@ export fdbm_loadbalance_weight_db1_s="w,0;r,1"
 | 动作 | 协议 | 说明 |
 | --- | --- | --- |
 | 查询 | `CONSUME(SqlPayload)` → `RESP(QueryResultServerPayload)` | 首包**只有列信息**，没有数据 |
-| 取行 | `NEXT_ROW` | **每次** `next()`（含第一次）都发一次，服务端执行一次物理 `next()` |
+| 取行 | `CONSUME(QueryResultColumnPayload(index = NEXT_ROW))`，`NEXT_ROW` 是索引哨兵 `-1` | **每次** `next()`（含第一次）都发一次，服务端执行一次物理 `next()` |
 | 读列 | 列读请求 | **每次** `get` / `getOrNull` 都发一次，服务端从「当前行缓冲」应答 |
 | 关闭 | `UNSUBSCRIBE(QueryResultClosePayload(qid))` → `ACK` | 幂等，不存在 `CLOSE_CURSOR` 负索引哨兵 |
 
@@ -317,7 +318,7 @@ fdbm 不是「什么 SQL 都能跑」的透明代理，它解析并重写一个*
 | `SELECT` | 列清单 / `*` / `DISTINCT` / 多表 / `[INNER\|LEFT\|RIGHT] JOIN ... ON` / `WHERE`（比较、`AND`/`OR`/`NOT`、`IN`、`LIKE`、括号）/ `ORDER BY` / `LIMIT` / `OFFSET` / `?` / `count(*)` / 受限派生表 |
 | `INSERT` | 多行 `VALUES` / `SET` / `INSERT ... SELECT` / `RETURNING <列>`（仅 PostgreSQL 家族、单目标路由） |
 | `UPDATE` | 单表或 JOIN 更新；**无分库列条件 → `ROUTE_FAILED`** |
-| `DELETE` | 先查出受影响行的分库键，再逐库删除并累加 `rowCount`；无分库列条件 → 拒绝 |
+| `DELETE` | 命中的库逐库删除并累加 `rowCount`（执行前按条件查一次受影响行的分库键，只用于失效分库缓存）；无分库列条件 → `ROUTE_FAILED` |
 | `SHOW` | `SHOW DATABASES` / `SHOW TABLES` |
 | DDL | `CREATE TABLE` / `ALTER TABLE` 原样透传到逻辑库全部物理库（不解析） |
 | 其它 | `EXPORT <key>=<value>` 改配置并落 `boot.sh`；`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` 透传到会话 pin 住的连接 |

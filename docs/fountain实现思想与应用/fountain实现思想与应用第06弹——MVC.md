@@ -8,11 +8,11 @@
 
 MVC的核心类型是RequestMeta。
 
-@Controlller宏遍历它修饰的类每一个公共实例成员函数，它展开的代码利用这些函数的函数名和参数TypeInfo调用内部函数获得Mapping注解和参数注解，并利用这些注解从HttpContext获得函数参数将它们转换为参数类型调用相应的函数，它们会作为尾闭包注册到RequestMeta。
+@Controller宏遍历它修饰的类中带Mapping注解（@GetMapping/@PostMapping/@PutMapping/@PatchMapping/@DeleteMapping等）的公共实例成员函数，它展开的代码利用这些函数的函数名和参数TypeInfo调用内部函数获得Mapping注解和参数注解，并利用这些注解从HttpContext获得函数参数将它们转换为参数类型调用相应的函数，它们会作为尾闭包注册到RequestMeta。没有Mapping注解的公共函数不会被注册。
 
 每次访问会从自定义的HttpRequestDistributorImpl利用请求路径找到MultiRequestMethodHandler实例，这个实例利用请求方法和Content-Type请求头找到相应的RequestMeta，MultiRequestMethodHandler会检查请求方法、Content-Type，并对不符合的访问返回相应的http状态码。然后调用RequestCondition实例检查表单参数和请求头，最后调用AuthHandler检查当前登录状态和用户访问权限，对于满足所有条件的访问会调用注册到RequestMeta的handle闭包，闭包内部从BeanFactory获得相应的Controller类实例并用这个实例调用controller函数。
 
-@Controller宏会利用各种参数注解解析各种参数。@RequestBody会利用Content-Type从MediaTypes获得注册的MediaType实现，将请求体转换为controller函数参数，@RequestParam会利用它的注解参数或函数参数名从表单获得请求参数，@RequestHeader会利用它的注解参数函数参数名从请求头获得请求参数，@PathVariable会利用它的注解参数或函数参数名从请求路径获得参数。
+@Controller宏会利用各种参数注解解析各种参数。@RequestBody会利用Content-Type从MediaTypes获得注册的MediaType实现，将请求体转换为controller函数参数，@RequestParam会利用它的注解参数或函数参数名从表单获得请求参数，@RequestHeader会利用它的注解参数或函数参数名从请求头获得请求参数，@PathVariable会利用它的注解参数或函数参数名从请求路径获得参数。
 
 开发者还可以向MVC注册自定义的AuthHandler实现登录状态和权限检查，并且可以实现ErrorHttpRequestHandler向MVC注册统一的各种错误结果HTTP响应状态码和HTTP响应体。
 
@@ -22,11 +22,11 @@ MVCStarter.initialize()从配置类获得配置信息完成stdx.net.http.Server�
 
 ### 实例化RequestMeta
 
-`@Controller`宏将每个公共实例成员函数的参数类型的TypeInfo、函数名作为`MVCStarter.generateAndRegister`的函数实参，controller类名作为这个函数的泛型实参。此函数最终会到达RequestMeta的generate函数，函数内反射获得InstanceFunctionInfo。以函数参数名为KEY，以ControllerFuncParam子类型和Validator子类型的注解为值构造`HashMap<String, (ControllerFuncParam, Validator)>`。
+`@Controller`宏将每个公共实例成员函数的参数类型的TypeInfo、函数名作为`MVCStarter.generateAndRegister`的函数实参，controller类名作为这个函数的泛型实参。此函数最终会到达RequestMeta的generate函数，函数内反射获得InstanceFunctionInfo。以函数参数名为KEY，以ControllerFuncParam子类型、Validator子类型的注解和可选的日期时间转换器为值构造`HashMap<String, (ControllerFuncParam, Validator, ?AbstractDateTimeConverter)>`。
 
 #### controller函数映射
 
-`@PostMapping` `@GetMapping` `@PutMapping` `@DeleteMapping` 是Controller函数的注解，标注controller URL、请求方法、Content-Type Accept。比如可以有以下注解
+`@PostMapping` `@GetMapping` `@PutMapping` `@PatchMapping` `@DeleteMapping` 是Controller函数的注解，标注controller URL、请求方法、Content-Type Accept。它们的属性是`path`、`method`、`produces`、`consumes`、`params`、`headers`、`ignoreAuth`、`ignorePrivilege`，其中`path`必填，GET/DELETE的`consumes`默认为空串，POST/PUT/PATCH默认是`application/json`。比如可以有以下注解
 
 ```cj
 @PostMapping[//请求方法是POST
@@ -81,7 +81,7 @@ ControllerFuncParam的子类型是controller函数参数的注解，它有以下
 
 ```cj
 /**
- * 这个接口的实现类用fountain.bean.macros.@Bean修饰可以实现登录状态与权限检查。
+ * 这个接口的实现类用fountain::f_bean.macros.@Bean修饰可以实现登录状态与权限检查。
  * 如果应用项目，登录状态和权限都需要检查，务必在一个类中实现，一次调用就都检查了。
  */
 public interface AuthHandler {
@@ -172,8 +172,8 @@ ctx是本次HTTP访问的stdx.net.http.HttpContext，e是本次发生的异常�
 ### 声明一个Controller
 
 ```cj
-import fountain.mvc.*
-import fountain.mvc.macros.*//此包重导出了IOC的@Bean宏
+import fountain::f_mvc.*
+import fountain::f_mvc.macros.*//此包重导出了IOC的@Bean宏
 
 @Controller//重新用@Bean修饰了这个类
 public class HellowordController {
@@ -188,11 +188,11 @@ public class HellowordController {
 ### 错误处理器
 ```cj
 import stdx.net.http.HttpContext
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_mvc.{ErrorHttpRequestHandler, HttpStatus}
 
 @Bean
 @BeanMeta[name:'NameOf500Handler']
