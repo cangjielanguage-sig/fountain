@@ -1,6 +1,6 @@
-# Verify（P0 + P1 主体 + P2，2026-11-26）
+# Verify（P0 + P1 主体 + P2 + P3，2026-11-26）
 
-> 本变更分阶段实施；本文件覆盖 **P0、P1 主体与 P2**；P1.2d/P1.5/P3–P6 尚未完成。
+> 本变更分阶段实施；本文件覆盖 **P0、P1 主体、P2 与 P3**；P1.2d/P1.5/P4–P6 尚未完成。
 
 ## 全量回归
 
@@ -8,7 +8,8 @@
 | --- | --- |
 | 基线 | 1178 用例 / 1178 通过 / 0 失败 |
 | P1 终态 | 1181 用例 / 1181 通过 |
-| P2 终态 | **1184 用例 / 1184 通过 / 0 失败 / 0 error / 0 skipped** |
+| P2 终态 | 1184 用例 / 1184 通过 |
+| P3 终态 | **1184 用例 / 1184 通过 / 0 失败 / 0 error / 0 skipped**（真实并发） |
 | 新增 | 6 条（`WindowIsolation_test` 3 + `ThreadLocalEnv_test` 3） |
 | 回归 | 0 |
 
@@ -16,7 +17,7 @@
 
 > P1/P2 各有一次全量运行唯一失败为既有性能用例 `PerfOverride_test.overrideBeatsReflectionEndToEnd`：
 > 一次净成本 3324 ns 超阈值，另一次反射耗时低于基线导致净成本被钳成 1 ns；两次单跑均通过。
-> 属已知环境噪声，与本次改动无关。最终代码复跑全量 **1184/1184 / 0 失败**。
+> 属已知环境噪声，与本次改动无关。P3 代码一次全量即 **1184/1184 / 0 失败**。
 
 ## 实施内容
 
@@ -31,6 +32,8 @@
 | P1.4 | `IterTable` 改 `ThreadLocal<IterState>`，去掉全局锁 |
 | P2.1 | `RuntimeEnv.deadlineNanos` / `MachineEnv.fnTableBase` 改 `ThreadLocal`（`static mut prop` 保持读法不变）；`UserHelperTable.stack` 线程私有；删 `JitExecutor.envMtx` |
 | P2.2 | 新增 `ThreadLocalEnv_test` 3 条（deadline / 函数表基址 / helper 栈），并做变异验证 |
+| P3.1 | 删 `JitFunction.callMtx`；`callForFn` 改读本次调用的 `CallOut.escaped`，`lastEscaped` 只留作单线程诊断访问器 |
+| P3.2 | `ParallelCall_test`（6 条）在**真实并发**下跑通，连续 3 轮无失败；`CallForFnConcurrency_test` 2/2 |
 
 ## 关键实现决策（与设计文档的差异）
 
@@ -57,14 +60,15 @@
 | `resetWindow` 去掉 gen 校验（按索引释放） | `resetWindowDoesNotKillSlotReusedByAnotherThread` **FAILED**：`isLiveHandle(bId)` left=false / right=true |
 | deadline/fnTableBase/helper 栈三处 TLS 同时改回全局 | `deadlineIsThreadLocal`、`fnTableBaseIsThreadLocal`、`userHelperStackIsThreadLocal` **三条全 FAILED** |
 
-四次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2）。
+四次变异均已回滚；回滚后全量 1181/1181（P1）、1184/1184（P2）；P3 后仍为 1184/1184。
 
 ## 未完成 / 风险
 
 - **P1.2d**：`freeSlots` 仍是全局 `ArrayList` + `mtx`（只保护分配/回收，临界区短）。
   并行度证据要等 P3 删 `callMtx` 后的 P6 基准；若分配成为瓶颈再切片私有化。
 - **P1.5**：`NativeMem.mallocCount/freeCount` 仍为普通静态计数（诊断口径）。
-- **端到端 deadline 隔离**：`callMtx` 仍在，真正「A 带 deadline、B 长调用并行」要等 P3 删锁后补测。
+- **并行度证据**：P3 已删调用锁，但吞吐基准（1/2/4/8 线程、8 线程 ≥5×）属 P6.2；
+  端到端 deadline 隔离（A 带期限、B 长调用同时进行）也并入 P6。
 - **API 漂移仍未解决**：主规格与 `design-parallel-call.md` 使用 `unloadFn`/`unload`，当前代码是
   `close(timeoutMs)` / `close()` / `isClosed()`。本阶段不触碰，P4/P5 前必须单独立项对齐。
 - `resetForTest` 只清当前线程的窗口栈；其它线程的 TLS 无法追溯（测试线程均已 join，风险可接受）。

@@ -220,7 +220,7 @@
 
 ## 9. 实施状态（2026-11-26）
 
-已落地（P0 + P1 主体 + P2）：
+已落地（P0 + P1 主体 + P2 + P3）：
 
 - **P0 存储选型**：分块存储（1024 槽/段，定长目录），见 D3「P0 结论」。
 - **P1.2 / P1.3**：窗口记账与窗口栈改线程私有；`ctx.hwBase/hwCap/hwTop` 是每线程真值。
@@ -230,6 +230,8 @@
 - **P1.4**：`IterTable` 改线程私有（`ThreadLocal<IterState>`），锁随表消失。
 - **P2**：`deadline` / `fnTableBase` / helper 栈改线程私有，删 `JitExecutor.envMtx`；
   `invokeOff` 对函数表基址做保存/恢复（重入不再把外层清 0）。
+- **P3**：删除 `callMtx`；`callForFn` 改读本次调用的 `CallOut.escaped`，不再依赖单元级 `lastEscaped`
+  （字段只保留给 `lastEscapedClosure()` 单线程诊断访问器）。并发调用从此真正并行。
 - 新增 `WindowIsolation_test`（3 条）：并发窗口记账独立、`resetWindow` 不误杀已被复用的槽、
   迭代器表线程私有；三条均做了**变异验证**（改回全局实现即变红）。
 
@@ -237,7 +239,8 @@
 
 - **P1.2d**：`freeSlots` 仍为全局表 + 短锁（当前只保护分配/回收，不在执行路径上串行化）。
 - **P1.5**：`NativeMem.mallocCount/freeCount` 仍是普通静态计数（诊断口径，暂未原子化）。
-- **P3–P6**：删 `callMtx`、跨线程包装、生命周期、基准。
+- **P4–P6**：跨线程包装、生命周期、基准。
 
 验收：全量 **1184 用例 / 1184 通过 / 0 失败**；单线程路径行为不变。
 新增 `ThreadLocalEnv_test`（3 条，三处 TLS 同时改回全局时三条全红）。
+P3 后 `ParallelCall_test` 在真实并发下连续 3 轮 6/6，`CallForFnConcurrency_test` 2/2。

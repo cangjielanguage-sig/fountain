@@ -39,14 +39,22 @@ import fountain::f_jit.runtime.UserHelperEntry
 import fountain::f_jit.runtime.UserHelperTable
 
 /**
+ * 一次调用的**私有**产出槽（并行调用 D5）：目前只装 `retType=12` 产出的逃逸条目。
+ *
+ * `callForFn` 必须拿到「本次调用自己的」提升组；放在单元字段里会被并发调用覆盖
+ * （旧实现靠 `callMtx` 兜底）。普通 `call<T>` 传 `None`，不产生额外分配。
+ */
+private class CallOut {
+    var escaped: ?EscapedClosure = None
+}
+
+/**
  * S6.5 统一函数包装 `call<T>`（§8.2 六步）。
  *
  * 执行器由装载层注入（机器码或纯字节码同一接口）：
  * `body(ctx, cells)` 返回结果 cell；`replay(ctx, cells)` 供 `-1 DEOPT` 透明重跑。
  */
 public class JitFunction <: Resource {
-    /** 全局调用窗口：HandleTable 只有一个窗口，桥的 open/body/reset 必须串行。 */
-    private static let callMtx: Mutex = Mutex()
 
     /**
      * 无参 `call` 的默认调用上下文（`deadline = None`）。
@@ -138,22 +146,19 @@ public class JitFunction <: Resource {
     /**
      * 带调用选项的六步调用（D3）：`deadline` 到期 ⇒ H22 写 −2 ⇒ `InterruptedException`。
      *
-     * **deadline 用栈式保存/恢复**而不是每次覆盖：`callMtx` 只串行化顶层调用，同一线程的
-     * 重入（宿主闭包体内再调 JIT）不受锁约束，直接 `setDeadline` 会把外层期限冲掉。
+     * **deadline 用栈式保存/恢复**而不是每次覆盖：同一线程的重入（宿主闭包体内再调 JIT）
+     * 必须恢复外层期限；deadline 已是线程私有（P2），并发调用互不影响。
      * 严格浮点由 `CompileOptions.strictFp` 在**产物层**决定（`FDIV` / `FDIV_CHK`），调用选项不再携带。
      */
     public func call<T>(args: Array<Any>, options: CallContext): T {
         let saved = RuntimeEnv.deadlineNanos
         RuntimeEnv.setDeadline(RuntimeEnv.deadlineNanosOf(options.deadline))
         try {
-            // HandleTable 是进程级单窗口：open/执行/reset 必须串行，否则并发调用会互相清窗。
-            synchronized (JitFunction.callMtx) {
-                this.enter()
-                try {
-                    return this.callLocked<T>(args, options)
-                } finally {
-                    this.exit()
-                }
+            this.enter()
+            try {
+                return this.callLocked<T>(args, options)
+            } finally {
+                this.exit()
             }
         } finally {
             RuntimeEnv.setDeadline(saved)
@@ -463,31 +468,25 @@ public class JitFunction <: Resource {
             return JitFunction.contractFail('callForFn 要求单元返回闭包（retType=12）')
         }
         let typeName = TypeInfo.of<Fn>().name
-        // 整个过程在 `callMtx` 内完成（A6/P2-4）：`lastEscaped` 是**单元级**字段，
-        // 锁外读取会让两个线程拿到彼此的条目（一侧释放会提前归还另一侧的捕获）。
-        // 取完立即清空，禁止跨调用残留。
-        synchronized (JitFunction.callMtx) {
-            this.enter()
-            var id = JitClosureId(JitClosureId.INVALID)
-            var entry: ?EscapedClosure = None
-            try {
-                id = this.callLocked<JitClosureId>(args, JitFunction.DEFAULT_CONTEXT)
-                entry = this.lastEscaped
-                this.lastEscaped = None
-            } finally {
-                this.exit()
-            }
-            let e = match (entry) {
-                case Some(x) => x
-                case None => return JitFunction.contractFail('闭包提升组缺失（m2 §14.3）')
-            }
-            match (JitFunction.parseFnType(typeName)) {
-                case Some(sig) =>
-                    JitFunction.wrapClosure(this, id, e, Int64(sig.params.size), sig.ret,
-                        sig.params)
-                case None =>
-                    JitFunction.wrapClosure(this, id, e, -1, LocalType.NONE, Array<UInt16>())
-            }
+        // 每次调用自带产出槽（D5）：`callForFn` 不再读单元级 `lastEscaped`，
+        // 并发调用不会交换提升组（旧实现靠 `callMtx` 兜底）。
+        let out = CallOut()
+        this.enter()
+        var id = JitClosureId(JitClosureId.INVALID)
+        try {
+            id = this.callLocked<JitClosureId>(args, JitFunction.DEFAULT_CONTEXT, out: out)
+        } finally {
+            this.exit()
+        }
+        let e = match (out.escaped) {
+            case Some(x) => x
+            case None => return JitFunction.contractFail('闭包提升组缺失（m2 §14.3）')
+        }
+        match (JitFunction.parseFnType(typeName)) {
+            case Some(sig) =>
+                JitFunction.wrapClosure(this, id, e, Int64(sig.params.size), sig.ret, sig.params)
+            case None =>
+                JitFunction.wrapClosure(this, id, e, -1, LocalType.NONE, Array<UInt16>())
         }
     }
 
@@ -514,7 +513,8 @@ public class JitFunction <: Resource {
         }
     }
 
-    private func callLocked<T>(args: Array<Any>, options: CallContext): T {
+    private func callLocked<T>(args: Array<Any>, options: CallContext,
+        out!: ?CallOut = None): T {
         // 已释放的包装实例在 `enterClosure` 就被 19 拦下（同一临界区判定，避免 TOCTOU）。
         let isWrapper = this.owner.isSome()
         if (isWrapper && !HandleTable.isLiveHandle(this.closureId)) {
@@ -610,8 +610,15 @@ public class JitFunction <: Resource {
             let _ = JitFunction.releaseReturnHandle(ret, unboxCode, this.returnGroup())
             if (unboxCode == LocalType.CLOSURE) {
                 // 组产生处登记（B1）：未承接的组也随单元卸载兜底释放。
+                // 有 `out` 时只写本次调用的私有槽；普通 `call` 仍记到单元字段，供
+                // 测试/桥的 `lastEscapedClosure()` 手工包装（单线程诊断口径）。
                 match (marshal.closureGroupOf()) {
-                    case Some(g) => this.lastEscaped = Some(this.registerEscaped(g))
+                    case Some(g) =>
+                        let e = this.registerEscaped(g)
+                        match (out) {
+                            case Some(o) => o.escaped = Some(e)
+                            case None => this.lastEscaped = Some(e)
+                        }
                     case None => ()
                 }
             }
