@@ -10,6 +10,9 @@
 
 - [ ] P1.1 红用例：两线程同时跑分配型单元（`any_box`/容器），断言各自句柄数正确、不互相清窗（当前必然串行/错乱）
 - [ ] P1.2 分配器 + 切片化 `openWindow/resetWindow`；`ctx.hwBase/hwTop` 成为真值
+- [ ] P1.2b **读路径去锁**：`getAny/getAs/isType/tagOfHandle/fetch*` 去掉全局锁，改为「所有权 + 发布后不可变」；`alive/gen` 原子发布
+- [ ] P1.2c `pin` 去重收窄：窗口内线程本地 map + 常量全局锁，删除全表线性扫描
+- [ ] P1.2d `freeSlots` 切片私有（全局只回收整段/切片池），消除 pop/push 的全局争用
 - [ ] P1.3 窗口栈改线程私有（重入仍正确）
 - [ ] P1.4 `IterTable` 改调用私有：红用例——两线程各自 `for (k in map)` 互不干扰，且 `next/key/value` 不再走全局锁
 - [ ] P1.5 `JitContext.malloc/freeCount` 原子化（或每线程计数）；断言并发下计数准确

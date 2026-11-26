@@ -20,11 +20,30 @@
 - 切片大小 = `max(initialCapacity, 需求)`；切片内用自有 free list，`resetWindow` 只释放**本切片**的槽。
 - 触顶（全局 `capacityLimit`）仍以 16 失败。
 
-### D3 槽存储的并发安全
+### D3 槽存储：去锁靠「所有权 + 发布后不可变」
 
-- 槽写入天然按切片隔离：一个槽在同一时刻只属于一个窗口 ⇒ **槽内读写不需要锁**。
-- 需要额外保护的只有：目录/容量增长、槽位分配与回收、`gen` 的失效判定。
-- 选型在 P0 spike 中定：① 分块存储（目录定长 + 块惰性分配，块内定长数组不移动）；② 预分配 `capacityLimit` 的定长数组（内存换简单）。**限制：任何活跃窗口存在时不得发生底层数组搬迁**，否则并发写会丢。
+现状：`HandleTable` 29 处 `synchronized(mtx)`，**纯读也加锁**（`getAny`/`getAs`/`isType`/`tagOfHandle`，
+`fetch*` 经 `fetchAny`）；`pin` 在锁内全表线性扫描去重。只切窗口不改读路径 ⇒ 每个 helper 一次全局锁，更糟。
+
+| 槽类别 | 写入者 | 读是否加锁 | 理由 |
+| --- | --- | --- | --- |
+| 窗口槽 | 本次调用的 owner 线程 | 否 | 切片独占 |
+| 常量槽 | 编译期一次 | 否 | 发布后不可变 |
+| 提升槽 | `PromotionGroup` 引用计数 | 否 | 存活期不可变；归零时无合法读者 |
+
+仍需锁的只剩冷路径：切片分配、槽回收、常量 pin、表增长。`alive/gen` 用原子发布。
+
+存储选型（P0）：① 分块存储（定长目录 + 惰性块，块不移动）；② 预分配 `capacityLimit` 定长数组。
+**硬约束：任何活跃窗口存在时底层数组不得搬迁。**
+
+### D3b 线程上下文只放「记账」，不放槽数据
+
+窗口记账（base/top/used/slots/窗口内去重表）与 `UserHelperTable.stack` 放线程上下文；
+**槽数组、常量、提升槽必须留在共享表**——提升要求 ID 不变、包装要跨线程，槽数据不能有线程副本。
+
+### D3c `pin` 去重收窄
+
+窗口内去重（线程本地 map，对象身份/规范键）+ 常量全局锁（冷路径）；删除全表线性扫描。
 
 ### D4 线程私有环境
 
@@ -56,6 +75,24 @@
 
 其余点不阻塞：`CompileCache` 只在编译路径（按 key 认领）；`AdapterRegistry` 在 pin 时查一次；
 `PromotionGroup` 是 per-group；诊断（`DbgDump`/Tracer）只在失败或开启时。
+
+### D3d 热路径写入台账：频繁 ≠ 需要锁
+
+`resetWindow` 每次调用按「已分配槽数」逐个写 `alive/objs/gens` 并 `freeSlots.add`；
+`newSlotLocked` 每次分配 `freeSlots.remove` 或 `objs.add`（8 个数组同增）。所以下列结构**确实高频**：
+
+| 结构 | 每调用写次数 | 写者 | 去锁方式 |
+| --- | --- | --- | --- |
+| 槽体（`objs/tags/alive/constFlags/escapeFlags/frozenFlags`） | 分配数 × 2（分配 + 收尾） | **仅本调用 owner** | 所有权 ⇒ 无锁 |
+| `gens` | 分配数（收尾 +1） | owner；逃逸槽由 `PromotionGroup` | 原子 u16 或「先失效后发布」 |
+| `windowSlots` / `windowBase/Top/Used` | 分配数 + 收尾 | 仅 owner | 搬线程上下文 |
+| **`freeSlots`** | 分配数 × 2（pop + push） | **所有线程** | **必须切片私有**；全局只回收整段 |
+| 索引空间（`objs.size` / `add`） | 仅 free list 空时 | 所有线程 | 切片分配时预取；增长走冷路径 |
+| 8 个数组增长 | 摊还偶发 | 所有线程 | 冷路径加锁；**活跃窗口期间禁止搬迁** |
+
+结论：**高频的是「槽体写入、gen、free list」**，但前两者写者唯一（调用 owner），不需要锁；
+真正会被所有线程同时撞的只有 **`freeSlots`** 和**数组增长**。
+⇒ `freeSlots` 必须从全局栈改为「每切片 free list + 全局切片池」，否则 pop/push 就是新的全局锁。
 
 ## 风险
 

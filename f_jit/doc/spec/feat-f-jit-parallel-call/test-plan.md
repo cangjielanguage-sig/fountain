@@ -5,6 +5,7 @@
 | 用例 | 断言 | 阶段 |
 | --- | --- | --- |
 | `concurrentWindowsDoNotInterfere` | 2 线程各 200 次分配型调用，各自句柄计数正确、结果正确 | P1 |
+| `pinDedupeStaysInWindow` | 单次调用内同一实参重复 pin 得到同一 ID；并发调用不在全局锁上线性扫描 | P1 |
 | `iterTablePerCallIsolation` | 两线程各自遍历 Map（各 1000 项），结果正确、游标互不可见、无全局锁争用 | P1 |
 | `deadlineIsThreadLocal` | A 带 10ms deadline、B 长调用（100ms），B 不被中断；A 按时中断 | P2 |
 | `sameUnitParallelCalls` | 4 线程 × 500 次同单元调用，结果/错误码/site 与串行一致；`liveCount` 回到基线 | P3 |
