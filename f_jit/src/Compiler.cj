@@ -78,6 +78,8 @@ public class Compiler {
             this.fns.add(f)
             this.classes.noteFunction(f.name)
             this.snapCache = None
+            // 注册表变了：之前因「未注册」失败的同源应可重试。
+            CompileCache.invalidateFailures()
         }
     }
 
@@ -91,6 +93,7 @@ public class Compiler {
             this.fns.remove(at: i)
             this.classes.removeFunction(name)
             this.snapCache = None
+            CompileCache.invalidateFailures()
             true
         }
     }
@@ -122,6 +125,8 @@ public class Compiler {
                 }
             }
             this.snapCache = None
+            // 注册表变了：之前因「未注册类名」失败的同源应可重试。
+            CompileCache.invalidateFailures()
         }
     }
 
@@ -133,6 +138,7 @@ public class Compiler {
             ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
                 enabled: enabled, bindings: bindings)
             this.snapCache = None
+            CompileCache.invalidateFailures()
         }
     }
 
@@ -147,6 +153,7 @@ public class Compiler {
             ReflectRegistrar.registerInterface<I>(into: this.classes, diag: this.opts.diagnostics,
                 enabled: enabled, bindings: bindings)
             this.snapCache = None
+            CompileCache.invalidateFailures()
         }
     }
 

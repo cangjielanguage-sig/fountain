@@ -86,11 +86,34 @@ protected class CompileCache {
         }
     }
 
-    /** 管线失败：等价共享错误文本。 */
+    /**
+     * 失败缓存上限（有界化）。
+     *
+     * `failures` 按源码指纹累积，失败单元没有 `close` 逐出点，长期运行会无限增长。
+     * 达到上限时整表清空：失败路径是冷路径，最多让后续同源重编一次。
+     */
+    private static const FAILURES_MAX: Int64 = 256
+
+    /** 管线失败：等价共享错误文本（有界）。 */
     public static func fail(key: String, message: String): Unit {
         synchronized(mtx) {
+            if (failures.size >= FAILURES_MAX) {
+                failures.clear()
+            }
             failures[key] = message
             compiling.remove(key)
+        }
+    }
+
+    /**
+     * 注册表发生变化后让失败缓存整体失效。
+     *
+     * 失败单元没有 `close`，在本方法之前 `failures` 没有任何生产侧清理点：
+     * 「先编译 → 失败 → 补注册类/函数 → 重试」会永久复述旧的「未注册」错误。
+     */
+    public static func invalidateFailures(): Unit {
+        synchronized(mtx) {
+            failures.clear()
         }
     }
 
@@ -130,6 +153,13 @@ protected class CompileCache {
     public static func failureOf(key: String): ?String {
         synchronized(mtx) {
             failures.get(key)
+        }
+    }
+
+    /** 失败条目数（诊断/测试用；`failureCacheIsBounded` 的依据）。 */
+    internal static func failureCount(): Int64 {
+        synchronized(mtx) {
+            failures.size
         }
     }
 
