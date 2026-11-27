@@ -140,10 +140,33 @@ internal class Win {
  * C 窗口 `append`（分配型 helper，每次至多 1 个新槽）、D 逃逸（窗口重置后仍可用且 ID 不变）。
  */
 public class HandleTable {
-    /** 窗口初始容量（调用前可调，不追溯进行中的调用；§9 附则 6）。 */
-    public static var initialCapacity: Int64 = 128
+    /**
+     * 窗口初始容量（调用前可调，不追溯进行中的调用；§9 附则 6）。
+     *
+     * H4：底层是 `AtomicInt64`——运行中改配置与并发开窗之间不再有数据竞争；
+     * 赋值语法（`HandleTable.initialCapacity = n`）保持不变。
+     */
+    public static mut prop initialCapacity: Int64 {
+        get() {
+            initialCapacityAtomic.load()
+        }
+        set(v) {
+            initialCapacityAtomic.store(v)
+        }
+    }
+
     /** 句柄表全局槽上限（触顶 → 16；运行中调大即时生效、调小不追溯）。 */
-    public static var capacityLimit: Int64 = 1048576
+    public static mut prop capacityLimit: Int64 {
+        get() {
+            capacityLimitAtomic.load()
+        }
+        set(v) {
+            capacityLimitAtomic.store(v)
+        }
+    }
+
+    private static let initialCapacityAtomic = AtomicInt64(128)
+    private static let capacityLimitAtomic = AtomicInt64(1048576)
 
     /** 分配器/回收/常量路径的**冷路径**锁；读路径不再进锁（D3）。 */
     private static let mtx = Mutex()
