@@ -1,6 +1,6 @@
 ---
 name: fountain-developer
-description: 当用户要求用 fountain 框架（仓颉）开发服务器应用、安装/初始化 fountain 环境、添加模块依赖、按需求开发或迁移/升级项目、在 fountain 仓库内开发、修改模块配置，或做代码审查并按报告修复时使用；fboot 或应用起不来、报 `cannot open shared object file` / `undefined symbol` / `liburing.so.2`、`fboot build` 失败时同样适用。本技能是 12 个 fountain 工作流技能的统一调度入口，按任务加载对应技能（技能没装先运行 `scripts/install_skill.py workflows`）。
+description: 当用户要求用 fountain 框架（仓颉）开发服务器应用、安装/初始化 fountain 环境、添加模块依赖、按需求开发或迁移/升级项目、在 fountain 仓库内开发、修改模块配置，或做代码审查并按报告修复时使用；fboot 或应用起不来、报 `cannot open shared object file` / `undefined symbol` / `liburing.so.2`、`fboot build` 失败时同样适用。本技能是 fountain 工作流技能的统一调度入口，按任务加载对应技能（技能没装先运行 `scripts/install_skill.py workflows`）。
 ---
 
 # fountain-developer — fountain 工作流调度
@@ -22,13 +22,13 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 旧版本项目升级 | `fountain-upgrade-legacy` | I |
 | 在 fountain 仓库内开发 | `fountain-develop-framework` | J |
 | 为现有项目添加 / 修改模块配置 | `fountain-configure-module` | K |
-| 代码审查 → OpenSpec 修复 | `fountain-code-review-fix` | L |
+| 代码审查 → OpenSpec 修复 | `fountain-review` | L |
 
 ## 调度协议
 
 1. **识别工作流**：按上表匹配用户任务；一个任务跨多个工作流时（如从零开发新服务 = A→B→C→D→F），按顺序加载。
 2. **加载技能**：用当前 Agent 的技能机制加载对应技能；没有技能机制时直接读该技能目录的 `SKILL.md`。**不要在本技能里重写工作流步骤，也不要跳过技能直接执行。**
-3. **缺失先安装**：`python <skill-root>/scripts/install_skill.py workflows` 一次装齐 12 个工作流技能；`install_skill.py list` 复验。
+3. **缺失先安装**：`python <skill-root>/scripts/install_skill.py workflows` 一次装齐全部工作流技能（清单见 `WORKFLOW_SKILLS`，口径是 `skills/` 下所有 `fountain-*`）；`install_skill.py list` 复验。
 4. **传递用户需求**：把用户原话、目标目录、项目类型、已有产物一并交给工作流技能；工作流技能会自行加载它需要的联动技能（cangjie-coding / cangjie-doc-lookup / opsx-* / harness / test-driven-development）。
 5. **收尾与下一棒**：收集工作流技能的完成摘要；按下表给出下一步建议，不替用户拍板。
 
