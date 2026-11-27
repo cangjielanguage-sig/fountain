@@ -111,9 +111,14 @@ B4 ctx create+free C1 = 411 ns          = L1 的 13.8%
   各自单元     1002 ns/call  （2.91×）   ← 差 1.88×
 ```
 
-同单元慢 1.88× 的机制是 `JitFunction.call` 的 `enter()/exit()` 每调用两次
-`synchronized(this.mtx)`（`active` 计数）。这是**性能**问题，不在本文 6 条之列，
-单独记录为后续优化候选（`active/state` 原子化 + 乐观进入）。
+**纠错（同日 3 轮交替复测）**：同单元 vs 异单元的 1.88× 是**测量伪影**——统一 n 后
+`same=1111 ns` vs `diff=1077 ns`（差 3%，噪声内）。`enter/exit` 的两次 `synchronized`
+在 4 线程下没有可测代价，原「原子化可 +70%」的预估作废。
+
+**已尝试且无收益**（`optimize-jitcontext-pool`，已回退）：`JitContext` 池化。
+- `ThreadLocal` 池：`C1` 405→**855 ns**（`std.ThreadLocal` 单次约 300 ns，比 malloc/free 还贵）；
+- `RuntimeState` 池：`C1` 405→348–376（−14%），但 `L1` 2952→3128/3248（+6~10%），
+  热路径的 `Some(rs)` 构造与池操作把收益吃回去，端到端无可采纳收益。
 
 ## 4. 状态
 
