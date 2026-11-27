@@ -17,6 +17,7 @@ package fountain::f_jit.runtime
 
 import std.collection.ArrayList
 import std.collection.HashMap
+import std.reflect.TypeInfo
 
 /**
  * 线程私有的运行期状态（`optimize-runtime-tls`）。
@@ -50,4 +51,33 @@ public class RuntimeState {
 
     /** 本线程上次命中的空闲分片（`HandleTable.popFree` 的提示；-1 = 未命中过）。 */
     internal var freeHint: Int64 = -1
+
+    /**
+     * `T → LocalType` 的引用缓存（`optimize-type-cache`）。
+     *
+     * 键是 `TypeInfo.of<T>()` 的**引用**（实测 std 对同一 T 稳定返回同一实例），
+     * 不是名字 —— 取名字要走 `unsafeBytes` + 去前缀分配 + 十几次字符串比较（约 1.5 µs）。
+     * 上限 32 条：调用点通常个位数 T，超出后不再登记（调用方继续现算，行为不变）。
+     */
+    internal let typeCodes: ArrayList<(TypeInfo, UInt16)> = ArrayList<(TypeInfo, UInt16)>()
+
+    /** 按引用查码；未命中 → None。命中路径 0 TLS、0 分配。 */
+    public func typeCodeOf(info: TypeInfo): ?UInt16 {
+        var i = 0
+        while (i < this.typeCodes.size) {
+            let (ti, code) = this.typeCodes[i]
+            if (refEq(ti, info)) {
+                return Some(code)
+            }
+            i = i + 1
+        }
+        None
+    }
+
+    /** 登记一个码（仅成功映射；上限 32，超出静默忽略）。 */
+    public func rememberTypeCode(info: TypeInfo, code: UInt16): Unit {
+        if (this.typeCodes.size < 32) {
+            this.typeCodes.add((info, code))
+        }
+    }
 }

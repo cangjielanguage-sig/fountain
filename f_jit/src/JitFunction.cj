@@ -538,7 +538,7 @@ public class JitFunction <: Resource {
             }
         }
         // 5（前置）：`T` 与签名返回类型一致（包装实例签名未知时以 `T` 为解包类型）
-        let want = JitFunction.localTypeOf<T>()
+        let want = JitFunction.localTypeOf<T>(rs)
         let dynamicRet = isWrapper && this.retType == LocalType.NONE
         match (want) {
             case Some(t) =>
@@ -888,8 +888,23 @@ public class JitFunction <: Resource {
         }
     }
 
-    private static func localTypeOf<T>(): ?UInt16 {
+    private static func localTypeOf<T>(rs: RuntimeState): ?UInt16 {
         let info = TypeInfo.of<T>()
+        // 命中：直接返回码（引用比较，0 分配）。未命中：走原字符串路径并登记。
+        match (rs.typeCodeOf(info)) {
+            case Some(c) => return Some(c)
+            case None => ()
+        }
+        let code = JitFunction.computeTypeCode(info)
+        match (code) {
+            case Some(c) => rs.rememberTypeCode(info, c)
+            case None => ()
+        }
+        code
+    }
+
+    /** 现算路径（未命中缓存时走；与旧实现逐位一致）。 */
+    private static func computeTypeCode(info: TypeInfo): ?UInt16 {
         let n = JitFunction.simpleTypeName(info.name)
         if (n == 'Int64') {
             return Some(LocalType.I64)
