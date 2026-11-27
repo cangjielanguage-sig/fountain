@@ -228,3 +228,46 @@ x86 侧 `X86Lower` 本来就是这个结构（`HashMap<String, Int64>` + 单遍 
 | `FbcReader.load` | ~12% | 切片 + 三张表解码，均为最小形态 |
 | `A64Lower.lower` | ~20% | 1.3–1.8 ms，尚未 profile 到具体 opcode 分支 |
 | `Assembler.validate` | ~10% | 同上 |
+
+## 11. D3 发射器按字存储 / `validate` 免解码 / CRC 预分配（2026-11-27，`optimize-compile-hotpath`）
+
+### 11.1 改前分段（插桩，250 条指令、9432 B 机器码）
+
+| 位置 | 实测 |
+| --- | --- |
+| `A64Lower.lower` 的 `translate` | 1.41–1.65 ms |
+| `A64Lower.lower` 的 `bind + decode` | 0.67–0.72 ms |
+| `Assembler.validateFunc` 的 `decode` | 0.21–0.23 ms |
+| `FbcReader.checkCrc32` | 0.15–0.53 ms |
+| `FbcReader` 的 `dir+types` / `site+name` / 切片 | 0.24 / 0.30 / 0.17 ms |
+
+### 11.2 改动
+
+1. `A64Emitter.out` 由 `ArrayList<UInt8>` 改 `ArrayList<UInt32>`：`word()` 一次 `add`；
+   `size()` 仍返回字节（`words*4`），`finish()` 新增 `bytes()` 一次展开。
+2. `Assembler.validateFunc` 不再 `InsnDecoder.decode`：`op`/`size` 取自 `info`，操作数直读 `code[off+1+k]`。
+3. `FbcReader.checkCrc32` 改预分配数组，去掉 `ArrayList` + `toArray` 两趟。
+
+### 11.3 数据（同进程中位数；该机双峰，单次端到端不可判）
+
+| 阶段 | 改前 | 改后 | 快模式配对 | 慢模式配对 |
+| --- | --- | --- | --- | --- |
+| `codegen` | 3.731 / **2.322** / 3.743 | 3.766 / 3.608 / **2.157** | **−7.1%** | −1.3% |
+| `load` | 0.973 / **0.499** / 0.913 | 0.902 / 0.908 / **0.493** | −1.2% | **−7.3%** |
+| `front` | 4.707 / 2.448 / 4.640 | 4.336 / 4.285 / **2.441** | −0.3% | **−8.1%** |
+
+三个维度在两个模式下都没有退化，折算单次编译 **−0.2~0.5 ms（−3~5%）**。
+判定 **keep（边际）**——收益明显小于 D1/D2，价值主要在消除结构性浪费。
+
+护栏：新增 `A64EmitterSize_test` 3 条（字节口径/小端展开/分支偏移），
+改前先绿；变异「`size()` 少乘 4」⇒ 2 条红。
+`A64Emitter_test` 13/13、`Golden_test` 4/4、`CompileCopy_test` 1/1；全量 1244/1244。
+
+### 11.4 下一步线索（都必须先单独测）
+
+1. **审计表去 TLS**：`A64Emitter.strOff/ldrOff` 每次内存操作 `auditTls.get()`；
+   本项目早前实测 `ThreadLocal.get` ≈300 ns，每函数约 1000 次 ⇒ 约 **0.3 ms**。
+   审计生命周期 = 一次 `compileOnce`，改成发射器实例字段即可。
+2. **`bind('L${off}')`**：250 次/函数的字符串拼接 + 哈希插入，可改惰性绑定或整数偏移键。
+3. **`InsnDecoder.decode` 的操作数数组**：`A64Lower`/`X86Lower` 仍每指令分配一次，
+   要消除需把 `translate` 的 `ops` 参数改成 `(code, off)` 直读。
