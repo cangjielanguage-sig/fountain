@@ -325,3 +325,34 @@ x86 侧 `X86Lower` 本来就是这个结构（`HashMap<String, Int64>` + 单遍 
 
 `A64Emitter_test` 13、`X86Compile_test` 11、`X86Lower_test` 50、`Golden_test` 4、
 `CompileCopy_test` 1 —— 全部通过，覆盖 73 处下标改写。全量 1246/1246。
+
+## 14. x86 审计表的并发隔离（2026-11-27，`fix-x86-audit-isolation`）
+
+### 14.1 缺陷
+
+`BackendX86_64.auditMemBases` 是**进程级静态 `ArrayList`**（无锁）。并发编译时：
+
+- 两个线程的 `add` 落在同一张表上（`ArrayList` 非线程安全）；
+- 一个线程 `lower()` 开头的 `resetAuditMemBases()` 会清掉另一线程已记录的项
+  ⇒ 对方快照为空 ⇒ `auditAllows([])` 返回 true ⇒ **非法内存基址被静默放行**。
+
+这是 aarch64 在 `optimize-compile-path` C0 里修过的同一缺陷；当时漏了 x86，
+且 `CompileConcurrency_test` 在 aarch64 上只走 A64 路径，从未暴露。
+
+### 14.2 证据与修复
+
+新增 `X86AuditIsolation_test`（另一线程写入后本线程快照必须为空）：
+
+| 实现 | `auditListIsThreadLocal` |
+| --- | --- |
+| 改前（静态表） | **FAILED** |
+| 改后（ThreadLocal） | PASSED |
+
+修法：审计表改 `ThreadLocal<ArrayList<Int64>>`，四个静态方法走线程私有列表，
+`auditAllows` 不变。选 ThreadLocal 而非实例字段，是因为 x86 的发射助手是静态函数、
+`EmitAudit_test` 也依赖静态采集 API；ThreadLocal 是此处最小且完整的修法。
+
+### 14.3 回归
+
+`X86AuditIsolation_test` 2/2、`EmitAudit_test` 6/6、`X86Compile_test` 11/11、
+`X86Lower_test` 50/50、`CompileConcurrency_test` 1/1；全量 1248/1248。
