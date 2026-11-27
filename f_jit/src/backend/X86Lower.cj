@@ -17,9 +17,8 @@ package fountain::f_jit.backend
 
 import std.collection.ArrayList
 import std.collection.HashMap
-import fountain::f_jit.bytecode.DecodedInsn
 import fountain::f_jit.bytecode.FuncEntry
-import fountain::f_jit.bytecode.InsnDecoder
+import fountain::f_jit.bytecode.OpInfo
 import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_base.CpuFeatures
 import fountain::f_jit.runtime.HelperAddresses
@@ -112,19 +111,15 @@ internal class X86Lower {
         this.probing = true
         this.depth = 0
         this.delta.clear()
-        // 解码一次、两遍复用：旧实现探针遍与发射遍各 `decode` 一次，操作数数组也各分配一次
-        // （`optimize-compile-copy`）。
-        let insns = ArrayList<DecodedInsn>()
-        let offs = ArrayList<Int64>()
+        // 两遍都直读 opcode/长度：降低期不需要 `decode` 的操作数数组（`optimize-decode-alloc`）。
         var off = start
         while (off < end) {
             let before = this.depth
-            let insn = InsnDecoder.decode(unit.code, off)
-            insns.add(insn)
-            offs.add(off)
-            this.translate(insn.op, insn.operands, off, off + insn.size)
+            let op = unit.code[off]
+            let next = off + Int64(OpInfo.OPCODE_TABLE[Int64(op)].len)
+            this.translate(op, unit.code, off + 1, off, next)
             this.delta[off] = this.depth - before
-            off = off + insn.size
+            off = next
         }
         this.probing = false
 
@@ -137,21 +132,20 @@ internal class X86Lower {
                 return
         }
 
-        // 3) 发射遍（复用探针遍的解码结果，偏移序列与探针遍逐条一致）
-        var k = 0
-        while (k < insns.size) {
-            let at = offs[k]
-            this.bind('L${at}')
-            let insn = insns[k]
-            let next = at + insn.size
+        // 3) 发射遍（与探针遍同一套 opcode/长度直读，偏移序列逐条一致）
+        off = start
+        while (off < end) {
+            this.bind('L${off}')
+            let op = unit.code[off]
+            let next = off + Int64(OpInfo.OPCODE_TABLE[Int64(op)].len)
             // 可达偏移以 CFG 深度为准；不可达区域（RET/BAIL 之后的死代码、内联错误块）
             // 无深度记录，沿用线性累加（与修复前行为一致，且不影响可达汇合点）。
-            match (this.depthAt.get(at)) {
+            match (this.depthAt.get(off)) {
                 case Some(d) => this.depth = d
                 case None => ()
             }
-            this.translate(insn.op, insn.operands, at, next)
-            k = k + 1
+            this.translate(op, unit.code, off + 1, off, next)
+            off = next
         }
         // G5 审计：机器码只能以栈/帧/ctx 为内存基址（等价于"不得解引用 helper 返回的 cell"）
         if (!BackendX86_64.auditAllows(BackendX86_64.auditMemBasesSnapshot())) {
@@ -756,35 +750,36 @@ internal class X86Lower {
         this.checkErr()
     }
 
-    private func translate(op: UInt8, ops: Array<UInt8>, at: Int64, next: Int64): Unit {
+    private func translate(op: UInt8, code: Array<UInt8>, opsAt: Int64, at: Int64,
+        next: Int64): Unit {
         match (op) {
             case 0x00u8 => this.add([0x90u8])
             case 0x01u8 => this.add([0xCCu8])
             case 0x02u8 => this.add([0x90u8])
             case 0x03u8 =>
-                this.movQwordCtx(8, X86Lower.i32(ops, 0))
+                this.movQwordCtx(8, X86Lower.i32(code, opsAt + 0))
             case 0x04u8 => this.checkErr()
-            case 0x05u8 => this.bail(X86Lower.i8(ops, 0))
+            case 0x05u8 => this.bail(X86Lower.i8(code, opsAt + 0))
             case 0x06u8 => ()
             case 0x07u8 => ()
             case 0x10u8 =>
-                this.movImm(0, X86Lower.i8(ops, 0))
+                this.movImm(0, X86Lower.i8(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
             case 0x11u8 =>
-                this.movImm(0, X86Lower.i32(ops, 0))
+                this.movImm(0, X86Lower.i32(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
             case 0x12u8 =>
-                this.movImm(0, X86Lower.i64(ops, 0))
+                this.movImm(0, X86Lower.i64(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
             case 0x13u8 =>
-                this.movImm(0, X86Lower.i64(ops, 0))
+                this.movImm(0, X86Lower.i64(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
             case 0x14u8 =>
-                this.movImm(0, X86Lower.u8(ops, 0))
+                this.movImm(0, X86Lower.u8(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
             case 0x15u8 =>
@@ -794,7 +789,7 @@ internal class X86Lower {
                 if (this.constBase == 0) {
                     this.ok = false
                 } else {
-                    this.movImm(0, this.constBase + 8 * X86Lower.u16(ops, 0))
+                    this.movImm(0, this.constBase + 8 * X86Lower.u16(code, opsAt + 0))
                         BackendX86_64.noteAbsMem() // 常量镜像：宿主绝对地址（与 a64 豁免对称）
                         this.add([0x48u8, 0x8Bu8, 0x00u8])
                     this.pushReg(0)
@@ -818,13 +813,13 @@ internal class X86Lower {
                     0x08u8, 0x48u8, 0x89u8, 0x0Cu8, 0x24u8, 0x48u8, 0x89u8, 0x44u8, 0x24u8,
                     0x08u8])
             case 0x1Cu8 =>
-                this.pushMemRsp(8 * X86Lower.u8(ops, 0))
+                this.pushMemRsp(8 * X86Lower.u8(code, opsAt + 0))
                 this.depth = this.depth + 1
             case 0x20u8 =>
-                this.pushMemRbp(0 - (32 + 8 * X86Lower.u16(ops, 0)))
+                this.pushMemRbp(0 - (32 + 8 * X86Lower.u16(code, opsAt + 0)))
                 this.depth = this.depth + 1
             case 0x21u8 =>
-                this.popMemRbp(0 - (32 + 8 * X86Lower.u16(ops, 0)))
+                this.popMemRbp(0 - (32 + 8 * X86Lower.u16(code, opsAt + 0)))
                 this.depth = this.depth - 1
             case 0x22u8 =>
                 this.pushMemRbp(-32)
@@ -840,7 +835,7 @@ internal class X86Lower {
                 this.depth = this.depth + 1
             case 0x26u8 =>
                 this.pushMemRbp(-32)
-                this.movImm(0, X86Lower.u16(ops, 0))
+                this.movImm(0, X86Lower.u16(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 2
                 this.helper(56, 2, 0)
@@ -1008,15 +1003,15 @@ internal class X86Lower {
             case 0x6Du8 => this.helper(13, 2, 0)
             case 0x6Eu8 => this.helper(15, 2, 0)
             case 0x70u8 =>
-                let rel = X86Lower.i32(ops, 0)
+                let rel = X86Lower.i32(code, opsAt + 0)
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')
             case 0x71u8 =>
-                let rel = X86Lower.i32(ops, 0)
+                let rel = X86Lower.i32(code, opsAt + 0)
                 this.add([0x58u8, 0x48u8, 0x85u8, 0xC0u8])
                 this.rel32([0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')
                 this.depth = this.depth - 1
             case 0x72u8 =>
-                let rel = X86Lower.i32(ops, 0)
+                let rel = X86Lower.i32(code, opsAt + 0)
                 this.add([0x58u8, 0x48u8, 0x85u8, 0xC0u8])
                 this.rel32([0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')
                 this.depth = this.depth - 1
@@ -1050,13 +1045,13 @@ internal class X86Lower {
                 this.bind(skipPoll)
                 // 编译期栈深记账：两条路径运行期的净栈变化相同（原路 push+pop 抵消），故无条件 -1。
                 this.depth = this.depth - 1
-                let rel = X86Lower.i32(ops, 0)
+                let rel = X86Lower.i32(code, opsAt + 0)
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')
-            case 0x75u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 0)
-            case 0x76u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 1)
-            case 0x77u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 2)
-            case 0x78u8 => this.callFunc(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2))
-            case 0x79u8 => this.helper(63, Int64(X86Lower.u8(ops, 0)) + 1, 0)
+            case 0x75u8 => this.helper(X86Lower.u16(code, opsAt + 0), X86Lower.u8(code, opsAt + 2), 0)
+            case 0x76u8 => this.helper(X86Lower.u16(code, opsAt + 0), X86Lower.u8(code, opsAt + 2), 1)
+            case 0x77u8 => this.helper(X86Lower.u16(code, opsAt + 0), X86Lower.u8(code, opsAt + 2), 2)
+            case 0x78u8 => this.callFunc(X86Lower.u16(code, opsAt + 0), X86Lower.u8(code, opsAt + 2))
+            case 0x79u8 => this.helper(63, Int64(X86Lower.u8(code, opsAt + 0)) + 1, 0)
             case 0x7Au8 => this.bail(18)
             case 0x7Bu8 => ()
             case 0x7Cu8 =>
@@ -1068,39 +1063,39 @@ internal class X86Lower {
             case 0x7Eu8 =>
                 this.add([0x31u8, 0xC0u8])
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'epilogue')
-            case 0x7Fu8 => this.callClosure(X86Lower.u8(ops, 0))
-            case 0x80u8 => this.castLike(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2))
-            case 0x81u8 => this.toI64(X86Lower.u8(ops, 0))
+            case 0x7Fu8 => this.callClosure(X86Lower.u8(code, opsAt + 0))
+            case 0x80u8 => this.castLike(X86Lower.u16(code, opsAt + 0), X86Lower.u8(code, opsAt + 2))
+            case 0x81u8 => this.toI64(X86Lower.u8(code, opsAt + 0))
             case 0x82u8 =>
                 this.movRaxMemRsp(0)
                 this.add([0xF2u8, 0x48u8, 0x0Fu8, 0x2Au8, 0xC0u8])
                 this.sseStore(0, 0)
             case 0x83u8 =>
-                this.movImm(0, X86Lower.u16(ops, 0))
+                this.movImm(0, X86Lower.u16(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
                 this.helper(17, 2, 0)
             case 0x84u8 =>
-                if (X86Lower.u8(ops, 2) == 0) {
-                    this.movImm(0, X86Lower.u16(ops, 0))
+                if (X86Lower.u8(code, opsAt + 2) == 0) {
+                    this.movImm(0, X86Lower.u16(code, opsAt + 0))
                     this.pushReg(0)
                     this.depth = this.depth + 1
                     this.helper(19, 2, 0)
                 } else {
-                    this.castLike(X86Lower.u16(ops, 0), 1)
+                    this.castLike(X86Lower.u16(code, opsAt + 0), 1)
                 }
             case 0x85u8 => this.bail(17)
             case 0x86u8 =>
-                let code = X86Lower.u8(ops, 0)
+                let code = X86Lower.u8(code, opsAt + 0)
                 this.add([0x58u8, 0x48u8, 0x85u8, 0xC0u8])
                 let okLabel = 'asm${at}'
                 this.rel32([0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], okLabel)
                 this.depth = this.depth - 1
                 this.bail(code)
                 this.bind(okLabel)
-            case 0x87u8 => this.bail(X86Lower.u8(ops, 0))
+            case 0x87u8 => this.bail(X86Lower.u8(code, opsAt + 0))
             case 0x88u8 =>
-                let code = X86Lower.u8(ops, 0)
+                let code = X86Lower.u8(code, opsAt + 0)
                 this.add([0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x85u8, 0xC0u8])
                 let okLabel = 'gnnz${at}'
                 this.rel32([0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], okLabel)
@@ -1134,7 +1129,7 @@ internal class X86Lower {
             case 0x94u8 => this.helper(6, 2, 0)
             case 0x95u8 => this.helper(8, 2, 0)
             case 0x96u8 =>
-                this.movImm(0, X86Lower.u8(ops, 0))
+                this.movImm(0, X86Lower.u8(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
                 this.helper(14, 2, 0)
@@ -1144,9 +1139,9 @@ internal class X86Lower {
             case 0x9Au8 => this.helper(41, 4, 0)
             case 0x9Bu8 => this.helper(42, 2, 0)
             case 0x9Cu8 =>
-                this.helper(if (X86Lower.u8(ops, 0) == 0) { 28 } else { 29 }, 1, 0)
+                this.helper(if (X86Lower.u8(code, opsAt + 0) == 0) { 28 } else { 29 }, 1, 0)
             case 0x9Du8 =>
-                if (X86Lower.u8(ops, 0) == 1) {
+                if (X86Lower.u8(code, opsAt + 0) == 1) {
                     this.helper(30, 1, 1)
                     this.seq = this.seq + 1
                     let dfin = 'df${this.seq}'
@@ -1188,7 +1183,7 @@ internal class X86Lower {
             case 0xB5u8 => this.helper(39, 2, 0)
             case 0xB6u8 => this.helper(40, 1, 0)
             case 0xB7u8 =>
-                this.movImm(0, X86Lower.u8(ops, 0))
+                this.movImm(0, X86Lower.u8(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
                 this.helper(33, 2, 0)
@@ -1199,7 +1194,7 @@ internal class X86Lower {
             case 0xBCu8 => this.helper(60, 2, 0)
             case 0xBDu8 => this.helper(61, 2, 0)
             case 0xBEu8 =>
-                this.movImm(0, X86Lower.u8(ops, 0))
+                this.movImm(0, X86Lower.u8(code, opsAt + 0))
                 this.pushReg(0)
                 this.depth = this.depth + 1
                 this.helper(62, 2, 0)

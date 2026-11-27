@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_jit.backend
 
 import fountain::f_jit.bytecode.FuncEntry
-import fountain::f_jit.bytecode.InsnDecoder
+import fountain::f_jit.bytecode.OpInfo
 import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_jit.runtime.CtxFlags
 import fountain::f_jit.runtime.HelperAddresses
@@ -92,9 +92,10 @@ internal class A64Lower {
         let end = Int64(this.fn.codeOff) + Int64(this.fn.codeLen)
         while (off < end) {
             this.e.bind('L${off}')
-            let insn = InsnDecoder.decode(unit.code, off)
-            let next = off + insn.size
-            this.translate(insn.op, insn.operands, off, next)
+            // 直读 opcode 与长度：降低期用不到 `decode` 的操作数数组（`optimize-decode-alloc`）。
+            let op = unit.code[off]
+            let next = off + Int64(OpInfo.OPCODE_TABLE[Int64(op)].len)
+            this.translate(op, unit.code, off + 1, off, next)
             off = next
         }
     }
@@ -144,13 +145,14 @@ internal class A64Lower {
         this.e.strOff(reg, 29, -40 - 8 * i)
     }
 
-    private func translate(op: UInt8, ops: Array<UInt8>, at: Int64, next: Int64): Unit {
+    private func translate(op: UInt8, code: Array<UInt8>, opsAt: Int64, at: Int64,
+        next: Int64): Unit {
         match (op) {
             case 0x00 => this.e.nop()
             case 0x01 => this.e.brk()
             case 0x02 => this.e.nop()
             case 0x03 =>
-                this.e.movImm64(11, A64Lower.i32(ops, 0))
+                this.e.movImm64(11, A64Lower.i32(code, opsAt + 0))
                 this.e.strOff(11, 19, 8)
             case 0x04 =>
                 this.e.ldrOff(11, 19, 0)
@@ -160,10 +162,10 @@ internal class A64Lower {
                 this.e.b('epilogue')
                 this.e.bind('chk${at}')
             case 0x05 =>
-                this.bail(A64Lower.i8(ops, 0))
+                this.bail(A64Lower.i8(code, opsAt + 0))
             case 0x06 => this.e.nop()
             case 0x07 =>
-                let need = A64Lower.u16(ops, 0)
+                let need = A64Lower.u16(code, opsAt + 0)
                 this.e.movReg(11, 29)
                 this.e.subImm(11, 11, this.frame)
                 this.e.subReg(11, 11, 31)
@@ -171,21 +173,21 @@ internal class A64Lower {
                 this.e.cmpReg(11, 12)
                 this.e.bCond(A64Cond.LO, 'deopt')
             case 0x10 =>
-                this.e.movImm64(9, A64Lower.i8(ops, 0))
+                this.e.movImm64(9, A64Lower.i8(code, opsAt + 0))
                 this.pushX(9)
             case 0x11 =>
-                this.e.movImm64(9, A64Lower.i32(ops, 0))
+                this.e.movImm64(9, A64Lower.i32(code, opsAt + 0))
                 this.pushX(9)
             case 0x12 =>
-                this.e.movImm64(9, A64Lower.i64(ops, 0))
+                this.e.movImm64(9, A64Lower.i64(code, opsAt + 0))
                 this.pushX(9)
             case 0x13 =>
-                this.e.movImm64(9, A64Lower.i64(ops, 0))
+                this.e.movImm64(9, A64Lower.i64(code, opsAt + 0))
                 this.e.fmovDFromX(0, 9)
                 this.e.subImm(20, 20, 8)
                 this.e.strD(0, 20, 0)
             case 0x14 =>
-                this.e.movImm64(9, if (A64Lower.u8(ops, 0) == 0) { 0 } else { 1 })
+                this.e.movImm64(9, if (A64Lower.u8(code, opsAt + 0) == 0) { 0 } else { 1 })
                 this.pushX(9)
             case 0x15 =>
                 this.e.movReg(9, 31)
@@ -195,7 +197,7 @@ internal class A64Lower {
                 if (this.constBase == 0) {
                     this.ok = false
                 } else {
-                    let idx = A64Lower.u16(ops, 0)
+                    let idx = A64Lower.u16(code, opsAt + 0)
                     this.e.movImm64(9, this.constBase + 8 * idx)
                     this.e.ldrAbs(9, 9, 0)
                     this.pushX(9)
@@ -216,14 +218,14 @@ internal class A64Lower {
                 this.e.strOff(9, 20, 8)
                 this.e.strOff(10, 20, 0)
             case 0x1C =>
-                this.e.ldrOff(9, 20, 8 * A64Lower.u8(ops, 0))
+                this.e.ldrOff(9, 20, 8 * A64Lower.u8(code, opsAt + 0))
                 this.pushX(9)
             case 0x20 =>
-                let i = A64Lower.u16(ops, 0)
+                let i = A64Lower.u16(code, opsAt + 0)
                 this.loadLocal(i, 9)
                 this.pushX(9)
             case 0x21 =>
-                let i = A64Lower.u16(ops, 0)
+                let i = A64Lower.u16(code, opsAt + 0)
                 this.e.ldrOff(9, 20, 0)
                 this.e.addImm(20, 20, 8)
                 this.storeLocal(i, 9)
@@ -233,7 +235,7 @@ internal class A64Lower {
             case 0x25 => this.loadLocal(3, 9); this.pushX(9)
             case 0x26 =>
                 // LOAD_CAP idx：locals[0] 闭包句柄 + idx → H56
-                let capIdx = A64Lower.u16(ops, 0)
+                let capIdx = A64Lower.u16(code, opsAt + 0)
                 this.loadLocal(0, 9)
                 this.pushX(9)
                 this.e.movImm64(9, capIdx)
@@ -346,15 +348,15 @@ internal class A64Lower {
             case 0x6E => this.helperCall(15, 2, 0)
             case 0x70 =>
                 // rel32 是**有符号**（向后跳为负；§5/§11.7），按 u32 读会把回边变成巨大正偏移
-                let rel = A64Lower.i32(ops, 0)
+                let rel = A64Lower.i32(code, opsAt + 0)
                 this.e.b('L${next + rel}')
             case 0x71 =>
-                let rel = A64Lower.i32(ops, 0)
+                let rel = A64Lower.i32(code, opsAt + 0)
                 this.e.ldrOff(9, 20, 0)
                 this.e.addImm(20, 20, 8)
                 this.e.cbz(9, 'L${next + rel}')
             case 0x72 =>
-                let rel = A64Lower.i32(ops, 0)
+                let rel = A64Lower.i32(code, opsAt + 0)
                 this.e.ldrOff(9, 20, 0)
                 this.e.addImm(20, 20, 8)
                 this.e.cbnz(9, 'L${next + rel}')
@@ -376,15 +378,15 @@ internal class A64Lower {
                 this.e.cbz(0, skipPoll)
                 this.helperCall0(22)
                 this.e.bind(skipPoll)
-                this.e.b('L${next + A64Lower.i32(ops, 0)}')
-            case 0x75 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 0)
-            case 0x76 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 1)
-            case 0x77 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 2)
-            case 0x78 => this.callFunc(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2))
-            case 0x79 => this.helperCall(63, Int64(A64Lower.u8(ops, 0)) + 1, 0)
+                this.e.b('L${next + A64Lower.i32(code, opsAt + 0)}')
+            case 0x75 => this.helperCall(A64Lower.u16(code, opsAt + 0), A64Lower.u8(code, opsAt + 2), 0)
+            case 0x76 => this.helperCall(A64Lower.u16(code, opsAt + 0), A64Lower.u8(code, opsAt + 2), 1)
+            case 0x77 => this.helperCall(A64Lower.u16(code, opsAt + 0), A64Lower.u8(code, opsAt + 2), 2)
+            case 0x78 => this.callFunc(A64Lower.u16(code, opsAt + 0), A64Lower.u8(code, opsAt + 2))
+            case 0x79 => this.helperCall(63, Int64(A64Lower.u8(code, opsAt + 0)) + 1, 0)
             case 0x7A => this.bail(18) // HW_OPEN：M1 未启用
             case 0x7B => this.e.nop()   // HW_CLOSE
-            case 0x7F => this.callClosure(A64Lower.u8(ops, 0))
+            case 0x7F => this.callClosure(A64Lower.u8(code, opsAt + 0))
             case 0x7C =>
                 this.e.ldrOff(0, 20, 0)
                 this.e.b('epilogue')
@@ -395,24 +397,24 @@ internal class A64Lower {
                 this.e.movReg(0, 31)
                 this.e.b('epilogue')
             case 0x81 =>
-                this.toI64(A64Lower.u8(ops, 0), at)
+                this.toI64(A64Lower.u8(code, opsAt + 0), at)
             case 0x82 =>
                 this.e.ldrOff(9, 20, 0)
                 this.e.scvtf(0, 9)
                 this.e.strD(0, 20, 0)
             case 0x80 =>
-                this.castLike(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), at)
+                this.castLike(A64Lower.u16(code, opsAt + 0), A64Lower.u8(code, opsAt + 2), at)
             case 0x83 =>
-                this.e.movImm64(9, A64Lower.u16(ops, 0))
+                this.e.movImm64(9, A64Lower.u16(code, opsAt + 0))
                 this.pushX(9)
                 this.helperCall(17, 2, 0)
             case 0x84 =>
-                if (A64Lower.u8(ops, 2) == 0) {
-                    this.e.movImm64(9, A64Lower.u16(ops, 0))
+                if (A64Lower.u8(code, opsAt + 2) == 0) {
+                    this.e.movImm64(9, A64Lower.u16(code, opsAt + 0))
                     this.pushX(9)
                     this.helperCall(19, 2, 0)
                 } else {
-                    this.castLike(A64Lower.u16(ops, 0), 1, at)
+                    this.castLike(A64Lower.u16(code, opsAt + 0), 1, at)
                 }
             case 0x85 =>
                 this.bail(17)
@@ -421,14 +423,14 @@ internal class A64Lower {
                 this.e.addImm(20, 20, 8)
                 this.e.cmpImm(9, 0)
                 this.e.cbnz(9, 'asm${at}')
-                this.bail(A64Lower.u8(ops, 0))
+                this.bail(A64Lower.u8(code, opsAt + 0))
                 this.e.bind('asm${at}')
             case 0x87 =>
-                this.bail(A64Lower.u8(ops, 0))
+                this.bail(A64Lower.u8(code, opsAt + 0))
             case 0x88 =>
                 this.e.ldrOff(9, 20, 0)
                 this.e.cbnz(9, 'gnnz${at}')
-                if (A64Lower.u8(ops, 0) == 0) {
+                if (A64Lower.u8(code, opsAt + 0) == 0) {
                     this.bail(6)
                 } else {
                     this.e.b('deopt')
@@ -443,7 +445,7 @@ internal class A64Lower {
             case 0x94 => this.helperCall(6, 2, 0)
             case 0x95 => this.helperCall(8, 2, 0)
             case 0x96 =>
-                this.e.movImm64(9, A64Lower.u8(ops, 0))
+                this.e.movImm64(9, A64Lower.u8(code, opsAt + 0))
                 this.pushX(9)
                 this.helperCall(14, 2, 0)
             case 0x97 => this.helperCall(16, 1, 0)
@@ -452,7 +454,7 @@ internal class A64Lower {
             case 0x9A => this.helperCall(41, 4, 0)
             case 0x9B => this.helperCall(42, 2, 0)
             case 0x9C =>
-                this.helperCall(if (A64Lower.u8(ops, 0) == 0) { 28 } else { 29 }, 1, 0)
+                this.helperCall(if (A64Lower.u8(code, opsAt + 0) == 0) { 28 } else { 29 }, 1, 0)
             case 0x9D =>
                 // DEC_TO_I64：mode1 时 DEC_RANGE(9) 改写为 DEOPT(-1)
                 this.helperCall(30, 1, 1)
@@ -461,7 +463,7 @@ internal class A64Lower {
                 let failLabel = 'decf${this.seq}'
                 this.e.ldrOff(11, 19, 0)
                 this.e.cbz(11, doneLabel)
-                if (A64Lower.u8(ops, 0) == 1) {
+                if (A64Lower.u8(code, opsAt + 0) == 1) {
                     this.e.cmpImm(11, 9)
                     this.e.bCond(A64Cond.NE, failLabel)
                     this.e.movImm64(11, -1)
@@ -497,7 +499,7 @@ internal class A64Lower {
             case 0xB5 => this.helperCall(39, 2, 0)
             case 0xB6 => this.helperCall(40, 1, 0)
             case 0xB7 =>
-                this.e.movImm64(9, A64Lower.u8(ops, 0))
+                this.e.movImm64(9, A64Lower.u8(code, opsAt + 0))
                 this.pushX(9)
                 this.helperCall(33, 2, 0)
             case 0xB8 => this.helperCall(50, 3, 0)
@@ -507,7 +509,7 @@ internal class A64Lower {
             case 0xBC => this.helperCall(60, 2, 0)
             case 0xBD => this.helperCall(61, 2, 0)
             case 0xBE =>
-                this.e.movImm64(9, A64Lower.u8(ops, 0))
+                this.e.movImm64(9, A64Lower.u8(code, opsAt + 0))
                 this.pushX(9)
                 this.helperCall(62, 2, 0)
             case 0xBF => this.helperCall(69, 1, 0)
