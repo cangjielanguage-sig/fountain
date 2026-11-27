@@ -612,3 +612,30 @@ F = 注册函数数（含构造器 helper），于是**每次调用付 O(F)**。
 `UserHelperTable.find(hid)` 仍每次调用一次 TLS `get`（~300 ns），因为它的两个调用点
 （`runtime/UserHelper.cj`、`runtime/AnyHelpers.cj`）在 C 调用路径上、签名里没有 `rs`。
 要消除需要改这两处 helper 的契约，收益与风险不成比例。
+
+## 18. 调用期去分配（2026-11-27，`optimize-call-alloc2`）
+
+### 18.1 改动
+
+1. `CallMarshal.unboxRet(t, cell)`：返回值解包从「现建闭包再立刻调用」改为直接方法调用；
+   `makeRetUnboxer` 保留并委托（测试在用）。
+2. 零实参单元共享 `JIT` 侧静态空 `cells`（封送循环不执行，不会被写）。
+
+### 18.2 数据：未测得显著收益
+
+`CallPathBench` B1（`{ n => n + 1 }`，5 轮取最小）：
+
+| 臂 | L1 |
+| --- | --- |
+| 改前 | 3036 ns |
+| 改后 | **2975** / 5516 ns |
+
+快模式 −2.0%、慢模式 +2.3%，低于 MOV(3%) 且在噪声内。**不宣称加速**。
+
+### 18.3 结论：本轮进入「测量分辨率以下」
+
+`optimize-helper-table` 之后，剩下的都是每次调用几十到几百 ns 的固定开销，
+而本机跨进程波动 ±40%、同进程也有 ±6%，已经无法为这类改动提供判定证据。
+继续做「少一个闭包/少一次查表」级别的改动，性价比低且无法验证。
+
+护栏：`CallMarshal_test` 10/10、`MarshalRs_test` 5/5、`CallPathBench` 正常；全量 1246/1246。
