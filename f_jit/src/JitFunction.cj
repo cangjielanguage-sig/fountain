@@ -529,14 +529,24 @@ public class JitFunction <: Resource {
         this.classSnapshot
     }
 
-    /** 桥/测试内部：最近一次 `retType=12` 调用的条目（未承接时用于手工包装）。 */
+    /**
+     * 桥/测试内部：最近一次 `retType=12` 调用的条目（未承接时用于手工包装）。
+     *
+     * **单线程诊断口径**（H3）：并发调用下「最近一次」由调度决定，值不确定；
+     * 该访问器只供单线程手工包装使用。并发场景请用 `callForFn`——它把提升组写进
+     * 本次调用私有的 `CallOut`，不经过本字段。
+     */
     internal func lastEscapedClosure(): ?EscapedClosure {
-        this.lastEscaped
+        var out: ?EscapedClosure = None
+        synchronized(this.mtx) {
+            out = this.lastEscaped
+        }
+        out
     }
 
-    /** 桥/测试内部：最近一次 `retType=12` 调用的提升组。 */
+    /** 桥/测试内部：最近一次 `retType=12` 调用的提升组（同样受 H3 的口径约束）。 */
     internal func lastPromotionGroup(): ?PromotionGroup {
-        match (this.lastEscaped) {
+        match (this.lastEscapedClosure()) {
             case Some(e) => Some(e.group)
             case None => None
         }
@@ -647,12 +657,17 @@ public class JitFunction <: Resource {
                 // 组产生处登记（B1）：未承接的组也随单元卸载兜底释放。
                 // 有 `out` 时只写本次调用的私有槽；普通 `call` 仍记到单元字段，供
                 // 测试/桥的 `lastEscapedClosure()` 手工包装（单线程诊断口径）。
+                // H3：该字段是单元级共享状态，写必须在单元锁内（读侧同样加锁），
+                // 否则并发返回闭包时互相覆盖，读者可能看到撕裂的引用。
                 match (marshal.closureGroupOf()) {
                     case Some(g) =>
                         let e = this.registerEscaped(g)
                         match (out) {
                             case Some(o) => o.escaped = Some(e)
-                            case None => this.lastEscaped = Some(e)
+                            case None =>
+                                synchronized(this.mtx) {
+                                    this.lastEscaped = Some(e)
+                                }
                         }
                     case None => ()
                 }
