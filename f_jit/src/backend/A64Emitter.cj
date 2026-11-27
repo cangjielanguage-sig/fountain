@@ -16,17 +16,7 @@ limitations under the License.
 package fountain::f_jit.backend
 
 import std.collection.ArrayList
-
-/** 标签：名字 + 字节偏移。 */
-internal struct A64Label {
-    let name: String
-    let at: Int64
-
-    init(name: String, at: Int64) {
-        this.name = name
-        this.at = at
-    }
-}
+import std.collection.HashMap
 
 /** 重定位项：kind 0=B/BL(imm26)、1=B.cond(imm19)、2=CBZ/CBNZ(imm19)。 */
 internal struct A64Reloc {
@@ -48,7 +38,13 @@ internal struct A64Reloc {
  */
 internal class A64Emitter {
     private let out: ArrayList<UInt8>
-    private let labels: ArrayList<A64Label>
+    /**
+     * 标签名 → 代码偏移。`bind` 首次绑定为准（与旧线性扫「返回首个匹配」等价）。
+     *
+     * 必须是哈希索引：`A64Lower` 每个字节码偏移都 `bind('L${off}')`，标签数与指令数同阶，
+     * 线性查表会让 `finish` 退化成 O(重定位数 × 标签数)（`optimize-emit-fixup`）。
+     */
+    private let labels: HashMap<String, Int64>
     private let relocs: ArrayList<A64Reloc>
     private var done: Bool
     /** 条件分支一律放大为「取反条件 +8；b target」（±1 MB 越界时由第二遍开启）。 */
@@ -56,7 +52,7 @@ internal class A64Emitter {
 
     init() {
         this.out = ArrayList<UInt8>()
-        this.labels = ArrayList<A64Label>()
+        this.labels = HashMap<String, Int64>()
         this.relocs = ArrayList<A64Reloc>()
         this.done = false
         this.farCond = false
@@ -65,7 +61,7 @@ internal class A64Emitter {
     /** 跳板模式：所有条件分支占 8 B（`b.cond +8; b target`）。 */
     init(farCond: Bool) {
         this.out = ArrayList<UInt8>()
-        this.labels = ArrayList<A64Label>()
+        this.labels = HashMap<String, Int64>()
         this.relocs = ArrayList<A64Reloc>()
         this.done = false
         this.farCond = farCond
@@ -76,16 +72,18 @@ internal class A64Emitter {
     }
 
     func bind(name: String): Unit {
-        this.labels.add(A64Label(name, this.out.size))
+        // 首个绑定优先：同名二次 bind 不得改变已有跳转目标（旧线性扫语义）。
+        match (this.labels.get(name)) {
+            case Some(_) => ()
+            case None => this.labels.add(name, this.out.size)
+        }
     }
 
     func labelOffset(name: String): Int64 {
-        for (l in this.labels) {
-            if (l.name == name) {
-                return l.at
-            }
+        match (this.labels.get(name)) {
+            case Some(at) => at
+            case None => -1
         }
-        -1
     }
 
     func word(w: UInt32): Unit {
@@ -114,14 +112,33 @@ internal class A64Emitter {
         }
     }
 
-    /** 回填全部分支重定位并返回字节序列（幂等）。 */
-    func finish(): Array<UInt8> {
+    /**
+     * 单遍回填：查标签 →（可选）校验可达范围 → 写回 imm。
+     *
+     * 旧实现是「`finishOrNull` 全量校验一遍 + `finish` 全量回填一遍」，查标签还是线性扫；
+     * 单函数 2411 条指令时实测占整次编译 78–92%（`optimize-emit-fixup`）。
+     */
+    private func resolve(checkRange: Bool): ?Array<UInt8> {
         if (this.done) {
-            return this.out.toArray()
+            return Some(this.out.toArray())
         }
         for (r in this.relocs) {
-            let target = this.labelOffset(r.label)
-            let delta = target - r.at
+            let delta = this.labelOffset(r.label) - r.at
+            if (checkRange) {
+                if (delta % 4 != 0) {
+                    return None
+                }
+                let words = delta / 4
+                if (r.kind == 0) {
+                    if (words < -33554432 || words > 33554431) {
+                        return None
+                    }
+                } else {
+                    if (words < -262144 || words > 262143) {
+                        return None
+                    }
+                }
+            }
             let base = this.readWord(r.at)
             if (r.kind == 0) {
                 let imm = (delta >> 2) & 0x03FFFFFF
@@ -132,7 +149,15 @@ internal class A64Emitter {
             }
         }
         this.done = true
-        this.out.toArray()
+        Some(this.out.toArray())
+    }
+
+    /** 回填全部分支重定位并返回字节序列（幂等；不校验范围）。 */
+    func finish(): Array<UInt8> {
+        match (this.resolve(false)) {
+            case Some(b) => b
+            case None => this.out.toArray()
+        }
     }
 
     /**
@@ -141,23 +166,7 @@ internal class A64Emitter {
      * 越界 → None（调用方降级解释器；跳板改写由布局阶段 S5.10 负责）。
      */
     func finishOrNull(): ?Array<UInt8> {
-        for (r in this.relocs) {
-            let delta = this.labelOffset(r.label) - r.at
-            if (delta % 4 != 0) {
-                return None
-            }
-            let words = delta / 4
-            if (r.kind == 0) {
-                if (words < -33554432 || words > 33554431) {
-                    return None
-                }
-            } else {
-                if (words < -262144 || words > 262143) {
-                    return None
-                }
-            }
-        }
-        Some(this.finish())
+        this.resolve(true)
     }
 
     // ---- 分支 ----
