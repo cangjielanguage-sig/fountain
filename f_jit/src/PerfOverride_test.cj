@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_jit
 
-import std.time.DateTime
+import std.time.MonoTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
@@ -56,6 +56,17 @@ public class PerfOverride_test {
             }))
     }
 
+    /** 跑一轮固定次数调用，返回总纳秒。用**单调时钟**，避免墙上时钟被 NTP 调整影响。 */
+    private static func measure(f: JitFunction, u: ReflectUser, rounds: Int64): Int64 {
+        let t0 = MonoTime.now()
+        var i = 0
+        while (i < rounds) {
+            let _ = f.call<Int64>([u])
+            i = i + 1
+        }
+        (MonoTime.now() - t0).toNanoseconds()
+    }
+
     @TestCase
     public func overrideBeatsReflectionEndToEnd(): Unit {
         let src = '{ u: ReflectUser => u.bump(1)\n 0 }'
@@ -86,29 +97,34 @@ public class PerfOverride_test {
             i = i + 1
         }
 
-        let t0 = DateTime.now()
-        i = 0
-        while (i < rounds) {
-            let _ = fBase.call<Int64>([u])
-            i = i + 1
+        // **交叉 3 轮、每臂取最小值**：净成本 = 两臂相减（~3 µs 从 ~9 µs 里减出来），单轮噪声会被放大
+        // ——共享 VM 上曾出现反射臂比基线还快、净成本被钳成 1 ns 的假失败。
+        // 高负载只会让个别轮次整体变慢，取每臂最小值即可剔除干扰；门槛语义不变。
+        var baseBest = Int64.Max
+        var refBest = Int64.Max
+        var ovBest = Int64.Max
+        var round = 0
+        while (round < 3) {
+            let b = PerfOverride_test.measure(fBase, u, rounds)
+            let r = PerfOverride_test.measure(fRef, u, rounds)
+            let o = PerfOverride_test.measure(fOv, u, rounds)
+            println('PERF-OVERRIDE round' + (round + 1).toString() + ' base=' +
+                (b / rounds).toString() + 'ns 反射=' + (r / rounds).toString() + 'ns 覆盖=' +
+                (o / rounds).toString() + 'ns')
+            if (b < baseBest) {
+                baseBest = b
+            }
+            if (r < refBest) {
+                refBest = r
+            }
+            if (o < ovBest) {
+                ovBest = o
+            }
+            round = round + 1
         }
-        let baseNs = (DateTime.now() - t0).toNanoseconds()
-
-        let t1 = DateTime.now()
-        i = 0
-        while (i < rounds) {
-            let _ = fRef.call<Int64>([u])
-            i = i + 1
-        }
-        let refNs = (DateTime.now() - t1).toNanoseconds()
-
-        let t2 = DateTime.now()
-        i = 0
-        while (i < rounds) {
-            let _ = fOv.call<Int64>([u])
-            i = i + 1
-        }
-        let ovNs = (DateTime.now() - t2).toNanoseconds()
+        let baseNs = baseBest
+        let refNs = refBest
+        let ovNs = ovBest
 
         // 扣掉基线后才是「一次宿主方法调用」本身的成本
         let refCost = if (refNs > baseNs) {
