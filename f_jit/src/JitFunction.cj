@@ -564,7 +564,7 @@ public class JitFunction <: Resource {
         } else {
             this.helperEntries
         }
-        let marshal = CallMarshal()
+        let marshal = CallMarshal(rs)
         // 每次调用独立窗口：执行期分配的句柄在 finally 统一回收（design §9.5 / T27）。
         // 一次拿到 (base, cap)，不再分别读两次 TLS（`optimize-runtime-tls`）。
         let (wBase, wCap) = HandleTable.openWindowWith(rs, HandleTable.initialCapacity)

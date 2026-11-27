@@ -25,6 +25,8 @@ import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.HostCallback
 import fountain::f_jit.runtime.JitClosure
 import fountain::f_jit.runtime.PromotionGroup
+import fountain::f_jit.runtime.RuntimeEnv
+import fountain::f_jit.runtime.RuntimeState
 import fountain::f_jit.runtime.SignatureDescriptor
 import fountain::f_jit.runtime.SignatureVerifier
 
@@ -37,13 +39,42 @@ import fountain::f_jit.runtime.SignatureVerifier
  * 生命周期：一次调用一个实例；`cleanup()` 释放本次 pin 的非逃逸槽（try/finally 义务）。
  */
 protected class CallMarshal {
-    /** 本次调用 pin 的窗口槽（B 路径）；escape 后移入 escaped。 */
-    private let pinned = ArrayList<Int64>()
-    private let escaped = ArrayList<Int64>()
+    /** 本线程运行期状态（`optimize-marshal-rs`）：pin 系列入口免去重复 TLS。 */
+    private let rs: RuntimeState
+    /** 本次调用 pin 的窗口槽（B 路径）；escape 后移入 escaped。惰性创建（值型调用不分配）。 */
+    private var pinned: ?ArrayList<Int64> = None
+    private var escaped: ?ArrayList<Int64> = None
     /** `retType=12` 时产出的提升组（`close` 的唯一释放路径）。 */
     private var closureGroup: ?PromotionGroup = None
 
-    public init() {}
+    public init(rs: RuntimeState) {
+        this.rs = rs
+    }
+
+    /** 兼容：测试/旧调用点（从当前线程取状态）。 */
+    public init() {
+        this.rs = RuntimeEnv.current()
+    }
+
+    private func pinnedList(): ArrayList<Int64> {
+        match (this.pinned) {
+            case Some(x) => x
+            case None =>
+                let x = ArrayList<Int64>()
+                this.pinned = Some(x)
+                x
+        }
+    }
+
+    private func escapedList(): ArrayList<Int64> {
+        match (this.escaped) {
+            case Some(x) => x
+            case None =>
+                let x = ArrayList<Int64>()
+                this.escaped = Some(x)
+                x
+        }
+    }
 
     /** 单参封送（§8.2.1 表；14 行可带声明类名做 `is C` 边界校验）。 */
     public func marshalArg(t: UInt16, v: Any, className!: ?String = None,
@@ -75,8 +106,8 @@ protected class CallMarshal {
         if (t == LocalType.ANY) {
             // Any 行（R5.1）：任意宿主值（值型 / 引用型 / 闭包 / 实例 / 对象）→ 装箱 → 盒句柄。
             // 盒是值语义载体：宿主给什么就存什么，调用期由 `any_is` / `any_as` 做类型问答。
-            let id = HandleTable.pinAnyBox(v)
-            this.pinned.add(id)
+            let id = HandleTable.pinAnyBoxWith(this.rs, v)
+            this.pinnedList().add(id)
             return id
         }
         if (t >= LocalType.JSON_VALUE && t <= LocalType.JSON_NULL) {
@@ -86,8 +117,8 @@ protected class CallMarshal {
                 return CallMarshal.contractFail(
                     '参数不是 ${LocalType.name(t)} 节点（m3 §11：16–19 跨桥走 token 11）')
             }
-            let id = HandleTable.pin(v)
-            this.pinned.add(id)
+            let id = HandleTable.pinWith(this.rs, v)
+            this.pinnedList().add(id)
             return id
         }
         if (t == LocalType.HOST_OBJECT) {
@@ -106,8 +137,8 @@ protected class CallMarshal {
                             }
                         case None => ()
                     }
-                    let id = HandleTable.pinHostObject(o)
-                    this.pinned.add(id)
+                    let id = HandleTable.pinHostObjectWith(this.rs, o)
+                    this.pinnedList().add(id)
                     return id
                 case _ => return CallMarshal.contractFail('null/非对象不可作 14 型实参（§16.2）')
             }
@@ -116,8 +147,8 @@ protected class CallMarshal {
             if (HandleTable.tokenOf(v) == TypeToken.RESERVED) {
                 return CallMarshal.contractFail('参数不是可封送的句柄对象（§8.2.1）')
             }
-            let id = HandleTable.pin(v)
-            this.pinned.add(id)
+            let id = HandleTable.pinWith(this.rs, v)
+            this.pinnedList().add(id)
             return id
         }
         CallMarshal.contractFail('该参数类型不可封送（§8.2.1）')
@@ -145,8 +176,8 @@ protected class CallMarshal {
         // H63 已同步改为 `reflectiveInvoke`（`FunctionTypeInfo.apply`），两侧口径一致。
         match (SignatureVerifier.verifyReflective(v, sig)) {
             case Some(verified) =>
-                let id = HandleTable.pinHostClosure(v, verified)
-                this.pinned.add(id)
+                let id = HandleTable.pinHostClosureWith(this.rs, v, verified)
+                this.pinnedList().add(id)
                 id
             case None =>
                 CallMarshal.contractFail('HostClosure 验签失败（m2 §4）')
@@ -180,7 +211,7 @@ protected class CallMarshal {
             if (t == LocalType.ANY) {
                 // Any 行（R5.2）：逃逸后拆盒，把**原生 Any** 交还宿主（不是盒句柄）
                 HandleTable.escape(cell)
-                CallMarshal.moveTo(this.pinned, this.escaped, cell)
+                CallMarshal.moveTo(this.pinned, this.escapedList(), cell)
                 return HandleTable.fetchAnyBox(cell)
             }
             if (CallMarshal.isHandleType(t)) {
@@ -193,7 +224,7 @@ protected class CallMarshal {
     /** 路径 D：登记逃逸并取回对象；失败 → 19。 */
     public func escapeAndGet(id: Int64): Any {
         HandleTable.escape(id)
-        CallMarshal.moveTo(this.pinned, this.escaped, id)
+        CallMarshal.moveTo(this.pinned, this.escapedList(), id)
         match (HandleTable.getAny(id)) {
             case Some(v) => v
             case None => CallMarshal.contractFail('逃逸句柄取回失败')
@@ -203,7 +234,7 @@ protected class CallMarshal {
     /** 带类型校验的逃逸取回（13/14 用槽位 tag 判定）。 */
     private func escapeAndGetTyped(id: Int64, tok: UInt16): Any {
         HandleTable.escape(id)
-        CallMarshal.moveTo(this.pinned, this.escaped, id)
+        CallMarshal.moveTo(this.pinned, this.escapedList(), id)
         match (HandleTable.getAs(id, tok)) {
             case Some(v) => v
             case None => CallMarshal.contractFail('逃逸句柄类型不符')
@@ -276,39 +307,54 @@ protected class CallMarshal {
 
     /** 释放本次调用登记的**非逃逸**槽；幂等。 */
     public func cleanup(): Unit {
-        for (id in this.pinned) {
-            if (!HandleTable.isConst(id)) {
-                HandleTable.release(id)
-            }
+        match (this.pinned) {
+            case Some(xs) =>
+                for (id in xs) {
+                    if (!HandleTable.isConst(id)) {
+                        HandleTable.release(id)
+                    }
+                }
+                xs.clear()
+            case None => ()
         }
-        this.pinned.clear()
     }
 
     /** 本次 pin 且已逃逸的句柄（供桥的逃逸区接管）。 */
     public func escapedIds(): Array<Int64> {
-        this.escaped.toArray()
-    }
-
-    private static func removeFrom(from: ArrayList<Int64>, id: Int64): Unit {
-        var i = 0
-        while (i < from.size) {
-            if (from[i] == id) {
-                from.remove(at: i)
-                return
-            }
-            i = i + 1
+        match (this.escaped) {
+            case Some(xs) => xs.toArray()
+            case None => Array<Int64>()
         }
     }
 
-    private static func moveTo(from: ArrayList<Int64>, to: ArrayList<Int64>, id: Int64): Unit {
-        var i = 0
-        while (i < from.size) {
-            if (from[i] == id) {
-                to.add(id)
-                from.remove(at: i)
-                return
-            }
-            i = i + 1
+    private static func removeFrom(from: ?ArrayList<Int64>, id: Int64): Unit {
+        match (from) {
+            case Some(xs) =>
+                var i = 0
+                while (i < xs.size) {
+                    if (xs[i] == id) {
+                        xs.remove(at: i)
+                        return
+                    }
+                    i = i + 1
+                }
+            case None => ()
+        }
+    }
+
+    private static func moveTo(from: ?ArrayList<Int64>, to: ArrayList<Int64>, id: Int64): Unit {
+        match (from) {
+            case Some(xs) =>
+                var i = 0
+                while (i < xs.size) {
+                    if (xs[i] == id) {
+                        to.add(id)
+                        xs.remove(at: i)
+                        return
+                    }
+                    i = i + 1
+                }
+            case None => ()
         }
         to.add(id)
     }

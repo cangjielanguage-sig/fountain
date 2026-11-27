@@ -427,13 +427,18 @@ public class HandleTable {
      * 无类型 token 的对象 ⇒ `ERR_CALL_CONTRACT(19)`。
      */
     public static func pin(obj: Any): Int64 {
+        HandleTable.pinWith(RuntimeEnv.current(), obj)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func pinWith(rs: RuntimeState, obj: Any): Int64 {
         let tok = tokenOf(obj)
         if (tok == TypeToken.RESERVED) {
             failWith(ErrCode.CALL_CONTRACT)
         }
         // 窗口内去重（D3c）：同一对象在「实参 / 闭包内引用 / 返回值带回」保持身份是**调用内**
         // 语义，只需扫本窗口分配过的 ID；不再在全局锁内做全表线性扫描。
-        let w = currentWin()
+        let w = currentWinOf(rs)
         var k = 0
         while (k < winPinSize(w)) {
             let id = winPinIdAt(w, k)
@@ -465,7 +470,7 @@ public class HandleTable {
             }
             k = k + 1
         }
-        let id = newSlot(obj, tok, false)
+        let id = newSlotWith(rs, obj, tok, false)
         w.pins.add(id)
         id
     }
@@ -476,7 +481,12 @@ public class HandleTable {
      * 同函数值 + 同签名 ⇒ 复用同 ID（幂等 Marshal）；签名不同则新槽（避免错用旧条目签名）。
      */
     public static func pinHostClosure(fn: Any, sig: SignatureDescriptor): Int64 {
-        let w = currentWin()
+        HandleTable.pinHostClosureWith(RuntimeEnv.current(), fn, sig)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func pinHostClosureWith(rs: RuntimeState, fn: Any, sig: SignatureDescriptor): Int64 {
+        let w = currentWinOf(rs)
         var k = 0
         while (k < winPinSize(w)) {
             let id = winPinIdAt(w, k)
@@ -509,7 +519,7 @@ public class HandleTable {
             }
             k = k + 1
         }
-        let id = newSlot(HostCallback(fn, sig), TypeToken.HOST_CLOSURE, false)
+        let id = newSlotWith(rs, HostCallback(fn, sig), TypeToken.HOST_CLOSURE, false)
         w.pins.add(id)
         id
     }
@@ -535,7 +545,12 @@ public class HandleTable {
      * **不透明宿主对象**大类登记；同一对象复用同 ID（引用语义、零拷贝）。
      */
     public static func pinHostObject(obj: Object): Int64 {
-        let w = currentWin()
+        HandleTable.pinHostObjectWith(RuntimeEnv.current(), obj)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func pinHostObjectWith(rs: RuntimeState, obj: Object): Int64 {
+        let w = currentWinOf(rs)
         var k = 0
         while (k < winPinSize(w)) {
             let id = winPinIdAt(w, k)
@@ -554,7 +569,7 @@ public class HandleTable {
             }
             k = k + 1
         }
-        let id = newSlot(obj, TypeToken.HOST_OBJECT, false)
+        let id = newSlotWith(rs, obj, TypeToken.HOST_OBJECT, false)
         w.pins.add(id)
         id
     }
@@ -649,7 +664,12 @@ public class HandleTable {
      * 返回新槽 ID。
      */
     public static func append(ctx: JitContext, obj: Any, tok: UInt16): Int64 {
-        let w = currentWin()
+        HandleTable.appendWith(RuntimeEnv.current(), ctx, obj, tok)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func appendWith(rs: RuntimeState, ctx: JitContext, obj: Any, tok: UInt16): Int64 {
+        let w = currentWinOf(rs)
         // 扩容触发点：保证追加后「容量 ≥ 2 × 已用数」（plan-m1 S4.3）
         let need = 2 * (w.used + 1)
         if (need > w.cap) {
@@ -665,19 +685,19 @@ public class HandleTable {
             }
             if (nc < w.used + 1) {
                 // 容量已到全局上限，无法再扩 ⇒ 触顶
-                syncTo(ctx)
+                syncTo(ctx, rs)
                 failWith(ErrCode.HANDLE_WINDOW_FULL)
             }
             w.cap = nc
         }
         if (w.base + w.used >= capacityLimit) {
-            syncTo(ctx)
+            syncTo(ctx, rs)
             failWith(ErrCode.HANDLE_WINDOW_FULL)
         }
-        let id = newSlot(obj, tok, false)
+        let id = newSlotWith(rs, obj, tok, false)
         w.appendIds.add(id)
         w.used = w.used + 1
-        syncTo(ctx)
+        syncTo(ctx, rs)
         id
     }
 
@@ -690,7 +710,12 @@ public class HandleTable {
      * 去重只看**本窗口已登记的槽**——复用窗口外（含桥侧 pin）的槽会让记账与实际分配脱节。
      */
     public static func appendHostObject(ctx: JitContext, obj: Object): Int64 {
-        let w = currentWin()
+        HandleTable.appendHostObjectWith(ctx, RuntimeEnv.current(), obj)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func appendHostObjectWith(ctx: JitContext, rs: RuntimeState, obj: Object): Int64 {
+        let w = currentWinOf(rs)
         var k = 0
         while (k < w.appendIds.size) {
             let id = w.appendIds[k]
@@ -709,7 +734,7 @@ public class HandleTable {
             }
             k = k + 1
         }
-        append(ctx, obj, TypeToken.HOST_OBJECT)
+        HandleTable.appendWith(rs, ctx, obj, TypeToken.HOST_OBJECT)
     }
 
     /** `Duration → 纳秒`；极端值（±Duration.Max）超出 Int64 ⇒ 退化为上下界哨兵（不抛异常）。 */
@@ -1124,7 +1149,11 @@ public class HandleTable {
      * 返回时该索引已从分片摘除 ⇒ 调用方对它独占，后续写入无需加锁。
      */
     private static func popFree(): Int64 {
-        let rs = RuntimeEnv.current()
+        HandleTable.popFreeWith(RuntimeEnv.current())
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    private static func popFreeWith(rs: RuntimeState): Int64 {
         let start = if (rs.freeHint >= 0) { rs.freeHint } else { 0 }
         var k = 0
         while (k < FREE_STRIPES) {
@@ -1167,7 +1196,12 @@ public class HandleTable {
      * 新 ID 尚未交给调用方，持旧 ID 的读者会被 `gens` 不匹配拒绝。
      */
     private static func newSlot(obj: Any, tok: UInt16, isConst: Bool): Int64 {
-        var idx = popFree()
+        HandleTable.newSlotWith(RuntimeEnv.current(), obj, tok, isConst)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    private static func newSlotWith(rs: RuntimeState, obj: Any, tok: UInt16, isConst: Bool): Int64 {
+        var idx = popFreeWith(rs)
         var reused = true
         if (idx <= 0) {
             reused = false
@@ -1288,8 +1322,13 @@ public class HandleTable {
      * 包装对象（保证盒在容器里保持身份，见 `JitAnyBox` 的类注释）。
      */
     public static func pinAnyBox(v: Any): Int64 {
+        HandleTable.pinAnyBoxWith(RuntimeEnv.current(), v)
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func pinAnyBoxWith(rs: RuntimeState, v: Any): Int64 {
         // 桥侧路径 B：不占窗口、不随窗口收尾释放（由调用方归还）。
-        newSlot(JitAnyBox(v), TypeToken.ANY, false)
+        newSlotWith(rs, JitAnyBox(v), TypeToken.ANY, false)
     }
 
     /**
