@@ -158,9 +158,8 @@ public class Ticktock <: Emitter {
             if (task.once) {
                 return
             }
-        }else{
-            addOrReplaceTask(task, task.cron)
         }
+        addOrReplaceTask(task, task.cron)
     }
     private static func getTasksFromBeanFactory() {
         BeanFactory.instance.getList<CronTicktockTask>()

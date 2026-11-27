@@ -32,6 +32,11 @@ public class CronCompiler {
     private static let RANGE = Regex("^(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$")
     private static let SINGLE = Regex("^\\d{1,2}$")
 
+    private static let DURATION_RANGE_YEAR = Regex("^(\\d{4}|\\*)?/(\\d{1,}|\\*)?-(\\d{4}|\\*)?$")
+    private static let DURATION_YEAR = Regex("^(\\d{4}|\\*)?/(\\d{1,}|\\*)?$")
+    private static let RANGE_YEAR = Regex("^(\\d{4}|\\*)?-(\\d{4}|\\*)?$")
+    private static let SINGLE_YEAR = Regex("^\\d{4}$")
+
     /** 表达式文本 -> 编译结果（只读共享），仅由 Ticktock 内部使用。 */
     private static let sharedCache = ConcurrentHashMap<String, Collection<CronDataCollection>>()
     private static let SHARED_CACHE_LIMIT = 4096
@@ -90,7 +95,7 @@ public class CronCompiler {
                     continue
                 }
                 for (value in unit.split(",")) {
-                    if (DURATION_RANGE.matches(value)) {
+                    if (DURATION_RANGE.matches(value) || (i == 6 && DURATION_RANGE_YEAR.matches(value))) {
                         //value.contains("/") && value.contains("-")
                         var first = 0
                         var last = value.indexOf("/", first) ?? -1
@@ -105,7 +110,7 @@ public class CronCompiler {
                         last = value.size
                         var end = parsePart(value, first, last, ticktockUnit.max)
                         putCronc(cronc, ticktockUnit, start, end, duration)
-                    } else if (DURATION.matches(value)) {
+                    } else if (DURATION.matches(value) || (i == 6 && DURATION_YEAR.matches(value))) {
                         var first = 0
                         var last = value.indexOf("/", first) ?? -1
                         var start = parsePart(value, first, last, ticktockUnit.min)
@@ -117,7 +122,7 @@ public class CronCompiler {
                         var duration = parsePart(value, first, last, 1)
                         var end = ticktockUnit.max
                         putCronc(cronc, ticktockUnit, start, end, duration)
-                    } else if (RANGE.matches(value)) {
+                    } else if (RANGE.matches(value) || (i == 6 && RANGE_YEAR.matches(value))) {
                         var first = 0
                         var last = value.indexOf("-", first) ?? -1
                         var start = parsePart(value, first, last, ticktockUnit.min)
@@ -134,7 +139,7 @@ public class CronCompiler {
                         }
                     } else if (value == "L") {
                         cronc.putLast(ticktockUnit)
-                    } else if (SINGLE.matches(value)) {
+                    } else if (SINGLE.matches(value) || (i == 6 && SINGLE_YEAR.matches(value))) {
                         var single = Int64.parse(value)
                         cronc.put(ticktockUnit, ticktockUnit.convertSingle(single))
                     } else {

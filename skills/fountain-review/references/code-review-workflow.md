@@ -28,20 +28,23 @@ workdir        = <project_root>/reviews/<YYYYMMDDHHMM>_<简述>/
 project_root   = <project_root>
 source_branch  = <source_branch>
 target_branch  = <target_branch>
-parallel_per_batch = 2（默认）
+report_dir     = <project_root>/docs/review/    # 模块报告，随代码入库
+date           = <YYYYMMDD>
+parallel_per_batch = 2（默认，按模块计）
 ```
 
-`<YYYYMMDDHHMM>` 由 `scripts/review_workdir.py` 生成（同时写 `scope.md` 并打印 `BRANCH=`）；`<简述>` 用模块名或审查主题（ASCII 更稳，如 `f_store` / `review`）。
+`<YYYYMMDDHHMM>` / `date` 由 `scripts/review_workdir.py` 生成（同时写 `scope.md`、`modules.md`，并打印 `BRANCH=` / `DATE=` / `MODULE_COUNT=`）；`<简述>` 用模块名或审查主题（ASCII 更稳，如 `f_store` / `review`）。
 
 执行约束：
 
 - **主 Agent 不读被审源码**：不 `Read` / `Grep` / `Glob` 源文件、不 `git diff` 看内容；所有代码阅读交给 reviewer 子 agent。
 - **审查引擎自包含**：reviewer 指令在 `reviewer.md`，清单在 `references/review-checklist.md`；不安装、不加载 `cangjie-code-review-harness`。
+- **审查单元是模块**：一个模块一个 reviewer 子 agent、一份报告；模块太大（> 15 个源文件）拆子轮写 `{workdir}/parts/`，由主 Agent 合并成一份模块报告。
+- **审完即落盘**：每完成一个模块，报告写入 `docs/review/<module>_review_<YYYYMMDD>.md`，并把 `modules.md` 该行改为 `已审`；同日重审不覆盖，改存 `_v2`。
 - 分支差异模式：严格按阶段零→四；阶段零的 `git checkout / merge --squash` 只操作审查分支。阶段零的 `git pull` 因网络 / 凭据失败时**不要卡住**：改用工作区快照模式（跳过阶段零），`scope.md` 写明基线，报告里注明「未对照远端目标分支」。
 - 工作区快照模式：跳过阶段零；由主 Agent 写 `scope.md`（模板见下），从阶段一开始。
 - reviewer 子 agent 按 `reviewer.md` 主动查阅 `cangjie-doc-lookup` / `fountain-api-lookup` 核对语言特性与 API，不凭记忆判断。
-- 轮次规划按**模块边界 / 目录**切分，单轮覆盖不超过约 8–12 个源文件；项目很大时按模块分批，不一次性铺开。
-- 阶段四除 `todo.md` 外，让汇总子 agent 再写 `review_summary.md`：审查范围、轮次、各轮严重/一般/轻微统计、总评。
+- 阶段四按 `modules.md` 汇总成 `todo.md`（按模块分组）与 `review_summary.md`（跨模块统计、覆盖缺口、总评）。
 
 `scope.md` 模板：
 
@@ -51,25 +54,31 @@ parallel_per_batch = 2（默认）
 - 项目根：<project_root>
 - 审查范围：<scope（模块路径或 .）>
 - 基线：<分支 source → target 的 diff / 工作区快照>
+- 审查单元：模块（清单见 `modules.md`，一模块一报告）
 - 审查重点：正确性、设计合理性、仓颉语言特性、可读性/可维护性、性能、安全性；
-  死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、大粒度锁热点、并发串行、
-  低效算法、降堆内存 / 降 CPU 可行性方案（含 local mode）
+  死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、热点瓶颈定位、大粒度锁热点、
+  并发串行、低效算法、现有代码的存量 BUG（来源标 `[存量]`）、
+  降堆内存 / 降 CPU 可行性方案（含 local mode）
+- 已有性能资料：<bench 结果 / profile 输出 / `doc/` 下的优化方案；没有则写"未提供"，
+  热点类结论只能按代码结构给「疑似热点（需实测）」>
 - 排除：<明确不审的目录，如 generated/、third_party/>
-- 报告目录：<workdir>
+- 过程目录：<workdir>
+- 报告目录：<project_root>/docs/review/
 ```
 
 ## 3. 审查结束后的收尾
 
 - 分支差异模式会留下临时审查分支与暂存内容：先 `git checkout <原分支>`；若因暂存内容失败，**问用户**是否丢弃审查分支的暂存内容（那是审查引擎生成的 squash 副本，不是用户改动），确认后再 `git checkout -f`；审查分支是否删除也问用户，不擅自 `branch -D`。
-- `reviews/` 是审查产物目录：确认它在 `.gitignore` / `.git/info/exclude` 里；没有就提醒用户，不擅自改仓库的 `.gitignore`。也可以把 `workdir` 放到项目外（如 `~/.workbuddy/reviews/<项目>-<时间>/`），避免污染工作区。
+- `reviews/` 是过程产物目录（`scope.md` / `modules.md` / `todo.md`）：确认它在 `.gitignore` / `.git/info/exclude` 里；没有就提醒用户，不擅自改仓库的 `.gitignore`。也可以把 `workdir` 放到项目外（如 `~/.workbuddy/reviews/<项目>-<时间>/`），避免污染工作区。
+- **`docs/review/` 与 `reviews/` 相反：模块报告是交付物，要入库**。不要把它加进 `.gitignore`，也不要在收尾时删掉。
 - 审查阶段**不改任何源码**；发现的问题只进报告。
 
 ## 4. 报告 → OpenSpec propose
 
 主 Agent 可以读 `todo.md` 与 `review_summary.md`（这是汇总产物，不是源码）：
 
-1. 统计严重 / 一般 / 轻微数量；**修复范围默认 = 严重 + 一般**；轻微项列在报告里由用户决定是否纳入，不静默丢弃。
-2. 给每条问题编号：`R<轮次>-<序号>`（如 `R1-1`），后续 tasks 逐条引用。
+1. 统计严重 / 一般 / 轻微数量与**存量缺陷**条数（`[存量]` 标记）；**修复范围默认 = 本次改动的严重 + 一般**；轻微项与存量缺陷由用户决定是否纳入，既不静默丢弃也不静默扩大范围。
+2. 给每条问题编号：`<module>-<序号>`（如 `f_orm-3`），后续 tasks 逐条引用；存量问题加 `S` 后缀（如 `f_orm-3S`），便于在 tasks 里区分来源。
 3. `openspec update` + `openspec list --json`；未初始化按 `openspec-workflow.md` 第 1–2 节（`<tool>` 问用户）。
 4. 执行 `opsx:propose "根据代码审查报告 <workdir>/todo.md 修复 <项目/模块> 的严重与一般问题（严重 X、一般 Y）"`：
    - `proposal.md`：审查范围与基线、问题统计、修复目标与非目标、验收口径；
@@ -81,7 +90,7 @@ parallel_per_batch = 2（默认）
 ## 5. 修复与验收
 
 - **REQUIRED SUB-SKILL:** `test-driven-development`；`opsx:apply` 里逐任务 Red-Green-Refactor：先写能复现该审查问题的失败用例，再最小修复，跑绿才勾任务。
-- **性能类任务（CPU / 内存 / GC / local mode）必须先有基线数据**：改前基线 + 改后对照，同 SDK、同机器、`-O2`、同输入与并发，报中位数与离散程度。没有数据的性能项不进 `tasks.md`，只能作为「待验证假设」留在报告里；数据不成立的优化撤回。
+- **性能类任务（CPU 热点 / 内存 / GC / local mode）必须先有基线数据**：改前基线 + 改后对照，同 SDK、同机器、`-O2`、同输入与并发，报中位数与离散程度。没有数据的性能项——**包括没有 profile 的热点结论**——不进 `tasks.md`，只能作为「待验证假设」留在报告里；数据不成立的优化撤回。
 - 审查报告的「建议」只作参考；最终以 `design.md` 为准。修复涉及设计变更 / 公开 API 时回步骤 3 问用户，不自行扩大范围。
 - `opsx:verify` 前：受影响模块 + 全量回归（`cjpm test` / `fboot test`）+ `fboot build`；涉及启动链做冒烟。
 - 对照 `todo.md` 逐条核对覆盖：未修项必须写明原因并经用户同意；verify CRITICAL 清零。

@@ -40,28 +40,47 @@ private func expand(decl: Decl): Tokens {
             throw TicktockException('only class decl is allowed')
     }
 }
+/**
+ * 带注解的成员在语法树上被包成 `MacroExpandDecl`（`@CronTask[...] public func f()`），
+ * 修饰符（public / static）与函数签名都在内层声明上 ⇒ 先剥掉注解包装再判断。
+ */
+private func unwrapAnnotated(decl: Decl): Decl {
+    match (decl) {
+        case d: MacroExpandDecl => unwrapAnnotated(d.macroInputDecl)
+        case d => d
+    }
+}
+
 private func expand(decl: ClassDecl): Tokens {
     let name = decl.identifier
     var map = quote(
         let map = HashMap<String, () -> Unit>()
     ) + `nl`
-    for(m in decl.body.decls where isPublic(m) && !isStatic(m)){
-        if(let f: FuncDecl <- m && f.funcParams.isEmpty()){
-            map += quote(
-                map[$(f.identifier.value)] = {=> lookup<$name>().$(f.identifier)()}
-            ) + `nl`
+    for(m in decl.body.decls){
+        let member = unwrapAnnotated(m)
+        if(isPublic(member) && !isStatic(member)){
+            if(let f: FuncDecl <- member && f.funcParams.isEmpty()){
+                map += quote(
+                    map[$(f.identifier.value)] = {=> 
+                        lookup<$name>().$(f.identifier)()
+                        ()
+                    }
+                ) + `nl`
+            }
         }
     }
+    // 任务名 = "类名#方法名"：时间轮按 name 登记，同名会被后登记的覆盖。
+    let taskNamePrefix = Token(TokenKind.STRING_LITERAL, "${name.value}#")
     quote(
         @Bean
         $decl
         private let _ = {=>
             $map
             for((t, n) in CronTicktockTaskImpl.extract<$name>()){
-                CronTicktockTaskImpl(t, map[n]) |> Ticktock.instance.addOrReplaceTask
+                CronTicktockTaskImpl($taskNamePrefix + n, t, map[n]) |> Ticktock.instance.addOrReplaceTask
             }
             for((t, n) in DelayedTicktockTaskImpl.extract<$name>()){
-                DelayedTicktockTaskImpl(t, map[n]) |> Ticktock.instance.addOrReplaceDelayTask
+                DelayedTicktockTaskImpl($taskNamePrefix + n, t, map[n]) |> Ticktock.instance.addOrReplaceDelayTask
             }
         }()
     )
