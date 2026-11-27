@@ -79,4 +79,4 @@
 - [x] T10.2 `verify.md`；镜像 `f_jit/doc/spec/optimize-runtime-tls/`；
       `openspec validate optimize-runtime-tls --strict`。
 - [x] T10.3 `doc/optimize-call-path.md` 增 §16，并在 §12.4 标注已被 §16 推翻。
-- [ ] T10.4 归档 `2026-11-27-optimize-runtime-tls`；提交并推送 `sts/1.3.x-LocalMode`。
+- [x] T10.4 归档 `2026-11-27-optimize-runtime-tls`；提交并推送 `sts/1.3.x-LocalMode`。
