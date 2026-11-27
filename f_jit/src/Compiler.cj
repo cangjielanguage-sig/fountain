@@ -36,6 +36,11 @@ public class Compiler {
     public let opts: CompileOptions
     private let maxPredefined: Int64
     private let mtx: Mutex = Mutex()
+    /**
+     * 快照缓存：`snapshot()` 在注册表不变时复用，避免每次编译都在锁内做 O(F) 拷贝
+     * （F=200 时实测占单编译 11.6%，4 线程累计 41.5%）。任何注册/注销都要置空。
+     */
+    private var snapCache: ?PredefinedSnapshot = None
     private let fns: ArrayList<PredefinedFunction> = ArrayList<PredefinedFunction>()
     /** 宿主侧类注册表（M2；快照语义与函数注册表同族）。 */
     private let classes: ClassRegistry = ClassRegistry()
@@ -72,6 +77,7 @@ public class Compiler {
             }
             this.fns.add(f)
             this.classes.noteFunction(f.name)
+            this.snapCache = None
         }
     }
 
@@ -84,6 +90,7 @@ public class Compiler {
             }
             this.fns.remove(at: i)
             this.classes.removeFunction(name)
+            this.snapCache = None
             true
         }
     }
@@ -111,6 +118,7 @@ public class Compiler {
                     this.classes.noteFunction(m.bind.name)
                 }
             }
+            this.snapCache = None
         }
     }
 
@@ -119,6 +127,9 @@ public class Compiler {
         bindings!: JitBindings = JitBindings.empty()): Unit where T <: Object {
         ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
             enabled: enabled, bindings: bindings)
+        synchronized(this.mtx) {
+            this.snapCache = None
+        }
     }
 
     /**
@@ -130,6 +141,9 @@ public class Compiler {
         bindings!: JitBindings = JitBindings.empty()): Unit {
         ReflectRegistrar.registerInterface<I>(into: this.classes, diag: this.opts.diagnostics,
             enabled: enabled, bindings: bindings)
+        synchronized(this.mtx) {
+            this.snapCache = None
+        }
     }
 
     /** 类是否已注册（诊断/测试）。 */
@@ -164,6 +178,10 @@ public class Compiler {
     /** 当前注册表快照（编译期使用；注册/注销不影响已编译产物）。 */
     protected func snapshot(): PredefinedSnapshot {
         synchronized(this.mtx) {
+            match (this.snapCache) {
+                case Some(s) => return s
+                case None => ()
+            }
             let names = ArrayList<String>()
             let params = ArrayList<Array<UInt16>>()
             let rets = ArrayList<UInt16>()
@@ -183,8 +201,10 @@ public class Compiler {
                     impls.add(f.impl)
                 }
             }
-            PredefinedSnapshot(names.toArray(), params.toArray(), rets.toArray(),
+            let snapOut = PredefinedSnapshot(names.toArray(), params.toArray(), rets.toArray(),
                 impls: impls.toArray())
+            this.snapCache = Some(snapOut)
+            snapOut
         }
     }
 
