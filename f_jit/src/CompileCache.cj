@@ -53,10 +53,18 @@ protected class CompileCache {
         }
     }
 
-    /** 管线成功：发布结果并唤醒等待者。 */
+    /**
+     * 管线成功：发布结果并唤醒等待者。
+     *
+     * **锁序（H1）**：`bindCacheKey` 要取单元 `mtx`，必须在全局缓存锁**之外**调用。
+     * 否则与 `JitFunction.close`（持单元锁 → 取缓存锁）构成 ABBA。
+     *
+     * 这样做是安全的：此刻该函数对象还没写入 `ready`，`compiling` 也仍含该 key
+     * （只在下面锁内移除），因此不可能有另一线程拿到它并发 `close`。
+     */
     public static func finish(key: String, fn: JitFunction): Unit {
+        fn.bindCacheKey(key)
         synchronized(mtx) {
-            fn.bindCacheKey(key)
             ready[key] = fn
             compiling.remove(key)
             failures.remove(key)
