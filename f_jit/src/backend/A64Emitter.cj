@@ -450,28 +450,25 @@ internal class A64Emitter {
     // 审计必须**按编译线程隔离**：并发编译不同源码时，共享 `ArrayList` 的 add 会越界，
     // 且 reset 会把别的编译的审计项清掉（`optimize-compile-path` C0 实测 IndexOutOfBounds）。
     // 审计生命周期与一次 `A64Compiler.compileOnce` 相同，放在 ThreadLocal 里零锁、零共享。
-    private static let auditTls = ThreadLocal<ArrayList<Int64>>()
+    /**
+     * 本次编译记录的内存基址（`optimize-emit-audit`）。
+     *
+     * 用**实例字段**而不是 ThreadLocal：审计生命周期 = 一次 `A64Compiler.compileOnce`，
+     * 每次编译都新建一个 `A64Emitter`，隔离性天然成立；ThreadLocal 只是把成本摊到每次
+     * 内存操作上（实测 598 次/编译，约 180 µs）。
+     */
+    private let audit: ArrayList<Int64> = ArrayList<Int64>()
 
-    private static func auditList(): ArrayList<Int64> {
-        match (auditTls.get()) {
-            case Some(l) => l
-            case None =>
-                let l = ArrayList<Int64>()
-                auditTls.set(Some(l))
-                l
-        }
+    internal func noteMemBase(reg: Int64): Unit {
+        this.audit.add(reg)
     }
 
-    internal static func noteMemBase(reg: Int64): Unit {
-        auditList().add(reg)
+    internal func resetAudit(): Unit {
+        this.audit.clear()
     }
 
-    internal static func resetAuditMemBases(): Unit {
-        auditList().clear()
-    }
-
-    internal static func auditMemBasesSnapshot(): Array<Int64> {
-        auditList().toArray()
+    internal func auditSnapshot(): Array<Int64> {
+        this.audit.toArray()
     }
 
     /** 允许的内存基址：`x19(19)` / `x20(20)` / `x29(29)` / `sp(31)`；其余一律拒绝。 */
@@ -485,7 +482,7 @@ internal class A64Emitter {
     }
 
     func strOff(rt: Int64, rn: Int64, off: Int64): Unit {
-        A64Emitter.noteMemBase(rn)
+        this.noteMemBase(rn)
         if (off >= 0 && off % 8 == 0 && off <= 32760) {
             this.word(0xF9000000u32 | (UInt32(off / 8) << 10) | (UInt32(rn) << 5) | UInt32(rt))
         } else if (off >= -256 && off <= 255) {
@@ -497,7 +494,7 @@ internal class A64Emitter {
     }
 
     func ldrOff(rt: Int64, rn: Int64, off: Int64): Unit {
-        A64Emitter.noteMemBase(rn)
+        this.noteMemBase(rn)
         this.emitLdr(rt, rn, off)
     }
 

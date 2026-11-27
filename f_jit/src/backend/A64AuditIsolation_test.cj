@@ -29,18 +29,24 @@ import std.unittest.testmacro.*
 @Test
 public class A64AuditIsolation_test {
     @TestCase
-    public func auditListIsThreadLocal(): Unit {
-        A64Emitter.resetAuditMemBases()
+    public func auditListsArePerEmitterIsolated(): Unit {
+        // 每个发射器一份审计表（`optimize-emit-audit`）：并发编译各用各的实例，互不可见。
+        let local = A64Emitter()
+        let remote = A64Emitter()
+        local.resetAudit()
+        remote.resetAudit()
         let writer = spawn {
-            A64Emitter.noteMemBase(19)
+            remote.noteMemBase(19)
             0
         }
         @Assert(writer.get(), 0)
-        // 别的线程写过一条；本线程没写过 ⇒ 自己的快照必须是空的。
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 0)
-        A64Emitter.noteMemBase(29)
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 1)
-        A64Emitter.resetAuditMemBases()
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 0)
+        // 另一个实例写过一条；本实例没写过 ⇒ 自己的快照必须是空的。
+        @Assert(local.auditSnapshot().size, 0)
+        local.noteMemBase(29)
+        @Assert(local.auditSnapshot().size, 1)
+        local.resetAudit()
+        @Assert(local.auditSnapshot().size, 0)
+        // 对方那份不受影响
+        @Assert(remote.auditSnapshot().size, 1)
     }
 }

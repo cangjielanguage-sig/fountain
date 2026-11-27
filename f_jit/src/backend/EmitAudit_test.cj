@@ -85,24 +85,25 @@ public class EmitAudit_test {
     @TestCase
     public func a64AbsoluteLoadIsAuditExempt(): Unit {
         let e = A64Emitter()
-        A64Emitter.resetAuditMemBases()
+        e.resetAudit()
         e.ldrAbs(9, 9, 0)
         e.ldrAbs(10, 9, 8)
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 0)
-        @Assert(A64Emitter.auditAllows(A64Emitter.auditMemBasesSnapshot()), true)
+        @Assert(e.auditSnapshot().size, 0)
+        @Assert(A64Emitter.auditAllows(e.auditSnapshot()), true)
         // 同一基址走普通载入 ⇒ 仍须被采集并拒绝
         e.ldrOff(9, 9, 0)
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 1)
-        @Assert(A64Emitter.auditAllows(A64Emitter.auditMemBasesSnapshot()), false)
+        @Assert(e.auditSnapshot().size, 1)
+        @Assert(A64Emitter.auditAllows(e.auditSnapshot()), false)
     }
 
     @TestCase
     public func a64NoteAndReset(): Unit {
-        A64Emitter.resetAuditMemBases()
-        A64Emitter.noteMemBase(20)
-        A64Emitter.noteMemBase(31)
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 2)
-        A64Emitter.resetAuditMemBases()
-        @Assert(A64Emitter.auditMemBasesSnapshot().size, 0)
+        let e = A64Emitter()
+        e.resetAudit()
+        e.noteMemBase(20)
+        e.noteMemBase(31)
+        @Assert(e.auditSnapshot().size, 2)
+        e.resetAudit()
+        @Assert(e.auditSnapshot().size, 0)
     }
 }
