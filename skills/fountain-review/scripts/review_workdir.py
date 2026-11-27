@@ -35,7 +35,7 @@ from pathlib import Path
 DEFAULT_FOCUS = (
     "正确性、设计合理性、仓颉语言特性、可读性/可维护性、安全性；"
     "死代码、表现形式不同的重复逻辑、空实现、栈溢出风险、OOM 风险、"
-    "大粒度锁热点、并发串行热点、低效算法、现有代码的存量 BUG、"
+    "热点瓶颈定位、大粒度锁热点、并发串行热点、低效算法、现有代码的存量 BUG、"
     "可降低堆内存占用与 CPU 占用的可行性方案、local mode 改造可行性"
 )
 DEFAULT_EXCLUDE = "generated/, third_party/, target/, .git/, .worktrees/"
@@ -86,6 +86,10 @@ def build_scope_md(args: argparse.Namespace, scope_rel: str) -> str:
     focus_lines = "\n".join(f"- {item}" for item in focus)
     exclude_lines = "\n".join(f"- {item}" for item in exclude)
     emphasis = args.emphasis.strip() if args.emphasis else "（本轮未特别指定，按通用维度 + 全部专项扫）"
+    perf_notes = args.perf_notes.strip() if args.perf_notes else (
+        "（未提供：热点类结论只能按代码结构给「疑似热点（需实测）」，"
+        "并在报告里写清需要补哪种 profile / 基准）"
+    )
     return f"""# 审查范围
 
 - **项目根**：`{args.project_root}`
@@ -103,6 +107,10 @@ def build_scope_md(args: argparse.Namespace, scope_rel: str) -> str:
 ## 本轮特别强调
 
 {emphasis}
+
+## 已有性能资料
+
+{perf_notes}
 
 ## 排除
 
@@ -160,6 +168,8 @@ def main(argv: "list[str] | None" = None) -> int:
                         help="排除项，逗号分隔")
     parser.add_argument("--emphasis", default="",
                         help="本轮特别强调的内容（写进 scope.md）")
+    parser.add_argument("--perf-notes", default="",
+                        help="已有性能资料（bench 结果 / profile 路径 / 优化方案 doc），写进 scope.md")
     parser.add_argument("--slug", default="", help="目录简述，默认取 scope 末段")
     parser.add_argument("--date", default="", help="报告日期 YYYYMMDD，默认今天")
     parser.add_argument("--max-depth", type=int, default=3,
