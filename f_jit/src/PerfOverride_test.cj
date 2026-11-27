@@ -67,12 +67,22 @@ public class PerfOverride_test {
         (MonoTime.now() - t0).toNanoseconds()
     }
 
+    private static func median3(a: Int64, b: Int64, c: Int64): Int64 {
+        if ((a <= b && b <= c) || (c <= b && b <= a)) {
+            b
+        } else if ((b <= a && a <= c) || (c <= a && a <= b)) {
+            a
+        } else {
+            c
+        }
+    }
+
     @TestCase
     public func overrideBeatsReflectionEndToEnd(): Unit {
         let src = '{ u: ReflectUser => u.bump(1)\n 0 }'
         // 基线臂：同一 lambda 但不调任何宿主方法，用来扣掉「call 固定开销 + 解释器跑空壳」。
         let baseSrc = '{ u: ReflectUser => 0 }'
-        let rounds: Int64 = 3000
+        let rounds: Int64 = 6000
 
         // 缓存键只含源码指纹，不含注册表 ⇒ 两臂必须各自 reset，否则第二臂会拿到
         // 第一臂的产物（slot 映射不同，测的就不是同一件事了）。
@@ -97,59 +107,51 @@ public class PerfOverride_test {
             i = i + 1
         }
 
-        // **交叉 3 轮、每臂取最小值**：净成本 = 两臂相减（~3 µs 从 ~9 µs 里减出来），单轮噪声会被放大
-        // ——共享 VM 上曾出现反射臂比基线还快、净成本被钳成 1 ns 的假失败。
-        // 高负载只会让个别轮次整体变慢，取每臂最小值即可剔除干扰；门槛语义不变。
-        var baseBest = Int64.Max
-        var refBest = Int64.Max
-        var ovBest = Int64.Max
+        // **同轮配对、3 轮取中位数**：净成本 = 两臂相减（~3 µs 从 ~9 µs 里减出来），单轮噪声会被放大。
+        // 「每臂独立取最小」会把不同轮次的偶然极小值拼在一起 —— 实测出现过比值 0.82 > 0.80 的假失败。
+        // 每轮配对算比值再取中位数：单轮异常被中位数吸收，真实退化（三轮都 ~1.0）仍会红。
+        var q1: Int64 = 0
+        var q2: Int64 = 0
+        var q3: Int64 = 0
         var round = 0
         while (round < 3) {
             let b = PerfOverride_test.measure(fBase, u, rounds)
             let r = PerfOverride_test.measure(fRef, u, rounds)
             let o = PerfOverride_test.measure(fOv, u, rounds)
+            let rc = if (r > b) {
+                r - b
+            } else {
+                1
+            }
+            let oc = if (o > b) {
+                o - b
+            } else {
+                1
+            }
+            let q = oc * 1000 / rc
             println('PERF-OVERRIDE round' + (round + 1).toString() + ' base=' +
                 (b / rounds).toString() + 'ns 反射=' + (r / rounds).toString() + 'ns 覆盖=' +
-                (o / rounds).toString() + 'ns')
-            if (b < baseBest) {
-                baseBest = b
-            }
-            if (r < refBest) {
-                refBest = r
-            }
-            if (o < ovBest) {
-                ovBest = o
+                (o / rounds).toString() + 'ns 净成本 反射=' + (rc / rounds).toString() +
+                'ns 覆盖=' + (oc / rounds).toString() + 'ns 比值X1000=' + q.toString())
+            if (round == 0) {
+                q1 = q
+            } else if (round == 1) {
+                q2 = q
+            } else {
+                q3 = q
             }
             round = round + 1
         }
-        let baseNs = baseBest
-        let refNs = refBest
-        let ovNs = ovBest
+        let median = PerfOverride_test.median3(q1, q2, q3)
 
-        // 扣掉基线后才是「一次宿主方法调用」本身的成本
-        let refCost = if (refNs > baseNs) {
-            refNs - baseNs
-        } else {
-            1
-        }
-        let ovCost = if (ovNs > baseNs) {
-            ovNs - baseNs
-        } else {
-            1
-        }
-        println('PERF-OVERRIDE base=' + (baseNs / rounds).toString() + 'ns 反射=' +
-            (refNs / rounds).toString() + 'ns 覆盖=' + (ovNs / rounds).toString() +
-            'ns 净成本 反射=' + (refCost / rounds).toString() + 'ns 覆盖=' +
-            (ovCost / rounds).toString() + 'ns ratioX10=' + (refCost * 10 / ovCost).toString())
-
-        // 门禁：覆盖后**净成本**必须低于反射净成本的 4/5（即至少快 1.25×）。
+        // 门禁：覆盖后**净成本**必须低于反射净成本的 4/5（比值中位数 < 800，即至少快 1.25×）。
         // 为何门槛这么低：`JitFunction.call<T>` 每次调用有 8–17 μs 的固定开销（逐项探针见
         // doc/perf-m2.md：localTypeOf 只占 0.1–0.2 μs，大头在 JitExecutor.invoke 与收尾），
         // 把方法调用那几微秒压在下面。本条只拦「覆盖退化成反射」，不表达端到端加速比。
-        if (ovCost * 5 >= refCost * 4) {
-            @Fail('PERF-OVERRIDE 净成本未达标 ref=' + (refCost / rounds).toString() + 'ns ov=' +
-                (ovCost / rounds).toString() + 'ns')
+        println('PERF-OVERRIDE medianRatioX1000=' + median.toString())
+        if (median >= 800) {
+            @Fail('PERF-OVERRIDE 净成本未达标 medianRatioX1000=' + median.toString())
         }
-        @Assert(TCase.hit('T32/override-beats-reflect', refCost * 4 > ovCost * 5), true)
+        @Assert(TCase.hit('T32/override-beats-reflect', median < 800), true)
     }
 }

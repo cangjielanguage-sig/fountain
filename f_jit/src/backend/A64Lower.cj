@@ -18,7 +18,9 @@ package fountain::f_jit.backend
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.InsnDecoder
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.runtime.CtxFlags
 import fountain::f_jit.runtime.HelperAddresses
+import fountain::f_jit.runtime.JitContext
 
 /**
  * AArch64 指令降低（§12.4）。
@@ -357,7 +359,9 @@ internal class A64Lower {
                 this.e.addImm(20, 20, 8)
                 this.e.cbnz(9, 'L${next + rel}')
             case 0x74 =>
-                // 回边：STACK_GUARD + H22 安全点，再跳目标
+                // 回边：STACK_GUARD + 安全点（**仅本次调用带 deadline 时**）+ 跳目标。
+                // 无期限时 `interrupt_poll` 恒返回 0 且不写错误槽，是可省略的空操作；
+                // 实测它占机器码回边 97.7% 的成本（doc/optimize-call-path.md §14）。
                 let need = this.frame
                 this.e.movReg(11, 29)
                 this.e.subImm(11, 11, this.frame)
@@ -365,7 +369,13 @@ internal class A64Lower {
                 this.e.movImm64(12, need)
                 this.e.cmpReg(11, 12)
                 this.e.bCond(A64Cond.LO, 'deopt')
+                let skipPoll = 'sl${next}'
+                this.e.ldrOff(0, 19, JitContext.OFF_FLAGS)
+                this.e.movImm64(1, CtxFlags.DEADLINE)
+                this.e.andReg(0, 0, 1)
+                this.e.cbz(0, skipPoll)
                 this.helperCall0(22)
+                this.e.bind(skipPoll)
                 this.e.b('L${next + A64Lower.i32(ops, 0)}')
             case 0x75 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 0)
             case 0x76 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 1)

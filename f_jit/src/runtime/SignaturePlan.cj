@@ -18,6 +18,7 @@ package fountain::f_jit.runtime
 import std.collection.ArrayList
 import std.reflect.FunctionTypeInfo
 import fountain::f_jit.base.ErrCode
+import std.sync.AtomicReference
 import std.sync.Mutex
 
 /**
@@ -110,10 +111,25 @@ public class SignaturePlan {
  *
  * `enabled = false` 时 `getOrBuild` 一律返回 `None`（强制通用路径，供 R5.5 对拍）。
  */
+/**
+ * 不可变快照：`plans` 发布后不再修改，`builds` 随快照一起发布。
+ *
+ * 与 `SignatureRegistry` 同理：**不做字符串键索引**（表小，拼键比线性扫更贵），只去掉锁。
+ */
+private class PlanSnapshot {
+    let plans: Array<SignaturePlan>
+    let builds: Int64
+
+    init(plans: Array<SignaturePlan>, builds: Int64) {
+        this.plans = plans
+        this.builds = builds
+    }
+}
+
 public class SignatureTable {
-    private static let mtx = Mutex()
-    private static let entries = ArrayList<SignaturePlan>()
-    private static var builds = 0
+    private static let writeMtx = Mutex()
+    private static let current = AtomicReference<PlanSnapshot>(
+        PlanSnapshot(Array<SignaturePlan>(), 0))
 
     /** 特化总开关（测试与宿主可关；关闭后新建条目一律无计划）。 */
     public static var enabled = true
@@ -121,23 +137,45 @@ public class SignatureTable {
     /** 条目上限：超过后**不再缓存**（冷路径每次现造，行为不变、内存有界）。 */
     public static let MAX_ENTRIES = 128
 
-    /** 取或建计划；`enabled = false` → `None`。 */
+    /** 取或建计划；`enabled = false` → `None`。命中路径无锁。 */
     public static func getOrBuild(sig: SignatureDescriptor): ?SignaturePlan {
         if (!enabled) {
             return None
         }
-        synchronized(mtx) {
-            var i = 0
-            while (i < entries.size) {
-                if (entries[i].sameShape(sig.params, sig.ret)) {
-                    return Some(entries[i])
-                }
-                i = i + 1
+        let snap = current.load()
+        var i = 0
+        while (i < snap.plans.size) {
+            if (snap.plans[i].sameShape(sig.params, sig.ret)) {
+                return Some(snap.plans[i])
             }
-            builds = builds + 1
+            i = i + 1
+        }
+        synchronized(writeMtx) {
+            // 双检：可能已由别的线程建好。
+            let s2 = current.load()
+            var j = 0
+            while (j < s2.plans.size) {
+                if (s2.plans[j].sameShape(sig.params, sig.ret)) {
+                    return Some(s2.plans[j])
+                }
+                j = j + 1
+            }
             let p = SignaturePlan(sig)
-            if (entries.size < MAX_ENTRIES) {
-                entries.add(p)
+            let builds = s2.builds + 1
+            let n = s2.plans.size
+            if (n < MAX_ENTRIES) {
+                // 先填满新数组，再 store。
+                let next = Array<SignaturePlan>(n + 1, repeat: p)
+                j = 0
+                while (j < n) {
+                    next[j] = s2.plans[j]
+                    j = j + 1
+                }
+                next[n] = p
+                current.store(PlanSnapshot(next, builds))
+            } else {
+                // 超上限：不缓存，但计数仍 +1（与改造前一致）。
+                current.store(PlanSnapshot(s2.plans, builds))
             }
             Some(p)
         }
@@ -145,31 +183,22 @@ public class SignatureTable {
 
     /** 实际**新建**的计划数（对拍/断言用：同签名只建一次）。 */
     public static func buildCount(): Int64 {
-        synchronized(mtx) {
-            builds
-        }
+        current.load().builds
     }
 
     public static func entryCount(): Int64 {
-        synchronized(mtx) {
-            entries.size
-        }
+        current.load().plans.size
     }
 
     /** 测试专用：清空表与计数、恢复开关。 */
     public static func resetForTest(): Unit {
-        synchronized(mtx) {
-            entries.clear()
-            builds = 0
+        synchronized(writeMtx) {
+            current.store(PlanSnapshot(Array<SignaturePlan>(), 0))
         }
         enabled = true
     }
 }
 
-/**
- * 带计划的反射调用：与 `reflectiveInvoke` 只差「实参装配」这一步——转换器已固化在计划里，
- * 不再逐次读 `sig.params[i]`。`apply` 仍是同一次调用（异常照旧冒泡到 H63）。
- */
 internal func reflectiveInvokeWithPlan(fn: Any, cached: ?FunctionTypeInfo, plan: SignaturePlan,
     a: Array<Int64>): Any {
     let ti = match (cached) {

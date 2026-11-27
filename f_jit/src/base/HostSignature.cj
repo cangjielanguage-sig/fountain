@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_jit.base
 
 import std.collection.ArrayList
+import std.sync.AtomicReference
 import std.sync.Mutex
 
 /**
@@ -101,88 +102,101 @@ public class HostSignature {
  * 并发：注册发生在宿主初始化/编译前，取用发生在执行期；`ArrayList` 的读在锁内拷贝引用，
  * 条目本身不可变，故读出后无需持锁。
  */
+/**
+ * 不可变快照：`entries` 下标即 id，发布后不再修改。
+ *
+ * **不做字符串键索引**：实测表规模只有个位数条目时，拼键（`StringBuilder` + 插值）
+ * 比线性扫 `sameShape` 更贵（349 → 790 ns）。这里只去掉锁，保留线性扫。
+ */
+private class SigSnapshot {
+    let entries: Array<HostSignature>
+
+    init(entries: Array<HostSignature>) {
+        this.entries = entries
+    }
+}
+
 public class SignatureRegistry {
-    private static let mtx = Mutex()
-    private static let entries = ArrayList<HostSignature>()
+    private static let writeMtx = Mutex()
+    private static let current = AtomicReference<SigSnapshot>(SigSnapshot(Array<HostSignature>()))
 
     private init() {}
 
     /**
      * 登记一个宿主签名；结构相同则返回既有 id（幂等）。
      *
-     * 调用方（`JitHost.registerSignature` 或宏生成物）负责给出正确的 `params`/`ret` 与
-     * 类型正确的 `adapter`；两者不一致会在适配器执行时以 `ClassCastException` 暴露。
+     * **写时复制 + 原子发布**：`id` 只按追加序增长，旧快照对新 id 的读者仍然完整可用。
      */
     public static func register(sig: HostSignature): Int32 {
-        synchronized(mtx) {
+        synchronized(writeMtx) {
+            let snap = current.load()
             var i = 0
-            while (i < entries.size) {
-                let e = entries[i]
-                if (e.sameShape(sig.params, sig.paramNames, sig.ret, sig.retName)) {
+            while (i < snap.entries.size) {
+                if (snap.entries[i].sameShape(sig.params, sig.paramNames, sig.ret, sig.retName)) {
                     return Int32(i)
                 }
                 i = i + 1
             }
-            entries.add(sig)
-            Int32(entries.size - 1)
+            let n = snap.entries.size
+            // 先填满新数组，再 store（读者绝不看到半成品）。
+            let next = Array<HostSignature>(n + 1, repeat: sig)
+            i = 0
+            while (i < n) {
+                next[i] = snap.entries[i]
+                i = i + 1
+            }
+            next[n] = sig
+            current.store(SigSnapshot(next))
+            Int32(n)
         }
     }
 
     /** 按结构查 id；未登记 → `None`（JIT 编译期据此报「签名未注册」）。 */
     public static func find(params: Array<UInt16>, paramNames: Array<String>,
         ret: UInt16, retName: String): ?Int32 {
-        synchronized(mtx) {
-            var i = 0
-            while (i < entries.size) {
-                if (entries[i].sameShape(params, paramNames, ret, retName)) {
-                    return Some(Int32(i))
-                }
-                i = i + 1
+        let snap = current.load()
+        var i = 0
+        while (i < snap.entries.size) {
+            if (snap.entries[i].sameShape(params, paramNames, ret, retName)) {
+                return Some(Int32(i))
             }
-            None
+            i = i + 1
         }
+        None
     }
 
     /** 按 id 取条目；越界 → `None`（运行期视为单元/宿主不匹配）。 */
     public static func get(id: Int32): ?HostSignature {
-        synchronized(mtx) {
-            if (id < 0 || Int64(id) >= entries.size) {
-                return None
-            }
-            Some(entries[Int64(id)])
+        let snap = current.load()
+        if (id < 0 || Int64(id) >= snap.entries.size) {
+            return None
         }
+        Some(snap.entries[Int64(id)])
     }
 
-    /**
-     * 按结构取**适配器**（M2.2：H63 的类型化快速路径）；未登记 → `None`。
-     *
-     * 单次持锁扫描，不嵌套 `find` + `get`——`Mutex` 不可重入，嵌套会自锁。
-     */
+    /** 按结构取**适配器**（H63 的类型化快速路径）；未登记 → `None`。命中路径无锁。 */
     public static func adapterOf(params: Array<UInt16>, paramNames: Array<String>,
         ret: UInt16, retName: String): ?((Any, Array<Any>) -> Any) {
-        synchronized(mtx) {
-            var i = 0
-            while (i < entries.size) {
-                if (entries[i].sameShape(params, paramNames, ret, retName)) {
-                    return Some(entries[i].adapter)
-                }
-                i = i + 1
+        let snap = current.load()
+        var i = 0
+        while (i < snap.entries.size) {
+            if (snap.entries[i].sameShape(params, paramNames, ret, retName)) {
+                return Some(snap.entries[i].adapter)
             }
-            None
+            i = i + 1
         }
+        None
     }
 
     /** 已登记数量（诊断/测试用）。 */
     public static func count(): Int64 {
-        synchronized(mtx) {
-            entries.size
-        }
+        current.load().entries.size
     }
 
     /** 测试专用：清空注册表。 */
     public static func resetForTest(): Unit {
-        synchronized(mtx) {
-            entries.clear()
+        synchronized(writeMtx) {
+            current.store(SigSnapshot(Array<HostSignature>()))
         }
     }
 }

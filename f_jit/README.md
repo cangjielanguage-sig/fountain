@@ -604,8 +604,8 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
 
 - 机器码仅 Linux x86_64 / aarch64（其余平台解释执行）；
 - x86_64 需 SSE4.1（缺则不 JIT 含取整指令的单元）；
-- 回边每轮一次 H22 `interrupt_poll`；紧循环上该调用（内部含一次分配）成本显著，已记入
-  `doc/spec/f-jit-m1/verify.md` 待优化；
+- 回边安全点**按需执行**：仅当本次调用带 `deadline` 时才调 H22 `interrupt_poll`（无期限时跳过；
+  该调用曾占机器码空循环 97.7% 的成本）；带期限时仍逐回边检查，中断延迟不变；
 - 逃逸闭包建议显式 `close()`；漏调时单元卸载会级联释放，单元长期存活则提升组一直驻留；
 - 细节规格见 `doc/jit-bytecode-m1.md` / `doc/design-m1.md` / `doc/plan-m1.md`，验收见
   `doc/spec/f-jit-m1/verify.md`，性能见 `doc/perf-m1.md`。

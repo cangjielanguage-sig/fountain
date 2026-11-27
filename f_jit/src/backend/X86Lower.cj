@@ -1029,8 +1029,18 @@ internal class X86Lower {
                 this.movQwordCtx(0, -1) // deopt：写 -1 后直接返回（不转储）
                 this.jumpTo('epilogue')
                 this.bind(okL)
+                // 安全点**仅在本次调用带 deadline 时**执行（与 A64 同构）：
+                // 无期限时 `interrupt_poll` 恒返回 0 且不写错误槽，可整体跳过。
+                let skipPoll = 'sp${this.seq}'
+                BackendX86_64.noteMemBase(15)
+                this.add(BackendX86_64.emitCtxFlagsToRax())
+                this.add(BackendX86_64.emitDeadlineMaskToRdx())
+                this.add(BackendX86_64.emitTestRaxRdx())
+                this.rel32(BackendX86_64.emitJz(), skipPoll)
                 this.helper(22, 0, 0) // H22 interrupt_poll（变体 0：占位结果 + 自动 CHECK_ERR）
                 this.addRsp(8)
+                this.bind(skipPoll)
+                // 编译期栈深记账：两条路径运行期的净栈变化相同（原路 push+pop 抵消），故无条件 -1。
                 this.depth = this.depth - 1
                 let rel = X86Lower.i32(ops, 0)
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')

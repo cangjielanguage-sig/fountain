@@ -488,7 +488,8 @@ header:
   <cond 求值 → 栈顶 0/1>
   JZ   end                 ; 假 → 退出循环
   <body>
-  LOOP_BACK header         ; 回边 = STACK_GUARD + interrupt_poll(H22) + jmp header
+  LOOP_BACK header         ; 回边 = STACK_GUARD + 安全点 + jmp header
+                           ; 安全点 = 仅当本次调用带 deadline 时调 interrupt_poll(H22)
 end:
 ```
 
@@ -496,7 +497,7 @@ end:
   - 区间：`for i in a..b(:s)` → 隐藏局部 `i` 初始化为 `a`（声明即首写，满足明确赋值），条件按 `s` 符号与 `b` 比较（`..=` 含端点，空区间规则见 §11.9），步进 `i = i + s`（`s<0` 用 `ISUB`）；空区间首轮条件即假，体不执行；
   - 容器：`for x in list` → `n = LEN(h)`（迭代开始快照长度）+ `j = 0; while j < n { x = GET_IDX(h, j); body; j = j + 1 }`；`for (k, v) in map`（**v0.16.1 惰性单遍迭代**）→ `cur = MAP_ITER_BEGIN(m)`（0xAF）→ 循环：`has = MAP_ITER_STEP(cur, 0)`（0xBE；0 → 跳出口）→ `k = MAP_ITER_STEP(cur, 1)`、`v = MAP_ITER_STEP(cur, 2)` → body → 回跳；**出口标签处发射一次 `MAP_ITER_STEP(cur, 3)`（close，幂等；覆盖条件出口与 break）**——**唯一一遍遍历（无快照、无预遍历）**；**不登记窗口槽**（迭代器状态在宿主侧调用级表，条目 ≤ 同时活跃迭代器数＝嵌套深度）；**迭代中修改同一 map → 23**（对齐 std `ConcurrentModificationException`）；
   - 隐藏计数局部计入 `nLocals` 与局部类型表（`Int64`），遵守明确赋值与空安全的全部规则。
-- **`while (true)`**：可省略头部的 `JZ`，但**回边安全点必须保留**——`deadline` 到期经 `interrupt_poll` 置 -2，保证无限循环可中断（§12.6）。
+- **`while (true)`**：可省略头部的 `JZ`，但**回边安全点必须保留**——`deadline` 到期经 `interrupt_poll` 置 -2，保证无限循环可中断（§12.6）。**v0.19 起安全点按需执行**：实现读 `ctx.flags` 的 `DEADLINE` 位（`CtxFlags.DEADLINE`，由 `JitContext.create` 按本次调用的 `deadline` 写入），无期限时跳过 H22 —— `interrupt_poll` 在无期限时恒返回 0 且不写错误槽，跳过它可观察行为不变；带期限时仍**逐回边**检查，中断延迟不变。实测该调用占机器码空循环 97.7% 的成本（`doc/optimize-call-path.md` §14）。
 - **`break` / `continue`**：无专用指令。`break` = `JMP end`；`continue` = `JMP` 至回边指令（`LOOP_BACK`）之前，保证每一轮回边都经过安全点。
 - **多重赋值与变量交换（v0.6）**：`(a, b) = (b, a)` 是前端糖，语义冻结为**同时赋值**——全部 RHS 先求值、后统一写回（先读后写 ⇒ 交换天然正确，`a` 的写入不影响 `b` 的读取）。降低：为每个 RHS 结果引入**隐藏局部**（类型 = 各 RHS 静态类型，声明即首写，计入 `nLocals` 与局部类型表），再依序 `STOREL` 至 LHS。约束：LHS 只能是局部变量（M1 无属性赋值——`list[i] = v` 是指令不是赋值语句）；RHS 仅支持**一维元组字面量**（M1 函数单返回值，无元组类型，元组不可作为值传递）；LHS 槽可用 `_` 忽略——对应 RHS **仍求值**（副作用与错误不能省），结果经 `POP`（0x19）丢弃；RHS **从左到右求值**；含变更型调用的 RHS 照常受 §9.15 约束。明确赋值交互：LHS 全部视为出口已赋值（各 `STOREL` 均执行）；RHS 所读变量须此前已赋值（§7 校验 10 自然满足）。
 - **`recursive(args)` 自递归（v0.7，§8.0）**：顶层 lambda 内 = `CALL_FUNC <entryFn>`（`fid` = 自身，目录必含）；实参表达式从左到右求值入栈，argc 与自身 `nargs` 一致由前端静态校验 + §7 校验 7 把关；**v0.17 自动尾递归优化**：**尾位置**的 `recursive(...)` 降为「实参逆序 `STOREL`（闭包槽基址 1）→ `LOOP_BACK <函数入口>`」帧复用回边（不重入帧、不增长栈；不发射 `RET`——该路径以回边终结）；非尾位置深度受宿主线程栈限制。**v0.9/v0.10**：`recursive` 绑定**最近一层词法闭包**（嵌套闭包内 = `LOADL 0` + `CALL_CLOSURE`，捕获快照经闭包对象携带；顶层 = `CALL_FUNC`，§8.5/§8.6）。**v0.12 值位**：`recursive` 可作右值——求值结果 = 当前层的**自引用闭包值**（LocalType 12，类型 = 当前层签名 `(T1..Tn) -> R`）：闭包层 = `LOADL 0`（零成本）；顶层 = `closure_new <adapterFn>`（0 捕获；adapterFn 为前端按需生成的隐藏适配器 FuncEntry，闭包帧格式，体 = 转发 `CALL_FUNC <entryFn>`，§8.0/§8.6）——经变量赋值与嵌套捕获，内层闭包可递归调用任意外层（§8.5）。

@@ -76,6 +76,13 @@ public class CtxFlags {
     public static const TRACE: Int64 = 2
     /** 单元内存在回边（`LOOP_BACK`），安全点有意义。 */
     public static const HAS_LOOP: Int64 = 4
+    /**
+     * 本次调用带 `deadline`（`optimize-loop-safepoint`）。
+     *
+     * 回边安全点据此决定是否调 H22：无期限时 `interrupt_poll` 恒返回 0 且不写错误槽，
+     * 是可省略的空操作（实测占机器码回边 97.7% 的成本）。
+     */
+    public static const DEADLINE: Int64 = 8
 }
 
 /**
@@ -160,6 +167,9 @@ public class JitContext {
      */
     public static func create(hwBase!: Int64, hwCap!: Int64, fnId!: Int64, dbgBase!: Int64): JitContext {
         let p = LibC.malloc<Int64>(count: WORD_COUNT)
+        // flags 只带「本次调用是否设了 deadline」：桥在进入本次调用前已写好线程 TLS
+        // （`JitFunction.call` 先 `setDeadline` 再创建 ctx），故此处读到的就是本次调用的值。
+        let flags = if (RuntimeEnv.deadlineNanos >= 0) { CtxFlags.DEADLINE } else { 0 }
         unsafe {
             p.write(0, 0)
             p.write(1, -1)
@@ -167,7 +177,7 @@ public class JitContext {
             p.write(3, hwCap)
             p.write(4, hwBase)
             p.write(5, fnId)
-            p.write(6, 0)
+            p.write(6, flags)
             p.write(7, dbgBase)
         }
         NativeMem.bumpMalloc()

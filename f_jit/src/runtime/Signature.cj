@@ -354,10 +354,15 @@ public class HostCallback {
     public let sig: ?SignatureDescriptor
 
     /**
-     * 反射签名元数据（pin 时算一次，调用期复用）。
+     * 反射签名元数据（**按需**：只有走反射路径才需要）。
      *
-     * `FunctionTypeInfo.of(fn)` 每次调用都做一次类型查找；M2 的宿主闭包调用频次高，
-     * 把它缓存进条目可省掉这部分（实测详见 `perf-m2`）。
+     * 带签名的构造（`init(fn, sig)`）**不再**在装箱时探测：类型化 adapter 命中时，
+     * H63 根本不用 `FunctionTypeInfo`，预探测就是纯浪费 —— 实测
+     * `FunctionTypeInfo.of` 占 `HostCallback` 构造的 22–38%，且 4 线程扩展比仅 0.31–0.35×
+     * （std 反射元数据缓存的内部争用，见 `doc/optimize-call-path.md` §15.4）。
+     *
+     * 反射路径（`reflectiveInvoke*`）本就接受 `cached = None` 并现场探测，故这里传 `None` 安全。
+     * 无签名构造（`init(fn)`）必然走反射，仍预探测。
      */
     public let ti: ?FunctionTypeInfo
 
@@ -380,7 +385,8 @@ public class HostCallback {
     public init(fn: Any, sig: SignatureDescriptor) {
         this.fn = fn
         this.sig = Some(sig)
-        this.ti = HostCallback.probeType(fn)
+        // 惰性：adapter 命中时不需要反射元数据；反射路径自己会探测（`cached = None`）。
+        this.ti = None
         this.adapter = SignatureRegistry.adapterOf(sig.params, sig.paramNames, sig.ret, sig.retName)
         this.plan = SignatureTable.getOrBuild(sig)
     }

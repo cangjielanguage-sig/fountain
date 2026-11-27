@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_jit
 
-import std.time.DateTime
+import std.time.MonoTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.LocalType
@@ -40,9 +40,19 @@ import fountain::f_jit.runtime.invokeHelper
  */
 @Test
 public class PerfM2_test {
+    private static func median3(a: Int64, b: Int64, c: Int64): Int64 {
+        if ((a <= b && b <= c) || (c <= b && b <= a)) {
+            b
+        } else if ((b <= a && a <= c) || (c <= a && a <= b)) {
+            a
+        } else {
+            c
+        }
+    }
+
     @TestCase
     public func userHelperVsHostClosure(): Unit {
-        let rounds: Int64 = 2000
+        let rounds: Int64 = 4000
         HandleTable.resetForTest()
         HandleTable.openWindow(4096)
         let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(), hwCap: 4096,
@@ -67,35 +77,52 @@ public class PerfM2_test {
                 @Assert(r1 == i + 1 && r2 == i + 1, true)
                 i = i + 1
             }
-            let t0 = DateTime.now()
-            var k = 0
-            while (k < rounds) {
-                let _ = invokeHelper(ctx, uh, [k])
-                k = k + 1
-            }
-            let dUh = DateTime.now() - t0
+            // 同轮配对、3 轮取中位数（与 `PerfOverride_test` 同法）：两臂各只有数千轮（数百 µs），
+            // 「每臂独立取最小」会把不同轮次的偶然极小值拼在一起，比值失真；中位数能吸收单轮异常。
+            var q1: Int64 = 0
+            var q2: Int64 = 0
+            var q3: Int64 = 0
+            var round = 0
+            while (round < 3) {
+                var k = 0
+                let tu = MonoTime.now()
+                while (k < rounds) {
+                    let _ = invokeHelper(ctx, uh, [k])
+                    k = k + 1
+                }
+                let du = (MonoTime.now() - tu).toNanoseconds()
 
-            let t1 = DateTime.now()
-            k = 0
-            while (k < rounds) {
-                let _ = invokeHelper(ctx, Int64(HelperId.HOST_CALL_TRAMPOLINE), [h, k])
-                k = k + 1
-            }
-            let dHost = DateTime.now() - t1
+                k = 0
+                let th = MonoTime.now()
+                while (k < rounds) {
+                    let _ = invokeHelper(ctx, Int64(HelperId.HOST_CALL_TRAMPOLINE), [h, k])
+                    k = k + 1
+                }
+                let dh = (MonoTime.now() - th).toNanoseconds()
 
-            let un = dUh.toNanoseconds()
-            let hn = dHost.toNanoseconds()
-            @Assert(un > 0 && hn > 0, true)
-            // 比值以「每万次耗时」表示，避免小数
-            let ratioX100 = hn * 100 / un
-            let uhPer10k = un * 10000 / rounds
-            let hostPer10k = hn * 10000 / rounds
-            // 回归门禁：比值不得超过 10×（实测约 4.6–5.8×，见 `doc/perf-m2.md`）。
-            // 失败时消息里带出三条数字，便于定位是 user helper 变快还是闭包变慢。
-            @Assert(TCase.hit('T32/host-call-overhead-ratio',
-                ratioX100 > 100 && ratioX100 < 1000), true)
-            let _ = uhPer10k
-            let _ = hostPer10k
+                @Assert(du > 0 && dh > 0, true)
+                let q = dh * 100 / du
+                println('PERF-M2 round' + (round + 1).toString() + ' userHelperNs=' +
+                    (du / rounds).toString() + ' hostClosureNs=' + (dh / rounds).toString() +
+                    ' 比值X100=' + q.toString())
+                if (round == 0) {
+                    q1 = q
+                } else if (round == 1) {
+                    q2 = q
+                } else {
+                    q3 = q
+                }
+                round = round + 1
+            }
+            let ratioX100 = PerfM2_test.median3(q1, q2, q3)
+
+            // 回归门禁：比值不得超过 10×（实测约 3–6×，见 `doc/perf-m2.md`）。
+            // 用 3 轮比值的中位数；越界时同时打印每轮数字，便于定位是 user helper 变快还是闭包变慢。
+            let okRatio = ratioX100 > 100 && ratioX100 < 1000
+            if (!okRatio) {
+                @Fail('PERF-M2 比值越界 medianRatioX100=' + ratioX100.toString())
+            }
+            @Assert(TCase.hit('T32/host-call-overhead-ratio', okRatio), true)
         } finally {
             UserHelperTable.pop()
             JitContext.free(ctx)
