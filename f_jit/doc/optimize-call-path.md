@@ -351,6 +351,10 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
 
 ### 12.4 停止条件
 
+> **2026-11-27 更新：本节结论已被 §16 推翻。** 进程内探针证明剩余成本的主项是
+> **每次调用 14 次 `ThreadLocal` 访问（~4.4 µs，占一半）**，不需要 perf 即可定位；
+> 合并为单个 `RuntimeState` 后 `L1` 下降 32–36%。本节保留为历史记录。
+
 `optimize-call-path.md` §8 的停止条件已满足：连续两项（P3.1/P3.2）无数据支持。
 **调用路径优化到此为止**；后续若要把单次调用从 µs 级降到亚 µs，需要：
 1. 专用 ≥8 核机器 + `perf`（或仓颉运行时 GC 统计）；
@@ -511,3 +515,56 @@ adapter 命中时 H63 直接调类型化适配器，`FunctionTypeInfo` 完全用
 
 签名两表 + `probeType` 两处合计：`HostCallback` 4 线程构造 **1008 → 159 ns（−84%）**，
 扩展比 **0.52× → 2.81×**。宿主闭包实参路径不再是并发瓶颈。
+
+## 16. 线程私有状态合并：TLS 访问 14 → 2 次（2026-11-27，`optimize-runtime-tls`）
+
+### 16.1 问题：剩余 8.6 µs 的主项是 TLS 访问，不是 GC
+
+§12.4 曾判断「剩余成本需要 perf 才能定位」。进程内探针（同轮配对、best-of-3，用后删除）给出了相反结论：
+
+| 测量 | 数据 |
+| --- | --- |
+| `ThreadLocal` 单次 `get` / `set` | **319 / 304 ns**（std 实现；私有实例 4T 503 vs 共享 508 ⇒ 不是实例争用） |
+| `realTlsBundle`（deadline 保存/设置/恢复 + fnTable 保存/设置/恢复，6 次） | **1906 ns** |
+| `windowBundle`（`openWindow` + `base` + `cap` + `resetWindow`，4 次 TLS + 2×`Win`） | **1888 ns** |
+| `JitFunction.call` 全路径 TLS | **14 次**（deadline 3、fnTable 3、win 5、iter 1、fault 1） |
+| 推算 | **~4.4 µs / 8.6–9.7 µs（45–51%）** |
+
+对照项：GC 分配约 1.0–1.4 µs、`enter/exit` 两对 mutex 86 ns、`NativeMem` 两个原子无争用。
+
+### 16.2 改动
+
+- 新增 `runtime/RuntimeState.cj`：`deadlineNanos` / `fnTableBase` / `wins` / `iters` / `faults` /
+  `freeHint` 合并为一个线程私有载荷；`RuntimeEnv.current()` 取一次；
+- `HandleTable.openWindowWith(rs, cap) -> (base, cap)`、`resetWindow(rs, -1)`、`syncTo(ctx, rs)`：
+  窗口侧 5 次 TLS → 0；
+- `JitContext.create(..., deadlineNanos: Some(rs.deadlineNanos))`：不再回读 TLS；
+- `IterTable` / `HostFault` 改读 `rs.iters` / `rs.faults`，空表/None 时直接跳过清理（0 TLS）；
+- `JitFunction.call` 的 deadline 改「值不变不写」（常规无期限调用 0 次写）；
+- `JitExecutor.invokeOff` 仅在 `fnTableBase` 变化时 set/restore（稳态 3 次 → 1 次 get）。
+
+### 16.3 数据（5 次，`taskset 0-4`；本轮双峰，分峰比较）
+
+| 指标 | 慢峰（改前 → 改后） | Δ | 快峰（改前 → 改后） | Δ |
+| --- | --- | --- | --- | --- |
+| **L1** | 9751–9883 → 6228–6299 ns | **−36%** | 5323–5524 → 3502–3758 ns | **−32%** |
+| **Q1** | 101–102k → 158–160k calls/s | **+56%** | 181–188k → 266–285k | **+48%** |
+| **Q4** | 248–260k → 376–416k | **+52%** | 450–479k → 678–729k | **+50%** |
+| C1 | 720–731 → 739–745 ns | +2%（噪声） | 375–399 → 386–427 | +5%（噪声） |
+| F1 / F4 | 955–971 / 393–417 → 952–993 / 441–442 | 噪声 | 485–491 / 225 → 518–590 / 218–225 | 噪声 |
+
+全量 **1224/1224 / 0 失败**；新增 `RuntimeStateIsolation_test` 3 条；
+变异（`current()` 每次返回新对象）⇒ **3 条全红**，已恢复。
+
+### 16.4 结论与残留
+
+**keep。** 单次调用省约 2.0–3.5 µs，是 `optimize-call-path` 系列里单项收益最大的一次；
+且证明「TLS 访问次数」是桥接层可继续下探的方向。
+
+残留：
+
+- 稳态仍有 2 次 TLS：`RuntimeEnv.current()` + `MachineEnv.fnTableBase`（后者可再并入 rs，
+  但需要把 rs 传入 `JitExecutor.invokeOff` 的调用链）；
+- 分配型 helper（`append` / `pin`）每次仍经一次 `current()`（~300 ns/次），
+  彻底消除要把 rs 下传到 `CallMarshal` 与 helper 入口；
+- 共享 VM 的双峰仍在，`8 线程 ≥5×` 需专用 ≥8 核机器复测。
