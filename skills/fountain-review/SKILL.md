@@ -23,9 +23,9 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 - **不需要** `cangjie-code-review-harness`：审查引擎随本技能分发（`reviewer.md` + `references/review-checklist.md`）。
 
 1. **步骤 0 — 定范围与基线（只读）**：`project_root` = `git -C <目标> rev-parse --show-toplevel`（无 git 时向上找 `cjpm.toml` / `openspec/`）；「当前目录」→ 项目根 + `scope=.`，「指定模块」→ 项目根 + 该模块相对路径。基线二选一：**分支差异**（`source_branch != target_branch` 且 diff 非空）或**工作区快照**（无 git / 同分支 / diff 为空）；工作区不干净时停下问用户「提交 / stash / 快照审查」，不擅自处理。
-2. **步骤 1 — 执行审查（本技能内建引擎）**：按下面「审查引擎」准备参数与 `scope.md`，分支模式走阶段零→四，快照模式跳过阶段零。**主 Agent 不读被审源码**；审查阶段**不改源码**。产出分轮报告 + `todo.md` + `review_summary.md`。
+2. **步骤 1 — 执行审查（本技能内建引擎）**：按下面「审查引擎」准备参数与 `scope.md`，分支模式走阶段零→四，快照模式跳过阶段零。**主 Agent 不读被审源码**；审查阶段**不改源码**。审查对象是**本次改动 + 本轮读到的现有代码**——现有代码里的缺陷同样要报，标 `[存量]`（`review-checklist §11`）。产出分轮报告 + `todo.md` + `review_summary.md`。
    - 用户明确说「只审查、不修」→ 本步结束，交报告，不进 OpenSpec。
-3. **步骤 2 — 报告 → `opsx:propose`**：读 `todo.md` / `review_summary.md`（这是汇总产物，不是源码），统计严重 X / 一般 Y / 轻微 Z；**修复范围默认严重 + 一般**，轻微项由用户决定是否纳入（不静默丢弃）。给每条问题编号 `R<轮次>-<序号>`；`openspec update` + `openspec list --json` 后执行 `opsx:propose "根据代码审查报告 <workdir>/todo.md 修复 <项目/模块> 的严重与一般问题（严重 X、一般 Y）"`——proposal 写审查范围/基线与统计，design 写修复方案与风险，**tasks 逐条映射 `[R1-1][严重]`（含复现点与测试点，禁止漏项）**；把 `todo.md` + `review_summary.md` 复制到 `doc/spec/<变更名>/review.md`。**本步只写规划产物，不改代码**，完成后停下等评审。
+3. **步骤 2 — 报告 → `opsx:propose`**：读 `todo.md` / `review_summary.md`（这是汇总产物，不是源码），统计严重 X / 一般 Y / 轻微 Z 与**存量 N 条**；**修复范围默认 = 本次改动的严重 + 一般**，轻微项与存量缺陷由用户决定是否纳入（既不静默丢弃，也不静默扩大范围）。给每条问题编号 `R<轮次>-<序号>`；`openspec update` + `openspec list --json` 后执行 `opsx:propose "根据代码审查报告 <workdir>/todo.md 修复 <项目/模块> 的严重与一般问题（严重 X、一般 Y）"`——proposal 写审查范围/基线与统计，design 写修复方案与风险，**tasks 逐条映射 `[R1-1][严重]`（含复现点与测试点，禁止漏项）**；把 `todo.md` + `review_summary.md` 复制到 `doc/spec/<变更名>/review.md`。**本步只写规划产物，不改代码**，完成后停下等评审。
 4. **步骤 3 — 用户评审（门禁）**：逐条确认 `design.md` / `tasks.md` 与 `todo.md` 的覆盖关系（严重/一般是否全部有任务、修复方案是否改变公开 API / 行为、轻微项取舍）；缺口用 `opsx:update` 折回。**未确认不进 apply。**
 5. **步骤 4 — `opsx:apply` 逐任务 TDD 修复**：严格按 tasks 顺序；每条问题**先写能复现该问题的失败用例**（Red）→ 最小修复（Green）→ 重构；跑绿才勾任务；不允许「改了但没测试」。审查报告的「建议」只作参考，以 design 为准；涉及设计变更 / 公开 API 时回步骤 3 问用户，不自行扩大范围。**性能类任务必须先补基线再改代码**（见下方硬规则），没有数据的性能项不进 tasks。
 6. **步骤 5 — 回归 + `opsx:verify`**：受影响模块 + 全量回归（`cjpm test` / `fboot test`）+ `fboot build`；涉及启动链做冒烟；`opsx:verify` CRITICAL 清零；对照 `todo.md` 逐条核对覆盖，未修项写明原因并经用户同意。
@@ -80,7 +80,7 @@ python <skill_dir>/scripts/review_workdir.py \
   --project-root <project_root> \
   --scope <模块路径或 .> \
   --baseline "分支 {source} → {target}" \
-  --focus "正确性、死代码、重复逻辑、空实现、栈溢出、OOM、低性能、内存/CPU 优化空间、local mode 可行性" \
+  --focus "正确性、死代码、重复逻辑、空实现、栈溢出、OOM、低性能、存量 BUG、内存/CPU 优化空间、local mode 可行性" \
   --exclude "generated/,third_party/,target/"
 ```
 
@@ -120,7 +120,8 @@ python <skill_dir>/scripts/review_workdir.py \
    - 只收「严重」「一般」两类缺陷，忽略「轻微」与「优化可行性方案」
    - 保留：题目、位置、判据、描述；忽略：建议
    - 按轮次分组，每组前加 `## R{N}`
-   - 每条用 `### [严重] {题目}` / `### [一般] {题目}`，下用 bullet 列 **位置** / **判据** / **描述**
+   - 每条用 `### [严重] {题目}` / `### [一般] {题目}`，下用 bullet 列 **位置** / **来源** / **判据** / **描述**
+   - 来源为存量的在标题加 `[存量]`（`### [一般][存量] …`），并在文末统计存量为「严重 a / 一般 b」
 
 2. {workdir}/review_summary.md
    - 审查范围与基线、轮次清单、各轮 严重/一般/轻微/优化方案 数量、总计
@@ -154,6 +155,8 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 | 一轮铺 30 个文件「一次审完」 | 单轮 ≤ 8–12 个文件；范围大就多轮 |
 | 报告没有「覆盖自检」表，或表里缺行 | 该表是结构性要求；缺行视为本轮未完成，打回重跑 |
 | 死代码 / 重复逻辑两栏写「未发现」却没做符号搜索 | 这两类必须机械过一遍（`review-checklist §1 / §2` 的机械动作） |
+| 只审 diff 里改过的行，现有代码的缺陷视而不见 | 本轮读到的现有逻辑也要按 `review-checklist §11` 过一遍；存量标 `[存量]` |
+| 把存量缺陷当成本次改动的回归，或直接塞进修复范围 | 来源用 `git blame` 判定；存量默认只报，纳入与否由用户在门禁决定 |
 | 把「优化可行性方案」写进 `todo.md` | `todo.md` 只收严重 + 一般缺陷；优化方案留在分轮报告里 |
 | 说「这个改动更快 / 更省内存」但没跑测试 | 必须有改前基线 + 改后对照（`-O2`、同输入、中位数）；否则只能写「待验证假设」 |
 | 拿一次最快值或「关掉日志后变快了」当结论 | 不算证据：要中位数 + 离散程度 + 同环境对照 |

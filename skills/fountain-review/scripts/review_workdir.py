@@ -29,7 +29,8 @@ from pathlib import Path
 DEFAULT_FOCUS = (
     "正确性、设计合理性、仓颉语言特性、可读性/可维护性、安全性；"
     "死代码、表现形式不同的重复逻辑、空实现、栈溢出风险、OOM 风险、"
-    "大粒度锁热点、并发串行热点、低效算法、可降低堆内存占用与 CPU 占用的可行性方案"
+    "大粒度锁热点、并发串行热点、低效算法、现有代码的存量 BUG、"
+    "可降低堆内存占用与 CPU 占用的可行性方案、local mode 改造可行性"
 )
 DEFAULT_EXCLUDE = "generated/, third_party/, target/, .git/"
 
