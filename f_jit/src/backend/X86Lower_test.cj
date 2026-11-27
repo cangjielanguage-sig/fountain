@@ -54,6 +54,24 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitBail(3)), '49C70703000000' + '31C0' + 'E900000000')
     }
 
+    /**
+     * 回边安全点按需判据（`optimize-loop-safepoint`）：读 `ctx.flags` → 取掩码 → test → jz。
+     *
+     * 语义：`flags & DEADLINE == 0`（无期限）⇒ 跳过 H22。x86 侧逻辑与 A64 同构，
+     * 本机无法运行 x86 机器码，故用字节级断言锁住发射序列。
+     */
+    @TestCase
+    public func loopBackPollGate(): Unit {
+        // mov rax,[r15+48]
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCtxFlagsToRax()), '498B4730')
+        // mov edx,8（CtxFlags.DEADLINE）
+        @Assert(X86Lower_test.hex(BackendX86_64.emitDeadlineMaskToRdx()), 'BA08000000')
+        // test rax,rdx
+        @Assert(X86Lower_test.hex(BackendX86_64.emitTestRaxRdx()), '4885D0')
+        // jz rel32（占位，回填由 X86Lower.rel32）
+        @Assert(X86Lower_test.hex(BackendX86_64.emitJz()), '0F8400000000')
+    }
+
     @TestCase
     public func integerBinaryOps(): Unit {
         let tail = '0F8000000000' + '4889442408' + '4883C408'

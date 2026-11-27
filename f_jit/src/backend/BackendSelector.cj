@@ -295,6 +295,21 @@ internal class BackendX86_64 <: Backend {
         [0x0Fu8, 0x86u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
     }
 
+    /** `mov rax,[r15+48]`：读 `ctx.flags`（回边安全点的按需判据）。 */
+    internal static func emitCtxFlagsToRax(): Array<UInt8> {
+        [0x49u8, 0x8Bu8, 0x47u8, 0x30u8]
+    }
+
+    /** `mov edx,8`：`CtxFlags.DEADLINE` 掩码（零扩展写 rdx）。 */
+    internal static func emitDeadlineMaskToRdx(): Array<UInt8> {
+        [0xBAu8, 0x08u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `test rax,rdx`。 */
+    internal static func emitTestRaxRdx(): Array<UInt8> {
+        [0x48u8, 0x85u8, 0xD0u8]
+    }
+
     /** `SWAP`：交换 `[rsp]` 与 `[rsp+8]`。 */
     internal static func emitSwap(): Array<UInt8> {
         [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x8Bu8, 0x4Cu8, 0x24u8, 0x08u8,
