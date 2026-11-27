@@ -248,18 +248,35 @@ internal class BackendX86_64 <: Backend {
     // 只用于**测试与自检**：降低期记录每条内存访问的基址寄存器，`lower()` 结束时校验
     // 必须落在 `{rsp(4), rbp(5), r15(15)}`。这条约束等价于「机器码不得把 helper 返回的
     // cell 当指针解引用」——任何解引用都必有基址寄存器，而合法基址只有栈/帧/ctx。
-    private static let auditMemBases = ArrayList<Int64>()
+    /**
+     * 本线程的审计表（`fix-x86-audit-isolation`）。
+     *
+     * 旧实现是**进程级静态 `ArrayList`**：并发编译时 `add` 互相踩，且一个线程的
+     * `resetAuditMemBases()` 会清掉另一线程已记录的项 —— 空快照让 `auditAllows([])`
+     * 返回 true，本该拒绝的非法基址被静默放行（与 aarch64 侧 C0 同一缺陷）。
+     */
+    private static let auditTls = ThreadLocal<ArrayList<Int64>>()
+
+    private static func auditList(): ArrayList<Int64> {
+        match (auditTls.get()) {
+            case Some(l) => l
+            case None =>
+                let l = ArrayList<Int64>()
+                auditTls.set(Some(l))
+                l
+        }
+    }
 
     internal static func noteMemBase(reg: Int64): Unit {
-        auditMemBases.add(reg)
+        auditList().add(reg)
     }
 
     internal static func resetAuditMemBases(): Unit {
-        auditMemBases.clear()
+        auditList().clear()
     }
 
     internal static func auditMemBasesSnapshot(): Array<Int64> {
-        auditMemBases.toArray()
+        auditList().toArray()
     }
 
     /**
@@ -269,7 +286,7 @@ internal class BackendX86_64 <: Backend {
      * `movImm64` + `ldr` 的豁免是同一条规则（见 `d2b0b4d8`）。
      */
     internal static func noteAbsMem(): Unit {
-        auditMemBases.add(-1)
+        auditList().add(-1)
     }
 
     /**
