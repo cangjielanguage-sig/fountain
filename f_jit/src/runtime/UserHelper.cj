@@ -62,15 +62,31 @@ public class UserHelperTable {
         }
     }
 
-    /** 压入一次调用单元的 helper 表（`base` 通常为 0，表示 hid 从 0x0100 起）。 */
-    public static func push(base: UInt16, entries: Array<UserHelperEntry>): Unit {
+    /**
+     * 构建 `hid → entry` 表（`hid = USER_BASE + base + i`）。
+     *
+     * **每单元只调一次**（`JitFunction.bindUserHelpers`）：旧实现把它放在每次调用里，
+     * 注册 F 个函数就每调用重建 F 项，实测 456–925 ns/项（`optimize-helper-table`）。
+     */
+    public static func buildTable(base: UInt16,
+        entries: Array<UserHelperEntry>): HashMap<Int64, UserHelperEntry> {
         let table = HashMap<Int64, UserHelperEntry>()
         var i = 0
         while (i < entries.size) {
             table.add(Int64(HelperId.USER_BASE) + Int64(base) + Int64(i), entries[i])
             i = i + 1
         }
+        table
+    }
+
+    /** 压入一张**已构建**的表：调用期零构建，只做一次入栈。 */
+    public static func pushTable(table: HashMap<Int64, UserHelperEntry>): Unit {
         stack().add(table)
+    }
+
+    /** 兼容入口：按 `entries` 现建现压（测试与一次性场景）。 */
+    public static func push(base: UInt16, entries: Array<UserHelperEntry>): Unit {
+        pushTable(buildTable(base, entries))
     }
 
     /** 弹出顶层表；空栈幂等。 */

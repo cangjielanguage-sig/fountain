@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_jit
 
 import std.collection.ArrayList
+import std.collection.HashMap
 import std.reflect.ClassTypeInfo
 import std.reflect.InterfaceTypeInfo
 import std.reflect.TypeInfo
@@ -89,6 +90,8 @@ public class JitFunction <: Resource {
     private var jitBacked: Bool = false
     /** 本单元的 user helper 表（m2 §15；空 = 无 user helper，调用期不压栈）。 */
     private var helperEntries: Array<UserHelperEntry> = Array<UserHelperEntry>()
+    /** 预构建的 `hid → entry` 表（绑定期建一次，调用期只压引用；`optimize-helper-table`）。 */
+    private var helperTableCache: ?HashMap<Int64, UserHelperEntry> = None
     // ---- 逃逸闭包（§14.3，M2-8：统一 JitFunction）----
     /** 非 None = 闭包包装实例；指向承载闭包 fnId 的单元入口实例。 */
     private var owner: ?JitFunction = None
@@ -396,6 +399,19 @@ public class JitFunction <: Resource {
     /** 装载层内部：绑定本单元 user helper 表（slot 0 = hid 0x0100）。 */
     internal func bindUserHelpers(entries: Array<UserHelperEntry>): Unit {
         this.helperEntries = entries
+        // 在这里建表而不是每次调用：F 个 helper 的逐项插入以前跑在热路径上。
+        this.helperTableCache = Some(UserHelperTable.buildTable(0u16, entries))
+    }
+
+    /** 本单元的 helper 表；未绑定（测试直造实例）则现场建一次并缓存。 */
+    internal func helperTableRef(): HashMap<Int64, UserHelperEntry> {
+        match (this.helperTableCache) {
+            case Some(t) => t
+            case None =>
+                let t = UserHelperTable.buildTable(0u16, this.helperEntries)
+                this.helperTableCache = Some(t)
+                t
+        }
     }
 
     /** 装载层内部：绑定入口形参的 14 类名 / HostClosure 签名 / 类快照。 */
@@ -556,13 +572,13 @@ public class JitFunction <: Resource {
             this.retType
         }
         let dynamicArgs = isWrapper && Int64(this.paramTypes.size) != Int64(args.size)
-        let helpers = if (isWrapper) {
+        let helperTable = if (isWrapper) {
             match (this.owner) {
-                case Some(o) => o.helperEntries
-                case None => this.helperEntries
+                case Some(o) => o.helperTableRef()
+                case None => this.helperTableRef()
             }
         } else {
-            this.helperEntries
+            this.helperTableRef()
         }
         let marshal = CallMarshal(rs)
         // 每次调用独立窗口：执行期分配的句柄在 finally 统一回收（design §9.5 / T27）。
@@ -581,8 +597,8 @@ public class JitFunction <: Resource {
             ctx.attachDump(dump)
         }
         try {
-            if (helpers.size > 0) {
-                UserHelperTable.push(0u16, helpers)
+            if (helperTable.size > 0) {
+                UserHelperTable.pushTable(helperTable)
             }
             // 2. 封送
             let cells = Array<Int64>(args.size, repeat: 0)
@@ -640,7 +656,7 @@ public class JitFunction <: Resource {
                 case None => return JitFunction.contractFail('返回值与 T 不符')
             }
         } finally {
-            if (helpers.size > 0) {
+            if (helperTable.size > 0) {
                 UserHelperTable.pop()
             }
             marshal.cleanup()
