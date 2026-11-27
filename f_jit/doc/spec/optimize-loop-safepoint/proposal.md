@@ -1,6 +1,6 @@
 # 回边安全点改为「按需」：无期限调用跳过 `interrupt_poll`
 
-## 为什么
+## Why
 
 `doc/optimize-call-path.md` §14 的实测（aarch64）：
 
@@ -26,7 +26,7 @@ public static func deadlineExpired(): Bool {
 
 绝大多数调用不带 deadline（`CallContext.deadline = None`），却为每个回边付 654 ns。
 
-## 改什么
+## What Changes
 
 把回边序列从「无条件调 H22」改为「**仅当本次调用带 deadline 时才调**」：
 
