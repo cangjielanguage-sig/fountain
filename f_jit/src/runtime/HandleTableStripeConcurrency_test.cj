@@ -64,4 +64,43 @@ public class HandleTableStripeConcurrency_test {
         // 高水位只应因世代号退休与分片尾部而小幅增长，不允许按线程数线性膨胀。
         @Assert(HandleTable.slotCount() - baseSlots <= 4 * 64, true)
     }
+
+    /** `slotCount()` 与分配并发：返回值单调不减，且结束后无活槽残留。 */
+    @TestCase
+    public func slotCountReadsAreMonotonicUnderChurn(): Unit {
+        HandleTable.resetForTest()
+        let base = HandleTable.slotCount()
+        let fs = ArrayList<Future<Int64>>()
+        var t = 0
+        while (t < 4) {
+            fs.add(spawn {
+                var k = 0
+                while (k < 5000) {
+                    HandleTable.openWindow(4)
+                    let id = HandleTable.pin('slotcount-probe')
+                    HandleTable.release(id)
+                    HandleTable.resetWindow(-1)
+                    k = k + 1
+                }
+                0
+            })
+            t = t + 1
+        }
+        var bad = 0
+        var last = base
+        var reads = 0
+        while (reads < 5000) {
+            let now = HandleTable.slotCount()
+            if (now < last || now < base) {
+                bad = bad + 1
+            }
+            last = now
+            reads = reads + 1
+        }
+        for (f in fs) {
+            @Assert(f.get(), 0)
+        }
+        @Assert(bad, 0)
+        @Assert(HandleTable.liveCount(), 0)
+    }
 }

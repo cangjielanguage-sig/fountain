@@ -169,7 +169,7 @@ public class HandleTable {
      * 已分配过的槽位总数（高水位，代替原先 `objs.size`）。
      * 索引 0 是哨兵（不可达）：ID 编码里 idx=0 与「空句柄」共用 0 值域。
      */
-    private static var totalSlots: Int64 = 1
+    private static let totalSlots = AtomicInt64(1)
     /** 空闲索引分片数（必须是 2 的幂：按 `idx & (FREE_STRIPES-1)` 固定归属）。 */
     private static const FREE_STRIPES: Int64 = 64
     /**
@@ -360,9 +360,8 @@ public class HandleTable {
      * `hwCap` = `initialCapacity`（无分配单元传 0）。重入时压入**本线程**的窗口栈。
      */
     public static func openWindow(cap: Int64): Unit {
-        let base = synchronized(mtx) {
-            totalSlots
-        }
+        // 原子读高水位：窗口基址只是容量账，不要求精确（槽允许复用、不要求连续）。
+        let base = totalSlots.load()
         let c = if (cap <= 0) { initialCapacity } else { cap }
         winStack().add(Win(base, c))
     }
@@ -543,8 +542,9 @@ public class HandleTable {
             // JSON 节点是可变的，按身份区分（它们的 canonKeyOf 为空，合并会把对象/数组混为一谈）
             if (tok != TypeToken.LIST && tok != TypeToken.MAP && !(obj is JsonValue)) {
                 let key = canonKeyOf(obj)
+                let top = totalSlots.load()
                 var i = 1
-                while (i < totalSlots) {
+                while (i < top) {
                     let seg = segAt(i)
                     let off = offOf(i)
                     if (seg.alive[off] && seg.constFlags[off] && seg.tags[off] == tok &&
@@ -1002,9 +1002,7 @@ public class HandleTable {
             let base = if (hwBase >= 0) {
                 hwBase
             } else {
-                synchronized(mtx) {
-                    totalSlots
-                }
+                totalSlots.load()
             }
             s.add(Win(base, initialCapacity))
         }
@@ -1114,13 +1112,13 @@ public class HandleTable {
     /** 表尾增长（全局 `mtx`；每 1024 槽一次，冷路径）。 */
     private static func growSlot(): Int64 {
         synchronized(mtx) {
-            let idx = totalSlots
+            let idx = totalSlots.load()
             // 全局硬上限：并发窗口各自按 base 记账，可能同时越过同一上限 ⇒ 这里兜底。
             if (idx >= capacityLimit) {
                 failWith(ErrCode.HANDLE_WINDOW_FULL)
             }
             let _ = ensureSegLocked(idx)
-            totalSlots = idx + 1
+            totalSlots.store(idx + 1)
             idx
         }
     }
@@ -1158,7 +1156,8 @@ public class HandleTable {
         synchronized(mtx) {
             var n = 0
             var i = 1
-            while (i < totalSlots) {
+            let top = totalSlots.load()
+            while (i < top) {
                 let seg = segAt(i)
                 if (seg.alive[offOf(i)]) {
                     n = n + 1
@@ -1171,9 +1170,7 @@ public class HandleTable {
 
     /** 用例/宿主审计：累计分配过的槽位数（高水位）。 */
     public static func slotCount(): Int64 {
-        synchronized(mtx) {
-            totalSlots
-        }
+        totalSlots.load()
     }
 
     /** 用例/宿主审计：因世代号耗尽而退休的槽数（退休槽永久失效、不可复用）。 */
@@ -1185,7 +1182,7 @@ public class HandleTable {
     public static func resetForTest(): Unit {
         synchronized(mtx) {
             // 清掉高水位内的所有段；段本身保留（地址稳定），只复位内容。
-            let segs = (totalSlots + SEG_SIZE - 1) >> SEG_SHIFT
+            let segs = (totalSlots.load() + SEG_SIZE - 1) >> SEG_SHIFT
             var c = 0
             while (c < segs) {
                 let s = segDir[c]
@@ -1213,7 +1210,7 @@ public class HandleTable {
                 st = st + 1
             }
             retiredSlots.store(0)
-            totalSlots = 1
+            totalSlots.store(1)
             let s0 = ensureSegLocked(0)
             s0.tags[0] = TypeToken.RESERVED
         }
