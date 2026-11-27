@@ -36,23 +36,19 @@ import fountain::f_jit.bytecode.ConstMapKey
  * - **不占用句柄窗口**（记账零新增），条目数 ≤ 嵌套深度。
  */
 public class IterTable {
-    /**
-     * 迭代器表是**调用级**资源：游标含 `gen`、不跨调用，更没有跨线程语义。
-     * 并行调用下改为**线程私有**（D8）——锁随表一起消失，`for (k in map)` 的每次
-     * `next` 不再争全局锁。
-     *
-     * 状态类型见文件末尾的 `IterState`（仓颉不支持类内嵌套类型声明）。
-     */
-    private static let tls = ThreadLocal<IterState>()
 
     private static func state(): IterState {
-        match (tls.get()) {
-            case Some(s) => s
-            case None =>
-                let s = IterState()
-                tls.set(Some(s))
-                s
+        RuntimeEnv.current().iters
+    }
+
+    /** 调用方已持有本线程状态（零 TLS）。 */
+    public static func clearAll(rs: RuntimeState): Unit {
+        // 健康路径（本次调用没用过迭代器）两个容器都为空：直接跳过，避免无谓的清理。
+        if (rs.iters.entries.size == 0 && rs.iters.gens.size == 0) {
+            return
         }
+        rs.iters.entries.clear()
+        rs.iters.gens.clear()
     }
 
     /**
@@ -106,9 +102,7 @@ public class IterTable {
 
     /** 调用结束与 DEOPT 交接两点清空（旧游标一律失效 ⇒ 99；只清本线程）。 */
     public static func clearAll(): Unit {
-        let st = state()
-        st.entries.clear()
-        st.gens.clear()
+        IterTable.clearAll(RuntimeEnv.current())
     }
 
     /** 当前线程的活跃条目数（≤ 嵌套深度；审计用）。 */
@@ -164,7 +158,7 @@ public class IterTable {
 }
 
 /** 线程私有的迭代器表状态（`IterTable` 的 TLS 载荷）。 */
-private class IterState {
+internal class IterState {
     let entries: ArrayList<?IterEntry> = ArrayList<?IterEntry>()
     let gens: ArrayList<UInt32> = ArrayList<UInt32>()
 }

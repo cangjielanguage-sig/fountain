@@ -27,30 +27,39 @@ import std.time.DateTime
  */
 public class RuntimeEnv {
     /**
-     * 绝对截止时刻（epoch 纳秒）；`< 0` = 无期限。
-     *
-     * **线程私有**（并行调用 D4）：期限是「本次调用」的属性，进程级读写会让 A 线程的
-     * deadline 误中断 B 线程的长调用。重入时由 `JitFunction` 栈式保存/恢复。
+     * 线程私有的运行期状态（`optimize-runtime-tls`）：deadline / fnTableBase / 窗口栈 /
+     * 迭代器表 / 异常旁路合并为一个载荷，调用路径只取一次。
      */
-    private static let tls = ThreadLocal<Int64>()
+    private static let stateTls = ThreadLocal<RuntimeState>()
+
+    /** 取当前线程的状态对象；首次访问时构造。 */
+    public static func current(): RuntimeState {
+        match (stateTls.get()) {
+            case Some(s) => s
+            case None =>
+                let s = RuntimeState()
+                stateTls.set(Some(s))
+                s
+        }
+    }
 
     public static mut prop deadlineNanos: Int64 {
         get() {
-            tls.get() ?? -1
+            RuntimeEnv.current().deadlineNanos
         }
         set(v) {
-            tls.set(Some(v))
+            RuntimeEnv.current().deadlineNanos = v
         }
     }
 
     /** 置一个绝对截止时刻（epoch 纳秒）。 */
     public static func setDeadline(nanos: Int64): Unit {
-        deadlineNanos = nanos
+        RuntimeEnv.current().deadlineNanos = nanos
     }
 
-    /** 清除期限（默认状态；TLS 槽一并清空）。 */
+    /** 清除期限（默认状态）。 */
     public static func clearDeadline(): Unit {
-        tls.set(None)
+        RuntimeEnv.current().deadlineNanos = -1
     }
 
     /**
@@ -96,23 +105,23 @@ public class MachineEnv {
     /**
      * 函数入口表基址（H57 `fn_table` 读）。**线程私有**（并行调用 D4）：
      * 每个线程执行的是自己的单元入口，进程级全局会让并发执行串表。
+     *
+     * 存储已并入 `RuntimeState`（`optimize-runtime-tls`），这里只保留公开访问器。
      */
-    private static let tls = ThreadLocal<Int64>()
-
     public static mut prop fnTableBase: Int64 {
         get() {
-            tls.get() ?? 0
+            RuntimeEnv.current().fnTableBase
         }
         set(v) {
-            tls.set(Some(v))
+            RuntimeEnv.current().fnTableBase = v
         }
     }
 
     public static func setFnTableBase(base: Int64): Unit {
-        fnTableBase = base
+        RuntimeEnv.current().fnTableBase = base
     }
 
     public static func reset(): Unit {
-        tls.set(None)
+        RuntimeEnv.current().fnTableBase = 0
     }
 }

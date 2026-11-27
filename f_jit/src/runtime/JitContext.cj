@@ -165,11 +165,17 @@ public class JitContext {
      * 初值按 §8.2 第 1 步：`errCode = 0`、`site = -1`、`hwTop = hwBase`；`hwCap` / `fnId` /
      * `dbgBase` 由桥给出。
      */
-    public static func create(hwBase!: Int64, hwCap!: Int64, fnId!: Int64, dbgBase!: Int64): JitContext {
+    public static func create(hwBase!: Int64, hwCap!: Int64, fnId!: Int64, dbgBase!: Int64,
+        deadlineNanos!: ?Int64 = None): JitContext {
         let p = LibC.malloc<Int64>(count: WORD_COUNT)
         // flags 只带「本次调用是否设了 deadline」：桥在进入本次调用前已写好线程 TLS
-        // （`JitFunction.call` 先 `setDeadline` 再创建 ctx），故此处读到的就是本次调用的值。
-        let flags = if (RuntimeEnv.deadlineNanos >= 0) { CtxFlags.DEADLINE } else { 0 }
+        // （`JitFunction.call` 先设 deadline 再创建 ctx），故此处读到的就是本次调用的值。
+        // 调用方已持有本线程状态时可直接传 `deadlineNanos`，省一次 TLS 访问。
+        let dl = match (deadlineNanos) {
+            case Some(v) => v
+            case None => RuntimeEnv.deadlineNanos
+        }
+        let flags = if (dl >= 0) { CtxFlags.DEADLINE } else { 0 }
         unsafe {
             p.write(0, 0)
             p.write(1, -1)
@@ -186,7 +192,12 @@ public class JitContext {
 
     /** 配对释放（桥 `finally` 义务；T27）。释放前清掉本次调用的 cause 旁路。 */
     public static func free(ctx: JitContext): Unit {
-        HostFault.clear(ctx)
+        JitContext.free(ctx, RuntimeEnv.current())
+    }
+
+    /** 配对释放（调用方已持有本线程状态，零 TLS）。 */
+    public static func free(ctx: JitContext, rs: RuntimeState): Unit {
+        HostFault.clearWith(ctx, rs)
         unsafe { LibC.free<Int64>(ctx.p) }
         NativeMem.bumpFree()
     }

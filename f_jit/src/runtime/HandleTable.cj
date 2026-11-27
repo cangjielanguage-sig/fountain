@@ -108,7 +108,7 @@ private class FreeStripes {
  * 两张清单都存 **ID（含 gen）** 而不是索引：槽可能被显式归还、又被别的线程复用 ——
  * 收尾只能按「代数仍匹配」释放，否则会误杀新槽。
  */
-private class Win {
+internal class Win {
     var base: Int64
     var cap: Int64
     var used: Int64 = 0
@@ -177,29 +177,29 @@ public class HandleTable {
      * 释放只归还到该槽归属的分片 ⇒ 全局 `mtx` 不再参与每次分配/释放。
      */
     private static let stripes = FreeStripes(FREE_STRIPES)
-    /** 本线程最近命中的分片（下次优先尝试，减少空扫）。 */
-    private static let freeHint = ThreadLocal<Int64>()
 
-    /** 各线程的窗口栈；栈底是**环境窗口**（直接调 helper 的用例没有显式 openWindow）。 */
-    private static let winTls = ThreadLocal<ArrayList<Win>>()
+    /**
+     * 各线程的窗口栈（`optimize-runtime-tls`：存储在 `RuntimeState.wins`，不再单独占一个 TLS）。
+     * 栈底是**环境窗口**（直接调 helper 的用例没有显式 openWindow）。
+     */
+    private static func winStackOf(rs: RuntimeState): ArrayList<Win> {
+        if (rs.wins.size == 0) {
+            rs.wins.add(Win(1, initialCapacity))
+        }
+        rs.wins
+    }
 
     private static func winStack(): ArrayList<Win> {
-        match (winTls.get()) {
-            case Some(s) => s
-            case None =>
-                let s = ArrayList<Win>()
-                s.add(Win(1, initialCapacity))
-                winTls.set(Some(s))
-                s
-        }
+        winStackOf(RuntimeEnv.current())
+    }
+
+    private static func currentWinOf(rs: RuntimeState): Win {
+        let s = winStackOf(rs)
+        s[s.size - 1]
     }
 
     private static func currentWin(): Win {
-        let s = winStack()
-        if (s.size == 0) {
-            s.add(Win(1, initialCapacity))
-        }
-        s[s.size - 1]
+        currentWinOf(RuntimeEnv.current())
     }
 
     private static func currentWinOrNone(): ?Win {
@@ -354,21 +354,29 @@ public class HandleTable {
     }
 
     /**
-     * 打开一次调用的窗口（桥 `call<T>` 第 1 步；§8.2）。
-     *
-     * `hwBase` = 当前槽位高水位（本次调用的起点，仅用于容量账），
-     * `hwCap` = `initialCapacity`（无分配单元传 0）。重入时压入**本线程**的窗口栈。
+     * 打开一次调用的窗口并返回 `(base, cap)`（`optimize-runtime-tls`）：
+     * 调用方拿到上下界后直接建 ctx，不再分别 `windowBaseOf()` / `windowCapOf()`。
      */
-    public static func openWindow(cap: Int64): Unit {
+    public static func openWindowWith(rs: RuntimeState, cap: Int64): (Int64, Int64) {
         // 原子读高水位：窗口基址只是容量账，不要求精确（槽允许复用、不要求连续）。
         let base = totalSlots.load()
         let c = if (cap <= 0) { initialCapacity } else { cap }
-        winStack().add(Win(base, c))
+        winStackOf(rs).add(Win(base, c))
+        (base, c)
+    }
+
+    public static func openWindow(cap: Int64): Unit {
+        let _ = openWindowWith(RuntimeEnv.current(), cap)
     }
 
     /** 窗口镜像同步到 ctx（机器码按同一偏移读写的契约）。 */
     public static func syncTo(ctx: JitContext): Unit {
-        let w = currentWin()
+        HandleTable.syncTo(ctx, RuntimeEnv.current())
+    }
+
+    /** 窗口镜像同步（调用方已持有本线程状态，零 TLS）。 */
+    public static func syncTo(ctx: JitContext, rs: RuntimeState): Unit {
+        let w = currentWinOf(rs)
         ctx.hwBase = w.base
         ctx.hwCap = w.cap
         ctx.hwTop = w.base + w.used
@@ -966,7 +974,12 @@ public class HandleTable {
      * `hwBase` 给 ≥ 0 时按该值重建窗口（桥的口径）；给 < 0 时以表尾为起点。
      */
     public static func resetWindow(hwBase: Int64): Unit {
-        let s = winStack()
+        HandleTable.resetWindow(RuntimeEnv.current(), hwBase)
+    }
+
+    /** 调用结束重置窗口（调用方已持有本线程状态，零 TLS）。 */
+    public static func resetWindow(rs: RuntimeState, hwBase: Int64): Unit {
+        let s = winStackOf(rs)
         let w = if (s.size > 0) {
             s.remove(at: s.size - 1)
         } else {
@@ -1085,10 +1098,8 @@ public class HandleTable {
      * 返回时该索引已从分片摘除 ⇒ 调用方对它独占，后续写入无需加锁。
      */
     private static func popFree(): Int64 {
-        let start = match (freeHint.get()) {
-            case Some(v) => v
-            case None => 0
-        }
+        let rs = RuntimeEnv.current()
+        let start = if (rs.freeHint >= 0) { rs.freeHint } else { 0 }
         var k = 0
         while (k < FREE_STRIPES) {
             let s = (start + k) & (FREE_STRIPES - 1)
@@ -1101,7 +1112,7 @@ public class HandleTable {
                 }
             }
             if (got > 0) {
-                freeHint.set(Some(s))
+                rs.freeHint = s
                 return got
             }
             k = k + 1

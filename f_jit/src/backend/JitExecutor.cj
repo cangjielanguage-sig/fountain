@@ -143,8 +143,13 @@ public class JitExecutor {
 
     private func invokeOff(ctx: JitContext, entryOff: Int64, cells: Array<Int64>): Int64 {
         // 线程私有基址（D4）：保存/恢复以支持宿主闭包重入（外层恢复自己的表）。
+        // 稳态（同一单元连续调用、无重入）base 不变 ⇒ 只付一次 get，不写 TLS。
         let savedBase = MachineEnv.fnTableBase
-        MachineEnv.setFnTableBase(this.table.base())
+        let tableBase = this.table.base()
+        let needRestore = savedBase != tableBase
+        if (needRestore) {
+            MachineEnv.setFnTableBase(tableBase)
+        }
         let n = cells.size
         let p = if (n == 0) {
             CPointer<Int64>()
@@ -170,7 +175,9 @@ public class JitExecutor {
             if (n > 0) {
                 unsafe { LibC.free<Int64>(rawAlloc) }
             }
-            MachineEnv.setFnTableBase(savedBase)
+            if (needRestore) {
+                MachineEnv.setFnTableBase(savedBase)
+            }
         }
     }
 

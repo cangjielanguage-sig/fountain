@@ -34,6 +34,7 @@ import fountain::f_jit.runtime.IterTable
 import fountain::f_jit.runtime.JitContext
 import fountain::f_jit.runtime.PromotionGroup
 import fountain::f_jit.runtime.RuntimeEnv
+import fountain::f_jit.runtime.RuntimeState
 import fountain::f_jit.runtime.SignatureDescriptor
 import fountain::f_jit.runtime.UserHelperEntry
 import fountain::f_jit.runtime.UserHelperTable
@@ -151,17 +152,26 @@ public class JitFunction <: Resource {
      * 严格浮点由 `CompileOptions.strictFp` 在**产物层**决定（`FDIV` / `FDIV_CHK`），调用选项不再携带。
      */
     public func call<T>(args: Array<Any>, options: CallContext): T {
-        let saved = RuntimeEnv.deadlineNanos
-        RuntimeEnv.setDeadline(RuntimeEnv.deadlineNanosOf(options.deadline))
+        // 本线程运行期状态只取一次（`optimize-runtime-tls`）：deadline / 窗口 / 迭代器 /
+        // 异常旁路 / fnTable 全部走该对象字段，不再逐项访问 ThreadLocal。
+        let rs = RuntimeEnv.current()
+        let saved = rs.deadlineNanos
+        let want = RuntimeEnv.deadlineNanosOf(options.deadline)
+        if (want != saved) {
+            rs.deadlineNanos = want
+        }
         try {
             this.enter()
             try {
-                return this.callLocked<T>(args, options)
+                return this.callLocked<T>(args, options, rs: rs)
             } finally {
                 this.exit()
             }
         } finally {
-            RuntimeEnv.setDeadline(saved)
+            // 值未变时（常规无期限调用）连写回都省掉。
+            if (want != saved) {
+                rs.deadlineNanos = saved
+            }
         }
     }
 
@@ -471,10 +481,11 @@ public class JitFunction <: Resource {
         // 每次调用自带产出槽（D5）：`callForFn` 不再读单元级 `lastEscaped`，
         // 并发调用不会交换提升组（旧实现靠 `callMtx` 兜底）。
         let out = CallOut()
+        let rs = RuntimeEnv.current()
         this.enter()
         var id = JitClosureId(JitClosureId.INVALID)
         try {
-            id = this.callLocked<JitClosureId>(args, JitFunction.DEFAULT_CONTEXT, out: out)
+            id = this.callLocked<JitClosureId>(args, JitFunction.DEFAULT_CONTEXT, rs: rs, out: out)
         } finally {
             this.exit()
         }
@@ -514,7 +525,7 @@ public class JitFunction <: Resource {
     }
 
     private func callLocked<T>(args: Array<Any>, options: CallContext,
-        out!: ?CallOut = None): T {
+        rs!: RuntimeState, out!: ?CallOut = None): T {
         // 已释放的包装实例在 `enterClosure` 就被 19 拦下（同一临界区判定，避免 TOCTOU）。
         let isWrapper = this.owner.isSome()
         if (isWrapper && !HandleTable.isLiveHandle(this.closureId)) {
@@ -555,12 +566,13 @@ public class JitFunction <: Resource {
         }
         let marshal = CallMarshal()
         // 每次调用独立窗口：执行期分配的句柄在 finally 统一回收（design §9.5 / T27）。
-        HandleTable.openWindow(HandleTable.initialCapacity)
-        let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(),
-            hwCap: HandleTable.windowCapOf(), fnId: 0, dbgBase: 0)
+        // 一次拿到 (base, cap)，不再分别读两次 TLS（`optimize-runtime-tls`）。
+        let (wBase, wCap) = HandleTable.openWindowWith(rs, HandleTable.initialCapacity)
+        let ctx = JitContext.create(hwBase: wBase, hwCap: wCap, fnId: 0, dbgBase: 0,
+            deadlineNanos: Some(rs.deadlineNanos))
         // `ctx.flags` bit0 是历史保留位（X3）：严格浮点已改为产物级 opcode 差异，
         // 运行期不再有读者；这里不再写入。
-        HandleTable.syncTo(ctx)
+        HandleTable.syncTo(ctx, rs)
         let dump = match (this.diagReporter) {
             case Some(_) => DbgDump.allocateDump(this.diagMaxLocals)
             case None => CPointer<Int64>()
@@ -634,12 +646,12 @@ public class JitFunction <: Resource {
             marshal.cleanup()
             // 迭代器表是**调用级**资源：正常返回 / 抛错 / 中断 / DEOPT 重放四条出口都在
             // finally 收尾，跨调用的陈旧游标一律失效（A5/P2-2）。
-            IterTable.clearAll()
-            HandleTable.resetWindow(-1)
+            IterTable.clearAll(rs)
+            HandleTable.resetWindow(rs, -1)
             if (!dump.isNull()) {
                 DbgDump.freeDump(dump)
             }
-            JitContext.free(ctx)
+            JitContext.free(ctx, rs)
         }
     }
 

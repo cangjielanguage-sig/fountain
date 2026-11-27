@@ -207,7 +207,7 @@ internal func asObj(c: Int64): Object {
 }
 
 /** 一次调用的异常记录（文本 + 原始异常对象合并，避免两次查找）。 */
-private class FaultEntry {
+internal class FaultEntry {
     let text: String
     let ex: Exception
 
@@ -227,32 +227,38 @@ private class FaultEntry {
  * 因此表放 `ThreadLocal`：健康路径（无异常）`free` 不取锁、不分配；跨线程读得到「无记录」。
  */
 public class HostFault {
-    private static let tls = ThreadLocal<HashMap<UInt64, FaultEntry>>()
-
     private static func keyOf(ctx: JitContext): UInt64 {
         UInt64(ctx.cp().toUIntNative())
     }
 
-    private static func tableForWrite(): HashMap<UInt64, FaultEntry> {
-        match (tls.get()) {
+    private static func tableForWrite(rs: RuntimeState): HashMap<UInt64, FaultEntry> {
+        match (rs.faults) {
             case Some(m) => m
             case None =>
                 let m = HashMap<UInt64, FaultEntry>()
-                tls.set(Some(m))
+                rs.faults = Some(m)
                 m
         }
     }
 
     /** 记录一次宿主异常（后写覆盖——同一调用内最后一次失败为准）。 */
     public static func record(ctx: JitContext, e: Exception): Unit {
+        HostFault.recordWith(ctx, e, RuntimeEnv.current())
+    }
+
+    internal static func recordWith(ctx: JitContext, e: Exception, rs: RuntimeState): Unit {
         let k = HostFault.keyOf(ctx)
-        HostFault.tableForWrite().add(k, FaultEntry(HostFault.describe(e), e))
+        HostFault.tableForWrite(rs).add(k, FaultEntry(HostFault.describe(e), e))
     }
 
     /** 读取 cause 文本（不销毁；供断言/诊断）。 */
     public static func causeOf(ctx: JitContext): ?String {
+        HostFault.causeOfWith(ctx, RuntimeEnv.current())
+    }
+
+    internal static func causeOfWith(ctx: JitContext, rs: RuntimeState): ?String {
         let k = HostFault.keyOf(ctx)
-        match (tls.get()) {
+        match (rs.faults) {
             case Some(m) =>
                 match (m.get(k)) {
                     case Some(e) => Some(e.text)
@@ -264,8 +270,12 @@ public class HostFault {
 
     /** 读取原始异常对象（不销毁；桥据此打印完整栈）。 */
     public static func exceptionOf(ctx: JitContext): ?Exception {
+        HostFault.exceptionOfWith(ctx, RuntimeEnv.current())
+    }
+
+    internal static func exceptionOfWith(ctx: JitContext, rs: RuntimeState): ?Exception {
         let k = HostFault.keyOf(ctx)
-        match (tls.get()) {
+        match (rs.faults) {
             case Some(m) =>
                 match (m.get(k)) {
                     case Some(e) => Some(e.ex)
@@ -277,8 +287,12 @@ public class HostFault {
 
     /** 取走 cause 文本并清空本次调用的记录（桥构造 `JitException` 时调用）。 */
     public static func takeCause(ctx: JitContext): ?String {
+        HostFault.takeCauseWith(ctx, RuntimeEnv.current())
+    }
+
+    internal static func takeCauseWith(ctx: JitContext, rs: RuntimeState): ?String {
         let k = HostFault.keyOf(ctx)
-        match (tls.get()) {
+        match (rs.faults) {
             case Some(m) =>
                 let v: ?String = match (m.get(k)) {
                     case Some(e) => Some(e.text)
@@ -292,8 +306,12 @@ public class HostFault {
 
     /** 清空本次调用的记录（无 cause 的文件收尾/测试复位；无表时零成本）。 */
     public static func clear(ctx: JitContext): Unit {
+        HostFault.clearWith(ctx, RuntimeEnv.current())
+    }
+
+    internal static func clearWith(ctx: JitContext, rs: RuntimeState): Unit {
         let k = HostFault.keyOf(ctx)
-        match (tls.get()) {
+        match (rs.faults) {
             case Some(m) => m.remove(k)
             case None => ()
         }
