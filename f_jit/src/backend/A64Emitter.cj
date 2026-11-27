@@ -428,18 +428,31 @@ internal class A64Emitter {
     //
     // 记录每条 `ldr/str` 的**概念基址**（慢路径的 scratch 仍归属 `rn`）；`A64Compiler` 在
     // 降低结束后校验必须落在 `{x19(19), x20(20), x29(29), sp(31)}`。
-    private static let auditMemBases = ArrayList<Int64>()
+    // 审计必须**按编译线程隔离**：并发编译不同源码时，共享 `ArrayList` 的 add 会越界，
+    // 且 reset 会把别的编译的审计项清掉（`optimize-compile-path` C0 实测 IndexOutOfBounds）。
+    // 审计生命周期与一次 `A64Compiler.compileOnce` 相同，放在 ThreadLocal 里零锁、零共享。
+    private static let auditTls = ThreadLocal<ArrayList<Int64>>()
+
+    private static func auditList(): ArrayList<Int64> {
+        match (auditTls.get()) {
+            case Some(l) => l
+            case None =>
+                let l = ArrayList<Int64>()
+                auditTls.set(Some(l))
+                l
+        }
+    }
 
     internal static func noteMemBase(reg: Int64): Unit {
-        auditMemBases.add(reg)
+        auditList().add(reg)
     }
 
     internal static func resetAuditMemBases(): Unit {
-        auditMemBases.clear()
+        auditList().clear()
     }
 
     internal static func auditMemBasesSnapshot(): Array<Int64> {
-        auditMemBases.toArray()
+        auditList().toArray()
     }
 
     /** 允许的内存基址：`x19(19)` / `x20(20)` / `x29(29)` / `sp(31)`；其余一律拒绝。 */
