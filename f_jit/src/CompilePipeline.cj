@@ -86,11 +86,8 @@ protected class CompilePipeline {
         match (CompileCache.awaitReady(key)) {
             case Some(f) => f
             case None =>
-                let msg = match (CompileCache.failureOf(key)) {
-                    case Some(m) => m
-                    case None => '编译失败'
-                }
-                throw SourceCompileException('CompileFailed', 0, 0, 0, '', msg)
+                let (kind, msg) = CompilePipeline.missingResult(key, '编译失败')
+                throw SourceCompileException(kind, 0, 0, 0, '', msg)
         }
     }
 
@@ -117,11 +114,29 @@ protected class CompilePipeline {
         match (CompileCache.awaitReady(key)) {
             case Some(f) => f
             case None =>
-                let msg = match (CompileCache.failureOf(key)) {
-                    case Some(m) => m
-                    case None => '装载失败'
+                let (kind, msg) = CompilePipeline.missingResult(key, '装载失败')
+                throw SourceCompileException(kind, 0, 0, 0, '', msg)
+        }
+    }
+
+    /**
+     * `awaitReady` 返回 `None` 时的三态判定（H6）。
+     *
+     * - 有失败文本 ⇒ `CompileFailed` + 原文（首编线程的失败被共享）；
+     * - **仍在编译** ⇒ `CompileTimeout` + 秒数——这是「等太久」，与源码对错无关；
+     * - 其它（条目已被移除等）⇒ `CompileFailed` + `fallback`。
+     */
+    internal static func missingResult(key: String, fallback: String): (String, String) {
+        match (CompileCache.failureOf(key)) {
+            case Some(m) => ('CompileFailed', m)
+            case None =>
+                if (CompileCache.isCompiling(key)) {
+                    ('CompileTimeout',
+                        '编译等待超时（${CompileCache.awaitTimeoutNs / 1000000000} s）：' +
+                        '同键编译未在期限内完成')
+                } else {
+                    ('CompileFailed', fallback)
                 }
-                throw SourceCompileException('CompileFailed', 0, 0, 0, '', msg)
         }
     }
 

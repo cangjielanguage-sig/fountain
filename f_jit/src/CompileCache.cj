@@ -34,6 +34,21 @@ protected class CompileCache {
     private static let failures = HashMap<String, String>()
     private static var pipelineRuns: Int64 = 0
 
+    /**
+     * 等待同键编译的上限（H6）：默认 30 s。
+     *
+     * 提为可配字段是为了让测试能在 1 ms 内验证「等待超时」这条路径，
+     * 而不必构造一次真实的长编译。
+     */
+    internal static var awaitTimeoutNs: Int64 = 30000000000
+
+    /** 该键当前是否处于「编译中」（H6：区分「等待超时」与「编译失败」）。 */
+    public static func isCompiling(key: String): Bool {
+        synchronized(mtx) {
+            compiling.contains(key)
+        }
+    }
+
     /** 已就绪则直接返回；否则 None。 */
     public static func lookup(key: String): ?JitFunction {
         synchronized(mtx) {
@@ -85,7 +100,7 @@ protected class CompileCache {
      * **指数退避**：两次检查之间用墙钟空转（1 µs 起、翻倍到 500 µs），而不是每轮都取全局锁。
      * 旧实现自旋 500 万次、每轮 `synchronized(mtx)` —— 同 key 的等待者会持续抢占缓存锁，
      * 把其它 key 的 `claim+finish` 拖慢两个数量级（实测 187 µs/次 vs 退避后个位数 µs）。
-     * 预算改成墙钟 30 s，避免「快机器上过早超时」。
+     * 预算默认 30 s（可通过 `awaitTimeoutNs` 调整；H6 让测试能在 1 ms 内验证超时路径）。
      */
     public static func awaitReady(key: String): ?JitFunction {
         let start = MonoTime.now()
@@ -99,7 +114,7 @@ protected class CompileCache {
                     ready.get(key)
                 }
             }
-            if ((MonoTime.now() - start).toNanoseconds() >= 30000000000) {
+            if ((MonoTime.now() - start).toNanoseconds() >= awaitTimeoutNs) {
                 return None
             }
             let t = MonoTime.now()

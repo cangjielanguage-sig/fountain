@@ -119,9 +119,9 @@ B4 ctx create+free C1 = 411 ns          = L1 的 13.8%
 
 | 编号 | 隐患 | 变更 | 状态 |
 | --- | --- | --- | --- |
-| H1 | ABBA 锁序 | `fix-compilecache-lock-order` | 待做 |
-| H2 | 计数非原子 | `fix-native-assets-atomic` | 待做 |
-| H3 | `lastEscaped` 并发写 | `clarify-last-escaped-scope` | 待做 |
-| H4 | 配置数据竞争 | `fix-handle-config-race` | 待做 |
-| H5 | 锁外注册 | `fix-compiler-register-lock` | 待做 |
-| H6 | 超时语义 | `fix-await-timeout-semantics` | 待做 |
+| H1 | ABBA 锁序 | `fix-compilecache-lock-order` | 已完成（4a8…已归档） |
+| H2 | 计数非原子 | `fix-native-assets-atomic` | 已完成（改前红 left=396） |
+| H3 | `lastEscaped` 并发写 | `clarify-last-escaped-scope` | 已完成（语义收敛，无可测差异） |
+| H4 | 配置数据竞争 | `fix-handle-config-race` | 已完成（原子化，无可测差异） |
+| H5 | 锁外注册 | `fix-compiler-register-lock` | 已完成（旧实现窗口窄，未复现） |
+| H6 | 超时语义 | `fix-await-timeout-semantics` | 已完成（`CompileTimeout` 三态） |
