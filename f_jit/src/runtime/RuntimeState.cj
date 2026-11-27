@@ -43,6 +43,9 @@ public class RuntimeState {
     /** 本线程的窗口栈（栈底 = 环境窗口；由 `HandleTable` 初始化和使用）。 */
     internal let wins: ArrayList<Win> = ArrayList<Win>()
 
+    /** 空闲 `Win` 池（≤8；`HandleTable` 复用，减少每次调用 2 个对象分配）。 */
+    internal let freeWins: ArrayList<Win> = ArrayList<Win>()
+
     /** 本线程的迭代器表（调用级；`IterTable` 使用）。 */
     internal let iters: IterState = IterState()
 

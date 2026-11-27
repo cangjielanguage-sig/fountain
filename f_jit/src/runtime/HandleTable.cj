@@ -198,6 +198,30 @@ public class HandleTable {
         s[s.size - 1]
     }
 
+    /** 从池里取一个 `Win`（清空上一次的记账）；池空则新建。 */
+    private static func acquireWin(rs: RuntimeState, base: Int64, cap: Int64): Win {
+        if (rs.freeWins.size > 0) {
+            let w = rs.freeWins.remove(at: rs.freeWins.size - 1)
+            w.base = base
+            w.cap = cap
+            w.used = 0
+            w.appendIds.clear()
+            w.pins.clear()
+            return w
+        }
+        Win(base, cap)
+    }
+
+    /** 回收一个已清空的 `Win`（上限 8；超出丢弃）。 */
+    private static func recycleWin(rs: RuntimeState, w: Win): Unit {
+        if (rs.freeWins.size < 8) {
+            w.used = 0
+            w.appendIds.clear()
+            w.pins.clear()
+            rs.freeWins.add(w)
+        }
+    }
+
     private static func currentWin(): Win {
         currentWinOf(RuntimeEnv.current())
     }
@@ -361,7 +385,7 @@ public class HandleTable {
         // 原子读高水位：窗口基址只是容量账，不要求精确（槽允许复用、不要求连续）。
         let base = totalSlots.load()
         let c = if (cap <= 0) { initialCapacity } else { cap }
-        winStackOf(rs).add(Win(base, c))
+        winStackOf(rs).add(acquireWin(rs, base, c))
         (base, c)
     }
 
@@ -983,7 +1007,7 @@ public class HandleTable {
         let w = if (s.size > 0) {
             s.remove(at: s.size - 1)
         } else {
-            Win(1, initialCapacity)
+            acquireWin(rs, 1, initialCapacity)
         }
         // 逐槽取所属分片锁（而不是整段持全局 mtx）：窗口槽彼此独立，收尾是释放热点之一。
         var k = 0
@@ -1010,6 +1034,8 @@ public class HandleTable {
         }
         w.pins.clear()
         w.appendIds.clear()
+        // 回收对象（字段已清空），下次 openWindow 直接复用。
+        recycleWin(rs, w)
         // 重入：内层窗口收尾后外层窗口原样保留（各自独立的 Win 实例）；栈空则重建环境窗口。
         if (s.size == 0) {
             let base = if (hwBase >= 0) {
@@ -1017,7 +1043,7 @@ public class HandleTable {
             } else {
                 totalSlots.load()
             }
-            s.add(Win(base, initialCapacity))
+            s.add(acquireWin(rs, base, initialCapacity))
         }
     }
 
