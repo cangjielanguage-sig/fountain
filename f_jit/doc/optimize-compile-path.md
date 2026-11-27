@@ -299,3 +299,29 @@ x86 侧 `X86Lower` 本来就是这个结构（`HashMap<String, Int64>` + 单遍 
 护栏：`CompileConcurrency_test`、`EmitAudit_test`（改实例 API，断言不变）、
 `A64AuditIsolation_test`（改为双实例隔离，新增「对方那份不受影响」）、
 `A64Emitter_test` 13/13、`Golden_test` 4/4；全量 1246/1246。
+
+## 13. D5 降低期直读操作数（2026-11-27，`optimize-decode-alloc`）
+
+### 13.1 改动
+
+`A64Lower.translate` / `X86Lower.translate` 的 `ops: Array<UInt8>` 参数改为
+`(code, opsAt)`；73 处 `u8/u16/i8/i32/u32/i64(ops, k)` 改为 `(code, opsAt + k)`；
+两处 `lower` 循环改为 `op = code[off]` + `next = off + OpInfo...len`，不再调用
+`InsnDecoder.decode`。`X86Lower` 顺带删除上一轮引入的 `DecodedInsn` 缓存。
+
+### 13.2 数据：**未测得收益**
+
+`compileUnitWith` 同进程 21 次中位数：
+
+| 臂 | 各进程（ms） | 最优配对 |
+| --- | --- | --- |
+| 改前 | **1.946** / 3.346 / 2.162 | — |
+| 改后 | 2.075 / 3.141 / 3.206 | 1.946 → 2.075（+6.6%） |
+
+慢模式 −6.1%、快模式 +6.6%，方向相反，均在噪声内。与 D4 一样，本轮**不宣称加速**；
+保留理由是「每编译少 250 次小数组分配 + x86 少一层缓存 + 与 `validateFunc` 路径统一」。
+
+### 13.3 护栏
+
+`A64Emitter_test` 13、`X86Compile_test` 11、`X86Lower_test` 50、`Golden_test` 4、
+`CompileCopy_test` 1 —— 全部通过，覆盖 73 处下标改写。全量 1246/1246。
