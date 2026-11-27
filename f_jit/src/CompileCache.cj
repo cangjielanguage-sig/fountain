@@ -18,6 +18,7 @@ package fountain::f_jit
 import std.collection.HashMap
 import std.collection.HashSet
 import std.sync.Mutex
+import std.time.MonoTime
 
 /**
  * S6.7 编译缓存（§8 只编译一次）：进程级 static，状态 `Idle → Compiling → Ready/Failed`。
@@ -70,10 +71,18 @@ protected class CompileCache {
         }
     }
 
-    /** 等待状态离开 `Compiling`；返回就绪值（失败/未注册 → None）。 */
+    /**
+     * 等待状态离开 `Compiling`；返回就绪值（失败/未注册 → None）。
+     *
+     * **指数退避**：两次检查之间用墙钟空转（1 µs 起、翻倍到 500 µs），而不是每轮都取全局锁。
+     * 旧实现自旋 500 万次、每轮 `synchronized(mtx)` —— 同 key 的等待者会持续抢占缓存锁，
+     * 把其它 key 的 `claim+finish` 拖慢两个数量级（实测 187 µs/次 vs 退避后个位数 µs）。
+     * 预算改成墙钟 30 s，避免「快机器上过早超时」。
+     */
     public static func awaitReady(key: String): ?JitFunction {
-        var spins = 0
-        while (spins < 5000000) {
+        let start = MonoTime.now()
+        var backoffNs: Int64 = 1000
+        while (true) {
             let done = synchronized(mtx) {
                 !compiling.contains(key)
             }
@@ -82,9 +91,16 @@ protected class CompileCache {
                     ready.get(key)
                 }
             }
-            spins = spins + 1
+            if ((MonoTime.now() - start).toNanoseconds() >= 30000000000) {
+                return None
+            }
+            let t = MonoTime.now()
+            while ((MonoTime.now() - t).toNanoseconds() < backoffNs) {}
+            if (backoffNs < 500000) {
+                backoffNs = backoffNs * 2
+            }
         }
-        None
+        return None
     }
 
     /** 失败文本（无 → None）。 */
