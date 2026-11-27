@@ -117,7 +117,7 @@ public class ReportTasks {
     public func dailyReport(): Unit {
         ...//每天 8:00 执行
     }
-    @DelayedTask[immediate: true, delay: Duration.second]
+    @DelayedTask[immediate: true, delay: '1s']
     public func warmUp(): Unit {
         ...//登记时立即执行一次，之后按延迟重复
     }
@@ -127,7 +127,7 @@ public class ReportTasks {
 - 只有**public、非 static、无参**的方法会被登记；任务名是「类名#方法名」，同一个类（或不同类）里的多个方法互不覆盖。
 - `@TicktockTasks` 会同时给类加上 `@Bean`；登记发生在类所在包的初始化阶段，生成的代码通过 `lookup<类名>()` 调用目标方法（bean 默认单例）。
 - 注解参数与同名任务接口的语义一致：`@CronTask` 的 `cron`/`once`/`concurrentable`、`@DelayedTask` 的 `delayedPeriodic`/`immediate`/`delay`。
-- `delay` 必须是**编译期常量**（注解参数要求常量表达式），直接写 `Duration.second` 这类标准库常量；`1500 * Duration.millisecond` 无法通过编译。
+- `delay` 是 **Duration 字符串**（注解参数必须是编译期常量，写不了 `Duration` 表达式）：单位 `d/h/m/s/ms/us/ns` 可连写，例如 `'1s'`、`'500ms'`、`'1m30s'`，解析规则与 `fountain::f_data` 的 `Duration.parse` 一致。
 - 延迟任务以「当前时间 + delay」生成的 CRON 表达式登记，精度为秒。
 
 ## 公开API一览

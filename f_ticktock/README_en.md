@@ -118,7 +118,7 @@ public class ReportTasks {
     public func dailyReport(): Unit {
         ...//runs every day at 08:00
     }
-    @DelayedTask[immediate: true, delay: Duration.second]
+    @DelayedTask[immediate: true, delay: '1s']
     public func warmUp(): Unit {
         ...//runs once on registration, then repeats with the delay
     }
@@ -128,7 +128,7 @@ Conventions:
 - Only **public, non-static, parameterless** methods are registered; the task name is "class name#method name", so several methods of the same class (or of different classes) never overwrite each other.
 - `@TicktockTasks` also adds `@Bean` to the class; registration happens while the package of the class is initialised, and the generated code calls the target method through `lookup<the class>()` (beans are singletons by default).
 - Annotation arguments mean the same as the properties of the corresponding task interface: `cron`/`once`/`concurrentable` for `@CronTask`, `delayedPeriodic`/`immediate`/`delay` for `@DelayedTask`.
-- `delay` must be a **compile-time constant** (annotation arguments require constant expressions): use standard library constants such as `Duration.second`; `1500 * Duration.millisecond` does not compile.
+- `delay` is a **Duration string** (annotation arguments must be compile-time constants, so a `Duration` expression cannot be used): units `d/h/m/s/ms/us/ns` may be concatenated, e.g. `'1s'`, `'500ms'`, `'1m30s'`; parsing follows `Duration.parse` of `fountain::f_data`.
 - A delayed task is registered with a CRON expression derived from "now + delay"; its precision is one second.
 
 ## Public API overview

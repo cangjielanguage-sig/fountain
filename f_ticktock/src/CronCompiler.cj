@@ -32,8 +32,8 @@ public class CronCompiler {
     private static let RANGE = Regex("^(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$")
     private static let SINGLE = Regex("^\\d{1,2}$")
 
-    private static let DURATION_RANGE_YEAR = Regex("^(\\d{4}|\\*)?/(\\d{4}|\\*)?-(\\d{4}|\\*)?$")
-    private static let DURATION_YEAR = Regex("^(\\d{4}|\\*)?/(\\d{4}|\\*)?$")
+    private static let DURATION_RANGE_YEAR = Regex("^(\\d{4}|\\*)?/(\\d{1,}|\\*)?-(\\d{4}|\\*)?$")
+    private static let DURATION_YEAR = Regex("^(\\d{4}|\\*)?/(\\d{1,}|\\*)?$")
     private static let RANGE_YEAR = Regex("^(\\d{4}|\\*)?-(\\d{4}|\\*)?$")
     private static let SINGLE_YEAR = Regex("^\\d{4}$")
 
