@@ -3,8 +3,8 @@
 > 状态：**全部阶段已判定并归档**（含 Phase 4）。
 > P1.1、P1.2、P2.1、P4-A、P4-B 数据达标并保留；P1.3 无收益已回滚；
 > P3.1/P3.2 经成本分解判定收益上限低于 MOV，**不做**。
-> **§14 是新的量级发现（未立项）**：aarch64 回边安全点 `interrupt_poll` 占机器码空循环 **97.7%**
-> （662 → 15 ns/轮），是当前最大的一块，需独立变更 `optimize-loop-safepoint` 设计评审。
+> **§14 是新的量级发现（已实施）**：aarch64 回边安全点 `interrupt_poll` 曾占机器码空循环 **97.7%**
+> （665 → 15 ns/轮）；变更 `optimize-loop-safepoint` 改为「仅带 deadline 时执行」，语义零让步。
 > 本文只定义实验与判定规则；每项的最终数据与决策见 §6/§7/§11/§12/§14。
 > 关联归档：`2026-11-26-feat-f-jit-parallel-call`、`2026-11-27-optimize-call-path-phase1`、
 > `2026-11-27-optimize-call-path-phase2`。
@@ -413,20 +413,34 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
 绝对地址（4 条）**、`blr`；进入 `invokeHelper` 还要 `try/catch` + `match(hid)`（100+ 分支）
 + `interruptPoll` 的 TLS 读。空循环的纯执行只有 7 条指令（15 ns），poll 相当于每轮多付 654 ns。
 
-### 14.4 候选方案（**未立项**，需设计评审）
+### 14.4 方案选择与实施（`optimize-loop-safepoint`）
 
-| 方案 | 预期 | 代价 / 风险 |
+| 方案 | 无期限时每轮 | 有期限时中断延迟 | 判定 |
+| --- | --- | --- | --- |
+| 现状（每回边无条件调 H22） | 662 ns | ≤1 回边 | — |
+| **D. `ctx.flags` 带 `DEADLINE` 位，回边按需调 H22** | **15 ns** | ≤1 回边（不变） | **采纳（已实施）** |
+| A. 回边节流（每 N 轮一次，N=16） | 约 56 ns | 放宽到 ~10 µs | 不采纳（有语义代价，收益还更小） |
+| B. ctx 携带 deadline 时间戳 | 约 18 ns | ≤1 回边 | 不采纳（要扩 64 B 布局） |
+| C. 热 case 前置 + 分派地址常驻 | 不确定 | ≤1 回边 | 不采纳（收益不确定） |
+
+D 的做法：
+
+- `CtxFlags.DEADLINE`（bit3）由 `JitContext.create` 按本次调用的 `deadline` 写入
+  （桥先 `setDeadline` 再创建 ctx，顺序保证读到本次调用的值）；
+- A64 回边：`ldr flags → and 8 → cbz 跳过 → helperCall0(22)`；
+- x86 回边：`mov rax,[r15+48] → test rax,8 → jz 跳过 → call H22`。
+
+它同时满足「无期限零成本」与「有期限仍逐回边检查」，**不动 64 B 布局、不放宽中断延迟**。
+
+### 14.5 实施结果（2026-11-27）
+
+| 指标 | 改动前 | 改动后 |
 | --- | --- | --- |
-| **A. 回边节流**（每 N 轮 poll 一次，N=16） | 约 56 ns/轮（**快 ~12×**） | 中断延迟从 ~0.7 µs 放宽到 ~10 µs；需回边计数器寄存器；规格「每回边一次安全点」需改表述 |
-| **B. ctx 携带 deadline，回边内联比较** | 回边 3–4 条指令（`ldr`+`cmp`+条件调 helper） | 要动 64 B `JitContext` 布局（冻结契约）；无期限时接近零成本 |
-| **C. 热 case 前置 + 分派地址常驻寄存器** | 可能省 100–200 ns/轮 | 改动小，收益不确定（未测） |
+| 空循环（`LoopSafepoint_test.loopPerIterCost`） | 665 ns/轮 | **15 ns/轮（44×）** |
+| 有期限紧循环中断 | 正常 −2 | 正常 −2（`boundedLoopStillInterrupts`） |
+| `AnyBridgeCall_test.p0_6_deadlineInterruptsLoop` | 绿 | 绿 |
+| 变异（把条件跳转改成无条件跳过） | — | 两条中断用例**同时变红** |
+| 全量 | 1210 / 1210 | **1214 / 1214（零失败）** |
 
-A+B 组合能把紧循环拉回接近纯执行成本，是**目前所有优化项里量级最大的一个**（远超 MOV）。
-但它改变「回边安全点」的规格表述、且涉及 `JitContext` 布局 ⇒ 必须独立 OpenSpec 变更
-（建议名 `optimize-loop-safepoint`）。
-
-### 14.5 本次判定
-
-**只测量、不实施**：数据已证明问题存在且量级巨大，但方案必须先做设计评审
-（中断语义、ctx 布局、AArch64/X86 双后端一致性）。x86 侧当前回边只有 `jmp`（README 已知限制），
-现象与此不同，需在立项时一并处理。
+> 附带修正：x86 回边**并非**「只有 `jmp`」——`X86Lower.cj:1032` 一直有 `helper(22, 0, 0)`，
+> 本次只是同样加了条件门。README「x86 缺 H22」的已知限制已过时，已同步删除。

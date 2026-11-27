@@ -643,8 +643,9 @@ Three constraints:
 
 - Native code only on Linux x86_64 / aarch64 (all other platforms interpret);
 - x86_64 requires SSE4.1 (units with rounding ops are not JITed otherwise);
-- one H22 `interrupt_poll` per loop back-edge; on tight loops this call (which allocates) is costly —
-  tracked in `doc/spec/f-jit-m1/verify.md`;
+- the loop back-edge safepoint runs **on demand**: H22 `interrupt_poll` is called only when the call
+  carries a `deadline` (skipped otherwise — that call used to be 97.7% of a tight loop's cost); with a
+  deadline it is still checked on every back-edge, so interrupt latency is unchanged;
 - escaping closures should be `close()`ed explicitly; skipping it is recovered by the cascading unit `close()`, but a long-lived unit keeps the promotion group resident;
 - specifications: `doc/jit-bytecode-m1.md` / `doc/design-m1.md` / `doc/plan-m1.md`; acceptance:
   `doc/spec/f-jit-m1/verify.md`; performance: `doc/perf-m1.md`.
