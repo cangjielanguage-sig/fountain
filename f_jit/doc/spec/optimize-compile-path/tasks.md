@@ -13,15 +13,15 @@
   `claim+finish` 延迟（改动前 vs 改动后），目标下降 ≥30%。
 - [x] C1.4 全量回归；单独提交。
 
-- [ ] C2.1 行为用例：注册函数后编译可见；再注册另一个后再次编译可见（缓存失效正确）。
-- [ ] C2.2 实现 `snapCache` + 各注册入口失效。
-- [ ] C2.3 微基准：共享 `Compiler` 的 4 线程编译扩展比，目标提升 ≥10% 或 snapshot 占比 <3%。
-- [ ] C2.4 全量回归；单独提交。
+- [x] C2.1 行为用例：注册函数后编译可见；再注册另一个后再次编译可见（缓存失效正确）。
+- [x] C2.2 实现 `snapCache` + 各注册入口失效。
+- [x] C2.3 微基准：共享 `Compiler` 的 4 线程编译扩展比，目标提升 ≥10% 或 snapshot 占比 <3%。
+- [x] C2.4 全量回归；单独提交。
 
 - [x] C3 **取消**：M0 实测 mmap+mprotect 占 2.4%/5.9%，未达 15% 门槛（文档 §6）。
 
-- [ ] X.1 写 `verify.md`；`doc/optimize-compile-path.md` 填决策日志；镜像
-  `f_jit/doc/spec/optimize-compile-path/`；`openspec validate --strict`；归档。
+- [x] X.1 写 `verify.md`；`doc/optimize-compile-path.md` 填决策日志；镜像
+  `f_jit/doc/spec/optimize-compile-path/`；`openspec validate --strict`；归档 `2026-11-27-optimize-compile-path`。
 
 ## 不做
 
