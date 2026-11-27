@@ -271,3 +271,31 @@ x86 侧 `X86Lower` 本来就是这个结构（`HashMap<String, Int64>` + 单遍 
 2. **`bind('L${off}')`**：250 次/函数的字符串拼接 + 哈希插入，可改惰性绑定或整数偏移键。
 3. **`InsnDecoder.decode` 的操作数数组**：`A64Lower`/`X86Lower` 仍每指令分配一次，
    要消除需把 `translate` 的 `ops` 参数改成 `(code, off)` 直读。
+
+## 12. D4 审计表随发射器实例（2026-11-27，`optimize-emit-audit`）
+
+### 12.1 改动
+
+`A64Emitter.auditTls`（`ThreadLocal<ArrayList<Int64>>`）→ 实例字段 `audit: ArrayList<Int64>`；
+`noteMemBase` / `resetAudit` / `auditSnapshot` 由静态改实例；`auditAllows` 保持静态纯函数。
+`A64Compiler.compileOnce` 改用 `e.resetAudit()` / `e.auditSnapshot()`。
+
+审计生命周期本就等于一次 `compileOnce`（每次编译新建发射器），实例字段天然隔离。
+
+### 12.2 数据：**未测得收益**
+
+`JitCompiler.compileUnitWith` 同进程 21 次中位数：
+
+| 臂 | 各进程（ms） | 快模式配对 | 慢模式配对 |
+| --- | --- | --- | --- |
+| 改前 | 3.539 / **2.128** / 3.552 | — | — |
+| 改后 | **2.165** / 3.395 | +1.7% | −4.4% |
+
+598 次 TLS get × 约 300 ns ≈ 180 µs（预期 −8%）**没有兑现**：两个模式方向相反，差异在噪声内。
+改动保留的理由是「严格更少工作 + 审计生命周期显式化」，不宣称加速。
+
+**教训**：跨场景外推微基准的单项成本（TLS get）不可靠；动热点前应对该入口做同进程 A/B。
+
+护栏：`CompileConcurrency_test`、`EmitAudit_test`（改实例 API，断言不变）、
+`A64AuditIsolation_test`（改为双实例隔离，新增「对方那份不受影响」）、
+`A64Emitter_test` 13/13、`Golden_test` 4/4；全量 1246/1246。
