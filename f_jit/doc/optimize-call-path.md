@@ -444,3 +444,55 @@ D 的做法：
 
 > 附带修正：x86 回边**并非**「只有 `jmp`」——`X86Lower.cj:1032` 一直有 `helper(22, 0, 0)`，
 > 本次只是同样加了条件门。README「x86 缺 H22」的已知限制已过时，已同步删除。
+
+## 15. 宿主签名两表去锁（2026-11-27，`optimize-signature-tables`）
+
+### 15.1 问题
+
+`CallMarshal.marshalHostClosure` → `pinHostClosure` 的窗口去重只在**同一窗口**内有效；
+跨调用时新建 `HostCallback(fn, sig)`，其构造函数进两张全局表：
+
+```cj
+this.adapter = SignatureRegistry.adapterOf(...)   // 全局锁 + 线性扫 sameShape
+this.plan = SignatureTable.getOrBuild(sig)        // 全局锁 + 线性扫 sameShape
+```
+
+实测（临时探针，已删）：单线程 **615 ns/次**，4 线程 **1174 ns**，扩展比 **0.52×**（越并越慢）。
+成本分解：`adapterOf` 349 ns、`getOrBuild` 216 ns、`TypeInfo.of`（`probeType`）116 ns。
+
+### 15.2 改法与数据（A/B 同轮，旧/新各两轮）
+
+两表改为「不可变快照 + `AtomicReference`」，`register` 写时复制、读路径零锁。
+
+| 指标 | 旧 | 新 | 变化 |
+| --- | --- | --- | --- |
+| `HostCallback` 单线程 | 524 / 280 ns | 456 / 252 ns | −11% |
+| **`HostCallback` 4 线程每 op** | 1008 / 752 ns | **484 / 360 ns** | **−52%** |
+| 4 线程扩展比 | 0.52× / 0.37× | 0.94× / 0.70× | 明显改善 |
+| `adapterOf` | 357 / 212 | 316 / 209 | −11% / −1% |
+| `getOrBuild` | 216 / 124 | 200 / 108 | −7% / −13% |
+
+### 15.3 被否决的方案：字符串结构键索引
+
+原计划用「结构键 `HashMap`」替代线性扫，实现后**负收益**：
+
+| 版本 | `adapterOf` | `getOrBuild` | 全构造 |
+| --- | --- | --- | --- |
+| 锁 + 线性扫（旧） | 349 | 216 | 521 |
+| **字符串键版** | **790** | **554** | **1306** |
+| 快照 + 线性扫（采纳） | **233** | **134** | **244** |
+
+**教训**：表只有个位数条目时，线性扫（逐位比 `UInt16` + 短字符串）只要几十 ns，
+而拼键每次要 5–10 次 `StringBuilder` 插值 + 分配。**小表做索引是负优化。**
+表规模超过约 50 条时才值得重新评估，且键应缓存在调用方而不是每次现拼。
+
+### 15.4 剩余争用（未解决）
+
+`TypeInfo.of(host)`（即 `HostCallback.probeType`）4 线程扩展比 **0.31–0.35×**，
+单线程占全构造 22–38%。这是 std 反射元数据缓存内部的争用，不在上述两表里。
+若要继续，方向是「按 `fn` 身份缓存 `FunctionTypeInfo`」或「把 probeType 结果随
+`HostSignature` 一起登记」，需另案评估缓存生命周期。
+
+### 15.5 结论
+
+签名两表不再是并发瓶颈（4 线程 −52%）；`HostCallback` 构造的剩余成本主要在反射 probeType。
