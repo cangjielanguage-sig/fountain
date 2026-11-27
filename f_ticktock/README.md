@@ -104,6 +104,32 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 }
 ```
 
+### 注解式声明任务
+`@TicktockTasks` 把一个类里的注解方法登记成定时任务，不必为每个任务单独写 `CronTicktockTask` 实现类：
+```cj
+import fountain::f_ticktock.*
+import fountain::f_ticktock.macros.*
+import fountain::f_bean.*        // 宏注入的 @Bean 展开后要用 BeanFactory
+
+@TicktockTasks
+public class ReportTasks {
+    @CronTask[cron: '0 0 8 * * *']
+    public func dailyReport(): Unit {
+        ...//每天 8:00 执行
+    }
+    @DelayedTask[immediate: true, delay: Duration.second]
+    public func warmUp(): Unit {
+        ...//登记时立即执行一次，之后按延迟重复
+    }
+}
+```
+约定：
+- 只有**public、非 static、无参**的方法会被登记；任务名是「类名#方法名」，同一个类（或不同类）里的多个方法互不覆盖。
+- `@TicktockTasks` 会同时给类加上 `@Bean`；登记发生在类所在包的初始化阶段，生成的代码通过 `lookup<类名>()` 调用目标方法（bean 默认单例）。
+- 注解参数与同名任务接口的语义一致：`@CronTask` 的 `cron`/`once`/`concurrentable`、`@DelayedTask` 的 `delayedPeriodic`/`immediate`/`delay`。
+- `delay` 必须是**编译期常量**（注解参数要求常量表达式），直接写 `Duration.second` 这类标准库常量；`1500 * Duration.millisecond` 无法通过编译。
+- 延迟任务以「当前时间 + delay」生成的 CRON 表达式登记，精度为秒。
+
 ## 公开API一览
 
 | 类型 | 说明 |
@@ -111,6 +137,8 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 | `TicktockTaskDef` / `TicktockTask` / `CronTicktockTask` / `DelayedTicktockTask` | 任务契约与三种任务基类 |
 | `FuncCronTicktockTask` / `FuncInvocationTask` / `FuncInvocationCronTask` | 用函数/闭包表达的任务 |
 | `DelayedPeriodic` | 延迟任务的执行模式（`FixedRate` 固定频率 / `FixedDelay` 固定间隔） |
+| `@TicktockTasks` / `@CronTask` / `@DelayedTask`（`fountain::f_ticktock.macros`） | 注解式声明定时任务：类上标 `@TicktockTasks`，方法上标 `@CronTask` 或 `@DelayedTask` |
+| `CronTicktockTaskImpl` / `DelayedTicktockTaskImpl` | 注解方法生成的任务实现（由宏使用，也可直接构造） |
 | `TicktockUnit` 及 `SecondlyTicktockUnit`、`MinutelyTicktockUnit`、`HourlyTicktockUnit`、`MonthDailyTicktockUnit`、`MonthlyTicktockUnit`、`WeekDailyTicktockUnit`、`YearlyTicktockUnit` | CRON 各时间单位的解析单元 |
 | `CronCompiler` / `CronData` / `CronDataCollection` | CRON 表达式的编译与数据载体 |
 | `Ticktock` | 定时器本体，驱动任务执行 |

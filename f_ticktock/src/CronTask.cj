@@ -17,6 +17,7 @@ package fountain::f_ticktock
 
 import std.collection.ArrayList
 import std.reflect.*
+import fountain::f_data.*
 
 @Annotation[target: [MemberFunction]]
 public class CronTask {
@@ -31,14 +32,24 @@ public class DelayedTask {
     public const DelayedTask(
         public let delayedPeriodic!: DelayedPeriodic = DelayedPeriodic.FixedDelay,
         public let immediate!: Bool = false,
-        public let delay!: Duration
+        public let delay!: String
     ){}
 }
 public class CronTicktockTaskImpl <: CronTicktockTask {
+    /**
+     * @param taskName 时间轮内的唯一名字（`@TicktockTasks` 以"类名#方法名"生成）。
+     *        不能用默认的类全限定名：同一类的多个方法会得到同一个名字，后登记的会覆盖前面的。
+     */
     public CronTicktockTaskImpl(
+        private let taskName: String,
         private let task: CronTask,
         private let callee: () -> Unit
     ){}
+    public prop name: String {
+        get() {
+            taskName
+        }
+    }
     public prop cron: String {
         get() {
             return task.cron
@@ -72,10 +83,17 @@ public class CronTicktockTaskImpl <: CronTicktockTask {
     }
 }
 public class DelayedTicktockTaskImpl <: DelayedTicktockTask {
+    /** @param taskName 时间轮内的唯一名字，含义同 {@link CronTicktockTaskImpl}。 */
     public DelayedTicktockTaskImpl(
+        private let taskName: String,
         private let task: DelayedTask,
         private let callee: () -> Unit
     ){}
+    public prop name: String {
+        get() {
+            taskName
+        }
+    }
     public prop delayedPeriodic: DelayedPeriodic {
         get() {
             return task.delayedPeriodic
@@ -88,7 +106,7 @@ public class DelayedTicktockTaskImpl <: DelayedTicktockTask {
     }
     public prop delay: Duration {
         get() {
-            return task.delay
+            return Duration.parse(task.delay)
         }
     }
     public func execute(): Unit {

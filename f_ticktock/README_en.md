@@ -105,6 +105,32 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 }
 ```
 
+### Declaring tasks with annotations
+`@TicktockTasks` registers annotated methods of a class as timer tasks, so there is no need to write a separate `CronTicktockTask` implementation per task:
+```cj
+import fountain::f_ticktock.*
+import fountain::f_ticktock.macros.*
+import fountain::f_bean.*        // the injected @Bean expands to BeanFactory calls
+
+@TicktockTasks
+public class ReportTasks {
+    @CronTask[cron: '0 0 8 * * *']
+    public func dailyReport(): Unit {
+        ...//runs every day at 08:00
+    }
+    @DelayedTask[immediate: true, delay: Duration.second]
+    public func warmUp(): Unit {
+        ...//runs once on registration, then repeats with the delay
+    }
+}
+```
+Conventions:
+- Only **public, non-static, parameterless** methods are registered; the task name is "class name#method name", so several methods of the same class (or of different classes) never overwrite each other.
+- `@TicktockTasks` also adds `@Bean` to the class; registration happens while the package of the class is initialised, and the generated code calls the target method through `lookup<the class>()` (beans are singletons by default).
+- Annotation arguments mean the same as the properties of the corresponding task interface: `cron`/`once`/`concurrentable` for `@CronTask`, `delayedPeriodic`/`immediate`/`delay` for `@DelayedTask`.
+- `delay` must be a **compile-time constant** (annotation arguments require constant expressions): use standard library constants such as `Duration.second`; `1500 * Duration.millisecond` does not compile.
+- A delayed task is registered with a CRON expression derived from "now + delay"; its precision is one second.
+
 ## Public API overview
 
 | Type | Description |
@@ -112,6 +138,8 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 | `TicktockTaskDef` / `TicktockTask` / `CronTicktockTask` / `DelayedTicktockTask` | Task contracts and three task base classes |
 | `FuncCronTicktockTask` / `FuncInvocationTask` / `FuncInvocationCronTask` | Tasks expressed with functions/closures |
 | `DelayedPeriodic` | Execution mode of delayed tasks (`FixedRate` fixed rate / `FixedDelay` fixed delay) |
+| `@TicktockTasks` / `@CronTask` / `@DelayedTask` (`fountain::f_ticktock.macros`) | Declare tasks with annotations: `@TicktockTasks` on the class, `@CronTask` or `@DelayedTask` on methods |
+| `CronTicktockTaskImpl` / `DelayedTicktockTaskImpl` | Task implementations produced for annotated methods (used by the macro, may also be constructed directly) |
 | `TicktockUnit` and `SecondlyTicktockUnit`, `MinutelyTicktockUnit`, `HourlyTicktockUnit`, `MonthDailyTicktockUnit`, `MonthlyTicktockUnit`, `WeekDailyTicktockUnit`, `YearlyTicktockUnit` | Parsing units for the CRON time units |
 | `CronCompiler` / `CronData` / `CronDataCollection` | Compilation of CRON expressions and their data carriers |
 | `Ticktock` | The timer itself, driving task execution |
