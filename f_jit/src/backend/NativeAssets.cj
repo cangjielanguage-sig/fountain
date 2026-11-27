@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_jit.backend
 
+import std.sync.AtomicInt64
+
 /**
  * JIT 产物内的两块**非 GC 内存**（design §12.4 模板 B/C、§8.7 资产清点）：
  *
@@ -24,26 +26,32 @@ package fountain::f_jit.backend
  * 生命周期与 `JitFunction` 同生共死；分配/释放计数供 T27/T29 断言无泄漏。
  */
 public class NativeAssets {
-    private static var allocs: Int64 = 0
-    private static var frees: Int64 = 0
+    /**
+     * 分配/释放计数（H2）：**原子**递增。
+     *
+     * 旧实现是普通 `Int64` 的 `+1`：并发编译/卸载时 read-modify-write 竞争会丢增量，
+     * 导致 `liveCount()` 偏低甚至为负，T27/T29 的「资产无泄漏」断言在并发下不可信。
+     */
+    private static let allocs = AtomicInt64(0)
+    private static let frees = AtomicInt64(0)
 
     internal static func onAlloc(): Unit {
-        NativeAssets.allocs = NativeAssets.allocs + 1
+        let _ = NativeAssets.allocs.fetchAdd(1)
     }
 
     internal static func onFree(): Unit {
-        NativeAssets.frees = NativeAssets.frees + 1
+        let _ = NativeAssets.frees.fetchAdd(1)
     }
 
     /** 未释放资产数。 */
     public static func liveCount(): Int64 {
-        NativeAssets.allocs - NativeAssets.frees
+        NativeAssets.allocs.load() - NativeAssets.frees.load()
     }
 
     /** 测试用：清零计数。 */
     public static func resetCounters(): Unit {
-        NativeAssets.allocs = 0
-        NativeAssets.frees = 0
+        NativeAssets.allocs.store(0)
+        NativeAssets.frees.store(0)
     }
 }
 
