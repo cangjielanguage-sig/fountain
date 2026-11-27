@@ -5,6 +5,7 @@
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_exception" = {path = "../f_exception"}
   "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_time" = {path = "../f_time"}
   
 [package]
