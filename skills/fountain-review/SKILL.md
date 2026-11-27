@@ -1,6 +1,6 @@
 ---
 name: fountain-review
-description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分支 / 工作区快照，并按审查报告修复时使用；逐模块审查，一个模块一份报告写到 docs/review 下（module_review_日期.md），覆盖死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、热点瓶颈定位、大粒度锁热点、并发串行、低效算法、现有代码存量 BUG、降低堆内存与 CPU 占用的可行性方案（含 local mode 探索），再走 OpenSpec 六步 + 严格 TDD 修复；主 Agent 不读被审源码。
+description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分支 / 工作区快照，并按审查报告修复时使用；逐模块审查，一个模块一份报告写到 docs/review 下（module_review_日期.md），覆盖死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、并发安全与锁粒度、热点瓶颈定位、大粒度锁热点、并发串行、低效算法、现有代码存量 BUG、降低堆内存与 CPU 占用的可行性方案（含 local mode 探索），再走 OpenSpec 六步 + 严格 TDD 修复；主 Agent 不读被审源码。
 ---
 
 # fountain-review — 代码审查 → OpenSpec 修复（工作流 L）
@@ -11,7 +11,8 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 
 1. **主 Agent 不读被审源码**——代码阅读由 reviewer 子 agent 完成，主 Agent 只操作 `scope.md` / `modules.md` / 模块报告 / `todo.md` / `review_summary.md`。
 2. **逐模块审查、一模块一报告**——以模块为审查单元，每审完一个模块立即把报告写到 `{project_root}/docs/review/<module>_review_<YYYYMMDD>.md`。
-3. **所有性能优化必须有性能测试数据**——CPU、内存、GC 压力、local mode 改造一律如此，见「性能结论的取证纪律」。
+3. **并发默认按"会被多线程调用"审**——先证明安全，再谈锁粒度；锁能不要就不要，要就要小。
+4. **所有性能优化必须有性能测试数据**——CPU、内存、GC 压力、local mode 改造一律如此，见「性能结论的取证纪律」。
 
 ## 执行步骤
 
@@ -179,6 +180,8 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 | 没数据也把性能项写进 `tasks.md` | 先补基线（Red 用例 + bench）再立项；无数据项不进 apply |
 | 审到问题顺手改掉 | 审查阶段禁改源码；修复走步骤 2–6 |
 | 用户说「只审查」还继续 propose | 唯一例外：只出报告时在步骤 1 结束 |
+| 说「这个类是公共的，多线程用也没事」 | 并发安全要指出共享路径与同步手段；没找到共享路径就写线程封闭，别默认安全 |
+| 为了性能把锁去掉 / 缩小 | 去锁是设计变更：先证明不变量有替代保护（不可变 / 线程封闭 / 原子），再附多线程压力测试 |
 | 说「这个函数没人用」就要删 | 对外可达的 `public` 不算死代码；但**非公共顶级声明里的 `public` 成员**（类型 internal/private/protected）全项目无使用就算；`protected` 只有 `public open` / `public abstract`（非 `sealed`）类成员豁免 |
 | 说「这个函数没人用」却只在单文件搜过 | `private` 搜全仓、`internal` 搜本包及子包、`protected` 先判所属类再定范围 |
 | 说「这里是热点」但只有调用次数，没有 self time 占比 | 调用次数多 ≠ 最热；没数据就不是发现——写进「待验证假设」，不进 todo |
