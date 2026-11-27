@@ -108,8 +108,11 @@ public class Compiler {
      * 方法表的 `bind` 同时进入预定义函数面（`u.m()` 的 hid 来源），同名已存在则复用。
      */
     public func registerClass(desc: ClassDescriptor): Unit {
-        this.classes.register(desc)
+        // H5：类注册与方法并入必须在**同一临界区**内完成。锁外注册会留下一个可观察的
+        // 中间态——类已可见、方法尚未进入函数快照——并发编译此时会误判「未注册函数」。
+        // 锁序 this.mtx → ClassRegistry.mtx，与 snapshot() 一致。
         synchronized(this.mtx) {
+            this.classes.register(desc)
             for (m in desc.methods) {
                 if (this.indexOfLocked(m.bind.name) < 0) {
                     if (!this.classes.hasFunction(m.bind.name)) {
@@ -125,9 +128,10 @@ public class Compiler {
     /** 反射自动注册（m2 §12.5）；`enabled=false` 用于关闭反射的构建。 */
     public func registerType<T>(enabled!: Bool = true,
         bindings!: JitBindings = JitBindings.empty()): Unit where T <: Object {
-        ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
-            enabled: enabled, bindings: bindings)
+        // H5：反射注册与快照失效同处一个临界区（锁序 this.mtx → ClassRegistry.mtx）。
         synchronized(this.mtx) {
+            ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
+                enabled: enabled, bindings: bindings)
             this.snapCache = None
         }
     }
@@ -139,9 +143,9 @@ public class Compiler {
      */
     public func registerInterface<I>(enabled!: Bool = true,
         bindings!: JitBindings = JitBindings.empty()): Unit {
-        ReflectRegistrar.registerInterface<I>(into: this.classes, diag: this.opts.diagnostics,
-            enabled: enabled, bindings: bindings)
         synchronized(this.mtx) {
+            ReflectRegistrar.registerInterface<I>(into: this.classes, diag: this.opts.diagnostics,
+                enabled: enabled, bindings: bindings)
             this.snapCache = None
         }
     }
