@@ -106,9 +106,11 @@ public class Semantics_test {
     /** 读未赋值 → 编译期拒绝（**不得推迟为运行期错误**）。 */
     @TestCase
     public func readBeforeWriteIsRejected(): Unit {
-        let e = Semantics_test.expectDaError('{ =>\nvar x = 1\nlet y = z\nx }')
+        // 注意用**已声明未赋值**的 `z`：名字若从未声明，应由名字解析报
+        // UndefinedIdentifier（见 `DaDiagnostic_test`），不属明确赋值的职责。
+        let e = Semantics_test.expectDaError('{ =>\nvar x = 1\nvar z: Int64\nlet y = z\nx }')
         @Assert(e.kind, DiagKind.NOT_ASSIGNED)
-        @Assert(e.line, 3)
+        @Assert(e.line, 4)
     }
 
     /** **循环出口不视为已赋值**（回边不动点；§5「明确赋值分析与回边」）。 */
@@ -152,7 +154,8 @@ public class Semantics_test {
     @TestCase
     public func multiAssignReadsBeforeWriting(): Unit {
         @Assert(Semantics_test.daOf('{ =>\nvar a: Int64 = 1\nvar b: Int64 = 2\n(a, b) = (b, a)\na }'), true)
-        let e = Semantics_test.expectDaError('{ =>\nvar a: Int64 = 1\n(a, _) = (q, a)\na }')
+        // `q` 用**已声明未赋值**（未声明的名字归名字解析，见 `DaDiagnostic_test`）
+        let e = Semantics_test.expectDaError('{ =>\nvar a: Int64 = 1\nvar q: Int64\n(a, _) = (q, a)\na }')
         @Assert(e.kind, DiagKind.NOT_ASSIGNED)
     }
 

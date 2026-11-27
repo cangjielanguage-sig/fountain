@@ -202,15 +202,19 @@ internal class DefiniteAssignment {
                 if (n == '_' || n == 'DateTime' || n == 'Duration') {
                     return
                 }
-                var assigned = false
                 match (state.get(n)) {
-                    case Some(v) => assigned = v
-                    case None => assigned = false
-                }
-                if (!assigned) {
-                    diagFail(DiagKind.NOT_ASSIGNED, this.src, 0, pos.line, pos.column,
-                        '局部变量「${n}」在读取路径上未必已被赋值（§7 校验 10：循环出口不视为已赋值；' +
-                        '局部无默认值，请在读取前显式赋值）')
+                    case Some(v) =>
+                        if (!v) {
+                            diagFail(DiagKind.NOT_ASSIGNED, this.src, 0, pos.line, pos.column,
+                                '局部变量「${n}」在读取路径上未必已被赋值（§7 校验 10：循环出口不视为已赋值；' +
+                                '局部无默认值，请在读取前显式赋值）')
+                        }
+                    case None =>
+                        // **未在本函数声明** ≠ 未赋值。§7 校验 10 只管「已声明的非参数局部」；
+                        // 这里可能是全局注册函数名、类名、闭包外层变量（由 walkExprWithOuter 处理），
+                        // 也可能是真正的未声明名——交给名字解析报
+                        // UndefinedIdentifier / UnregisteredFunction，不能让 DA 抢先误报。
+                        return
                 }
             case AstExpr.Binary(_, l, r, _) =>
                 this.walkExpr(l, state)
@@ -349,14 +353,15 @@ internal class DefiniteAssignment {
                 match (state.get(n)) {
                     case Some(_) => ()
                     case None =>
-                        var ok = false
                         match (outer.get(n)) {
-                            case Some(v) => ok = v
-                            case None => ok = false
-                        }
-                        if (!ok) {
-                            diagFail(DiagKind.NOT_ASSIGNED, this.src, 0, pos.line, pos.column,
-                                '闭包捕获的变量「${n}」在闭包创建点未必已被赋值（§8.5：捕获 = 创建时刻的值快照）')
+                            case Some(v) =>
+                                if (!v) {
+                                    diagFail(DiagKind.NOT_ASSIGNED, this.src, 0, pos.line, pos.column,
+                                        '闭包捕获的变量「${n}」在闭包创建点未必已被赋值（§8.5：捕获 = 创建时刻的值快照）')
+                                }
+                            case None =>
+                                // 内层与外层都没有声明：不是「局部未赋值」，放行给名字解析。
+                                return
                         }
                 }
             case AstExpr.Closure(inner, _) =>
