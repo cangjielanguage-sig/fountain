@@ -227,11 +227,16 @@ public class FbcReader {
     /** ⑪ crc32 覆盖 code + const + site + name 四段（写方口径 = 读方口径，design D8）。 */
     private static func checkCrc32(h: FbcHeader, raw: Array<UInt8>): Unit {
         let off = h.payloadOff()
-        let all = ArrayList<UInt8>()
-        for (i in off..raw.size) {
-            all.add(raw[i])
+        // 一次分配 + 下标写入：旧实现逐字节进 ArrayList 再 toArray()，同一段载荷搬两趟
+        // （`optimize-compile-hotpath`）。
+        let n = raw.size - off
+        let payload = Array<UInt8>(n, repeat: 0u8)
+        var i = 0
+        while (i < n) {
+            payload[i] = raw[off + i]
+            i = i + 1
         }
-        let actual = Crc32.isoHdlc.compute(all.toArray())
+        let actual = Crc32.isoHdlc.compute(payload)
         if (actual != h.crc32) {
             rejectFormat('crc32 不符: 声明 0x${hexOf32(h.crc32)}, 实算 0x${hexOf32(actual)}（§11.6）')
         }

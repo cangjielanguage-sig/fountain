@@ -37,7 +37,14 @@ internal struct A64Reloc {
  * 编码以 `as`/`objdump` 实测为准（见 `A64_test` 的期望字）。
  */
 internal class A64Emitter {
-    private let out: ArrayList<UInt8>
+    /**
+     * 指令字序列（**按 32 位字**存，不同于对外口径）。
+     *
+     * 9432 B 机器码 = 2358 字；按字节存要 4 次 `add`/字（≈9400 次），按字存只要 1 次
+     * （`optimize-compile-hotpath` 实测 `translate` 1.4–1.65 ms 的主因）。
+     * 对外 `size()` 仍返回**字节**，`finish()` 时一次展开。
+     */
+    private let out: ArrayList<UInt32>
     /**
      * 标签名 → 代码偏移。`bind` 首次绑定为准（与旧线性扫「返回首个匹配」等价）。
      *
@@ -51,7 +58,7 @@ internal class A64Emitter {
     private let farCond: Bool
 
     init() {
-        this.out = ArrayList<UInt8>()
+        this.out = ArrayList<UInt32>()
         this.labels = HashMap<String, Int64>()
         this.relocs = ArrayList<A64Reloc>()
         this.done = false
@@ -60,22 +67,23 @@ internal class A64Emitter {
 
     /** 跳板模式：所有条件分支占 8 B（`b.cond +8; b target`）。 */
     init(farCond: Bool) {
-        this.out = ArrayList<UInt8>()
+        this.out = ArrayList<UInt32>()
         this.labels = HashMap<String, Int64>()
         this.relocs = ArrayList<A64Reloc>()
         this.done = false
         this.farCond = farCond
     }
 
+    /** 已发码字节数（**不是字数**：`bind`/重定位都用这个口径）。 */
     func size(): Int64 {
-        this.out.size
+        this.out.size * 4
     }
 
     func bind(name: String): Unit {
         // 首个绑定优先：同名二次 bind 不得改变已有跳转目标（旧线性扫语义）。
         match (this.labels.get(name)) {
             case Some(_) => ()
-            case None => this.labels.add(name, this.out.size)
+            case None => this.labels.add(name, this.size())
         }
     }
 
@@ -87,29 +95,31 @@ internal class A64Emitter {
     }
 
     func word(w: UInt32): Unit {
-        var k = 0
-        while (k < 4) {
-            this.out.add(UInt8((w >> (8 * UInt32(k))) & 0xFFu32))
-            k = k + 1
-        }
+        this.out.add(w)
     }
 
     private func readWord(at: Int64): UInt32 {
-        var w = 0u32
-        var k = 0
-        while (k < 4) {
-            w = w | (UInt32(this.out[at + k]) << (8 * UInt32(k)))
-            k = k + 1
-        }
-        w
+        this.out[at / 4]
     }
 
     private func patchWord(at: Int64, w: UInt32): Unit {
-        var k = 0
-        while (k < 4) {
-            this.out[at + k] = UInt8((w >> (8 * UInt32(k))) & 0xFFu32)
-            k = k + 1
+        this.out[at / 4] = w
+    }
+
+    /** 展开成字节序列（小端；每次返回新数组）。 */
+    private func bytes(): Array<UInt8> {
+        let n = this.out.size
+        let out = Array<UInt8>(n * 4, repeat: 0u8)
+        var i = 0
+        while (i < n) {
+            let w = this.out[i]
+            out[i * 4] = UInt8(w & 0xFFu32)
+            out[i * 4 + 1] = UInt8((w >> 8) & 0xFFu32)
+            out[i * 4 + 2] = UInt8((w >> 16) & 0xFFu32)
+            out[i * 4 + 3] = UInt8((w >> 24) & 0xFFu32)
+            i = i + 1
         }
+        out
     }
 
     /**
@@ -120,7 +130,7 @@ internal class A64Emitter {
      */
     private func resolve(checkRange: Bool): ?Array<UInt8> {
         if (this.done) {
-            return Some(this.out.toArray())
+            return Some(this.bytes())
         }
         for (r in this.relocs) {
             let delta = this.labelOffset(r.label) - r.at
@@ -149,14 +159,14 @@ internal class A64Emitter {
             }
         }
         this.done = true
-        Some(this.out.toArray())
+        Some(this.bytes())
     }
 
     /** 回填全部分支重定位并返回字节序列（幂等；不校验范围）。 */
     func finish(): Array<UInt8> {
         match (this.resolve(false)) {
             case Some(b) => b
-            case None => this.out.toArray()
+            case None => this.bytes()
         }
     }
 
@@ -172,12 +182,12 @@ internal class A64Emitter {
     // ---- 分支 ----
 
     func b(label: String): Unit {
-        this.relocs.add(A64Reloc(this.out.size, 0, label))
+        this.relocs.add(A64Reloc(this.size(), 0, label))
         this.word(0x14000000u32)
     }
 
     func bl(label: String): Unit {
-        this.relocs.add(A64Reloc(this.out.size, 0, label))
+        this.relocs.add(A64Reloc(this.size(), 0, label))
         this.word(0x94000000u32)
     }
 
@@ -187,7 +197,7 @@ internal class A64Emitter {
             this.word(0x54000000u32 | (UInt32(A64Emitter.invert(cond)) & 0xFu32) | (2u32 << 5))
             this.b(label)
         } else {
-            this.relocs.add(A64Reloc(this.out.size, 1, label))
+            this.relocs.add(A64Reloc(this.size(), 1, label))
             this.word(0x54000000u32 | (UInt32(cond) & 0xFu32))
         }
     }
@@ -197,7 +207,7 @@ internal class A64Emitter {
             this.word(0xB5000000u32 | (2u32 << 5) | UInt32(rt)) // cbnz rt,+8
             this.b(label)
         } else {
-            this.relocs.add(A64Reloc(this.out.size, 2, label))
+            this.relocs.add(A64Reloc(this.size(), 2, label))
             this.word(0xB4000000u32 | UInt32(rt))
         }
     }
@@ -207,7 +217,7 @@ internal class A64Emitter {
             this.word(0xB4000000u32 | (2u32 << 5) | UInt32(rt)) // cbz rt,+8
             this.b(label)
         } else {
-            this.relocs.add(A64Reloc(this.out.size, 2, label))
+            this.relocs.add(A64Reloc(this.size(), 2, label))
             this.word(0xB5000000u32 | UInt32(rt))
         }
     }

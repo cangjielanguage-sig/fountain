@@ -178,8 +178,10 @@ internal class Assembler {
             if (off + info.len > code.size) {
                 codeFail('指令操作数被截断: opcode 0x${Assembler.hex(code[off])} @${off}（§7 校验 2）')
             }
-            let insn = InsnDecoder.decode(code, off)
-            let op = insn.op
+            // 不再调用 InsnDecoder.decode：op 与 size 已在 `info` 中，操作数按 `code` 下标直读。
+            // 每条指令一次操作数数组分配在本机约 300–700 ns（`optimize-compile-hotpath`）。
+            let op = code[off]
+            let insnSize = info.len
             // 8) M2 专属指令：HW_OPEN/HW_CLOSE 恒 NotImpl；CALL_HOST 由规则集决定
             if (op == Op.HW_OPEN || op == Op.HW_CLOSE) {
                 notImplFail('M2 专属指令 0x${Assembler.hex(op)} @${off} 在后档专项未实现（§7 校验 8）')
@@ -190,21 +192,21 @@ internal class Assembler {
             }
             // 1/6) 每条 CALL_HELPER(_V) 必须紧邻 CHECK_ERR（跨回边也不得被优化掉）
             if (op == Op.CALL_HELPER || op == Op.CALL_HELPER_V) {
-                let next = off + insn.size
+                let next = off + insnSize
                 if (next >= code.size || code[next] != Op.CHECK_ERR) {
                     codeFail('CALL_HELPER 后缺 CHECK_ERR @${off}（§7 校验 1/6）')
                 }
             }
             // 4) PUSH_KH 索引 < 常量表长度（常量表在布局前冻结）
             if (op == Op.PUSH_KH) {
-                let idx = Int64(InsnDecoder.u16(insn, 0))
+                let idx = Int64(Assembler.u16At(code, off + 1))
                 if (idx >= this.sess.consts.size) {
                     codeFail('PUSH_KH 常量索引越界: ${idx} / ${this.sess.consts.size}（§7 校验 4）')
                 }
             }
             // 5) 局部槽索引 < nLocals
             if (op == Op.LOADL || op == Op.STOREL) {
-                let idx = Int64(InsnDecoder.u16(insn, 0))
+                let idx = Int64(Assembler.u16At(code, off + 1))
                 if (idx >= f.nLocals()) {
                     codeFail('局部槽越界: ${idx} / ${f.nLocals()} @${off}（§7 校验 5）')
                 }
@@ -217,8 +219,8 @@ internal class Assembler {
             }
             // 7) CALL_FUNC 目标必须在目录内且 argc == nargs
             if (op == Op.CALL_FUNC) {
-                let fid = InsnDecoder.u16(insn, 0)
-                let argc = Int64(InsnDecoder.u8(insn, 2))
+                let fid = Assembler.u16At(code, off + 1)
+                let argc = Int64(code[off + 3])
                 let nargs = this.nargsOf(fid)
                 if (nargs < 0) {
                     codeFail('CALL_FUNC 目标不在目录内: fid=${fid} @${off}（§7 校验 7）')
@@ -230,7 +232,7 @@ internal class Assembler {
             }
             // 7') Q2.4：CALL_HOST 的 `[h_fn, a1..an]` 栈布局（h_fn 是**最先**压入的那个）
             if (op == Op.CALL_HOST) {
-                let argc = Int64(InsnDecoder.u8(insn, 0))
+                let argc = Int64(code[off + 1])
                 if (depth < argc + 1 || slots.size < argc + 1) {
                     codeFail(
                         'CALL_HOST argc 与栈不符: argc=${argc} 需 ${argc + 1} 槽，实际 ${depth} @${off}（§7 校验 7）')
@@ -242,21 +244,21 @@ internal class Assembler {
             }
             // 11) 变更型函数禁用 deopt 源（DEC_TO_I64 / TO_I64 的 mode=1）
             if (op == Op.DEC_TO_I64 || op == Op.TO_I64) {
-                let mode = InsnDecoder.u8(insn, 0)
+                let mode = code[off + 1]
                 if ((f.body.flags & FuncFlags.MUTATION) != 0u16 && mode == 1u8) {
                     notImplFail(
                         '变更型函数禁用 deopt 模式: op=0x${Assembler.hex(op)} mode=1 @${off}（§7 校验 11）')
                 }
             }
             // 栈深（仅供 CALL_HOST 判据；分支造成的偏差不在此拒绝）
-            let (pop, push) = StackEffect.of(op, Assembler.effectArgc(op, insn))
+            let (pop, push) = StackEffect.of(op, Assembler.effectArgc(op, code, off))
             if (pop >= 0) {
                 var k: Int64 = 0
                 while (k < pop && !slots.isEmpty()) {
                     slots.remove(at: slots.size - 1)
                     k = k + 1
                 }
-                let loaded = Assembler.loadedSlotOf(op, insn)
+                let loaded = Assembler.loadedSlotOf(op, code, off)
                 var j: Int64 = 0
                 while (j < push) {
                     slots.add(if (j == 0) { loaded } else { -1 })
@@ -268,7 +270,7 @@ internal class Assembler {
                     push
                 }
             }
-            off = off + insn.size
+            off = off + insnSize
         }
         // 9) 类型表长度 = nLocals（由 LocalTypes 保证）且值在规则集合法集内
         var i: Int64 = 0
@@ -289,26 +291,31 @@ internal class Assembler {
     }
 
     /** 栈账所需的 `argc`（`CALL_*` 家族）；其余 0。 */
-    private static func effectArgc(op: UInt8, insn: DecodedInsn): Int64 {
+    private static func effectArgc(op: UInt8, code: Array<UInt8>, off: Int64): Int64 {
         if (op == Op.CALL_HELPER || op == Op.CALL_HELPER_NC || op == Op.CALL_HELPER_V ||
             op == Op.CALL_FUNC) {
-            return Int64(InsnDecoder.u8(insn, 2))
+            return Int64(code[off + 3])
         }
         if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
-            return Int64(InsnDecoder.u8(insn, 0))
+            return Int64(code[off + 1])
         }
         0
     }
 
     /** `LOADL*` 压入的槽号；其余返回 −1。 */
-    private static func loadedSlotOf(op: UInt8, insn: DecodedInsn): Int64 {
+    private static func loadedSlotOf(op: UInt8, code: Array<UInt8>, off: Int64): Int64 {
         if (op == Op.LOADL) {
-            return Int64(InsnDecoder.u16(insn, 0))
+            return Int64(Assembler.u16At(code, off + 1))
         }
         if (op >= Op.LOADL0 && op <= Op.LOADL3) {
             return Int64(op - Op.LOADL0)
         }
         -1
+    }
+
+    /** 小端 u16（操作数直读用）。 */
+    private static func u16At(code: Array<UInt8>, at: Int64): UInt16 {
+        UInt16(code[at]) | (UInt16(code[at + 1]) << 8)
     }
 
     /** 目录内按 fnId 查形参个数；未命中 → −1。 */
