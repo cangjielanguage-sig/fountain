@@ -1,4 +1,4 @@
-# fountain 通用规则（12 个工作流技能共享）
+# fountain 通用规则（工作流技能共享）
 
 > 本文件由 fountain-developer 的工作流技能随包携带。独立使用某个工作流技能时，先读本文件；只执行与当前工作流相关的条目（A/B/C/D/E/K 不走 OpenSpec 六步与 TDD 门禁，F/G/H/I/J/L 必须走）。
 
@@ -17,18 +17,20 @@
 | I | `fountain-upgrade-legacy` | 旧版本项目升级 |
 | J | `fountain-develop-framework` | 在 fountain 仓库内开发 |
 | K | `fountain-configure-module` | 为现有项目添加 / 修改模块配置 |
-| L | `fountain-code-review-fix` | 代码审查 → OpenSpec 修复 |
+| L | `fountain-review` | 代码审查 → OpenSpec 修复 |
 
 ## 工作流技能的安装
 
-12 个独立技能由 `fountain-developer` 调度，也可以单独加载；缺任一用 `python <skill-root>/scripts/install_skill.py workflows` 一次装齐，`install_skill.py list` 复验 `12/12`。每个技能自带本文件与所需脚本，不依赖调度器是否安装。
+工作流技能由 `fountain-developer` 调度，也可以单独加载；缺任一用 `python <skill-root>/scripts/install_skill.py workflows` 一次装齐，`install_skill.py list` 里 `fountain 工作流技能` 那行应显示全部已装（`N/N`）。每个技能自带本文件与所需脚本，不依赖调度器是否安装。
+
+工作流技能清单以 `install_skill.py` 的 `WORKFLOW_SKILLS` 为准；新增工作流技能时同步登记。调度器 `fountain-developer`、工具类 `fountain-tag`、环境类 `installing-cangjie-sdk` 不登记（它们用 `install_skill.py fountain` 一起装）。
 
 ## 技能格式与联动技能（安装与参数细节见 `references/skill-infra.md`）
 
 本技能是标准 Agent Skills 布局（`SKILL.md` + `references/` + `scripts/`），**不绑定任何编程智能体**：支持技能机制的直接放进技能目录；不支持的 Agent 直接读本文件（`SKILL.md`）按流程执行，效果相同；`scripts/` 下的脚本可独立运行。
 下文提到「加载技能」（如 `cangjie-coding` / `cangjie-doc-lookup`）时一律指：按当前 Agent 的能力加载（有技能机制按其机制加载，没有就直接读该技能目录下的 `SKILL.md`）。
 
-`cangjie-coding`（仓颉知识库 / 构建测试规范）、`cangjie-doc-lookup`（本地官方文档查阅）与 **12 个 `opsx-*` 技能**（鸿蒙 PC 上执行 OpenSpec 的通道）**加载失败（技能没装）时不要中断任务、也不要停下来问用户**：用 `python <skill-root>/scripts/install_skill.py all` 装进当前 Agent 的技能目录再加载（只补其中一组时用 `install_skill.py opsx` / `cangjie-coding` / `cangjie-doc-lookup`）；**工作流 L 的审查技能用 `install_skill.py harness`，fountain 仓库的全部技能（含 opsx-*）用 `install_skill.py fountain`**。装完用 `install_skill.py list` 复验（`opsx-*` 那组应显示 `12/12 已装`）；`cangjie-doc-lookup` 装好后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`，路径对不上时按它 SKILL.md「执行前检查」处理）。
+`cangjie-coding`（仓颉知识库 / 构建测试规范）、`cangjie-doc-lookup`（本地官方文档查阅）与 **12 个 `opsx-*` 技能**（鸿蒙 PC 上执行 OpenSpec 的通道）**加载失败（技能没装）时不要中断任务、也不要停下来问用户**：用 `python <skill-root>/scripts/install_skill.py all` 装进当前 Agent 的技能目录再加载（只补其中一组时用 `install_skill.py opsx` / `cangjie-coding` / `cangjie-doc-lookup`）；**fountain 仓库的全部技能（含 opsx-*）用 `install_skill.py fountain`，只补工作流技能用 `install_skill.py workflows`**。装完用 `install_skill.py list` 复验（`opsx-*` 那组应显示 `12/12 已装`）；`cangjie-doc-lookup` 装好后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`，路径对不上时按它 SKILL.md「执行前检查」处理）。
 
 另外几类联动技能（加载时机见「必须遵守」）：
 
@@ -36,7 +38,8 @@
 | --- | --- | --- |
 | `test-driven-development` | **工作流 F / G / H / I / J / L 一开始**，写任何实现代码之前 | 来源与安装见 `references/skill-infra.md` 第 3 节；本机确实找不到时按本文「严格 TDD」与 `references/delivery-workflow.md` 第 3 节的 Red-Green-Refactor 循环执行，并在交付说明里写明「未加载 TDD 技能」 |
 | **12 个 `opsx-*` 技能**（`opsx-propose` / `opsx-apply` / `opsx-verify` / `opsx-archive` 等，鸿蒙 PC 上执行 OpenSpec 的通道） | **工作流 F / G / H / I / J / L 全程**，六步的每一步 | 加载失败 = 本机没装这批技能：`python <skill-root>/scripts/install_skill.py opsx`（来源是 fountain 仓库的 `skills/opsx-*`），装完 `list` 复验 `12/12 已装`。**不要手工 clone + 拷贝、不要改用手写规格代替**；展开见 `references/openspec-workflow.md` 第 9 节 |
-| `cangjie-code-review-harness` | **工作流 L 一开始**，进入审查之前 | 没装：`python <skill-root>/scripts/install_skill.py harness`——从 `https://gitcode.com/zhangyin_gitcode/cangjie_harness.git` 装全部审议式技能（代码审查 / 架构设计 / 需求设计等）；本机没有 git 时脚本自动借融合侧 git 或归档下载 |
+
+工作流 L 的审查引擎由 `fountain-review` 自带（`reviewer.md` + `references/review-checklist.md`），**不需要**安装 `cangjie-code-review-harness` 或任何外部审查技能。
 
 上表只管「技能装没装」。OpenSpec **项目侧**的就绪（CLI、`openspec init`、`config.yaml` 的中文 context）是另一回事，见 `references/openspec-workflow.md` 第 1–2 节与「必须遵守」的 OpenSpec 条目。
 

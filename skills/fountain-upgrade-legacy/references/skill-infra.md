@@ -19,9 +19,9 @@ python <skill-root>/scripts/install_skill.py list                # 先看各组�
 python <skill-root>/scripts/install_skill.py cangjie-doc-lookup  # 从已克隆的 fountain 项目 skills/ 子目录装
 python <skill-root>/scripts/install_skill.py cangjie-coding      # 从 CangjieSkills 仓装
 python <skill-root>/scripts/install_skill.py opsx                # 装 12 个 opsx-* 技能（同源：fountain 的 skills/）
-python <skill-root>/scripts/install_skill.py harness             # 装 cangjie_harness 仓全部审议式技能（工作流 L）
+python <skill-root>/scripts/install_skill.py harness             # 装 cangjie_harness 仓全部审议式技能（可选，L 不再依赖）
 python <skill-root>/scripts/install_skill.py fountain            # 装 fountain 仓 skills/ 下全部技能（含 opsx-*）
-python <skill-root>/scripts/install_skill.py workflows           # 装 12 个独立工作流技能（A-L）
+python <skill-root>/scripts/install_skill.py workflows           # 装全部独立工作流技能（fountain-*，当前 14 个）
 python <skill-root>/scripts/install_skill.py all                 # 三组旧联动全装
 ```
 
@@ -30,12 +30,12 @@ python <skill-root>/scripts/install_skill.py all                 # 三组旧联�
 | `cangjie-doc-lookup` | **已克隆的 fountain 项目**的 `<fountain-root>/skills/cangjie-doc-lookup` | fountain 仓库根按 `fountain_lookup.py` 同一套规则定位（`--root` > `$FOUNTAIN_ROOT` > 当前目录上溯 > 技能相对位置 > 技能目录下的克隆副本；都没有会先克隆文档副本）。若那份源码停在还没有该技能的旧版本，脚本会给出提示：切到较新的版本（文档副本用 `python <skill-root>/scripts/fountain_lookup.py switch latest`）或 `--fountain-root` 指到含它的源码 |
 | `cangjie-coding` | `https://gitcode.com/Cangjie-TPC/CangjieSkills.git` | 默认**稀疏克隆**到 `~/.cangjie-skills/CangjieSkills`（只取 `.agents/skills`，`--repo-dir` 可改；已存在则 `git pull --ff-only`），再从 `.agents/skills/cangjie-coding` 复制进技能目录 |
 | 12 个 `opsx-*` | **已克隆的 fountain 项目**的 `<fountain-root>/skills/opsx-<工作流>` | 与 `cangjie-doc-lookup` 同一套仓库定位规则；子命令 `opsx` 一次装齐 12 个（也可用 `install_skill.py opsx-propose` 单个装）。检出分支还没这批技能时（如停在未合入的 master），脚本会报该切哪个分支；用于鸿蒙 PC 上执行 OpenSpec，展开见 `references/openspec-workflow.md` 第 9 节 |
-| `cangjie-code-review-harness`（及 harness 仓其它审议式技能） | `https://gitcode.com/zhangyin_gitcode/cangjie_harness.git` 的 `.opencode/skills/*` | 子命令 `harness` 装全部技能；默认检出到 `~/.cangjie-harness/cangjie_harness`（`--harness-dir` 可改）。本机没有 git 时优先借融合侧 git 克隆到共享目录，失败再用 GitCode 归档下载。工作流 L 依赖其中的 `cangjie-code-review-harness` |
+| harness 仓的审议式技能（架构设计 / 需求设计等，**可选**） | `https://gitcode.com/zhangyin_gitcode/cangjie_harness.git` 的 `.opencode/skills/*` | 子命令 `harness` 装全部技能；默认检出到 `~/.cangjie-harness/cangjie_harness`（`--harness-dir` 可改）。本机没有 git 时优先借融合侧 git 克隆到共享目录，失败再用 GitCode 归档下载。**工作流 L 不再依赖其中的 `cangjie-code-review-harness`**（审查引擎已并入 `fountain-review`），不需要为 L 装它 |
 | fountain 全部技能 | **已克隆的 fountain 项目**的 `<fountain-root>/skills/*` | 子命令 `fountain` 一次装 `cangjie-doc-lookup`、12 个 `opsx-*`、`fountain-tag`、`installing-cangjie-sdk`、`skill-generator` 等；跳过 `fountain-developer` 自身，避免边运行边覆盖。工作流 L 用它一次补齐 OpenSpec 通道与文档查阅 |
-| 12 个工作流技能 | **已克隆的 fountain 项目**的 `<fountain-root>/skills/fountain-*` | 由 `fountain-developer` 拆分的 A-L 独立技能（`fountain-install-fboot` / `fountain-build-server` / `fountain-code-review-fix` 等）；子命令 `workflows` 一次装齐。每个技能自带 `references/common-rules.md` 与所需脚本，可独立加载；`fountain-developer` 只做调度 |
+| 全部工作流技能 | **已克隆的 fountain 项目**的 `<fountain-root>/skills/fountain-*` | 由 `fountain-developer` 拆分的 A-L 独立技能（`fountain-install-fboot` / `fountain-build-server` / `fountain-review` / `fountain-publish` 等）；子命令 `workflows` 一次装齐（清单以 `install_skill.py` 的 `WORKFLOW_SKILLS` 为准，工具类 `fountain-tag` 与环境类 `installing-cangjie-sdk` 不在其中）。每个业务技能自带 `references/common-rules.md` 与所需脚本，可独立加载；`fountain-developer` 只做调度 |
 
 - 安装目标目录默认自动探测：优先**当前放着 `fountain-developer` 的那个技能目录**（`~/.workbuddy/skills`、`~/.codebuddy/skills`、`~/.claude/skills`、`~/.agents/skills` 等），也可 `--skills-root DIR` 指定；已装过的技能默认不覆盖，要升级加 `--force`。**被 openspec 托管的项目内 `.codebuddy/skills` 会被自动跳过**（它是 `openspec update` 生成、会被整片重刷的目录，装进去会静默消失）。
-- 装完**复验**：`install_skill.py list` 显示各组状态（`opsx-*` 那组应为 `12/12`，`fountain 工作流技能` 应为 `12/12`，`fountain 全部技能` 应为全装，`cangjie-code-review-harness` 应为已装）。装好 `cangjie-doc-lookup` 后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`），文档源路径对不上时按它 SKILL.md「执行前检查」的四选一处理。
+- 装完**复验**：`install_skill.py list` 显示各组状态（`opsx-*` 那组应为 `12/12`，`fountain 工作流技能` 应为全装 `N/N`，`fountain 全部技能` 应为全装）。装好 `cangjie-doc-lookup` 后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`），文档源路径对不上时按它 SKILL.md「执行前检查」的四选一处理。
 - 装 12 个 `opsx-*` 时会把它依赖的**运行器 `opsx_fusion.py` 一并部署**到 `~/.workbuddy/scripts/`（ssh 探测 / 连接信息固化 / 生成执行命令都靠它，缺了技能第一步就失败）。源在 fountain 仓库 `skills/fountain-developer/scripts/opsx_fusion.py`；`list` 里会显示它的部署状态，已存在不一致时加 `--force` 更新。
 - 不支持的技能机制的 Agent 不需要「安装」这一步：直接按上面的来源读该技能的 `SKILL.md` 即可（脚本也能用，只是把文件放到一个目录）。
 

@@ -14,14 +14,14 @@
 
 **基线二选一**（按可观察条件自动判定，不凭感觉）：
 
-- **分支差异模式**：`source_branch != target_branch` 且 `git diff --stat <target>...<source>` 非空 → 审查这条分支相对目标的全部改动（审查技能的阶段零会 squash 到临时审查分支）。
-- **工作区快照模式**：没有 git、`source_branch == target_branch`、或 diff 为空 → 审查当前工作区（或指定模块）的现状；**跳过审查技能的阶段零**，从阶段一开始，`scope.md` 写明「基线 = 工作区快照」。
+- **分支差异模式**：`source_branch != target_branch` 且 `git diff --stat <target>...<source>` 非空 → 审查这条分支相对目标的全部改动（审查引擎的阶段零会 squash 到临时审查分支）。
+- **工作区快照模式**：没有 git、`source_branch == target_branch`、或 diff 为空 → 审查当前工作区（或指定模块）的现状；**跳过审查引擎的阶段零**，`scope.md` 写明「基线 = 工作区快照」。
 
 **工作区必须干净**（`git status --porcelain` 为空）才能走分支差异模式。不干净时停下问用户三选一：先提交 / 先 stash / 改为工作区快照审查；**不擅自提交或 stash**。
 
-## 2. 调用 cangjie-code-review-harness
+## 2. 执行审查（本技能内建引擎）
 
-按该技能自己的「调用参数」准备：
+按 SKILL.md「审查引擎」准备参数：
 
 ```
 workdir        = <project_root>/reviews/<YYYYMMDDHHMM>_<简述>/
@@ -31,14 +31,15 @@ target_branch  = <target_branch>
 parallel_per_batch = 2（默认）
 ```
 
-`<YYYYMMDDHHMM>` 用 `date +%Y%m%d%H%M` 生成；`<简述>` 用模块名或审查主题（ASCII 更稳，如 `f_store` / `review`）。
+`<YYYYMMDDHHMM>` 由 `scripts/review_workdir.py` 生成（同时写 `scope.md` 并打印 `BRANCH=`）；`<简述>` 用模块名或审查主题（ASCII 更稳，如 `f_store` / `review`）。
 
 执行约束：
 
 - **主 Agent 不读被审源码**：不 `Read` / `Grep` / `Glob` 源文件、不 `git diff` 看内容；所有代码阅读交给 reviewer 子 agent。
-- 分支差异模式：严格按技能阶段零→四；阶段零的 `git checkout / merge --squash` 只操作审查分支。阶段零的 `git pull` 因网络 / 凭据失败时**不要卡住**：改用工作区快照模式（跳过阶段零），`scope.md` 写明基线，报告里注明「未对照远端目标分支」。
-- 工作区快照模式：跳过阶段零；由主 Agent 写 `scope.md`（模板见下），从阶段一（范围抽取已由 scope.md 完成）→ 阶段二（轮次规划）→ 阶段三（并行审查）→ 阶段四（汇总）。
-- reviewer 子 agent 按 `reviewer.md` 主动查阅 `cangjie-coding` / `cangjie-doc-lookup` 核对语言特性与 std/stdx API，不凭记忆判断。
+- **审查引擎自包含**：reviewer 指令在 `reviewer.md`，清单在 `references/review-checklist.md`；不安装、不加载 `cangjie-code-review-harness`。
+- 分支差异模式：严格按阶段零→四；阶段零的 `git checkout / merge --squash` 只操作审查分支。阶段零的 `git pull` 因网络 / 凭据失败时**不要卡住**：改用工作区快照模式（跳过阶段零），`scope.md` 写明基线，报告里注明「未对照远端目标分支」。
+- 工作区快照模式：跳过阶段零；由主 Agent 写 `scope.md`（模板见下），从阶段一开始。
+- reviewer 子 agent 按 `reviewer.md` 主动查阅 `cangjie-doc-lookup` / `fountain-api-lookup` 核对语言特性与 API，不凭记忆判断。
 - 轮次规划按**模块边界 / 目录**切分，单轮覆盖不超过约 8–12 个源文件；项目很大时按模块分批，不一次性铺开。
 - 阶段四除 `todo.md` 外，让汇总子 agent 再写 `review_summary.md`：审查范围、轮次、各轮严重/一般/轻微统计、总评。
 
@@ -50,14 +51,16 @@ parallel_per_batch = 2（默认）
 - 项目根：<project_root>
 - 审查范围：<scope（模块路径或 .）>
 - 基线：<分支 source → target 的 diff / 工作区快照>
-- 审查重点：正确性、设计合理性、仓颉语言特性、可读性/可维护性、性能、安全性
+- 审查重点：正确性、设计合理性、仓颉语言特性、可读性/可维护性、性能、安全性；
+  死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、大粒度锁热点、并发串行、
+  低效算法、降堆内存 / 降 CPU 可行性方案（含 local mode）
 - 排除：<明确不审的目录，如 generated/、third_party/>
 - 报告目录：<workdir>
 ```
 
 ## 3. 审查结束后的收尾
 
-- 分支差异模式会留下临时审查分支与暂存内容：先 `git checkout <原分支>`；若因暂存内容失败，**问用户**是否丢弃审查分支的暂存内容（那是审查技能生成的 squash 副本，不是用户改动），确认后再 `git checkout -f`；审查分支是否删除也问用户，不擅自 `branch -D`。
+- 分支差异模式会留下临时审查分支与暂存内容：先 `git checkout <原分支>`；若因暂存内容失败，**问用户**是否丢弃审查分支的暂存内容（那是审查引擎生成的 squash 副本，不是用户改动），确认后再 `git checkout -f`；审查分支是否删除也问用户，不擅自 `branch -D`。
 - `reviews/` 是审查产物目录：确认它在 `.gitignore` / `.git/info/exclude` 里；没有就提醒用户，不擅自改仓库的 `.gitignore`。也可以把 `workdir` 放到项目外（如 `~/.workbuddy/reviews/<项目>-<时间>/`），避免污染工作区。
 - 审查阶段**不改任何源码**；发现的问题只进报告。
 
@@ -78,10 +81,11 @@ parallel_per_batch = 2（默认）
 ## 5. 修复与验收
 
 - **REQUIRED SUB-SKILL:** `test-driven-development`；`opsx:apply` 里逐任务 Red-Green-Refactor：先写能复现该审查问题的失败用例，再最小修复，跑绿才勾任务。
+- **性能类任务（CPU / 内存 / GC / local mode）必须先有基线数据**：改前基线 + 改后对照，同 SDK、同机器、`-O2`、同输入与并发，报中位数与离散程度。没有数据的性能项不进 `tasks.md`，只能作为「待验证假设」留在报告里；数据不成立的优化撤回。
 - 审查报告的「建议」只作参考；最终以 `design.md` 为准。修复涉及设计变更 / 公开 API 时回步骤 3 问用户，不自行扩大范围。
 - `opsx:verify` 前：受影响模块 + 全量回归（`cjpm test` / `fboot test`）+ `fboot build`；涉及启动链做冒烟。
 - 对照 `todo.md` 逐条核对覆盖：未修项必须写明原因并经用户同意；verify CRITICAL 清零。
-- 交付说明附审查报告路径与问题清单；`opsx:archive` 后用最终版覆盖 `doc/spec/<变更名>/`（四件套 + `review.md`）。
+- 交付说明附审查报告路径、问题清单与**性能类改动的前后数据**；`opsx:archive` 后用最终版覆盖 `doc/spec/<变更名>/`（四件套 + `review.md`）。
 
 ## 6. 只出报告、不修复
 
@@ -91,9 +95,11 @@ parallel_per_batch = 2（默认）
 
 | 你正想做 | 现实 |
 | --- | --- |
-| 主 Agent 先读一遍源码再派审查 | 审查技能禁止主 Agent 读被审文件；代码阅读交给 reviewer 子 agent |
+| 主 Agent 先读一遍源码再派审查 | 审查引擎禁止主 Agent 读被审文件；代码阅读交给 reviewer 子 agent |
+| 为了审查先装 `cangjie-code-review-harness` | 已并入本技能，不需要；装了也不会被使用 |
 | 工作区不干净，先提交了再审查 | 提交是用户决定；先问「提交 / stash / 快照审查」三选一 |
 | 审查报告只统计不建任务 | tasks 必须逐条映射 `todo.md` 的严重/一般问题，编号可追溯 |
 | 顺手把轻微项也全修了 | 修复范围默认严重 + 一般；轻微项是否纳入由用户拍板 |
+| 性能项没有基线就直接改 | 先补 bench / 峰值内存基线，否则不进 tasks；改完必须有对照数据 |
 | 审查后直接改代码，不走 propose | 审查报告是输入，propose 是门禁；未评审 design/tasks 不进 apply |
 | 审查分支的暂存内容直接 `reset --hard` | 先问用户；那是审查副本，不是用户改动，但仍需确认 |

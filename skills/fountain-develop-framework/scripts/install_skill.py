@@ -12,20 +12,20 @@ fountain-developer 联动的技能分六组，它们没装（加载失败）时�
                            在鸿蒙 PC 上执行 OpenSpec 的通道，见 references/openspec-workflow.md
                            （装这批时会把运行器 opsx_fusion.py 一并部署到 ~/.workbuddy/scripts/）
     harness 全部技能     <- https://gitcode.com/zhangyin_gitcode/cangjie_harness.git（.opencode/skills/<名字>）
-                           代码审查 / 架构设计 / 需求设计等审议式技能；工作流 L 用其中的
-                           cangjie-code-review-harness
+                           架构设计 / 需求设计等审议式技能（可选）；工作流 L 已改用
+                           fountain-review 自带的 reviewer 引擎，不再依赖 cangjie-code-review-harness
     fountain 全部技能    <- 已克隆的 fountain 项目的 skills/*（含 12 个 opsx-*、cangjie-doc-lookup、
                            fountain-tag 等；跳过 fountain-developer 自身）
-    12 个工作流技能      <- 已克隆的 fountain 项目的 skills/fountain-*（A-L 拆分后的独立技能）
+    全部工作流技能       <- 已克隆的 fountain 项目的 skills/fountain-*（A-L 拆分后的独立技能，当前 13 个）
 
 用法：
     python install_skill.py list                  # 看所有联动技能的安装状态与来源
     python install_skill.py cangjie-doc-lookup    # 装文档查阅技能
     python install_skill.py cangjie-coding        # 装仓颉知识库技能
     python install_skill.py opsx                  # 装 12 个 opsx-* 技能（OpenSpec 执行通道）
-    python install_skill.py harness               # 装 harness 仓全部技能（代码审查等）
+    python install_skill.py harness               # 装 harness 仓全部审议式技能（架构 / 需求设计等，可选）
     python install_skill.py fountain              # 装 fountain 仓 skills/ 下全部技能
-    python install_skill.py workflows             # 装 12 个独立工作流技能（A-L）
+    python install_skill.py workflows             # 装全部独立工作流技能（fountain-*，当前 13 个）
     python install_skill.py all                   # 三组旧联动技能全装（cangjie-coding / doc-lookup / opsx）
 
 选项：
@@ -244,12 +244,16 @@ OPSX_SKILLS = [
     "opsx-archive", "opsx-bulk-archive", "opsx-verify", "opsx-onboard",
 ]
 
-# 12 个独立工作流技能（由 fountain-developer 拆分；源在 fountain 仓库 skills/）
+# 独立工作流技能（由 fountain-developer 拆分；源在 fountain 仓库 skills/）
+# 维护口径：skills/ 下的工作流技能登记在这里；调度器 fountain-developer、工具类
+# fountain-tag、环境类 installing-cangjie-sdk 不登记（它们用 `install_skill.py fountain` 装）。
+# 新增工作流技能时同步本列表，避免 `workflows` 装不全、`list` 显示数量对不上。
 WORKFLOW_SKILLS = [
     "fountain-install-fboot", "fountain-init-workspace", "fountain-init-module",
     "fountain-add-dependency", "fountain-api-lookup", "fountain-build-server",
     "fountain-port-other-lang", "fountain-adopt-cangjie", "fountain-upgrade-legacy",
-    "fountain-develop-framework", "fountain-configure-module", "fountain-code-review-fix",
+    "fountain-develop-framework", "fountain-configure-module",
+    "fountain-review", "fountain-publish",
 ]
 
 
@@ -473,8 +477,6 @@ def install_harness_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]"
     skills = discover_skill_dirs(repo_dir)
     if not skills:
         return False, f"仓库里没找到有效技能：{repo_dir}"
-    if "cangjie-code-review-harness" not in skills:
-        return False, f"harness 仓里没有 cangjie-code-review-harness（仓库结构可能已变）：{repo_dir}"
     failed = []
     for name, src in sorted(skills.items()):
         ok2, note2 = install_dir(src, root / name, a.force)
@@ -524,7 +526,7 @@ def install_fountain_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]
 
 
 def install_workflows_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]":
-    """安装 12 个独立工作流技能（fountain-developer 的拆分产物）。"""
+    """安装全部独立工作流技能（fountain-developer 的拆分产物）。"""
     fr = fountain_root(a.fountain_root)
     skills_dir = fr / "skills"
     missing = [n for n in WORKFLOW_SKILLS if not (skills_dir / n / "SKILL.md").is_file()]
@@ -582,9 +584,6 @@ def cmd_list(a: argparse.Namespace) -> None:
     src2, why2 = source_cangjie_skills(repo_dir, "cangjie-coding")
     state = "已克隆" if (repo_dir / ".git").exists() else "未克隆（首次安装时自动克隆）"
     print(f"  cangjie-coding      <- {src2 if src2 else f'{CANGJIE_SKILLS_REPO}（{state}）'}")
-    harness_ok = (root / "cangjie-code-review-harness" / "SKILL.md").is_file()
-    print(f"  cangjie-code-review-harness <- "
-          f"{'已装' if harness_ok else '未装（工作流 L：install_skill.py harness）'}")
     if fr is not None:
         all_names = sorted(p.name for p in (fr / "skills").iterdir()
                            if (p / "SKILL.md").is_file() and p.name != "fountain-developer")
@@ -646,7 +645,7 @@ def main() -> None:
         return
 
     if args.cmd == "harness":
-        root = pick_skills_root(args.skills_root, ["cangjie-code-review-harness"])
+        root = pick_skills_root(args.skills_root, ["cangjie-architecture-design-harness"])
         print(f"安装目标：{root}\n")
         ok, note = install_harness_all(args, root)
         print(f"\n[{'ok' if ok else '失败'}] harness：{note}")
