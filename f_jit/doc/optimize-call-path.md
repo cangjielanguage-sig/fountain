@@ -568,3 +568,47 @@ adapter 命中时 H63 直接调类型化适配器，`FunctionTypeInfo` 完全用
 - 分配型 helper（`append` / `pin`）每次仍经一次 `current()`（~300 ns/次），
   彻底消除要把 rs 下传到 `CallMarshal` 与 helper 入口；
 - 共享 VM 的双峰仍在，`8 线程 ≥5×` 需专用 ≥8 核机器复测。
+
+## 17. helper 表从 O(F)/call 降到 O(1)/call（2026-11-27，`optimize-helper-table`）
+
+### 17.1 问题
+
+`JitFunction.callLocked` 每次调用都 `UserHelperTable.push(0u16, helpers)`，
+而 `push` 会新建 `HashMap` 并把该单元全部 F 个 user helper 逐项插入。
+F = 注册函数数（含构造器 helper），于是**每次调用付 O(F)**。
+
+同机实测（同一份源码 `{ => fn0(1) }`，只改注册函数数量）：
+
+| 注册函数数 | 每次调用 |
+| --- | --- |
+| 4 | 11.7 / 11.9 µs |
+| 204 | **103 / 197 µs** |
+| 每项每次调用 | 456 / 925 ns |
+
+这是当时 f_jit 里最大的一处浪费，量级超过编译路径所有已优化项之和。
+
+### 17.2 改动
+
+1. `UserHelperTable.buildTable(base, entries)` 抽出建表；`pushTable(table)` 只压引用；
+   `push(...)` 保留为兼容入口（测试与一次性场景）。
+2. `JitFunction` 在 `bindUserHelpers` 时建一次并缓存 `helperTableCache`；
+   `callLocked` 用 `helperTableRef()`（包装闭包实例取 `owner` 的表）。
+
+### 17.3 数据
+
+| 注册函数数 | 改前 | 改后 |
+| --- | --- | --- |
+| 4 | 11.7 / 11.9 µs | 4.03 / 7.70 µs |
+| 204 | 103 / 197 µs | **3.97 / 7.60 µs** |
+| 差值（204−4） | +91 / +185 µs | **−0.06 / −0.09 µs** |
+
+**O(F) → O(1)**：204 个 helper 的调用成本降到与 4 个 helper 相同（−96%）。
+
+护栏 `HelperTableScope_test` 3 条（嵌套遮蔽/pop 恢复、调用后无栈残余、hid 顺序），
+改前 3/3、改后 3/3；全量 1246/1246。
+
+### 17.4 未做
+
+`UserHelperTable.find(hid)` 仍每次调用一次 TLS `get`（~300 ns），因为它的两个调用点
+（`runtime/UserHelper.cj`、`runtime/AnyHelpers.cj`）在 C 调用路径上、签名里没有 `rs`。
+要消除需要改这两处 helper 的契约，收益与风险不成比例。
