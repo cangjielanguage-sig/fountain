@@ -183,3 +183,48 @@ x86 侧 `X86Lower` 本来就是这个结构（`HashMap<String, Int64>` + 单遍 
 | 前端 `SourceCompiler.compile` | ~45% | `assemble` / `parse` / `lower` / `load` 均为真实工作量，需再分段才谈得上优化 |
 | `compileUnitWith` 的逐字节拷贝 | ~19% | `for (x in b) out.add(x)`，可改 `add(all)` 或预分配，独立变更 |
 | `A64Lower.lower` | ~13% | 1.3–1.8 ms，未 profile 到具体分支 |
+
+## 10. D2 批量搬运与 x86 单次解码（2026-11-27，`optimize-compile-copy`）
+
+### 10.1 改前分段（插桩）
+
+| 位置 | 实测 | 原因 |
+| --- | --- | --- |
+| `Assembler.build`（CRC + 四段拼接） | **0.82–1.45 ms** | 同样 1.9 KB 载荷被搬四趟：CRC 的 `ArrayList`、`toArray`、`wBytes` 逐字节、`take` |
+| `Assembler.layout` | 0.44–0.74 ms | 函数体 `for (k in 0..size) body[k] = code[k]` |
+| `Assembler.validate` | 0.27–0.69 ms | 逐指令栈校验（真实工作量） |
+| `JitCompiler.compileUnitWith` | 含在 2.62 ms 内 | 逐字节 `out.add(x)` + `toArray()`，9.6 KB 搬两趟 |
+| `JitExecutor.create` | 含在 3.07 ms 内 | `seal()` 之后又 `flushICache()` 一次（对整页重复刷新） |
+| `FbcReader.load` | 0.75–0.82 ms | head 0.15 / slices 0.15 / dir 0.20 / constSite 0.24 |
+
+### 10.2 改动
+
+1. `JitCompiler.compileUnitWith`：两遍（先收集字节与总长，再一次性分配下标写入）。
+2. `FbcWriter`：新增 `payload()` 一次拼出四段；`build()` 用同一份载荷算 CRC 并与头拼接。
+3. `Assembler` 函数体改 `clone()`。
+4. `JitExecutor.create` 删掉 `seal()` 之后重复的 `flushICache()`。
+5. `X86Lower.lower`：探针遍缓存 `DecodedInsn` 与偏移，发射遍复用（少一半解码与操作数数组分配）。
+
+### 10.3 数据
+
+端到端 `compile + load + create`（同探针，`git stash` 切臂，每次 5 轮取最小）：
+
+| 臂 | 结果（ms） | 中位数 |
+| --- | --- | --- |
+| 改前 | 12.20 / 7.27 / 12.31 | **12.20** |
+| 改后 | 9.92 / 10.05 / 6.20 / 10.01 / 10.14 | **10.01** |
+
+**中位数 −18.0%**，最优配对 −14.7%。
+
+护栏 `CompileCopy_test`（整单元 == 逐函数拼接，A64/x86 双架构有效）：
+改前、改后均绿；变异 `lens[i] = size - 1` ⇒ 红。
+`Golden_test` 4/4、`X86Compile_test` 11/11、`X86Lower_test` 50/50；全量 1241/1241。
+
+### 10.4 剩余（下一次要动就要先测）
+
+| 项 | 改后占比（估） | 备注 |
+| --- | --- | --- |
+| 前端 `assemble`（validate 0.3–0.7 + encode） | ~15% | validate 是逐指令栈校验，要优化得先看它内部 |
+| `FbcReader.load` | ~12% | 切片 + 三张表解码，均为最小形态 |
+| `A64Lower.lower` | ~20% | 1.3–1.8 ms，尚未 profile 到具体 opcode 分支 |
+| `Assembler.validate` | ~10% | 同上 |
