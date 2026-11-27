@@ -71,12 +71,17 @@ public class JitCompiler {
      */
     public static func compileUnitWith(unit: LoadedUnit, constBase: Int64,
         fnTableBase: Int64): ?JitArtifacts {
-        let out = ArrayList<UInt8>()
-        let ids = ArrayList<UInt32>()
-        let offs = ArrayList<Int64>()
-        let lens = ArrayList<Int64>()
+        // 两遍：先收集各函数字节并累加总长，再一次性分配、下标写入。
+        // 旧实现逐字节 `out.add(x)` 再 `toArray()`，9.6 KB 机器码要付两倍搬运
+        // （`optimize-compile-copy`）。
+        let n = unit.dir.size
+        let bodies = Array<Array<UInt8>>(n, repeat: Array<UInt8>())
+        let ids = Array<UInt32>(n, repeat: 0u32)
+        let offs = Array<Int64>(n, repeat: 0)
+        let lens = Array<Int64>(n, repeat: 0)
+        var total: Int64 = 0
         var i = 0
-        while (i < unit.dir.size) {
+        while (i < n) {
             let fn = unit.dir.at(i)
             let compiled = match (Arch.current.toString()) {
                 case 'x86_64' => X86Compiler.compileFunctionWith(unit, fn, constBase, fnTableBase)
@@ -84,16 +89,27 @@ public class JitCompiler {
             }
             match (compiled) {
                 case Some(b) =>
-                    ids.add(fn.fnId)
-                    offs.add(out.size)
-                    lens.add(b.size)
-                    for (x in b) {
-                        out.add(x)
-                    }
+                    ids[i] = fn.fnId
+                    offs[i] = total
+                    lens[i] = Int64(b.size)
+                    bodies[i] = b
+                    total = total + Int64(b.size)
                 case None => return None
             }
             i = i + 1
         }
-        Some(JitArtifacts(out.toArray(), ids.toArray(), offs.toArray(), lens.toArray()))
+        let out = Array<UInt8>(total, repeat: 0u8)
+        i = 0
+        while (i < n) {
+            let b = bodies[i]
+            let at = offs[i]
+            var k = 0
+            while (k < b.size) {
+                out[at + k] = b[k]
+                k = k + 1
+            }
+            i = i + 1
+        }
+        Some(JitArtifacts(out, ids, offs, lens))
     }
 }

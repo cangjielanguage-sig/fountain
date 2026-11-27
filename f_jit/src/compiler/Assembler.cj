@@ -75,10 +75,8 @@ internal class Assembler {
             let ltOff = off
             let codeOff = off + ltSize
             // 复制并回填站点立即数（函数内相对 → code 段绝对）
-            let body = Array<UInt8>(f.body.code.size, repeat: 0u8)
-            for (k in 0..f.body.code.size) {
-                body[k] = f.body.code[k]
-            }
+            // 整块复制（逐字节循环在 1230 B 上实测 0.44–0.74 ms，`optimize-compile-copy`）
+            let body = f.body.code.clone()
             for (ps in f.sites) {
                 let abs = codeOff + ps.relOff
                 Assembler.patchI32(body, ps.relOff, abs)

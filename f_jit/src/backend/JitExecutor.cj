@@ -105,7 +105,7 @@ public class JitExecutor {
             JitExecutor.releaseConsts(pinned)
             return None
         }
-        buf.flushICache()
+        // `seal()` 内已 flushICache 一次；此处原为重复刷新（`optimize-compile-copy`）
         i = 0
         while (i < unit.dir.size) {
             let fn = unit.dir.at(i)

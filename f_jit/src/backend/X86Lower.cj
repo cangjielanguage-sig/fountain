@@ -17,6 +17,7 @@ package fountain::f_jit.backend
 
 import std.collection.ArrayList
 import std.collection.HashMap
+import fountain::f_jit.bytecode.DecodedInsn
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.InsnDecoder
 import fountain::f_jit.bytecode.LoadedUnit
@@ -111,10 +112,16 @@ internal class X86Lower {
         this.probing = true
         this.depth = 0
         this.delta.clear()
+        // 解码一次、两遍复用：旧实现探针遍与发射遍各 `decode` 一次，操作数数组也各分配一次
+        // （`optimize-compile-copy`）。
+        let insns = ArrayList<DecodedInsn>()
+        let offs = ArrayList<Int64>()
         var off = start
         while (off < end) {
             let before = this.depth
             let insn = InsnDecoder.decode(unit.code, off)
+            insns.add(insn)
+            offs.add(off)
             this.translate(insn.op, insn.operands, off, off + insn.size)
             this.delta[off] = this.depth - before
             off = off + insn.size
@@ -130,20 +137,21 @@ internal class X86Lower {
                 return
         }
 
-        // 3) 发射遍
-        off = start
-        while (off < end) {
-            this.bind('L${off}')
-            let insn = InsnDecoder.decode(unit.code, off)
-            let next = off + insn.size
+        // 3) 发射遍（复用探针遍的解码结果，偏移序列与探针遍逐条一致）
+        var k = 0
+        while (k < insns.size) {
+            let at = offs[k]
+            this.bind('L${at}')
+            let insn = insns[k]
+            let next = at + insn.size
             // 可达偏移以 CFG 深度为准；不可达区域（RET/BAIL 之后的死代码、内联错误块）
             // 无深度记录，沿用线性累加（与修复前行为一致，且不影响可达汇合点）。
-            match (this.depthAt.get(off)) {
+            match (this.depthAt.get(at)) {
                 case Some(d) => this.depth = d
                 case None => ()
             }
-            this.translate(insn.op, insn.operands, off, next)
-            off = next
+            this.translate(insn.op, insn.operands, at, next)
+            k = k + 1
         }
         // G5 审计：机器码只能以栈/帧/ctx 为内存基址（等价于"不得解引用 helper 返回的 cell"）
         if (!BackendX86_64.auditAllows(BackendX86_64.auditMemBasesSnapshot())) {

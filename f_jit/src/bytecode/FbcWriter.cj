@@ -86,24 +86,37 @@ public class FbcWriter {
 
     /** 四段拼接后的 CRC-32/ISO-HDLC（`f_util` 实现，design D8）。 */
     public func crc32OfPayload(): UInt32 {
-        let all = ArrayList<UInt8>()
-        for (b in this.code) {
-            all.add(b)
+        Crc32.isoHdlc.compute(this.payload())
+    }
+
+    /**
+     * 四段载荷（code + const + site + name）一次性拼出。
+     *
+     * 旧实现 `crc32OfPayload` 逐字节进 `ArrayList` 再 `toArray()`，`build` 里再逐字节写一遍、
+     * `take` 又拷一遍——同一份 1.9 KB 载荷搬了四趟（`optimize-compile-copy`）。
+     */
+    private func payload(): Array<UInt8> {
+        let segs = [this.code, this.consts, this.site, this.name]
+        var total: Int64 = 0
+        for (s in segs) {
+            total = total + Int64(s.size)
         }
-        for (b in this.consts) {
-            all.add(b)
+        let out = Array<UInt8>(total, repeat: 0u8)
+        var at: Int64 = 0
+        for (s in segs) {
+            var k = 0
+            while (k < s.size) {
+                out[at + k] = s[k]
+                k = k + 1
+            }
+            at = at + Int64(s.size)
         }
-        for (b in this.site) {
-            all.add(b)
-        }
-        for (b in this.name) {
-            all.add(b)
-        }
-        Crc32.isoHdlc.compute(all.toArray())
+        out
     }
 
     /** 组装完整 `.fbc` 字节串。 */
     public func build(): Array<UInt8> {
+        let body = this.payload()
         let h = FbcHeader(
             Version.MAGIC,
             this.verMajor,
@@ -115,13 +128,21 @@ public class FbcWriter {
             UInt32(this.site.size),
             this.entryFn,
             UInt32(this.name.size),
-            crc32OfPayload())
-        let w = ByteWriter()
-        h.write(w)
-        w.wBytes(this.code)
-        w.wBytes(this.consts)
-        w.wBytes(this.site)
-        w.wBytes(this.name)
-        w.take()
+            Crc32.isoHdlc.compute(body))
+        let hw = ByteWriter()
+        h.write(hw)
+        let head = hw.take()
+        let out = Array<UInt8>(Int64(head.size) + Int64(body.size), repeat: 0u8)
+        var k = 0
+        while (k < head.size) {
+            out[k] = head[k]
+            k = k + 1
+        }
+        var j = 0
+        while (j < body.size) {
+            out[Int64(head.size) + j] = body[j]
+            j = j + 1
+        }
+        out
     }
 }
