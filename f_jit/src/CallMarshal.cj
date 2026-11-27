@@ -184,9 +184,18 @@ protected class CallMarshal {
         }
     }
 
-    /** 返回解包器（§8.2.2）：句柄型先逃逸再取对象。 */
+    /** 返回解包器（§8.2.2）：句柄型先逃逸再取对象。保留给测试；生产路径用 `unboxRet`。 */
     public func makeRetUnboxer(t: UInt16): (Int64) -> Any {
-        { cell =>
+        { cell => this.unboxRet(t, cell) }
+    }
+
+    /**
+     * 返回值解包本体（§8.2.2）。
+     *
+     * 直接方法调用版：旧实现每次调用现建一个闭包再立刻调用一次，
+     * 既分配又付一次间接调用（`optimize-call-alloc2`）。
+     */
+    public func unboxRet(t: UInt16, cell: Int64): Any {
             if (t == LocalType.I64) {
                 return cell
             }
@@ -218,7 +227,6 @@ protected class CallMarshal {
                 return this.escapeAndGet(cell)
             }
             CallMarshal.contractFail('该返回类型不可解包（§8.2.2）')
-        }
     }
 
     /** 路径 D：登记逃逸并取回对象；失败 → 19。 */

@@ -89,6 +89,8 @@ public class JitFunction <: Resource {
     /** 产物是否由机器码执行器承载（false = 纯字节码；用于 T52/诊断）。 */
     private var jitBacked: Bool = false
     /** 本单元的 user helper 表（m2 §15；空 = 无 user helper，调用期不压栈）。 */
+    /** 零实参调用的共享 cells（只读）。 */
+    private static let EMPTY_CELLS: Array<Int64> = Array<Int64>()
     private var helperEntries: Array<UserHelperEntry> = Array<UserHelperEntry>()
     /** 预构建的 `hid → entry` 表（绑定期建一次，调用期只压引用；`optimize-helper-table`）。 */
     private var helperTableCache: ?HashMap<Int64, UserHelperEntry> = None
@@ -601,7 +603,12 @@ public class JitFunction <: Resource {
                 UserHelperTable.pushTable(helperTable)
             }
             // 2. 封送
-            let cells = Array<Int64>(args.size, repeat: 0)
+            // 零实参单元复用同一个空数组（封送循环不执行，不会被写）。
+            let cells = if (args.size == 0) {
+                JitFunction.EMPTY_CELLS
+            } else {
+                Array<Int64>(args.size, repeat: 0)
+            }
             var i = 0
             while (i < args.size) {
                 if (dynamicArgs) {
@@ -630,7 +637,7 @@ public class JitFunction <: Resource {
             // `resetWindow` 回收）⇒ 异常路径必须同样归还，否则每次契约失败泄漏 1 槽。
             var v: Any = 0
             try {
-                v = marshal.makeRetUnboxer(unboxCode)(ret)
+                v = marshal.unboxRet(unboxCode, ret)
             } catch (e: Exception) {
                 let _ = JitFunction.releaseReturnHandle(ret, unboxCode, this.returnGroup())
                 throw e
