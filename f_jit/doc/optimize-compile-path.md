@@ -136,3 +136,50 @@ C2 的 4 线程对照用例抛 `IndexOutOfBoundsException`（`A64Emitter.noteMem
 | F=200，4 线程共享 | **41.5%** → 0% | 813 → **584 µs（−28.2%）** |
 
 4 线程扩展比 1.53× → **1.84×**。注册/注销全部失效，2 条语义用例锁定。
+
+## 9. D1 分支回填索引化（2026-11-27，`optimize-emit-fixup`）
+
+### 9.1 分段：编译延迟的大头不在前端
+
+200 注册函数 × 50 调用点（`unit.dir.size = 1`，字节码 1230 B，机器码 9644 B）：
+
+| 阶段 | 实测（改前） | 占单次编译 |
+| --- | --- | --- |
+| `JitExecutor.create` | 37.72 ms | 87% |
+| `A64Emitter.finishOrNull`（插桩 16 次采样） | **33.42–52.95 ms** | 78–92% |
+| `A64Lower.lower` | 1.33–1.79 ms | 3–4% |
+| 前端 `SourceCompiler.compile` | 5.43–5.55 ms | 13% |
+
+**根因**：`A64Emitter.labels` 是 `ArrayList`，`labelOffset` 线性扫全表；
+`A64Lower` 对每个字节码偏移 `bind('L${off}')`，标签数与指令数同阶；
+`finishOrNull` 对每条重定位查一次，`finish` 再查一次 ⇒ 约 2 × R × L 次字符串比较。
+单函数 2411 条指令要 33–53 ms，即约 15 µs/指令。
+
+### 9.2 改动
+
+1. `labels` 改 `HashMap<String, Int64>`；`bind` 首次绑定优先（保留旧语义），`labelOffset` O(1)。
+2. `finishOrNull` / `finish` 合并为单遍 `resolve(checkRange:)`，校验与回填一次完成。
+3. 删除只服务于线性扫的 `A64Label`。
+
+x86 侧 `X86Lower` 本来就是这个结构（`HashMap<String, Int64>` + 单遍 `finish`），
+本次是把 A64 对齐到 x86，不是新设计。
+
+### 9.3 数据
+
+| 指标 | 改前 | 改后 | Δ |
+| --- | --- | --- | --- |
+| 端到端 `compile + load + create` | 44.32 / 24.06 / 45.07 ms | **11.06 / 11.10 / 6.42 ms** | **−85.5%（最优配对）** |
+| `JitCompiler.compileUnitWith` | 37.72 ms | 2.62 / 5.11 / 2.77 ms | **−93.1%** |
+| 逐函数发码 `perFnSum` | 35.34 ms | 1.39 / 2.56 / 1.45 ms | **−96.1%** |
+
+护栏 `A64EmitterFixup_test` 4 条（改前先全绿，证明测的是既有语义）；
+变异 A（`bind` 总覆盖）⇒ `firstBindWins` 红，变异 B（恒按 imm26 回填）⇒ `conditionalKindsUseImm19` 红。
+全量 1239/1239。
+
+### 9.4 剩余
+
+| 项 | 改后占比 | 说明 |
+| --- | --- | --- |
+| 前端 `SourceCompiler.compile` | ~45% | `assemble` / `parse` / `lower` / `load` 均为真实工作量，需再分段才谈得上优化 |
+| `compileUnitWith` 的逐字节拷贝 | ~19% | `for (x in b) out.add(x)`，可改 `add(all)` 或预分配，独立变更 |
+| `A64Lower.lower` | ~13% | 1.3–1.8 ms，未 profile 到具体分支 |
