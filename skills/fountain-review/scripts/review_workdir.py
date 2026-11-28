@@ -4,18 +4,19 @@
 
 按约定创建 `{project_root}/reviews/{YYYYMMDDHHMM}_{简述}/`，其中：
     scope.md     审查范围与重点
-    modules.md   逐模块审查清单（模块 / 路径 / 源文件数 / 报告文件 / 状态）
+    modules.md   逐模块审查清单（模块 / 路径 / .cj 数 / .md 数 / 文件清单 / 报告 / 状态）
+    files/*.txt  每个模块待审的**全部** `.cj` 与 `.md` 文件清单（全量覆盖，不抽样）
 
-同时确保 `{project_root}/docs/review/` 存在——每审完一个模块，报告写到
-`docs/review/<module>_review_<YYYYMMDD>.md`。
+同时确保 `{project_root}/docs/review/<YYYY-MM-DD>/` 存在——每审完一个模块，报告写到
+`docs/review/<YYYY-MM-DD>/<module>.md`。
 
 用法：
     python review_workdir.py --project-root D:/proj
     python review_workdir.py --project-root D:/proj --scope f_orm --baseline "分支 a → b"
-    python review_workdir.py --project-root D:/proj --date 20261127 --max-depth 2
+    python review_workdir.py --project-root D:/proj --date 2026-11-27 --max-depth 2
 
 参数缺省值：
-    --scope     .  →  简述取 review
+    --scope     .  →  简述取 review；审查范围为「所有 f_* + fboot/fdbm/fmq/fprobe」，排除 f*demo 与 .worktrees
     --baseline  工作区快照
     --focus     通用维度 + 十类专项（见 references/review-checklist.md）
     --max-depth 3（向下找 cjpm.toml 的层数）
@@ -42,6 +43,17 @@ DEFAULT_EXCLUDE = "generated/, third_party/, target/, .git/, .worktrees/"
 # 这些目录不参与模块发现（隐藏目录统一跳过，这里只列非隐藏的）
 SKIP_DIRS = {"target", "third_party", "node_modules", "build", "dist", "reviews"}
 
+# 默认审查范围：所有 f_* 模块 + 这四个非 f_ 前缀的核心模块。
+# 不含 f*demo（示例应用）、fleet、.worktrees 下的任何内容。
+EXTRA_MODULES = {"fboot", "fdbm", "fmq", "fprobe"}
+
+
+def is_reviewable_module(top_name: str) -> bool:
+    """默认审查范围过滤：f_* 或 EXTRA_MODULES；f*demo 一律排除。"""
+    if top_name.endswith("demo"):
+        return False
+    return top_name.startswith("f_") or top_name in EXTRA_MODULES
+
 
 def slugify(text: str) -> str:
     """只保留 ASCII 字母数字与 . _ -，其余折叠成一个连字符。"""
@@ -50,14 +62,39 @@ def slugify(text: str) -> str:
     return cleaned or "review"
 
 
-def discover_modules(root: Path, max_depth: int) -> "list[tuple[str, str, int]]":
-    """发现可审查的模块，返回 [(模块名, 相对路径, 源文件数)]。
+FILE_SUFFIXES = (".cj", ".md")
+
+
+def collect_files(module_dir: Path, project_root: Path) -> "list[str]":
+    """列出模块内需要审查的全部 `.cj` 与 `.md`（相对项目根，正斜杠）。
+
+    审查是**全量**的：模块里每个 `.cj` 和 `.md` 都要读，不做抽样；
+    只跳过构建产物与隐藏目录（`target/`、`.git/` 等）。
+    """
+    out = []
+    for dirpath, dirnames, filenames in os.walk(module_dir):
+        dirnames[:] = sorted(
+            d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS
+        )
+        for filename in sorted(filenames):
+            if filename.lower().endswith(FILE_SUFFIXES):
+                out.append(Path(dirpath, filename).relative_to(project_root).as_posix())
+    return sorted(out)
+
+
+def discover_modules(root: Path, max_depth: int, base: "Path | None" = None,
+                     include_all: bool = False) -> "list[tuple]":
+    """发现可审查的模块，返回 [(模块名, 相对路径, cj 数, md 数, 文件清单)]。
 
     判据：目录里有 `cjpm.toml`，且 `src/` 下至少有一个 `.cj`（工作区根因此被跳过）。
-    模块名取相对路径，`/` 换成 `_`（如 `fdemo/user` → `fdemo_user`），报告文件名依赖它。
+    模块名取相对 root 的路径，`/` 换成 `_`（如 `fdemo/user` → `fdemo_user`），报告文件名依赖它。
+
+    默认只收 `f_*` 与 `fboot` / `fdbm` / `fmq` / `fprobe`，排除 `f*demo` 与 `.worktrees`；
+    `include_all=True`（显式 --scope 指向某目录时）不做范围过滤。
     """
     found = []
     root_depth = len(root.parts)
+    base = base or root
     for dirpath, dirnames, filenames in os.walk(root):
         current = Path(dirpath)
         depth = len(current.parts) - root_depth
@@ -74,9 +111,17 @@ def discover_modules(root: Path, max_depth: int) -> "list[tuple[str, str, int]]"
         cj_count = sum(1 for _ in src.rglob("*.cj"))
         if cj_count == 0:
             continue
+        try:
+            top = current.relative_to(base).parts[0]
+        except (ValueError, IndexError):
+            top = current.name
+        if not include_all and not is_reviewable_module(top):
+            continue
         rel = current.relative_to(root).as_posix()
         name = rel.replace("/", "_") if rel not in (".", "") else root.name
-        found.append((name, rel, cj_count))
+        files = collect_files(current, base)
+        md_count = sum(1 for f in files if f.lower().endswith(".md"))
+        found.append((name, rel, cj_count, md_count, files))
     return sorted(found, key=lambda item: item[0])
 
 
@@ -94,9 +139,10 @@ def build_scope_md(args: argparse.Namespace, scope_rel: str) -> str:
 
 - **项目根**：`{args.project_root}`
 - **审查范围**：`{scope_rel}`
+- **默认范围**：所有 `f_*` 模块 + `fboot` / `fdbm` / `fmq` / `fprobe`；不含 `f*demo` 与 `.worktrees`
 - **基线**：{args.baseline}
 - **审查单元**：模块（一份模块一份报告，见 `modules.md`）
-- **报告目录**：`docs/review/`（`<module>_review_<{args.date}>.md`）
+- **报告目录**：`docs/review/{args.date}/`（`<module>.md`）
 - **过程目录**：`{args.workdir}`
 - **并行度**：每批 {args.parallel_per_batch} 个子 agent
 
@@ -123,27 +169,31 @@ def build_scope_md(args: argparse.Namespace, scope_rel: str) -> str:
 - 每条发现必须给：位置（文件:行号）、来源（本次改动 / 存量）、判据（review-checklist 小节）、
   证据等级（静态确定 / 需实测 / 待确认）。
 - 缺陷进「发现」，性能与内存改进进「优化可行性方案」，两者分开统计。
-- 每审完一个模块，立即把该模块报告写到 `docs/review/<module>_review_{args.date}.md`。
+- **每个模块的 `.cj` 与 `.md` 全量审查**：按 `files/<module>.txt` 逐个读完（README、`doc/**` 都算），
+  不做抽样、不只审 `src/`；缺一个文件或没写「文件覆盖表」即本轮未完成。
+- 每审完一个模块，立即把该模块报告写到 `docs/review/{args.date}/<module>.md`。
 """
 
 
-def build_modules_md(args: argparse.Namespace, modules: "list[tuple[str, str, int]]",
-                     scope_rel: str) -> str:
+def build_modules_md(args: argparse.Namespace, modules: "list[tuple]", scope_rel: str) -> str:
     if not modules:
         table = "（未发现模块：目录下没有带 `src/*.cj` 的 `cjpm.toml`。单文件 / 片段审查可手写本表。）\n"
     else:
-        rows = ["| # | 模块 | 相对路径 | 源文件数 | 报告文件 | 状态 |",
-                "| --- | --- | --- | --- | --- | --- |"]
-        for index, (name, rel, count) in enumerate(modules, start=1):
-            report = f"docs/review/{name}_review_{args.date}.md"
-            rows.append(f"| {index} | {name} | {rel} | {count} | {report} | 待审 |")
+        rows = ["| # | 模块 | 相对路径 | .cj | .md | 合计 | 文件清单 | 报告文件 | 状态 |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+        for index, (name, rel, cj_count, md_count, files) in enumerate(modules, start=1):
+            report = f"docs/review/{args.date}/{name}.md"
+            manifest = f"files/{name}.txt"
+            rows.append(f"| {index} | {name} | {rel} | {cj_count} | {md_count} | "
+                        f"{len(files)} | {manifest} | {report} | 待审 |")
         table = "\n".join(rows) + "\n"
     return f"""# 模块审查清单
 
 - 项目根：`{args.project_root}`
 - 审查范围：`{scope_rel}`
-- 报告目录：`docs/review/`（文件名 `<module>_review_{args.date}.md`）
+- 报告目录：`docs/review/{args.date}/`（文件名 `<module>.md`）
 - 模块数：{len(modules)}
+- **全量要求**：每个模块的**全部 `.cj` 与 `.md`** 都要读到（`*.md` 含 README、`doc/**`）；文件清单见 `files/<module>.txt`
 
 {table}
 ## 状态约定
@@ -171,9 +221,11 @@ def main(argv: "list[str] | None" = None) -> int:
     parser.add_argument("--perf-notes", default="",
                         help="已有性能资料（bench 结果 / profile 路径 / 优化方案 doc），写进 scope.md")
     parser.add_argument("--slug", default="", help="目录简述，默认取 scope 末段")
-    parser.add_argument("--date", default="", help="报告日期 YYYYMMDD，默认今天")
+    parser.add_argument("--date", default="", help="报告日期 YYYY-MM-DD，默认今天")
     parser.add_argument("--max-depth", type=int, default=3,
                         help="向下查找 cjpm.toml 的层数（默认 3）")
+    parser.add_argument("--include-all", action="store_true",
+                        help="不限默认审查范围（默认只收 f_* 与 fboot/fdbm/fmq/fprobe，排除 f*demo）")
     parser.add_argument("--parallel-per-batch", type=int, default=2,
                         help="每批并行子 agent 数（默认 2）")
     parser.add_argument("--force", action="store_true",
@@ -192,7 +244,7 @@ def main(argv: "list[str] | None" = None) -> int:
 
     now = datetime.datetime.now()
     stamp = now.strftime("%Y%m%d%H%M")
-    args.date = args.date or now.strftime("%Y%m%d")
+    args.date = args.date or now.strftime("%Y-%m-%d")
     workdir = project_root / "reviews" / f"{stamp}_{slug}"
 
     workdir_text = str(workdir).replace("\\", "/")
@@ -206,11 +258,17 @@ def main(argv: "list[str] | None" = None) -> int:
     if not scan_root.is_dir():
         print(f"[review_workdir] 审查范围不存在：{scan_root}", file=sys.stderr)
         return 1
-    modules = discover_modules(scan_root, args.max_depth)
+    modules = discover_modules(scan_root, args.max_depth, base=project_root,
+                               include_all=args.include_all or scope_rel != ".")
 
-    report_dir = project_root / "docs" / "review"
+    report_dir = project_root / "docs" / "review" / args.date
     report_dir.mkdir(parents=True, exist_ok=True)
     workdir.mkdir(parents=True, exist_ok=True)
+    files_dir = workdir / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    for name, _rel, _cj, _md, files in modules:
+        (files_dir / f"{name}.txt").write_text(
+            "\n".join(files) + ("\n" if files else ""), encoding="utf-8")
     args.workdir = workdir_text
     args.project_root = str(project_root).replace("\\", "/")
 
@@ -221,10 +279,12 @@ def main(argv: "list[str] | None" = None) -> int:
     print(f"WORKDIR={args.workdir}")
     print(f"SCOPE={args.workdir}/scope.md")
     print(f"MODULES={args.workdir}/modules.md")
+    print(f"FILES={args.workdir}/files")
     print(f"BRANCH={workdir.name}")
     print(f"DATE={args.date}")
     print(f"REPORT_DIR={str(report_dir).replace(chr(92), '/')}")
     print(f"MODULE_COUNT={len(modules)}")
+    print(f"FILE_COUNT={sum(len(m[4]) for m in modules)}")
     print(f"BATCH={args.parallel_per_batch}")
     return 0
 
