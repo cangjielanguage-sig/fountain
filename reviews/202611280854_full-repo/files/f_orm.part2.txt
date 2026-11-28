@@ -1,0 +1,14 @@
+f_orm/README_en.md
+f_orm/doc/spec/fix-orm-queryresultwrap-type-alias/design.md
+f_orm/doc/spec/fix-orm-queryresultwrap-type-alias/proposal.md
+f_orm/doc/spec/fix-orm-queryresultwrap-type-alias/specs/orm-result-type-mapping/spec.md
+f_orm/doc/spec/fix-orm-queryresultwrap-type-alias/tasks.md
+f_orm/doc/spec/test-f-orm-update-column-keys/design.md
+f_orm/doc/spec/test-f-orm-update-column-keys/proposal.md
+f_orm/doc/spec/test-f-orm-update-column-keys/specs/orm-update-binding/spec.md
+f_orm/doc/spec/test-f-orm-update-column-keys/tasks.md
+f_orm/doc/优化方案.md
+f_orm/src/ORM.cj
+f_orm/src/ProtectedMacros/EmbedSensitive.cj
+f_orm/src/base/ArgAnyBinding_test.cj
+f_orm/src/base/ArgBindCount_test.cj

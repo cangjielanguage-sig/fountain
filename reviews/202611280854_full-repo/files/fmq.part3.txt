@@ -1,0 +1,14 @@
+fmq/doc/详细设计.md
+fmq/src/FmqTestSetup_test.cj
+fmq/src/MQUsage.cj
+fmq/src/MQUsage_test.cj
+fmq/src/Main_test.cj
+fmq/src/cluster/BackupReplicator.cj
+fmq/src/cluster/BackupReplicator_test.cj
+fmq/src/cluster/FakeTransport_test.cj
+fmq/src/cluster/FmqTestSetup_test.cj
+fmq/src/cluster/LogCapture_test.cj
+fmq/src/cluster/LogCleaner.cj
+fmq/src/cluster/LogCleaner_test.cj
+fmq/src/cluster/MQNodeTransport.cj
+fmq/src/cluster/MetaSyncer.cj

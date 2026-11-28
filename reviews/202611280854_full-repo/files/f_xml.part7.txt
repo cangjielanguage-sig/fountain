@@ -1,0 +1,15 @@
+f_xml/src/XmlEvent_test.cj
+f_xml/src/XmlException.cj
+f_xml/src/XmlNode.cj
+f_xml/src/XmlOptions.cj
+f_xml/src/XmlParser.cj
+f_xml/src/XmlParser_test.cj
+f_xml/src/XmlPullParser.cj
+f_xml/src/XmlPullParser_test.cj
+f_xml/src/XmlWriter.cj
+f_xml/src/XmlWriterIncremental_test.cj
+f_xml/src/XmlWriterOptions.cj
+f_xml/src/XmlWriterScratch_test.cj
+f_xml/src/XmlWriter_test.cj
+f_xml/src/XmlconfHarness_test.cj
+f_xml/src/f_xml.cj

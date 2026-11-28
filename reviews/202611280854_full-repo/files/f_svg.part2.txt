@@ -1,0 +1,17 @@
+f_svg/doc/f_svg-M7设计.md
+f_svg/doc/f_svg模块设计.md
+f_svg/doc/perf-baseline.md
+f_svg/doc/spec/add-f-svg-m2/design.md
+f_svg/doc/spec/add-f-svg-m2/fix-plan-2.md
+f_svg/doc/spec/add-f-svg-m2/fix-plan-3.md
+f_svg/doc/spec/add-f-svg-m2/fix-plan.md
+f_svg/doc/spec/add-f-svg-m2/proposal.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-animation/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-css/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-geometry/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-paint-and-clip/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-png/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-rasterization/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-render-pipeline/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-security/spec.md
+f_svg/doc/spec/add-f-svg-m2/specs/svg-text/spec.md

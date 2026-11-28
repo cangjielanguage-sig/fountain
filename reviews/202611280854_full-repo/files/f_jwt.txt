@@ -1,0 +1,14 @@
+f_jwt/README.md
+f_jwt/README_en.md
+f_jwt/doc/spec/fix-f-jwt-signature-verification/design.md
+f_jwt/doc/spec/fix-f-jwt-signature-verification/proposal.md
+f_jwt/doc/spec/fix-f-jwt-signature-verification/spec.md
+f_jwt/doc/spec/fix-f-jwt-signature-verification/tasks.md
+f_jwt/doc/spec/fix-f-jwt-signature-verification/verify.md
+f_jwt/src/HMACDigest.cj
+f_jwt/src/JWT.cj
+f_jwt/src/JWT_test.cj
+f_jwt/src/JwtIdCache.cj
+f_jwt/src/SignAlgo.cj
+f_jwt/src/encoding.cj
+f_jwt/src/exception/JWTException.cj

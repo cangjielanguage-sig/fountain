@@ -1,0 +1,7 @@
+f_jit/src/test/TCase.cj
+f_jit/src/test/Test.cj
+f_jit/src/test/diff/DiffHarness.cj
+f_jit/src/test/diff/RealRunners.cj
+f_jit/src/test/diff/TCoverage.cj
+f_jit/src/test/diff/diff_test.cj
+f_jit/src/userapi/UserApi_test.cj

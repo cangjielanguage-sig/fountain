@@ -1,0 +1,14 @@
+f_hydra/README.md
+f_hydra/README_en.md
+f_hydra/doc/spec/reuse-f-hydra-dense-decode/design.md
+f_hydra/doc/spec/reuse-f-hydra-dense-decode/proposal.md
+f_hydra/doc/spec/reuse-f-hydra-dense-decode/tasks.md
+f_hydra/src/FStoreVectorStore.cj
+f_hydra/src/FStoreVectorStore_test.cj
+f_hydra/src/IvfIndex.cj
+f_hydra/src/VectorCodec.cj
+f_hydra/src/VectorCodecReuse_test.cj
+f_hydra/src/VectorCodec_test.cj
+f_hydra/src/VectorMath.cj
+f_hydra/src/VectorModels.cj
+f_hydra/src/VectorStore.cj

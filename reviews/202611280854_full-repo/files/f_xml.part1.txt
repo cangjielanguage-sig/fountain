@@ -1,0 +1,5 @@
+f_xml/README.md
+f_xml/README_en.md
+f_xml/doc/build-warnings.md
+f_xml/doc/f_xml模块设计.md
+f_xml/doc/spec/complete-f-xml-m1-followups/baseline.md

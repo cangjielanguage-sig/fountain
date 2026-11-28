@@ -1,0 +1,15 @@
+fmq/doc/spec/fix-fmq-postfix-audit/proposal.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/docs/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/fmq/consume-semantics/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/fmq/manager-cli/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/fmq/metadata-cluster/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/fmq/metrics/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/fmq/queue-storage/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/specs/fmq/server-runtime/spec.md
+fmq/doc/spec/fix-fmq-postfix-audit/tasks.md
+fmq/doc/spec/fix-fmq-postfix-audit/verify-report.md
+fmq/doc/spec/fix-fmq-verify-followups/specs/fmq/manager-cli/spec.md
+fmq/doc/spec/fix-fmq-verify-followups/specs/fmq/metadata-cluster/spec.md
+fmq/doc/spec/fix-fmq-verify-followups/specs/fmq/queue-storage/spec.md
+fmq/doc/spec/fix-fmq-verify-followups/specs/fmq/server-runtime/spec.md
+fmq/doc/开发计划.md

@@ -1,0 +1,12 @@
+f_rule/src/test/Differential_test.cj
+f_rule/src/test/Integration_test.cj
+f_rule/src/test/NaiveMatcher.cj
+f_rule/src/test/NaiveMatcher_test.cj
+f_rule/src/test/PerfFixture_test.cj
+f_rule/src/test/PerfInsert_test.cj
+f_rule/src/test/PerfMemory_test.cj
+f_rule/src/test/PerfNetwork_test.cj
+f_rule/src/test/PerfSupport.cj
+f_rule/src/test/PerfTable_test.cj
+f_rule/src/test/PropertyGen.cj
+f_rule/src/test/ReteNetwork_test.cj

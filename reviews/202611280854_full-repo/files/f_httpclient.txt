@@ -1,0 +1,14 @@
+f_httpclient/README.md
+f_httpclient/README_en.md
+f_httpclient/doc/spec/f-llm-openai-compat/specs/http-sse-client/spec.md
+f_httpclient/doc/spec/reuse-sse-line-buffer/design.md
+f_httpclient/doc/spec/reuse-sse-line-buffer/proposal.md
+f_httpclient/doc/spec/reuse-sse-line-buffer/specs/http-sse-client/spec.md
+f_httpclient/doc/spec/reuse-sse-line-buffer/tasks.md
+f_httpclient/src/ExtendHttpResponse.cj
+f_httpclient/src/httpclient.cj
+f_httpclient/src/sse/SseEvent.cj
+f_httpclient/src/sse/SseException.cj
+f_httpclient/src/sse/SseReader.cj
+f_httpclient/src/sse/SseReaderLineBuffer_test.cj
+f_httpclient/src/sse/SseReader_test.cj

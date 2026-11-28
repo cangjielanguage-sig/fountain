@@ -1,0 +1,10 @@
+f_dbm/README.md
+f_dbm/README_en.md
+f_dbm/doc/spec/harden-fdbm-stack-defects/design.md
+f_dbm/doc/spec/harden-fdbm-stack-defects/proposal.md
+f_dbm/doc/spec/harden-fdbm-stack-defects/spec.md
+f_dbm/doc/spec/harden-fdbm-stack-defects/specs/f-dbm/spec.md
+f_dbm/doc/spec/harden-fdbm-stack-defects/tasks.md
+f_dbm/src/IdGenerator.cj
+f_dbm/src/IdGenerator_test.cj
+f_dbm/src/PartitionAlgorithm.cj

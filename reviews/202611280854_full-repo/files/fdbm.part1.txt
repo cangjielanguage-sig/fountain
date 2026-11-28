@@ -1,0 +1,10 @@
+fdbm/README.md
+fdbm/README_en.md
+fdbm/doc/spec/fix-fdbm-integration-test-driver-name/design.md
+fdbm/doc/spec/fix-fdbm-integration-test-driver-name/proposal.md
+fdbm/doc/spec/fix-fdbm-integration-test-driver-name/tasks.md
+fdbm/doc/spec/harden-fdbm-stack-defects/design.md
+fdbm/doc/spec/harden-fdbm-stack-defects/proposal.md
+fdbm/doc/spec/harden-fdbm-stack-defects/spec.md
+fdbm/doc/spec/harden-fdbm-stack-defects/specs/fdbm/spec.md
+fdbm/doc/spec/harden-fdbm-stack-defects/tasks.md

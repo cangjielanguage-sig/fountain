@@ -1,0 +1,7 @@
+f_mcp/doc/f_mcp模块设计.md
+f_mcp/doc/spec/add-f-mcp/design.md
+f_mcp/doc/spec/add-f-mcp/proposal.md
+f_mcp/doc/spec/add-f-mcp/specs/mcp-guardrails/spec.md
+f_mcp/doc/spec/add-f-mcp/specs/mcp/spec.md
+f_mcp/doc/spec/add-f-mcp/tasks.md
+f_mcp/doc/spec/add-f-mcp/verify-report.md

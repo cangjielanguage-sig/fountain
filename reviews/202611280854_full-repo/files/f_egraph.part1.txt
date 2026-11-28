@@ -1,0 +1,5 @@
+f_egraph/README.md
+f_egraph/README_en.md
+f_egraph/doc/spec/f-egraph-jit-flow-init/design.md
+f_egraph/doc/spec/f-egraph-jit-flow-init/proposal.md
+f_egraph/doc/spec/f-egraph-jit-flow-init/specs/f-egraph-flow-script/spec.md

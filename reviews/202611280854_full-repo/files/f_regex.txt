@@ -1,0 +1,8 @@
+f_regex/README.md
+f_regex/README_en.md
+f_regex/src/ExtendRegex.cj
+f_regex/src/RegexBuilder.cj
+f_regex/src/RegexFromString.cj
+f_regex/src/Regex_test.cj
+f_regex/src/SearchDirection.cj
+f_regex/src/exception/RegexBuilderException.cj

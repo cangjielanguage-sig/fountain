@@ -1,0 +1,11 @@
+f_mq/doc/spec/fix-fmq-full-audit/specs/f-mq/client/spec.md
+f_mq/doc/spec/fix-fmq-full-audit/specs/f-mq/protocol/spec.md
+f_mq/doc/spec/fix-fmq-full-audit/tasks.md
+f_mq/doc/spec/fix-fmq-full-audit/tracking.md
+f_mq/doc/spec/fix-fmq-full-audit/verify-report.md
+f_mq/doc/spec/fix-fmq-postfix-audit/design.md
+f_mq/doc/spec/fix-fmq-postfix-audit/proposal.md
+f_mq/doc/spec/fix-fmq-postfix-audit/specs/f-mq/client/spec.md
+f_mq/doc/spec/fix-fmq-postfix-audit/specs/f-mq/protocol/spec.md
+f_mq/doc/spec/fix-fmq-postfix-audit/tasks.md
+f_mq/doc/spec/fix-fmq-postfix-audit/verify-report.md

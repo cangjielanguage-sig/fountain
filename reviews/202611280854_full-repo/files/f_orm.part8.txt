@@ -1,0 +1,7 @@
+f_orm/src/wrap/QueryResultWrap_test.cj
+f_orm/src/wrap/SqlArg.cj
+f_orm/src/wrap/SqlArgBinding_test.cj
+f_orm/src/wrap/SqlArgs.cj
+f_orm/src/wrap/StatementWrap.cj
+f_orm/src/wrap/TransactionWrap.cj
+f_orm/src/wrap/imports.cj

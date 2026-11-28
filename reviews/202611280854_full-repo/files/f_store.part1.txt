@@ -1,0 +1,4 @@
+f_store/README.md
+f_store/README_en.md
+f_store/doc/审查报告.md
+f_store/doc/开发计划.md

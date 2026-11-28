@@ -1,0 +1,11 @@
+f_xml/doc/spec/complete-f-xml-m1-followups/design.md
+f_xml/doc/spec/complete-f-xml-m1-followups/proposal.md
+f_xml/doc/spec/complete-f-xml-m1-followups/specs/f-xml-char-layer/spec.md
+f_xml/doc/spec/complete-f-xml-m1-followups/specs/f-xml-conformance/spec.md
+f_xml/doc/spec/complete-f-xml-m1-followups/specs/f-xml-dtd-entities/spec.md
+f_xml/doc/spec/complete-f-xml-m1-followups/tasks.md
+f_xml/doc/spec/complete-f-xml-m1-followups/verification.md
+f_xml/doc/spec/implement-f-xml-m1/baseline.md
+f_xml/doc/spec/implement-f-xml-m1/design.md
+f_xml/doc/spec/implement-f-xml-m1/proposal.md
+f_xml/doc/spec/implement-f-xml-m1/specs/f-xml-char-layer/spec.md
