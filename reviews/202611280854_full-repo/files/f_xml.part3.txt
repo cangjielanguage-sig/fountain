@@ -1,0 +1,16 @@
+f_xml/doc/spec/implement-f-xml-m1/specs/f-xml-conformance/spec.md
+f_xml/doc/spec/implement-f-xml-m1/specs/f-xml-dom/spec.md
+f_xml/doc/spec/implement-f-xml-m1/specs/f-xml-dtd-entities/spec.md
+f_xml/doc/spec/implement-f-xml-m1/specs/f-xml-stream-parser/spec.md
+f_xml/doc/spec/implement-f-xml-m1/specs/f-xml-writer/spec.md
+f_xml/doc/spec/implement-f-xml-m1/tasks.md
+f_xml/doc/spec/implement-f-xml-m1/verification.md
+f_xml/doc/spec/optimize-f-xml-semantic-layer/baseline.md
+f_xml/doc/spec/optimize-f-xml-semantic-layer/design.md
+f_xml/doc/spec/optimize-f-xml-semantic-layer/proposal.md
+f_xml/doc/spec/optimize-f-xml-semantic-layer/specs/f-xml-semantic-layer/spec.md
+f_xml/doc/spec/optimize-f-xml-semantic-layer/tasks.md
+f_xml/doc/spec/optimize-f-xml-semantic-layer/verification.md
+f_xml/doc/spec/reuse-f-xml-writer-scratch/design.md
+f_xml/doc/spec/reuse-f-xml-writer-scratch/proposal.md
+f_xml/doc/spec/reuse-f-xml-writer-scratch/specs/xml-writer-output/spec.md

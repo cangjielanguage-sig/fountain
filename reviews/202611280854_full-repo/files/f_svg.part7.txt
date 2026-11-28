@@ -1,0 +1,14 @@
+f_svg/doc/spec/add-f-svg-m6/specs/svg-security/spec.md
+f_svg/doc/spec/add-f-svg-m6/specs/svg-text/spec.md
+f_svg/doc/spec/add-f-svg-m6/specs/svg-value-types/spec.md
+f_svg/doc/spec/add-f-svg-m6/tasks.md
+f_svg/doc/spec/add-f-svg-m6/verification.md
+f_svg/doc/spec/add-f-svg-m6/verify-report-2.md
+f_svg/doc/spec/add-f-svg-m6/verify-report-3.md
+f_svg/doc/spec/add-f-svg-m6/verify-report.md
+f_svg/doc/spec/add-f-svg-m7-output-overloads/design.md
+f_svg/doc/spec/add-f-svg-m7-output-overloads/proposal.md
+f_svg/doc/spec/add-f-svg-m7-output-overloads/specs/svg-authoring/spec.md
+f_svg/doc/spec/add-f-svg-m7-output-overloads/tasks.md
+f_svg/doc/spec/add-f-svg-m7-output-overloads/verification.md
+f_svg/doc/spec/add-f-svg-m7/design.md

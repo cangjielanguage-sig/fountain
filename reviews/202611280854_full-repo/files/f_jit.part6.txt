@@ -1,0 +1,5 @@
+f_jit/doc/jit-bytecode-m3.md
+f_jit/doc/optimize-call-path.md
+f_jit/doc/optimize-compile-path.md
+f_jit/doc/perf-m1.md
+f_jit/doc/perf-m2.md

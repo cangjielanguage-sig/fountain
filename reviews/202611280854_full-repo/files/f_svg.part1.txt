@@ -1,0 +1,7 @@
+f_svg/README.md
+f_svg/README_en.md
+f_svg/doc/f_svg-M2设计.md
+f_svg/doc/f_svg-M3设计.md
+f_svg/doc/f_svg-M4设计.md
+f_svg/doc/f_svg-M5设计.md
+f_svg/doc/f_svg-M6设计.md

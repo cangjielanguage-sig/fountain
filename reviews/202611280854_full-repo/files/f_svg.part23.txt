@@ -1,0 +1,14 @@
+f_svg/src/SvgTextBaseline.cj
+f_svg/src/SvgTextBaselineM4_test.cj
+f_svg/src/SvgTextDecoration.cj
+f_svg/src/SvgTextDecoration2.cj
+f_svg/src/SvgTextDecorationM4_test.cj
+f_svg/src/SvgTextElement.cj
+f_svg/src/SvgTextElement_test.cj
+f_svg/src/SvgTextLayoutCacheM4_test.cj
+f_svg/src/SvgTextPath.cj
+f_svg/src/SvgTextPathExtensionM4_test.cj
+f_svg/src/SvgTextPathLayout.cj
+f_svg/src/SvgTextPathLayout_test.cj
+f_svg/src/SvgTextPathLengthM6_test.cj
+f_svg/src/SvgTextPathModel_test.cj

@@ -1,0 +1,7 @@
+f_rule/README.md
+f_rule/README_en.md
+f_rule/doc/01-architecture.md
+f_rule/doc/02-fact-model.md
+f_rule/doc/03-condition-expression.md
+f_rule/doc/04-rete-network.md
+f_rule/doc/05-agenda-conflict-resolution.md

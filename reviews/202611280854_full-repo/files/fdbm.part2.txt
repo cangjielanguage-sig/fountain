@@ -1,0 +1,3 @@
+fdbm/doc/spec/implement-f-dbd-driver-and-fdbm-server/specs/fdbm/spec.md
+fdbm/doc/开发计划.md
+fdbm/doc/详细设计.md

@@ -1,0 +1,16 @@
+f_email/src/smtp/SmtpCapabilities.cj
+f_email/src/smtp/SmtpClient.cj
+f_email/src/smtp/SmtpClientBuilder.cj
+f_email/src/smtp/SmtpReply.cj
+f_email/src/smtp/Smtp_test.cj
+f_email/src/transport/DotStuff.cj
+f_email/src/transport/DotStuff_test.cj
+f_email/src/transport/LineChannel.cj
+f_email/src/transport/LineChannelLargeRead_test.cj
+f_email/src/transport/LineChannel_test.cj
+f_email/src/transport/MailConnection.cj
+f_email/src/transport/MailConnection_test.cj
+f_email/src/transport/MailTrace.cj
+f_email/src/transport/TlsMode.cj
+f_email/src/transport/TransportFactory.cj
+f_email/src/transport/TransportTestSupport_test.cj

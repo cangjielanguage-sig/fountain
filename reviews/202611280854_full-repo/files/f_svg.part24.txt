@@ -1,0 +1,12 @@
+f_svg/src/SvgTextRenderer.cj
+f_svg/src/SvgTextRenderer_test.cj
+f_svg/src/SvgTextToleranceM6_test.cj
+f_svg/src/SvgTextWritingMode.cj
+f_svg/src/SvgTextWritingModeM4_test.cj
+f_svg/src/SvgTimeline.cj
+f_svg/src/SvgTransform.cj
+f_svg/src/SvgTransformBox.cj
+f_svg/src/SvgTransformBoxM5_test.cj
+f_svg/src/SvgTransformOrigin.cj
+f_svg/src/SvgTransformOriginM5_test.cj
+f_svg/src/SvgTransformOriginRenderM5_test.cj

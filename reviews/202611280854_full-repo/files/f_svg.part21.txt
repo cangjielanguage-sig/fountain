@@ -1,0 +1,9 @@
+f_svg/src/SvgRenderTree.cj
+f_svg/src/SvgRenderTree_test.cj
+f_svg/src/SvgRenderer.cj
+f_svg/src/SvgRenderer_test.cj
+f_svg/src/SvgRenderingHints.cj
+f_svg/src/SvgRenderingHintsM6_test.cj
+f_svg/src/SvgRoot.cj
+f_svg/src/SvgRootAttrsM6_test.cj
+f_svg/src/SvgRoot_test.cj

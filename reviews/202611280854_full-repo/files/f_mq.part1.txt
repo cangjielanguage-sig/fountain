@@ -1,0 +1,15 @@
+f_mq/README.md
+f_mq/README_en.md
+f_mq/doc/spec/add-fmq-message-queue/design.md
+f_mq/doc/spec/add-fmq-message-queue/proposal.md
+f_mq/doc/spec/add-fmq-message-queue/specs/f-mq/client/spec.md
+f_mq/doc/spec/add-fmq-message-queue/specs/f-mq/protocol/spec.md
+f_mq/doc/spec/add-fmq-message-queue/tasks.md
+f_mq/doc/spec/add-fmq-message-queue/verify-report.md
+f_mq/doc/spec/add-fmq-metrics-and-delay/design.md
+f_mq/doc/spec/add-fmq-metrics-and-delay/proposal.md
+f_mq/doc/spec/add-fmq-metrics-and-delay/specs/f-mq/protocol/spec.md
+f_mq/doc/spec/add-fmq-metrics-and-delay/tasks.md
+f_mq/doc/spec/add-fmq-metrics-and-delay/verify-report.md
+f_mq/doc/spec/fix-fmq-full-audit/design.md
+f_mq/doc/spec/fix-fmq-full-audit/proposal.md

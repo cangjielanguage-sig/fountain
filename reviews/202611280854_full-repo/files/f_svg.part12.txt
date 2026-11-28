@@ -1,0 +1,15 @@
+f_svg/src/SvgBounds_test.cj
+f_svg/src/SvgBuilder.cj
+f_svg/src/SvgBuilderM7_test.cj
+f_svg/src/SvgCircle.cj
+f_svg/src/SvgClipMask.cj
+f_svg/src/SvgClipMask_test.cj
+f_svg/src/SvgClipProperty.cj
+f_svg/src/SvgClipPropertyM4_test.cj
+f_svg/src/SvgClipRenderM4_test.cj
+f_svg/src/SvgClock.cj
+f_svg/src/SvgClock_test.cj
+f_svg/src/SvgColor.cj
+f_svg/src/SvgColor_test.cj
+f_svg/src/SvgComputedStyle.cj
+f_svg/src/SvgComputedStyleM4_test.cj

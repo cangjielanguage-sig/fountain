@@ -1,0 +1,3 @@
+f_jit/doc/design-m2.md
+f_jit/doc/design-m3.md
+f_jit/doc/design-parallel-call.md

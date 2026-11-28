@@ -1,0 +1,4 @@
+f_version/README.md
+f_version/README_en.md
+f_version/src/AppVersion.cj
+f_version/src/FountainVersion.cj

@@ -1,0 +1,14 @@
+f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings/design.md
+f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings/proposal.md
+f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings/specs/mcp-guardrails/spec.md
+f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings/specs/mcp/spec.md
+f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings/tasks.md
+f_mcp/doc/spec/optimize-mcp-truncate-utf8/design.md
+f_mcp/doc/spec/optimize-mcp-truncate-utf8/proposal.md
+f_mcp/doc/spec/optimize-mcp-truncate-utf8/specs/mcp-truncate-utf8/spec.md
+f_mcp/doc/spec/optimize-mcp-truncate-utf8/tasks.md
+f_mcp/doc/spec/rework-jsonrpc-macro-and-demos/specs/mcp/spec.md
+f_mcp/doc/spec/rework-jsonrpc-macro-and-demos/verify-report.md
+f_mcp/src/Mcp.cj
+f_mcp/src/base/McpContent.cj
+f_mcp/src/base/McpException.cj

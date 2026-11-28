@@ -1,0 +1,11 @@
+f_codec/README.md
+f_codec/README_en.md
+f_codec/src/Codec.cj
+f_codec/src/default/DataType.cj
+f_codec/src/default/DefaultCodec.cj
+f_codec/src/default/DefaultCodec_test.cj
+f_codec/src/default/TestObject_test.cj
+f_codec/src/default/imports.cj
+f_codec/src/default/release_test.cj
+f_codec/src/exception/CodecException.cj
+f_codec/src/imports.cj

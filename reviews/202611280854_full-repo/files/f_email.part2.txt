@@ -1,0 +1,17 @@
+f_email/doc/spec/add-f-email-client/design.md
+f_email/doc/spec/add-f-email-client/proposal.md
+f_email/doc/spec/add-f-email-client/specs/email-imap/spec.md
+f_email/doc/spec/add-f-email-client/specs/email-message/spec.md
+f_email/doc/spec/add-f-email-client/specs/email-mime/spec.md
+f_email/doc/spec/add-f-email-client/specs/email-pop3/spec.md
+f_email/doc/spec/add-f-email-client/specs/email-smtp/spec.md
+f_email/doc/spec/add-f-email-client/specs/email-transport/spec.md
+f_email/doc/spec/add-f-email-client/tasks.md
+f_email/doc/spec/add-f-email-client/verification.md
+f_email/doc/spec/reuse-f-email-stream-buffers/design.md
+f_email/doc/spec/reuse-f-email-stream-buffers/proposal.md
+f_email/doc/spec/reuse-f-email-stream-buffers/tasks.md
+f_email/src/EmailFacade.cj
+f_email/src/EmailFacade_test.cj
+f_email/src/email.cj
+f_email/src/imap/ImapCapabilities.cj

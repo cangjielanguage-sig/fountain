@@ -1,0 +1,17 @@
+f_jit/src/compiler/A64Exec_test.cj
+f_jit/src/compiler/A7JsonSet_test.cj
+f_jit/src/compiler/Acceptance_test.cj
+f_jit/src/compiler/AnyCastAux_test.cj
+f_jit/src/compiler/AnyCast_test.cj
+f_jit/src/compiler/AnyContainer_test.cj
+f_jit/src/compiler/AnyFrontend_test.cj
+f_jit/src/compiler/Assembler.cj
+f_jit/src/compiler/Assembler_test.cj
+f_jit/src/compiler/Ast.cj
+f_jit/src/compiler/AstM2_test.cj
+f_jit/src/compiler/AstShape.cj
+f_jit/src/compiler/Builder_test.cj
+f_jit/src/compiler/BytecodeBuilder.cj
+f_jit/src/compiler/Capture.cj
+f_jit/src/compiler/Capture_test.cj
+f_jit/src/compiler/CastOrParse_test.cj
