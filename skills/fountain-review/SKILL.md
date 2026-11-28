@@ -5,7 +5,7 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 
 # fountain-review — 代码审查 → OpenSpec 修复（工作流 L）
 
-审查与修复一条线：内置**只读**审查引擎（并行 reviewer 子 agent）产出分轮报告与问题清单，再按 OpenSpec 六步 + 严格 TDD 把问题修完并归档。原 `fountain-code-review-fix` 已整体并入本技能；审查不再依赖 `cangjie-code-review-harness`。
+审查与修复一条线：内置**只读**审查引擎（并行 reviewer 子 agent）产出分轮报告与问题清单，再按 OpenSpec 六步 + 严格 TDD 把问题修完并归档。审查引擎随本技能分发，不依赖 `cangjie-code-review-harness`。
 
 两条不可让渡的原则：
 
