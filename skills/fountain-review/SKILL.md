@@ -23,6 +23,7 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 - **`cangjie-doc-lookup`**：没装就 `python <skill-root>/scripts/install_skill.py fountain`（从 fountain 仓库 `skills/` 装全部技能），装完跑 `python <cangjie-doc-lookup 技能目录>/scripts/skill_paths.py check`。
 - **`opsx-*`（12 个）**：缺任一（`install_skill.py list` 不是 `12/12`）同样用 `install_skill.py fountain` 或 `install_skill.py opsx` 装齐，并确认运行器 `~/.workbuddy/scripts/opsx_fusion.py` 已部署。
 - **`test-driven-development`**：进入步骤 4 前必须加载（**REQUIRED SUB-SKILL:**），apply 里逐任务 Red-Green-Refactor。
+- **查证优先**：API 签名 / 标准库语义 / 语言特性拿不准时，先查 `cangjie-doc-lookup`（`scripts/skill_paths.py check` → `scripts/search_docs.py`），模块 API 查 `fountain-api-lookup`；报告里引文档位置作判据，查不到就写 `待确认`，不凭记忆断言。
 - **不需要** `cangjie-code-review-harness`：审查引擎随本技能分发（`reviewer.md` + `references/review-checklist.md`）。
 
 1. **步骤 0 — 定范围与基线（只读）**：`project_root` = `git -C <目标> rev-parse --show-toplevel`（无 git 时向上找 `cjpm.toml` / `openspec/`）；「当前目录」→ 项目根 + `scope=.`，「指定模块」→ 项目根 + 该模块相对路径。基线二选一：**分支差异**（`source_branch != target_branch` 且 diff 非空）或**工作区快照**（无 git / 同分支 / diff 为空）；工作区不干净时停下问用户「提交 / stash / 快照审查」，不擅自处理。
@@ -198,6 +199,7 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 | 用户说「只审查」还继续 propose | 唯一例外：只出报告时在步骤 1 结束 |
 | 说「这个类是公共的，多线程用也没事」 | 并发安全要指出共享路径与同步手段；没找到共享路径就写线程封闭，别默认安全 |
 | 为了性能把锁去掉 / 缩小 | 去锁是设计变更：先证明不变量有替代保护（不可变 / 线程封闭 / 原子），再附多线程压力测试 |
+| 凭记忆断言标准库签名 / 语言特性 | 先查 `cangjie-doc-lookup`，报告里引文档位置；查不到写 `待确认` |
 | 说「这个函数没人用」就要删 | 对外可达的 `public` 不算死代码；但**非公共顶级声明里的 `public` 成员**（类型 internal/private/protected）全项目无使用就算；`protected` 只有 `public open` / `public abstract`（非 `sealed`）类成员豁免 |
 | 说「这个函数没人用」却只在单文件搜过 | `private` 搜全仓、`internal` 搜本包及子包、`protected` 先判所属类再定范围 |
 | 说「这里是热点」但只有调用次数，没有 self time 占比 | 调用次数多 ≠ 最热；没数据就不是发现——写进「待验证假设」，不进 todo |
