@@ -165,7 +165,7 @@ def build_scope_md(args: argparse.Namespace, scope_rel: str) -> str:
 ## 约束
 
 - 只读审查，不改源码、不跑构建、不提交。
-- 主 Agent 不读被审源码；代码阅读由 reviewer 子 agent 完成。
+- 代码阅读默认由 reviewer 子 agent 完成；**子智能体达到上限时由主 Agent 接管剩余工作（含直读源码审查）**。
 - 每条发现必须给：位置（文件:行号）、来源（本次改动 / 存量）、判据（review-checklist 小节）、
   证据等级（静态确定 / 需实测 / 待确认）。
 - 缺陷进「发现」，性能与内存改进进「优化可行性方案」，两者分开统计。

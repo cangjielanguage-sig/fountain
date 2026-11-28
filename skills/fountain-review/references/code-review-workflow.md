@@ -38,7 +38,7 @@ parallel_per_batch = 2（默认，按模块计）
 
 执行约束：
 
-- **主 Agent 不读被审源码**：不 `Read` / `Grep` / `Glob` 源文件、不 `git diff` 看内容；所有代码阅读交给 reviewer 子 agent。
+- **代码阅读默认交给 reviewer 子 agent**：主 Agent 不 `Read` / `Grep` / `Glob` 源文件、不 `git diff` 看内容。**例外：子智能体达到上限** → 主 Agent 接管全部剩余工作（含直读源码审查），见 `SKILL.md`「子智能体上限时的接管规则」。
 - **审查引擎自包含**：reviewer 指令在 `reviewer.md`，清单在 `references/review-checklist.md`；不安装、不加载 `cangjie-code-review-harness`。
 - **审查单元是模块**：一个模块一个 reviewer 子 agent、一份报告；模块太大（> 15 个文件，`.cj` + `.md`）拆子轮写 `{workdir}/parts/`，由主 Agent 合并成一份模块报告。
 - **全量逐文件**：`files/<module>.txt` 列出该模块**全部** `.cj` 与 `.md`（含 README、`README_en`、`doc/**`）。每个文件都要读到，不抽样、不只审 `src/`；报告必须有「文件覆盖」表且与清单逐行对应。
@@ -132,7 +132,7 @@ git branch -d fix/review-<YYYYMMDD>
 
 | 你正想做 | 现实 |
 | --- | --- |
-| 主 Agent 先读一遍源码再派审查 | 审查引擎禁止主 Agent 读被审文件；代码阅读交给 reviewer 子 agent |
+| 主 Agent 先读一遍源码再派审查 | 默认交给 reviewer 子 agent；**仅子智能体达到上限时**才接管直读 |
 | 为了审查先装 `cangjie-code-review-harness` | 已并入本技能，不需要；装了也不会被使用 |
 | 工作区不干净，先提交了再审查 | 提交是用户决定；先问「提交 / stash / 快照审查」三选一 |
 | 审查报告只统计不建任务 | tasks 必须逐条映射 `todo.md` 的严重/一般问题，编号可追溯 |

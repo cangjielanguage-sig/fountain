@@ -1,6 +1,6 @@
 ---
 name: fountain-review
-description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分支 / 工作区快照，并按审查报告修复时使用；逐模块、逐文件审查（模块内全部 .cj 与 .md），一个模块一份报告写到 `docs/review/日期/模块名.md`，覆盖死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、并发安全与锁粒度、热点瓶颈定位、大粒度锁热点、并发串行、低效算法、现有代码存量 BUG、功能完备性与 README 覆盖、降低堆内存与 CPU 占用的可行性方案（含 local mode 探索），再走 OpenSpec 六步 + 严格 TDD 修复；主 Agent 不读被审源码。
+description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分支 / 工作区快照，并按审查报告修复时使用；逐模块、逐文件审查（模块内全部 .cj 与 .md），一个模块一份报告写到 `docs/review/日期/模块名.md`，覆盖死代码、表现形式不同的重复逻辑、空实现、栈溢出、OOM、并发安全与锁粒度、热点瓶颈定位、大粒度锁热点、并发串行、低效算法、现有代码存量 BUG、功能完备性与 README 覆盖、降低堆内存与 CPU 占用的可行性方案（含 local mode 探索），再走 OpenSpec 六步 + 严格 TDD 修复；代码阅读默认交给子 agent，子智能体达到上限时由主 Agent 接管剩余工作。
 ---
 
 # fountain-review — 代码审查 → OpenSpec 修复（工作流 L）
@@ -9,7 +9,7 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 
 两条不可让渡的原则：
 
-1. **主 Agent 不读被审源码**——代码阅读由 reviewer 子 agent 完成，主 Agent 只操作 `scope.md` / `modules.md` / 模块报告 / `todo.md` / `review_summary.md`。
+1. **代码阅读默认交给 reviewer 子 agent**——主 Agent 只操作 `scope.md` / `modules.md` / 模块报告 / `todo.md` / `review_summary.md`。**唯一例外：子智能体达到上限**（创建连续失败、报 limit / quota / 上限）→ 主 Agent 接管**全部剩余工作**，包括直接读源码把未完成的审查做完，见「子智能体上限时的接管规则」。
 2. **逐模块、逐文件审查**——以模块为审查单元，模块内**每个 `.cj` 与 `.md` 都必须读到**（全量，不抽样）；每审完一个模块立即把报告写到 `{project_root}/docs/review/<YYYY-MM-DD>/<module>.md`。
 3. **每次审查都是全量推进**——一次运行覆盖 `modules.md` 的**全部模块**、每个模块的**全部 `.cj` 与 `.md`**；不做增量（不按 diff 挑模块、不沿用上次结论）、不留未审模块。全量是默认，**开始前不询问用户**。
 4. **并发默认按"会被多线程调用"审**——先证明安全，再谈锁粒度；锁能不要就不要，要就要小。
@@ -27,13 +27,35 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 - **不需要** `cangjie-code-review-harness`：审查引擎随本技能分发（`reviewer.md` + `references/review-checklist.md`）。
 
 1. **步骤 0 — 定范围与基线（只读）**：`project_root` = `git -C <目标> rev-parse --show-toplevel`（无 git 时向上找 `cjpm.toml` / `openspec/`）；「当前目录」→ 项目根 + `scope=.`，「指定模块」→ 项目根 + 该模块相对路径。基线二选一：**分支差异**（`source_branch != target_branch` 且 diff 非空）或**工作区快照**（无 git / 同分支 / diff 为空）；工作区不干净时停下问用户「提交 / stash / 快照审查」，不擅自处理。
-2. **步骤 1 — 执行审查（本技能内建引擎）**：按下面「审查引擎」准备参数、`scope.md` 与 `modules.md`，分支模式走阶段零→四，快照模式跳过阶段零。**主 Agent 不读被审源码**；审查阶段**不改源码**。审查对象是**本次改动 + 本轮读到的现有代码**——现有代码里的缺陷同样要报，标 `[存量]`（`review-checklist §11`）。**一个模块一份报告，写到 `docs/review/<YYYY-MM-DD>/`**，全部模块完成后汇总 `todo.md` + `review_summary.md`。
+2. **步骤 1 — 执行审查（本技能内建引擎）**：按下面「审查引擎」准备参数、`scope.md` 与 `modules.md`，分支模式走阶段零→四，快照模式跳过阶段零。**代码阅读默认由子 agent 完成**（子智能体耗尽时主 Agent 接管，见接管规则）；审查阶段**不改源码**。审查对象是**本次改动 + 本轮读到的现有代码**——现有代码里的缺陷同样要报，标 `[存量]`（`review-checklist §11`）。**一个模块一份报告，写到 `docs/review/<YYYY-MM-DD>/`**，全部模块完成后汇总 `todo.md` + `review_summary.md`。
    - 用户明确说「只审查、不修」→ 本步结束，交报告，不进 OpenSpec。
 3. **步骤 2 — 汇总修复清单**：读 `todo.md` / `review_summary.md`（汇总产物，不是源码），统计严重 X / 一般 Y / 轻微 Z 与**存量 N 条**；**修复范围默认 = 本次改动的严重 + 一般**，轻微与存量由用户决定（既不静默丢弃，也不静默扩大）。给每条问题编号 `<module>-<序号>`（存量加 `S`）；`openspec update` + `openspec list --json` 确认工程可用。
 4. **步骤 3 — 审查报告入库并推送**：`docs/review/<YYYY-MM-DD>/*.md` 是交付物，**提交并推送**到当前源分支（`docs(review): <日期> 模块审查报告`）；`reviews/` 是过程目录，不入库（写进 `.git/info/exclude` 或放项目外）。提交前确认工作区干净。
 5. **步骤 4 — 建修复工作树（自动，不询问）**：加载 `using-git-worktrees`，从当前源分支创建 `.worktrees/review-fix-<YYYYMMDD>`（分支 `fix/review-<YYYYMMDD>`）；后续修复全部在这个 worktree 里做，主工作区不动。
 6. **步骤 5 — 逐问题走 OpenSpec 全流程（自动循环）**：对修复范围内的每个 `<module>-<n>`，一次只做一个问题：`opsx:propose "<id> <标题>"` → 用户评审 `design.md` / `tasks.md` → `opsx:apply` 严格 TDD（Red → Green → Refactor）→ `opsx:verify` → `opsx:archive` → `git commit`（**一个 issue 一个提交**，`fix(<module>): <id> <摘要>`）。详见「修复流水线」。
 7. **步骤 6 — 收尾（自动）**：全部问题修完且回归通过后，把 worktree 分支合入**创建它时的源分支**并推送（能快进就快进，否则普通合并）；`git worktree remove <path>` + `git branch -d <branch>`（只删本流程创建的那一个）；汇报每个问题的提交、报告路径与 verify 结果。
+
+## 子智能体上限时的接管规则
+
+**判定**：`Task` / 子 agent 创建连续失败 2 次，或错误信息含 limit / quota / 上限 / 不可用 → 判定「子智能体已达上限」，停止重试与等待。
+
+**接管范围：全部剩余工作，不止审查。** 主 Agent 从当前进度继续，质量要求不降：
+
+| 场景 | 主 Agent 怎么做 |
+| --- | --- |
+| 审查未完成的模块 | 按 `reviewer.md` 自己审：读 `files/<module>.txt` → 逐个读 `.cj` / `.md` → 按 checklist 逐维度 → 写 `docs/review/<日期>/<module>.md`（含文件覆盖表、优化方案、待验证假设）→ 把 `modules.md` 改为 `已审` |
+| 子轮未合并 | 按 part 顺序补完并合并成一份模块报告 |
+| 阶段四汇总 | 自己读各模块报告，写 `todo.md` 与 `review_summary.md`（汇总产物，本就不是源码） |
+| 修复阶段 | 自己按 TDD 逐问题执行；`opsx:apply` 等若依赖子 agent 而不可用，等价手工产出 propose / tasks / verify / archive |
+
+**接管时必须保持**：
+
+- **全量**：`modules.md` 全部模块、`files/<module>.txt` 全部文件都要审完，不因接管而抽样、跳过或缩小范围。
+- **模块内串行**：主 Agent 天然串行，不要为赶进度跳过子轮。
+- **报告结构不变**：发现 / 优化可行性方案 / 待验证假设 / 文件覆盖 / 覆盖自检 / 统计 / 总评，一个不少；文件覆盖表仍要与清单行数一致。
+- **注明接管**：在 `review_summary.md` 与最终汇报里写「子智能体上限，主 Agent 自 <模块> 起接管」，便于追溯执行者与质量口径。
+- 修复阶段的用户评审门禁、性能基线要求照旧，不因接管而放宽。
+
 
 ## 修复流水线（审查完成后自动执行）
 
@@ -187,7 +209,7 @@ python <skill_dir>/scripts/review_workdir.py \
 本轮审查目标：模块 <module>（路径 <rel>，<cj> 个 .cj + <md> 个 .md），重点：<专项>
 ```
 
-- 用当前 Agent 的子 agent 机制（`Task` 工具）；平台有专用高强度类型就用，没有就用默认类型。
+- 用当前 Agent 的子 agent 机制（`Task` 工具）；平台有专用高强度类型就用，没有就用默认类型。**创建连续失败 2 次或报上限 → 转「子智能体上限时的接管规则」，不要反复重试。**
 - **审完一个模块立即落盘**：报告写完 → 主 Agent 把 `modules.md` 该行改成 `已审`，再启动下一批；不要等所有模块审完才写。合并子轮时核对报告「文件覆盖」表与 `files/<module>.txt` 行数一致。
 - 同名报告已存在（同日重审）时**不静默覆盖**：改存 `<module>_v2.md`，报告头注明与上一份的关系。
 - 某模块失败：重试一次；仍失败则把 `modules.md` 标 `失败（原因）`，继续其它模块；**全部批次跑完后回头补齐失败与未审模块**，直到 `modules.md` 没有 `待审` / `失败`。确实补不齐时必须先告知用户并取得同意，才能带缺口结束——**不得默认带缺口进入汇总**。
@@ -238,7 +260,7 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 
 | 你正想做 | 现实 |
 | --- | --- |
-| 先自己读一遍源码 / 看 `git diff` 内容再派活 | 主 Agent 不读被审源码；代码阅读交给 reviewer 子 agent |
+| 先自己读一遍源码 / 看 `git diff` 内容再派活 | 默认交给 reviewer 子 agent；**仅子智能体达到上限时**主 Agent 才接管直读 |
 | 按文件数切轮，或一个 agent 铺 30 个文件 | 单位是**模块**，一模块一轮；模块太大拆子轮，最后合并成一份模块报告 |
 | 两个 agent 同时审同一个模块（含子轮） | 模块内一律串行；并行只发生在不同模块之间 |
 | 报告先写到 `reviews/`，事后再整理 | 模块报告直接写 `docs/review/<YYYY-MM-DD>/<module>.md`，随代码入库 |
