@@ -104,6 +104,8 @@ public class FileDownload {
                 }
                 if (length >= 0) {
                     responseBuilder.header("Content-Length", length.toString())
+                } else {
+                    responseBuilder.header('Transfer-Encoding', 'chunked')
                 }
                 responseBuilder.build()
             }
