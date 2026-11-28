@@ -79,34 +79,56 @@ parallel_per_batch = 2（默认，按模块计）
 - **`docs/review/` 与 `reviews/` 相反：模块报告是交付物，要入库**。不要把它加进 `.gitignore`，也不要在收尾时删掉。
 - 审查阶段**不改任何源码**；发现的问题只进报告。
 
-## 4. 报告 → OpenSpec propose
+## 4. 修复前的准备
 
-主 Agent 可以读 `todo.md` 与 `review_summary.md`（这是汇总产物，不是源码）：
+主 Agent 可以读 `todo.md` 与 `review_summary.md`（汇总产物，不是源码）：
 
 1. 统计严重 / 一般 / 轻微数量与**存量缺陷**条数（`[存量]` 标记）；**修复范围默认 = 本次改动的严重 + 一般**；轻微项与存量缺陷由用户决定是否纳入，既不静默丢弃也不静默扩大范围。
-2. 给每条问题编号：`<module>-<序号>`（如 `f_orm-3`），后续 tasks 逐条引用；存量问题加 `S` 后缀（如 `f_orm-3S`），便于在 tasks 里区分来源。
+2. 给每条问题编号 `<module>-<序号>`（如 `f_orm-3`），存量加 `S` 后缀（`f_orm-3S`）。
 3. `openspec update` + `openspec list --json`；未初始化按 `openspec-workflow.md` 第 1–2 节（`<tool>` 问用户）。
-4. 执行 `opsx:propose "根据代码审查报告 <workdir>/todo.md 修复 <项目/模块> 的严重与一般问题（严重 X、一般 Y）"`：
-   - `proposal.md`：审查范围与基线、问题统计、修复目标与非目标、验收口径；
-   - `design.md`：每类问题的修复方案、风险、是否动公开 API / 行为；
-   - `tasks.md`：**逐条映射** `todo.md` 的问题，标题带 `[R1-1][严重]`，每条含复现点与测试点；禁止漏项或合并成模糊任务；
-   - 把 `todo.md` + `review_summary.md` 复制到 `doc/spec/<变更名>/review.md`（随变更入库，作为修复依据）。
-5. 本步只写规划产物，不改代码；完成后停下等用户评审。
+4. **报告入库**：提交 `docs/review/<YYYY-MM-DD>/` 并推送源分支（`docs(review): <日期> 模块审查报告`）；`reviews/` 是过程目录，写进 `.git/info/exclude` 或放项目外，不入库。
+5. **建工作树**（加载 `using-git-worktrees`）：
+   ```bash
+   git worktree add .worktrees/review-fix-<YYYYMMDD> -b fix/review-<YYYYMMDD> <源分支>
+   ```
+   后续修复全在 worktree 内进行，主工作区不动。
 
-## 5. 修复与验收
+## 5. 逐问题 OpenSpec 全流程
 
-- **REQUIRED SUB-SKILL:** `test-driven-development`；`opsx:apply` 里逐任务 Red-Green-Refactor：先写能复现该审查问题的失败用例，再最小修复，跑绿才勾任务。
+对修复范围内的每个 `<module>-<n>`，一次只做一个问题：
+
+1. `opsx:propose "<id> <标题>"`：`proposal.md` 引用 `docs/review/<日期>/<module>.md` 的条目与 `todo.md` 编号；`design.md` 写方案与风险（是否动公开 API）；`tasks.md` 含复现点与测试点；把对应报告条目复制到 `doc/spec/<变更名>/review.md`。
+2. **用户评审门禁**：未确认 `design.md` / `tasks.md` 不进 apply。
+3. `opsx:apply` + **REQUIRED SUB-SKILL:** `test-driven-development`：先写能复现该问题的失败用例，再最小修复，跑绿才勾任务。
+4. `opsx:verify` + 回归（受影响模块 + `cjpm test` / `fboot test` + `fboot build`），CRITICAL 清零。
+5. `opsx:archive`。
+6. `git commit`：**一个 issue 一个提交**，`fix(<module>): <id> <摘要>`（含代码、用例、`doc/spec/<变更名>/`）。
+
+约束：
+
 - **性能类任务（CPU 热点 / 内存 / GC / local mode）必须先有基线数据**：改前基线 + 改后对照，同 SDK、同机器、`-O2`、同输入与并发，报中位数与离散程度。没有数据的性能项——**包括没有 profile 的热点结论**——不进 `tasks.md`，只能作为「待验证假设」留在报告里；数据不成立的优化撤回。
-- 审查报告的「建议」只作参考；最终以 `design.md` 为准。修复涉及设计变更 / 公开 API 时回步骤 3 问用户，不自行扩大范围。
-- `opsx:verify` 前：受影响模块 + 全量回归（`cjpm test` / `fboot test`）+ `fboot build`；涉及启动链做冒烟。
-- 对照 `todo.md` 逐条核对覆盖：未修项必须写明原因并经用户同意；verify CRITICAL 清零。
-- 交付说明附审查报告路径、问题清单与**性能类改动的前后数据**；`opsx:archive` 后用最终版覆盖 `doc/spec/<变更名>/`（四件套 + `review.md`）。
+- 审查报告的「建议」只作参考，最终以 `design.md` 为准；涉及设计变更 / 公开 API 时停下问用户，不自行扩大范围。
+- 修不动的（复现不了、方案有争议、需要改公开 API）：**停下来问用户**，不跳过、不塞进下一个问题；用户同意跳过的在汇报里单列。
 
-## 6. 只出报告、不修复
+## 6. 收尾
+
+全部问题修完、回归通过后：
+
+```bash
+git checkout <源分支>
+git merge fix/review-<YYYYMMDD>     # 能快进就快进
+git push
+git worktree remove .worktrees/review-fix-<YYYYMMDD>
+git branch -d fix/review-<YYYYMMDD>
+```
+
+只删除本流程创建的 worktree 与分支；其它 worktree / 分支一律不动。汇报每个问题的提交号、报告路径、verify 结果。
+
+## 7. 只出报告、不修复
 
 用户明确说「只审查、不修」时，在阶段四输出报告后结束，不进入 OpenSpec。这是工作流 L 唯一不执行六步的情况；用户没说就默认按审查报告修复。
 
-## 7. 红旗
+## 8. 红旗
 
 | 你正想做 | 现实 |
 | --- | --- |

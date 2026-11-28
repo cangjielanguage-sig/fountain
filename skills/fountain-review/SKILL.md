@@ -17,7 +17,7 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 
 ## 执行步骤
 
-**适用**：审查当前项目 / 指定模块 / 指定分支，并按结论修复。产出 = **逐模块审查报告**（`docs/review/<YYYY-MM-DD>/<module>.md`）+ **汇总**（`todo.md`、`review_summary.md`）+ **OpenSpec 修复**（propose → 用户评审 → apply 逐任务 TDD → verify → archive + `doc/spec/`）。
+**适用**：审查当前项目 / 指定模块 / 指定分支，并按结论修复。产出 = **逐模块审查报告**（`docs/review/<YYYY-MM-DD>/<module>.md`）+ **汇总**（`todo.md`、`review_summary.md`）+ **逐问题 OpenSpec 修复**（每个问题一次 change：propose → 用户评审 → apply TDD → verify → archive → 一次提交），修复在独立 worktree 内完成，最后合入源分支并清理。
 
 **开工前置（自动执行，无需用户要求）**：
 - **`cangjie-doc-lookup`**：没装就 `python <skill-root>/scripts/install_skill.py fountain`（从 fountain 仓库 `skills/` 装全部技能），装完跑 `python <cangjie-doc-lookup 技能目录>/scripts/skill_paths.py check`。
@@ -29,11 +29,74 @@ description: 当用户要求审查 fountain 仓库或其中的仓颉模块 / 分
 1. **步骤 0 — 定范围与基线（只读）**：`project_root` = `git -C <目标> rev-parse --show-toplevel`（无 git 时向上找 `cjpm.toml` / `openspec/`）；「当前目录」→ 项目根 + `scope=.`，「指定模块」→ 项目根 + 该模块相对路径。基线二选一：**分支差异**（`source_branch != target_branch` 且 diff 非空）或**工作区快照**（无 git / 同分支 / diff 为空）；工作区不干净时停下问用户「提交 / stash / 快照审查」，不擅自处理。
 2. **步骤 1 — 执行审查（本技能内建引擎）**：按下面「审查引擎」准备参数、`scope.md` 与 `modules.md`，分支模式走阶段零→四，快照模式跳过阶段零。**主 Agent 不读被审源码**；审查阶段**不改源码**。审查对象是**本次改动 + 本轮读到的现有代码**——现有代码里的缺陷同样要报，标 `[存量]`（`review-checklist §11`）。**一个模块一份报告，写到 `docs/review/<YYYY-MM-DD>/`**，全部模块完成后汇总 `todo.md` + `review_summary.md`。
    - 用户明确说「只审查、不修」→ 本步结束，交报告，不进 OpenSpec。
-3. **步骤 2 — 报告 → `opsx:propose`**：读 `todo.md` / `review_summary.md`（这是汇总产物，不是源码），统计严重 X / 一般 Y / 轻微 Z 与**存量 N 条**；**修复范围默认 = 本次改动的严重 + 一般**，轻微项与存量缺陷由用户决定是否纳入（既不静默丢弃，也不静默扩大范围）。给每条问题编号 `<module>-<序号>`（如 `f_orm-3`，存量加 `S` 后缀）；`openspec update` + `openspec list --json` 后执行 `opsx:propose "根据代码审查报告 <workdir>/todo.md 修复 <项目/模块> 的严重与一般问题（严重 X、一般 Y）"`——proposal 写审查范围/基线与统计，design 写修复方案与风险，**tasks 逐条映射 `[f_orm-3][严重]`（含复现点与测试点，禁止漏项）**；把 `todo.md` + `review_summary.md` 复制到 `doc/spec/<变更名>/review.md`，模块报告保留在 `docs/review/<YYYY-MM-DD>/`。**本步只写规划产物，不改代码**，完成后停下等评审。
-4. **步骤 3 — 用户评审（门禁）**：逐条确认 `design.md` / `tasks.md` 与 `todo.md` 的覆盖关系（严重/一般是否全部有任务、修复方案是否改变公开 API / 行为、轻微项取舍）；缺口用 `opsx:update` 折回。**未确认不进 apply。**
-5. **步骤 4 — `opsx:apply` 逐任务 TDD 修复**：严格按 tasks 顺序；每条问题**先写能复现该问题的失败用例**（Red）→ 最小修复（Green）→ 重构；跑绿才勾任务；不允许「改了但没测试」。审查报告的「建议」只作参考，以 design 为准；涉及设计变更 / 公开 API 时回步骤 3 问用户，不自行扩大范围。**性能类任务必须先补基线再改代码**（见下方硬规则），没有数据的性能项不进 tasks。
-6. **步骤 5 — 回归 + `opsx:verify`**：受影响模块 + 全量回归（`cjpm test` / `fboot test`）+ `fboot build`；涉及启动链做冒烟；`opsx:verify` CRITICAL 清零；对照 `todo.md` 逐条核对覆盖，未修项写明原因并经用户同意。
-7. **步骤 6 — 交付 + `opsx:archive` + 落盘**：按 `references/delivery-workflow.md` 提交（交付说明附审查报告路径、问题清单、**性能类改动的前后数据**）；执行 `opsx:archive`；最后用最终版覆盖更新 `doc/spec/<变更名>/`（四件套 + `review.md`）。
+3. **步骤 2 — 汇总修复清单**：读 `todo.md` / `review_summary.md`（汇总产物，不是源码），统计严重 X / 一般 Y / 轻微 Z 与**存量 N 条**；**修复范围默认 = 本次改动的严重 + 一般**，轻微与存量由用户决定（既不静默丢弃，也不静默扩大）。给每条问题编号 `<module>-<序号>`（存量加 `S`）；`openspec update` + `openspec list --json` 确认工程可用。
+4. **步骤 3 — 审查报告入库并推送**：`docs/review/<YYYY-MM-DD>/*.md` 是交付物，**提交并推送**到当前源分支（`docs(review): <日期> 模块审查报告`）；`reviews/` 是过程目录，不入库（写进 `.git/info/exclude` 或放项目外）。提交前确认工作区干净。
+5. **步骤 4 — 建修复工作树（自动，不询问）**：加载 `using-git-worktrees`，从当前源分支创建 `.worktrees/review-fix-<YYYYMMDD>`（分支 `fix/review-<YYYYMMDD>`）；后续修复全部在这个 worktree 里做，主工作区不动。
+6. **步骤 5 — 逐问题走 OpenSpec 全流程（自动循环）**：对修复范围内的每个 `<module>-<n>`，一次只做一个问题：`opsx:propose "<id> <标题>"` → 用户评审 `design.md` / `tasks.md` → `opsx:apply` 严格 TDD（Red → Green → Refactor）→ `opsx:verify` → `opsx:archive` → `git commit`（**一个 issue 一个提交**，`fix(<module>): <id> <摘要>`）。详见「修复流水线」。
+7. **步骤 6 — 收尾（自动）**：全部问题修完且回归通过后，把 worktree 分支合入**创建它时的源分支**并推送（能快进就快进，否则普通合并）；`git worktree remove <path>` + `git branch -d <branch>`（只删本流程创建的那一个）；汇报每个问题的提交、报告路径与 verify 结果。
+
+## 修复流水线（审查完成后自动执行）
+
+**触发条件**：`todo.md` 与 `review_summary.md` 已生成（即全量审查完成）。缺任何一个都说明审查没跑完，**不得进入修复**。
+
+**自动加载的技能**（缺一不可，进步骤 4 前加载）：
+
+| 技能 | 用途 | 标记 |
+| --- | --- | --- |
+| `using-git-worktrees` | 创建 / 管理修复工作树 | **REQUIRED SUB-SKILL** |
+| `test-driven-development` | 每个问题的 Red → Green → Refactor | **REQUIRED SUB-SKILL** |
+| `cangjie-doc-lookup` | 改代码时核对 API / 语言特性（不凭记忆） | **REQUIRED BACKGROUND** |
+| `fountain-develop-framework` | 改的是 fountain 自身模块时的工程约定 | **REQUIRED BACKGROUND** |
+| `opsx-propose` / `opsx-apply` / `opsx-verify` / `opsx-archive` | 单问题 OpenSpec 六步 | **REQUIRED SUB-SKILL**（按步骤加载） |
+
+**步骤 3 报告入库**：
+
+```bash
+git add docs/review/<YYYY-MM-DD>
+git commit -m "docs(review): <YYYY-MM-DD> 模块审查报告"
+git push
+```
+
+`reviews/<时间>_<简述>/` 只留在本地：写进 `.git/info/exclude`（本地生效、不改仓库 `.gitignore`），或把 workdir 放到项目外。
+
+**步骤 4 建工作树**（按 `using-git-worktrees` 的约定）：
+
+```bash
+git worktree add .worktrees/review-fix-<YYYYMMDD> -b fix/review-<YYYYMMDD> <源分支>
+```
+
+**步骤 5 逐问题循环**（每个问题一轮，不合并、不跳过）：
+
+```bash
+cd .worktrees/review-fix-<YYYYMMDD>
+# 1) 规划：一次只描述一个问题
+opsx:propose "<module>-<n> <问题标题>"
+# 2) 用户评审 design.md / tasks.md（门禁，未确认不进 apply）
+# 3) TDD 修复
+opsx:apply
+# 4) 验证
+opsx:verify
+# 5) 归档
+opsx:archive
+# 6) 一个 issue 一个提交（含代码、用例、doc/spec/<变更名>/）
+git add -A && git commit -m "fix(<module>): <module>-<n> <摘要>"
+```
+
+- 每个问题独立成 change，`proposal` / `design` 里引用 `docs/review/<日期>/<module>.md` 的对应条目与 `todo.md` 编号。
+- 修不动的（复现不了、方案有争议、需要改公开 API）：**停下来问用户**，不要跳过、不要塞进下一个问题。
+- 用户明确同意跳过的，在最后汇报里单列，不混进"已修复"。
+
+**步骤 6 收尾**：
+
+```bash
+git checkout <源分支>
+git merge fix/review-<YYYYMMDD>          # 能快进就快进
+git push
+git worktree remove .worktrees/review-fix-<YYYYMMDD>
+git branch -d fix/review-<YYYYMMDD>
+```
+
+只删除本流程创建的工作树与分支；其它 worktree / 分支一律不动。
 
 ## 审查引擎
 
@@ -182,6 +245,10 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 | 只审 `src/`，README 与 `doc/**` 跳过不看 | 模块内**全部** `.cj` 与 `.md` 都要读；文件清单见 `files/<module>.txt` |
 | README 说有、代码里没有 | 按 §14.1 报功能缺失：**承诺源 + 缺失证据**，不要只说「文档过期」 |
 | 新加的 public API 没写进 README | 按 §14.2 逐个公开声明对照 README，缺的列符号名 |
+| 审完就地在主工作区改代码 | 修复在 `using-git-worktrees` 建的 worktree 里做，主工作区不动 |
+| 多个问题合成一个 change / 一个提交 | 一个问题一个 OpenSpec change、一个提交 |
+| 修完不删 worktree 与分支 | 合入源分支并推送后，删掉本流程创建的那一个 |
+| 把 `reviews/` 也提交了 | 只有 `docs/review/` 入库；`reviews/` 是过程目录，留在本地 |
 | 先问「要不要现在做全量审查」/「是否启动」 | 全量是默认，直接开跑；只在真需要用户裁决（工作区脏、删分支、扩大修复范围）时才问 |
 | 上次审过了，这次只看改动 / 只看 diff | 每次审查都是全量重读；历史报告只能当线索，结论要重新取证 |
 | 先审几个关键模块，其余下次 | 一次运行必须覆盖 `modules.md` 的全部模块，不分批交付 |
@@ -215,7 +282,7 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 
 ## 前置与依赖
 
-- 联动技能 `cangjie-doc-lookup`、12 个 `opsx-*`、`test-driven-development`：加载失败按 `references/common-rules.md`「技能格式与联动技能」自动安装，不中断任务、不问用户。
+- 联动技能 `cangjie-doc-lookup`、12 个 `opsx-*`、`test-driven-development`、`using-git-worktrees`、`fountain-develop-framework`：加载失败按 `references/common-rules.md`「技能格式与联动技能」自动安装，不中断任务、不问用户。
 - **不再需要** `cangjie-code-review-harness`（旧工作流 L 的依赖已取消）；reviewer 指令与清单随本技能分发。
 
 ## 通用规则
@@ -238,4 +305,4 @@ local mode 的探索同样按这条执行：它降低的是**峰值内存**而�
 
 只审查时：报告已审模块数 / 失败模块、各模块报告路径（`docs/review/<YYYY-MM-DD>/<module>.md`）、跨模块统计与覆盖缺口。
 
-进入修复时：追加修复摘要、verify 结果、性能类改动的前后数据与 `doc/spec/<变更名>/review.md`；下一步是交付 / archive。
+进入修复时：按问题列出「编号 / 提交号 / verify 结果 / 性能类前后数据」，说明 worktree 分支已合入哪个源分支并推送、worktree 与分支已删除；跳过的问题单列并注明原因。
