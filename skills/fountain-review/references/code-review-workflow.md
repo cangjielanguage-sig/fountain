@@ -47,6 +47,7 @@ parallel_per_batch = 2（默认，按模块计）
 - 分支差异模式：严格按阶段零→四；阶段零的 `git checkout / merge --squash` 只操作审查分支。阶段零的 `git pull` 因网络 / 凭据失败时**不要卡住**：改用工作区快照模式（跳过阶段零），`scope.md` 写明基线，报告里注明「未对照远端目标分支」。
 - 工作区快照模式：跳过阶段零；由主 Agent 写 `scope.md`（模板见下），从阶段一开始。
 - reviewer 子 agent 按 `reviewer.md` 主动查阅 `cangjie-doc-lookup` / `fountain-api-lookup` 核对语言特性与 API，不凭记忆判断；查不到写 `待确认`，报告里引文档位置。
+- **模块间并行、模块内串行**：同批只放不同模块；同一模块的子轮（`parts/`）必须顺序执行，前一轮落盘后再开下一轮。
 - 阶段四按 `modules.md` 汇总成 `todo.md`（按模块分组）与 `review_summary.md`（跨模块统计、覆盖缺口、总评）。
 
 `scope.md` 模板：
